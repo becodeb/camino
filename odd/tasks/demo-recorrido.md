@@ -57,7 +57,7 @@ The school chains ScratchJr, Pilas Bloques, Code.org and Scratch. Each year chan
 - [x] T1 — Scaffold + port the shell, style, Brote, board and editor from habilidades; level runtime and level-select page; Sala 4 (direct control) and Sala 5 (sequence) levels. Route: delegated direct (writer trigger: 2+ non-trivial files).
 - [x] T2 — 1ro (repeat, slot-limited notebook, ghost-hand intro) and 2do (fog, repeat-until, if; three worlds at once). Route: delegated direct.
 - [x] T3 — 3ro real-time rules engine: key events and "whenever touches" rules with a score; plus the T2 review fixes (a)-(d). Route: delegated direct.
-- [ ] T4 — Parent pass: full screenshot tour, fixes list, LAN test instructions for the user.
+- [x] T4 — Parent pass: full screenshot tour, fixes list, LAN test instructions for the user.
 
 ## Progress
 
@@ -83,6 +83,8 @@ The school chains ScratchJr, Pilas Bloques, Code.org and Scratch. Each year chan
   - Known issues: the program editor (BlockEditor) takes its drag grip from the pointer after the 8 px threshold, not from pointer-down (the same bug was found and fixed in the rule editor by the browser check; not observed in program levels, left as is). Confetti of a win falls below short sheets (all levels). The home thumbnail of 3ro-2 shows a full inverted T of keys though the page has only ← →.
   - Engram mirror pending (engram MCP resolves cwd ~/projects as ambiguous).
 
+- 2026-09-27 T4 (parent): reviewed T1–T3 screenshots (home, all 10 pages, fixes a–d). Re-ran `npm test` (7 files, 123 passed) and `npm run build` (ok). Dev server up on the LAN at http://192.168.1.37:8797 (HTTP 200). Open items carried forward, not blocking the demo: BlockEditor drag-grip bug, confetti below short sheets, 3ro-2 home thumbnail keys, ~170 px free under the 2do-1 strip, 1ro ghost intro ≈13 s may be long for 6-year-olds. Untested: real speech audio, real touch Chromebook, real kids.
+
 ## Next step
 
-Parent review of the T3 screenshots (scratchpad `t3-*.png`), then T4 (full tour, fixes list, LAN test instructions).
+User tries the demo on the LAN and decides what to adjust; the demo is not pushed and not merged to main.
