@@ -2,6 +2,8 @@
 // tab opens the map; a core level is solved with taps and a drag and its seed lands in the pouch;
 // finishing the core stamps the sheet on the map; the dev drawer jumps and marks levels solved;
 // a reload keeps the progress; cleared or blocked storage does not break the app.
+// The practice formats (T2): a missing count is completed, a wrong block is fixed in place, a
+// wrong and a right prediction, a gold stamp earned through the gold seal; a reload keeps them.
 // Exits non-zero on the first failure.
 // PW=/tmp/pw node tools/check-primer.mjs [base]
 import { createRequire } from 'node:module';
@@ -119,10 +121,10 @@ try {
   if ((await page.textContent('[data-dev="level-id"]')) !== '1ro-h6-jefe') fail('the drawer shows the boss id');
   await tap('.dev-drawer a[data-dev-door="hard"]');
   await expectHash('#/1ro/hoja/6/puerta/dificil/1', 'a dev jump to the hard door');
-  await tap('.dev-sheets a[data-dev-sheet="12"]');
-  await expectHash('#/1ro/hoja/12', 'a dev jump to a sheet not built yet');
-  if (!(await count('.soon'))) fail('sheet 12 should show its "próximamente" page');
-  ok('dev jumps: sheet 6, its boss (framed), its hard door, and sheet 12 (próximamente)');
+  await tap('.dev-sheets a[data-dev-sheet="14"]');
+  await expectHash('#/1ro/hoja/14', 'a dev jump to a sheet not built yet');
+  if (!(await count('.soon'))) fail('sheet 14 should show its "próximamente" page');
+  ok('dev jumps: sheet 6, its boss (framed), its hard door, and sheet 14 (próximamente)');
   await tap('.dev-drawer button:has-text("apagar")');
 
   // ---------------------------------------------------------------- a reload keeps the progress
@@ -143,6 +145,110 @@ try {
   await expectHash('#/1ro/hoja/1/1', 'sheet 1 after clearing');
   if (!(await count('.btn-play'))) fail('the level page should load');
   ok('cleared storage starts the year again and the pages still load');
+
+  // ---------------------------------------------------------------- the practice formats (T2), through the real UI
+  /** Waits until the page is not running (a run and Brote's reaction). */
+  const idle = async () => {
+    await page.waitForTimeout(250);
+    await page.waitForFunction(() => !document.querySelector('.level[data-busy]'), null, { timeout: 30000 });
+    await page.waitForTimeout(300);
+  };
+  const program = () => page.evaluate(() => window.__camino.program);
+  // things that call for a tap pulse forever: they are clicked without waiting for a stable box
+  const press = async (sel) => { await page.click(sel, { force: true }); await page.waitForTimeout(280); };
+  const open = async (hash) => { await page.goto(`${base}?debug#${hash}`); await page.waitForTimeout(1100); };
+  const won = async () => { await page.waitForSelector('.next-page', { timeout: 30000 }); await page.waitForTimeout(1400); };
+  let n0 = await seeds();
+
+  // complete: the count is missing; ▶ does not run until it is there; four taps make 5, the dots follow
+  await open('/1ro/hoja/5/1');
+  if (!(await count('.zone-program .tape-count.is-empty'))) fail('sheet 5 page 1 should arrive with its count missing');
+  if (await count('.zone-palette')) fail('a page missing only a count has nothing to bring (no palette)');
+  await press('.btn-play');
+  if (await count('.level[data-busy]')) fail('with the count missing ▶ should not run');
+  for (let i = 0; i < 4; i++) await press('.zone-program .tape-count');
+  const five = await program();
+  if (five[0].count !== 5) fail(`four taps on a missing count should make 5, made ${five[0].count}`);
+  if ((await count('.zone-program [data-pips="0"] circle')) !== 5) fail('the repeat should show five dots');
+  if ((await page.textContent('.zone-program .tape-count')).trim() !== '5') fail('the count should read 5');
+  await press('.btn-play');
+  await won();
+  if ((await seeds()) !== n0 + 1) fail(`completing the count should earn a seed (${n0} → ${await seeds()})`);
+  ok('complete: the count arrives missing, ▶ waits for it, four taps make 5 (five dots), the run wins and earns a seed');
+
+  // fix: the run bumps on the wrong arrow and it shakes; a tap takes it out (its line stays empty), a drag brings the right one
+  n0 = await seeds();
+  await open('/1ro/hoja/3/1');
+  const given = await program();
+  await press('.btn-play');
+  await page.waitForSelector('.zone-program .blk.is-culprit', { timeout: 20000 });
+  if ((await page.getAttribute('.zone-program .blk.is-culprit', 'data-ref')) !== '1') fail('the culprit should be the second arrow');
+  await idle();
+  await press('.zone-program [data-ref="1"]');
+  const holed = await program();
+  if (holed.length !== given.length || holed[1].cmd !== '') fail(`a tap should empty the line in place, got ${JSON.stringify(holed)}`);
+  if (!(await count('.zone-program [data-hole="1"].is-active'))) fail('the emptied line should take the next block');
+  await drag('.zone-palette [data-cmd="up"]', '.zone-program [data-hole="1"]');
+  const fixed = await program();
+  if (fixed[1].cmd !== 'up' || fixed.length !== given.length) fail(`the drag should fill the empty line with ↑, got ${JSON.stringify(fixed)}`);
+  await press('.btn-play');
+  await won();
+  if ((await seeds()) !== n0 + 1) fail('fixing the arrow should earn a seed');
+  ok('fix: the run bumps and the wrong arrow shakes; a tap leaves its line empty in place, a drag fills it with ↑, the run wins');
+
+  // predict: ▶ first asks for a guess; a wrong guess plays and is not won; the right one is won
+  n0 = await seeds();
+  await open('/1ro/hoja/3/2');
+  await press('.btn-play');
+  if (await count('.level[data-busy]')) fail('▶ without a guess should not run');
+  await press('.board [data-cell="2,2"]');
+  if (!(await count('.board .guess'))) fail('a tap on a cell should draw the guess ring');
+  await press('.btn-play');
+  await idle();
+  if (await count('.next-page')) fail('a wrong guess should not win the page');
+  if ((await seeds()) !== n0) fail('a wrong guess should not earn a seed');
+  await press('.board [data-cell="3,2"]');
+  if ((await count('.board .guess')) !== 1) fail('a new tap should move the ring (one ring)');
+  await press('.btn-play');
+  await won();
+  if ((await seeds()) !== n0 + 1) fail('the right guess should earn a seed');
+  ok('predict: ▶ waits for a guess; the ring on (2,2) plays and Brote ends elsewhere (no seed); the ring on (3,2) wins');
+
+  // save blocks: the flat plan wins, the gold seal appears, the challenge with the child's plan, the gold stamp
+  n0 = await seeds();
+  await open('/1ro/hoja/11/1');
+  if (await count('.gold-seal')) fail('the gold seal waits until the page is solved');
+  for (let i = 0; i < 7; i++) await tap('.zone-palette [data-cmd="right"]');
+  await press('.btn-play');
+  await won();
+  if (!(await count('a.gold-seal'))) fail('solving a page with a gold challenge should show the gold seal');
+  await press('a.gold-seal');
+  await expectHash('#/1ro/hoja/11/1/oro', 'the gold seal opens the challenge');
+  await page.waitForTimeout(900);
+  if ((await count('.plan-note .plan-card')) !== 7) fail('the challenge should show the child\'s seven-arrow plan');
+  if ((await count('.zone-program [data-key^="end"]')) !== 1) fail('the challenge notebook should have one line');
+  await tap('.zone-palette [data-cmd="repeat"]');
+  await tap('.zone-palette [data-cmd="right"]');
+  for (let i = 0; i < 5; i++) await press('.zone-program .tape-count');
+  const gold = await program();
+  if (JSON.stringify(gold) !== JSON.stringify([{ t: 'loop', count: 7, body: ['right'] }])) fail(`taps should build repetir 7 [→], built ${JSON.stringify(gold)}`);
+  await press('.btn-play');
+  await page.waitForSelector('.gold-seal.is-earned', { timeout: 30000 });
+  await page.waitForTimeout(1400);
+  if (!(await count('.sheet-pages a[data-core="1"] .stamp.is-gold'))) fail('the page should be stamped in gold in the bar');
+  if ((await seeds()) !== n0 + 1) fail(`the gold stamp earns no seed (only the page did): ${n0} → ${await seeds()}`);
+  ok('save blocks: seven taps win the page and the gold seal appears; the challenge shows the plan and one line; repetir 7 [→] earns the gold stamp (no extra seed)');
+
+  // a reload keeps the formats' progress and the gold stamp
+  await page.reload();
+  await page.waitForTimeout(1100);
+  if (!(await count('.sheet-pages a[data-core="1"] .stamp.is-gold'))) fail('after a reload the gold stamp stays');
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('camino.progress.v1')));
+  for (const id of ['1ro-h5-1', '1ro-h3-1', '1ro-h3-2', '1ro-h11-1']) if (!stored.solved[id]) fail(`${id} should be stored as solved`);
+  if (!stored.gold['1ro-h11-1']) fail('the gold stamp should be stored');
+  await open('/1ro/hoja/3');
+  await expectHash('#/1ro/hoja/3/3', 'sheet 3 opens on its first unsolved page after pages 1 and 2');
+  ok('a reload keeps the gold stamp and the solved formats; sheet 3 now opens on its page 3');
 
   // ---------------------------------------------------------------- blocked storage: the app plays in memory
   const blocked = await browser.newPage({ viewport: { width: 1366, height: 768 } });

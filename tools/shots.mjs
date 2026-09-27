@@ -1,7 +1,7 @@
 // Screenshot tour with Playwright driving the system Chromium (no bundled browser needed).
 // PW=/tmp/pw node tools/shots.mjs <outDir> [base] [only]
 //   T1 scenarios are named t1-*, T2 scenarios t2-*, T3 scenarios t3-* (so `only=t2-` shoots the T2 tour);
-//   1ro's year (feature primer-grado) is p1-*.
+//   1ro's year (feature primer-grado) is p1-* (its T1) and p2-* (its T2: the formats, sheets 3, 5, 10–13, the river).
 //   PW: a directory with playwright installed; base: the running app (default http://127.0.0.1:8797/)
 //   only: run the scenarios whose name contains this text.
 // Uses the ?debug hooks (window.__camino) to build programs and run them; waits in real time.
@@ -228,10 +228,112 @@ const P1 = [
   { name: 'extra-hard-seq', size: [1280, 800], go: yr('/1ro/hoja/2/puerta/dificil/2'), progress: MIDYEAR },
   { name: 'dev-open', size: [1366, 768], go: yr('/1ro/hoja/6/puerta/media/1', '&dev'), progress: MIDYEAR },
   { name: 'dev-map', size: [1280, 800], go: yr('/1ro', '&dev'), progress: MIDYEAR },
-  { name: 'soon', size: [1366, 768], go: yr('/1ro/hoja/5', '&dev'), progress: MIDYEAR },
+  { name: 'soon', size: [1366, 768], go: yr('/1ro/hoja/14', '&dev'), progress: MIDYEAR },
 ].map((s) => ({ ...s, name: `p1-${s.name}` }));
 
-const S = [...T1, ...T2, ...T3, ...P1];
+// ---------------------------------------------------------------- 1ro's year, T2: the formats, sheets 3, 5, 10–13, the river
+/** Waits until the page is not running (a run, Brote's reaction, a ghost demo). */
+const idle = async (p, after = 0) => {
+  await p.waitForTimeout(250);
+  await p.waitForFunction(() => !document.querySelector('.level[data-busy]'), null, { timeout: 40000 });
+  await p.waitForTimeout(after);
+};
+/** Presses ▶ on the page (the real button) without waiting. */
+const play = (p) => p.click('.btn-play', { force: true });
+/** Sets the page's reference program through the ?debug hooks and runs it to the end. */
+const solveHere = async (p, after = 600) => {
+  await cam(p, () => window.__camino.setProgram(window.__camino.level.solution));
+  await p.waitForTimeout(400);
+  await play(p);
+  await idle(p, after);
+};
+/** Sheets 1–5 done (bosses of 1 and 2 too), sheet 10's first page, 11's first page in gold; the teacher at sheet 13. */
+const LATE = {
+  v: 1, seeds: 36, opened: 13, character: 'brote',
+  solved: solvedAll([
+    ...core(1, [1, 2, 3, 'jefe']), ...core(2, [1, 2, 3, 4, 'jefe']), ...core(3, [1, 2, 3, 4]), ...core(4, [1, 2, 3]),
+    ...core(5, [1, 2, 3, 4]), ...core(6, [1, 2, 3, 4]), ...core(8, [1, 2, 3]), ...core(10, [1, 3]), ...core(11, [1]),
+  ]),
+  gold: solvedAll(core(11, [1])),
+};
+const FRESH = { v: 1, seeds: 12, opened: 17, character: 'brote', solved: {}, gold: {} };
+
+const P2 = [
+  { name: 'map-1366', size: [1366, 768], go: yr('/1ro'), progress: LATE },
+  { name: 'map-1280', size: [1280, 800], go: yr('/1ro'), progress: LATE },
+  // the first page of each sheet built in T2
+  ...[3, 5, 10, 11, 12, 13].map((n) => ({ name: `sheet${n}-core1`, size: [1366, 768], go: yr(`/1ro/hoja/${n}/1`), progress: FRESH })),
+  // fix: idle, the culprit shaking, a block taken out (its line stays), won
+  { name: 'fix-idle', size: [1366, 768], go: yr('/1ro/hoja/3/1'), progress: FRESH },
+  {
+    name: 'fix-culprit', size: [1366, 768], go: yr('/1ro/hoja/3/1'), progress: FRESH,
+    run: async (p) => { await play(p); await p.waitForSelector('.blk.is-culprit', { timeout: 20000 }); await p.waitForTimeout(Number(process.env.SHAKE_MS ?? 160)); },
+  },
+  {
+    name: 'fix-hole-1280', size: [1280, 800], go: yr('/1ro/hoja/12/2'), progress: FRESH,
+    run: async (p) => { await play(p); await idle(p, 200); await p.click('.zone-program [data-ref="0:2"]', { force: true }); await p.waitForTimeout(700); },
+  },
+  {
+    name: 'fix-won', size: [1366, 768], go: yr('/1ro/hoja/12/3'), progress: FRESH,
+    run: async (p) => { await p.click('.zone-program [data-ref="0:1"]', { force: true }); await p.waitForTimeout(400); await p.click('.zone-palette [data-cmd="down"]', { force: true }); await p.waitForTimeout(400); await play(p); await idle(p, 700); },
+  },
+  // complete: a missing count, the count set and the passes filling, holes before and after the repeat
+  { name: 'complete-idle', size: [1366, 768], go: yr('/1ro/hoja/5/1'), progress: FRESH },
+  {
+    name: 'complete-midrun', size: [1366, 768], go: yr('/1ro/hoja/5/1'), progress: FRESH,
+    run: async (p) => { for (let i = 0; i < 4; i++) { await p.click('.zone-program .tape-count', { force: true }); await p.waitForTimeout(260); } await play(p); await p.waitForTimeout(Number(process.env.RUN_MS ?? 2300)); },
+  },
+  {
+    name: 'complete-won', size: [1366, 768], go: yr('/1ro/hoja/5/3'), progress: FRESH,
+    run: async (p) => { await p.click('.zone-program .tape-count', { force: true }); await p.waitForTimeout(260); await p.click('.zone-program .tape-count', { force: true }); await p.waitForTimeout(260); await play(p); await idle(p, 700); },
+  },
+  {
+    name: 'complete-holes-1280', size: [1280, 800], go: yr('/1ro/hoja/13/1'), progress: FRESH,
+    run: async (p) => { await p.click('.zone-palette [data-cmd="up"]', { force: true }); await p.waitForTimeout(400); await play(p); await p.waitForTimeout(400); },
+  },
+  // predict: idle, a guess, a wrong guess after the run, a right one
+  { name: 'predict-idle', size: [1366, 768], go: yr('/1ro/hoja/3/2'), progress: FRESH },
+  {
+    name: 'predict-guess', size: [1366, 768], go: yr('/1ro/hoja/3/4'), progress: FRESH,
+    run: async (p) => { await p.click('.board [data-cell="1,0"]', { force: true }); await p.mouse.move(5, 5); await p.waitForTimeout(700); },
+  },
+  {
+    name: 'predict-missed', size: [1366, 768], go: yr('/1ro/hoja/3/2'), progress: FRESH,
+    run: async (p) => { await p.click('.board [data-cell="2,2"]', { force: true }); await p.mouse.move(5, 5); await p.waitForTimeout(400); await play(p); await idle(p, 0); await p.waitForTimeout(Number(process.env.MISS_MS ?? 0)); },
+  },
+  {
+    name: 'predict-won', size: [1366, 768], go: yr('/1ro/hoja/3/2'), progress: FRESH,
+    run: async (p) => { await p.click('.board [data-cell="3,2"]', { force: true }); await p.mouse.move(5, 5); await p.waitForTimeout(400); await play(p); await idle(p, 900); },
+  },
+  {
+    name: 'predict-loop-1280', size: [1280, 800], go: yr('/1ro/hoja/5/2'), progress: FRESH,
+    run: async (p) => { await p.click('.board [data-cell="4,1"]', { force: true }); await p.mouse.move(5, 5); await p.waitForTimeout(400); await play(p); await p.waitForTimeout(Number(process.env.RUN_MS ?? 2100)); },
+  },
+  // save blocks: the gold seal offered after a win, the challenge with the child's plan, the gold stamp
+  { name: 'save-seal', size: [1366, 768], go: yr('/1ro/hoja/11/2'), progress: FRESH, run: (p) => solveHere(p, 900) },
+  { name: 'save-gold-page', size: [1366, 768], go: yr('/1ro/hoja/11/2/oro'), progress: LATE },
+  { name: 'save-gold-won', size: [1366, 768], go: yr('/1ro/hoja/11/2/oro'), progress: LATE, run: (p) => solveHere(p, 900) },
+  { name: 'save-gold-1280', size: [1280, 800], go: yr('/1ro/hoja/11/jefe/oro'), progress: LATE },
+  // the river
+  { name: 'river-zigzag', size: [1366, 768], go: yr('/1ro/hoja/10/3'), progress: FRESH },
+  { name: 'river-stream', size: [1366, 768], go: yr('/1ro/hoja/10/4'), progress: FRESH },
+  { name: 'river-boss', size: [1366, 768], go: yr('/1ro/hoja/12/jefe'), progress: FRESH },
+  { name: 'river-doors', size: [1366, 768], go: yr('/1ro/hoja/10/puertas'), progress: LATE },
+  // one extra per new family
+  { name: 'extra-fix', size: [1366, 768], go: yr('/1ro/hoja/3/puerta/media/1'), progress: LATE },
+  { name: 'extra-predict', size: [1366, 768], go: yr('/1ro/hoja/3/puerta/media/2'), progress: LATE },
+  { name: 'extra-complete', size: [1366, 768], go: yr('/1ro/hoja/5/puerta/media/1'), progress: LATE },
+  { name: 'extra-complete-card', size: [1366, 768], go: yr('/1ro/hoja/13/puerta/media/2'), progress: LATE },
+  { name: 'extra-fix-river', size: [1366, 768], go: yr('/1ro/hoja/12/puerta/media/1'), progress: LATE },
+  { name: 'extra-save', size: [1366, 768], go: yr('/1ro/hoja/11/puerta/media/1'), progress: LATE },
+  { name: 'extra-around', size: [1366, 768], go: yr('/1ro/hoja/13/puerta/dificil/1'), progress: LATE },
+  // the bar at 1280 (sheet 2: three seeds, four pages, the doors, the boss, the pouch)
+  { name: 'bar-sheet2-1280', size: [1280, 800], go: yr('/1ro/hoja/2/3'), progress: LATE },
+  { name: 'bar-sheet2-boss-1280', size: [1280, 800], go: yr('/1ro/hoja/2/jefe'), progress: LATE },
+  { name: 'dev-gold', size: [1366, 768], go: yr('/1ro/hoja/11/1/oro', '&dev'), progress: LATE },
+].map((s) => ({ ...s, name: `p2-${s.name}` }));
+
+const S = [...T1, ...T2, ...T3, ...P1, ...P2];
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox', '--disable-gpu'] });
 try {
