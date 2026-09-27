@@ -21,9 +21,8 @@ import { COUNT_MIN, countTaps, nextCount, nextHint } from '../game/hint';
 import { Lockstep } from '../game/lockstep';
 import { type LevelDef } from '../game/levels';
 import { cardCount, initialState, type Dir, type Program, type RobotState, type TraceStep } from '../game/model';
-import { stamp } from '../game/progress';
 import { BROTE } from './LevelBar';
-import { NextPage, RestartButton, Sheet, Shell, frameFor, useBoard, useDebugHooks, useGhost, useInstruction } from './levelKit';
+import { NextPage, RestartButton, Sheet, Shell, frameFor, useBoard, useDebugHooks, useGhost, useInstruction, useLevelNav } from './levelKit';
 import { RealtimeLevel } from './RealtimeLevel';
 
 /** Short spoken lines (es-AR). The board says the rest. */
@@ -43,6 +42,7 @@ function DirectLevel({ level }: { level: LevelDef }) {
   const { svgRef, viewRef } = useBoard(level);
   const say = useInstruction(level);
   const ghost = useGhost(rootRef);
+  const nav = useLevelNav();
   const pos = useRef<RobotState>(initialState(board));
   const [won, setWon] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -63,7 +63,7 @@ function DirectLevel({ level }: { level: LevelDef }) {
       if (res === 'aborted') break;
       if (st.kind !== 'crash') pos.current = st.to;
       if (res === 'win') {
-        stamp(level.id);
+        nav.won(level);
         setWon(true);
         speak(LINES.won);
         break;
@@ -72,7 +72,7 @@ function DirectLevel({ level }: { level: LevelDef }) {
     }
     busyRef.current = false;
     setBusy(false);
-  }, [board, level, viewRef, won]);
+  }, [board, level, viewRef, won, nav]);
 
   const restart = () => {
     if (busyRef.current) return;
@@ -142,10 +142,12 @@ function useBoards(level: LevelDef) {
 
 function Sheets({ level, svgs }: { level: LevelDef; svgs: React.RefObject<(SVGSVGElement | null)[]> }) {
   const multi = level.worlds.length > 1;
+  const nav = useLevelNav();
   return (
     <div className={`sheets${multi ? ' is-multi' : ''}`}>
       {level.worlds.map((b, i) => (
         <div key={i} className="sheet" data-zone="stage" data-world={multi ? i : undefined} style={multi ? { '--tone': WORLD_TONES[i] } as CSSProperties : undefined}>
+          {nav.decor}
           <span className="tape tape-l" aria-hidden="true" />
           <span className="tape tape-r" aria-hidden="true" />
           <svg ref={(el) => { svgs.current[i] = el; }} className="board" role="img" aria-label={`Tablero ${multi ? `${i + 1} ` : ''}de ${b.cols} por ${b.rows}`} />
@@ -162,6 +164,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
   const rootRef = useRef<HTMLElement>(null);
   const { svgs, views } = useBoards(level);
   const say = useInstruction(level);
+  const nav = useLevelNav();
   const ghost = useGhost(rootRef);
   const [program, setProgram] = useState<Program>([]);
   const programRef = useRef(program);
@@ -330,7 +333,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     if (results.every((r) => r === 'win')) {
       setMarks({});
       if (multi) await Promise.all(vs.map((v) => v.celebrate()));
-      stamp(level.id);
+      nav.won(level);
       setWon(true);
       speak(LINES.won);
     } else if (results.includes('crash')) {

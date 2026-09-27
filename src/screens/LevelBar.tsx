@@ -1,8 +1,9 @@
 // The top bar of a level: the 🔊 that repeats the spoken instruction, the
 // instruction drawn (Brote ··> seed ··> pot), the title in small print for the
-// adult, the tramo's pages with their stamps, and the raised hand (Ayuda).
+// adult, the pages with their stamps (the tramo's, or a sheet's), and the
+// raised hand (Ayuda).
 
-import { Fragment } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { CHARACTERS } from '../ink/characters.js';
 import { GRADES, levelsOf, type LevelDef } from '../game/levels';
 import { HelpIcon, SpeakerIcon } from '../ui/icons';
@@ -53,19 +54,28 @@ export function DrawnInstruction({ level }: { level: LevelDef }) {
   );
 }
 
-export function LevelBar({ level, stamps, onSpeak, onHelp }: { level: LevelDef; stamps: ReadonlySet<string>; onSpeak: () => void; onHelp: () => void }) {
-  const grade = GRADES.find((g) => g.id === level.grade)!;
+/** The bar of any page: 🔊, what to do (drawn), the adult's small print, the pages, and ✋. */
+export function Bar({ instruction, title, pages, aside, onSpeak, onHelp }: {
+  instruction: ReactNode; title: ReactNode; pages: ReactNode; aside?: ReactNode; onSpeak: () => void; onHelp: () => void;
+}) {
   return (
     <header className="level-bar cut" data-zone="bar">
       <button type="button" className="speak cut" aria-label="Escuchar otra vez" onClick={onSpeak}>
         <SpeakerIcon />
       </button>
-      <DrawnInstruction level={level} />
-      <h1 className="adult-title"><b>{grade.label} · {level.page}</b> {level.title}</h1>
-      <TramoPages current={level.id} stamps={stamps} />
+      {instruction}
+      <h1 className="adult-title">{title}</h1>
+      {pages}
+      {aside}
       <button type="button" className="help cut" aria-label="Ayuda" title="Ayuda" onClick={onHelp}>
         <HelpIcon />
       </button>
     </header>
   );
+}
+
+export function LevelBar({ level, title, pages, aside, onSpeak, onHelp }: {
+  level: LevelDef; title: ReactNode; pages: ReactNode; aside?: ReactNode; onSpeak: () => void; onHelp: () => void;
+}) {
+  return <Bar instruction={<DrawnInstruction level={level} />} title={title} pages={pages} aside={aside} onSpeak={onSpeak} onHelp={onHelp} />;
 }

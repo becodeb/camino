@@ -2,18 +2,23 @@
 // instruction, the ghost hand, the page shell (bar + zones), the three
 // controls and the ?debug hooks. Split from LevelScreen so the 3ro game page
 // (RealtimeLevel) uses the very same ones.
+//
+// Where a page belongs is a context (LevelNav): the demo's tramo by default
+// (its pages in the bar, the stamp, the next page of the tramo), or a sheet
+// of 1ro's year (its pages, doors and boss, the seed, the next page of the
+// sheet). The level pages themselves do not know which.
 
-import { useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { BoardView, aspectOf, frameOf, type Frame } from '../ui/board/BoardView';
 import { playGhost, type DemoStep, type GhostRun } from '../ui/ghost';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { RestartIcon } from '../ui/icons';
 import { NextPageArt } from '../ui/art';
 import { notebookWidth } from '../blocks/BlockEditor';
-import { nextLevel, type LevelDef } from '../game/levels';
+import { GRADES, nextLevel, type LevelDef } from '../game/levels';
 import { cmdProgram } from '../game/model';
 import { stamp, useStamps } from '../game/progress';
-import { BROTE, LevelBar } from './LevelBar';
+import { BROTE, LevelBar, TramoPages } from './LevelBar';
 
 export const DEBUG = typeof location !== 'undefined' && location.search.includes('debug');
 
@@ -38,11 +43,53 @@ export function useBoard(level: LevelDef) {
   return { svgRef, viewRef };
 }
 
+// ------------------------------------------------------------------ where the page belongs
+
+export interface LevelNav {
+  /** The pages in the bar: the tramo's, or a sheet's pages, doors and boss. */
+  pages(level: LevelDef): ReactNode;
+  /** The adult's small print in the bar. */
+  title(level: LevelDef): ReactNode;
+  /** The page was won (its stamp, its seed). */
+  won(level: LevelDef): void;
+  /** Where "next page" goes. */
+  next(level: LevelDef): void;
+  /** Where "salir" goes. */
+  quit: string;
+  /** What is spoken when the page opens (a sheet adds its own line the first time). Called once, when it is said. */
+  say?(level: LevelDef): string;
+  /** Drawn inside the board's sheet, around the board (the boss's frame). */
+  decor?: ReactNode;
+  /** A class on the page. */
+  className?: string;
+  /** After the pages in the bar (the seed pouch). */
+  aside?: ReactNode;
+}
+
+function LiveTramoPages({ current }: { current: string }) {
+  return <TramoPages current={current} stamps={useStamps()} />;
+}
+
+/** The demo's tramo: ten pages, stamps in memory, the next page of the tramo. */
+export const TRAMO_NAV: LevelNav = {
+  pages: (level) => <LiveTramoPages current={level.id} />,
+  title: (level) => <><b>{GRADES.find((g) => g.id === level.grade)!.label} · {level.page}</b> {level.title}</>,
+  won: (level) => stamp(level.id),
+  next: (level) => goNext(level),
+  quit: '#/',
+};
+
+export const LevelNavContext = createContext<LevelNav>(TRAMO_NAV);
+export const useLevelNav = () => useContext(LevelNavContext);
+
 /** Speaks the instruction when the page opens (after the first tap if the browser asks for one). */
 export function useInstruction(level: LevelDef) {
+  const nav = useLevelNav();
+  const navRef = useRef(nav);
+  navRef.current = nav;
   useEffect(() => {
     let off = () => {};
-    const t = setTimeout(() => { off = speakWhenAllowed(level.say); }, 450);
+    const t = setTimeout(() => { off = speakWhenAllowed(navRef.current.say?.(level) ?? level.say); }, 450);
     return () => { clearTimeout(t); off(); stopSpeaking(); };
   }, [level]);
   return useCallback(() => speak(level.say), [level]);
@@ -68,8 +115,10 @@ export function goNext(level: LevelDef) {
 
 export function Sheet({ svgRef, level }: { svgRef: React.RefObject<SVGSVGElement | null>; level: LevelDef }) {
   const b = level.worlds[0];
+  const nav = useLevelNav();
   return (
     <div className="sheet" data-zone="stage">
+      {nav.decor}
       <span className="tape tape-l" aria-hidden="true" />
       <span className="tape tape-r" aria-hidden="true" />
       <svg ref={svgRef} className="board" role="img" aria-label={`Tablero de ${b.cols} por ${b.rows}`} />
@@ -78,8 +127,9 @@ export function Sheet({ svgRef, level }: { svgRef: React.RefObject<SVGSVGElement
 }
 
 export function NextPage({ level }: { level: LevelDef }) {
+  const nav = useLevelNav();
   return (
-    <button type="button" className="next-page cut pop-in" aria-label="Hoja siguiente" onClick={() => goNext(level)}>
+    <button type="button" className="next-page cut pop-in" aria-label="Hoja siguiente" onClick={() => nav.next(level)}>
       <NextPageArt />
     </button>
   );
@@ -93,8 +143,8 @@ export function RestartButton({ onClick, disabled }: { onClick: () => void; disa
   );
 }
 
-export function Quit() {
-  return <a className="quit" href="#/">salir</a>;
+export function Quit({ href = '#/' }: { href?: string }) {
+  return <a className="quit" href={href}>salir</a>;
 }
 
 export interface ShellProps {
@@ -110,11 +160,11 @@ export interface ShellProps {
 }
 
 export function Shell({ level, mode, rootRef, onSpeak, onHelp, busy, children, notebookW }: ShellProps) {
-  const stamps = useStamps();
+  const nav = useLevelNav();
   return (
     <main
       ref={rootRef}
-      className={`level mode-${mode}`}
+      className={`level mode-${mode}${nav.className ? ` ${nav.className}` : ''}`}
       data-level={level.id}
       data-busy={busy ? 'true' : undefined}
       style={{
@@ -123,9 +173,9 @@ export function Shell({ level, mode, rootRef, onSpeak, onHelp, busy, children, n
         '--notebook-w': `${notebookW ?? notebookWidth(level.blocks, level.blockLabel)}px`,
       } as CSSProperties}
     >
-      <LevelBar level={level} stamps={stamps} onSpeak={onSpeak} onHelp={onHelp} />
+      <LevelBar level={level} title={nav.title(level)} pages={nav.pages(level)} aside={nav.aside} onSpeak={onSpeak} onHelp={onHelp} />
       {children}
-      <Quit />
+      <Quit href={nav.quit} />
     </main>
   );
 }

@@ -7,8 +7,10 @@ import { InkDefs } from './ui/InkDefs';
 import { HomeScreen } from './screens/HomeScreen';
 import { LevelScreen } from './screens/LevelScreen';
 import { ForestMap } from './screens/ForestMap';
+import { SheetScreen } from './screens/SheetScreen';
+import { DevDrawer } from './screens/DevDrawer';
 import { levelById } from './game/levels';
-import { parseRoute } from './curriculum/route';
+import { parseRoute, type Route } from './curriculum/route';
 import './ui/runtime';
 
 function useHash() {
@@ -21,9 +23,9 @@ function useHash() {
   return hash;
 }
 
-function Screen({ hash }: { hash: string }) {
-  const route = parseRoute(hash);
+function Screen({ route, hash }: { route: Route; hash: string }) {
   if (route.screen === 'map') return <ForestMap />;
+  if (route.screen === 'sheet') return <SheetScreen key={hash} n={route.n} page={route.page} />;
   if (route.screen === 'level') {
     const level = levelById(route.id);
     if (level) return <LevelScreen key={level.id} level={level} />;
@@ -33,11 +35,13 @@ function Screen({ hash }: { hash: string }) {
 
 export function App() {
   const hash = useHash();
+  const route = parseRoute(hash);
   useEffect(() => { window.scrollTo(0, 0); }, [hash]);
   return (
     <>
       <InkDefs />
-      <Screen hash={hash} />
+      <Screen route={route} hash={hash} />
+      <DevDrawer route={route} />
     </>
   );
 }

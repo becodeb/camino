@@ -19,12 +19,11 @@ import { addAction, addRule, removeRef, ruleRefusal, type RuleBlock, type RuleDr
 import { nextMove } from '../game/engine';
 import { type LevelDef } from '../game/levels';
 import { DIRS, type Dir } from '../game/model';
-import { stamp } from '../game/progress';
 import {
   MOVE_TICKS, TICK_MS, chaseSeed, hatOfKey, isHat, keyOf, rtInit, rtStep,
   type ActionId, type HatId, type Rule, type RtEvent,
 } from '../game/rules';
-import { DEBUG, NextPage, RestartButton, Shell, useBoard, useDebugHooks, useGhost, useInstruction } from './levelKit';
+import { DEBUG, NextPage, RestartButton, Shell, useBoard, useDebugHooks, useGhost, useInstruction, useLevelNav } from './levelKit';
 
 const LINES = {
   won: '¡Lo lograste!',
@@ -58,6 +57,7 @@ export function RealtimeLevel({ level }: { level: LevelDef }) {
   const { svgRef, viewRef } = useBoard(level);
   const say = useInstruction(level);
   const ghost = useGhost(rootRef);
+  const nav = useLevelNav();
   const hats = level.blocks.filter(isHat) as HatId[];
   const keys = hats.map(keyOf).filter((k): k is Dir => !!k);
   const opts = { maxActions: def.maxActions, maxRules: hats.length };
@@ -151,7 +151,7 @@ export function RealtimeLevel({ level }: { level: LevelDef }) {
     await lastMove.current;
     wonRef.current = true;
     setWon(true);
-    stamp(level.id);
+    nav.won(level);
     speak(LINES.won);
     await viewRef.current?.celebrate();
   };
