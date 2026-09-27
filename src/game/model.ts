@@ -36,7 +36,9 @@ export interface Board {
 /**
  * Command ids. A plain direction is one step. Later grades add:
  * `jump:<dir>` two cells, flying over whatever is between;
- * `ifrock:<dir>` if there is a rock right there, jump it; otherwise one step.
+ * `ifrock:<dir>` "si hay piedra, saltar": if there is a rock right there,
+ * jump it; otherwise nothing happens (Brote only looks). An if-then, no else:
+ * walking on is the next block's job.
  */
 export type CommandId = Dir | `jump:${Dir}` | `ifrock:${Dir}`;
 export type CommandKind = 'step' | 'jump' | 'ifrock';
@@ -68,7 +70,8 @@ export interface RobotState extends Cell {
   mask: number;
 }
 
-export type StepKind = 'move' | 'jump' | 'crash';
+/** `look`: an if that found nothing to do (Brote peeks ahead, stays put). */
+export type StepKind = 'move' | 'jump' | 'crash' | 'look';
 
 export interface TraceStep {
   /** Index among executed primitives. */
@@ -104,6 +107,10 @@ export const obstacleAt = (b: Board, c: number, r: number) => b.obstacles.find((
 export const fullMask = (b: Board) => (1 << b.pickups.length) - 1;
 export const initialState = (b: Board): RobotState => ({ c: b.start.c, r: b.start.r, mask: 0 });
 export const isWin = (b: Board, s: RobotState) => sameCell(s, b.goal) && s.mask === fullMask(b);
+
+/** 2do fog: what Brote sees from a cell, the cell itself and the four next to it. */
+export const visibleFrom = (b: Board, at: Cell): Cell[] =>
+  [at, ...Object.values(DELTA).map(([dc, dr]) => ({ c: at.c + dc, r: at.r + dr }))].filter((x) => inside(b, x.c, x.r));
 
 /** Cards the child placed (a loop itself is not a card). */
 export const cardCount = (p: Program) => p.reduce((n, it) => n + (it.t === 'cmd' ? 1 : it.body.length), 0);

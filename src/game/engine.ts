@@ -6,10 +6,15 @@ import {
   type Board, type CardRef, type Cell, type Dir, type Program, type RobotState, type Trace, type TraceStep,
 } from './model';
 
-/** A "repeat until the goal" loop gives up after this many passes (a program that never gets there). */
+/**
+ * A "repeat until the goal" loop gives up after this many passes, or as soon
+ * as a pass starts where an earlier one started (it would go round forever).
+ */
 export const MAX_PASSES = 40;
 
 type StepResult = Omit<TraceStep, 'index' | 'cmd' | 'ref'>;
+
+const stateKey = (s: RobotState) => `${s.c},${s.r},${s.mask}`;
 
 function land(b: Board, s: RobotState, c: number, r: number, collected: number[]): RobotState {
   let mask = s.mask;
@@ -46,7 +51,7 @@ export function applyCommand(b: Board, cmd: string, s: RobotState): StepResult {
   };
 
   if (kind === 'jump') return jump();
-  if (kind === 'ifrock') return obstacleAt(b, s.c + dc, s.r + dr) ? jump() : step();
+  if (kind === 'ifrock') return obstacleAt(b, s.c + dc, s.r + dr) ? jump() : result('look', s, []);
   return step();
 }
 
@@ -82,9 +87,15 @@ export function simulate(b: Board, program: Program, opts: { from?: RobotState }
       continue;
     }
     const passes = it.count === 'goal' ? MAX_PASSES : it.count;
+    const starts = new Set<string>();
     for (let iter = 0; iter < passes; iter++) {
       if (it.count === 'goal' && isWin(b, s)) break;
       if (!it.body.length) break;
+      if (it.count === 'goal') {
+        // a pass is a pure function of where it starts: same start, same pass, forever
+        if (starts.has(stateKey(s))) break;
+        starts.add(stateKey(s));
+      }
       for (let inner = 0; inner < it.body.length; inner++) {
         if (exec(it.body[inner], { item, inner, iter }) === 'stop') return finish();
       }
@@ -95,7 +106,14 @@ export function simulate(b: Board, program: Program, opts: { from?: RobotState }
 
 export const solves = (b: Board, program: Program) => simulate(b, program).outcome === 'win';
 
-const stateKey = (s: RobotState) => `${s.c},${s.r},${s.mask}`;
+/**
+ * One program in several worlds at once (2do page 2). Every block runs as
+ * exactly one step in every world, so while two worlds are both still going,
+ * their step `i` comes from the same block: the notebook can follow all of
+ * them. The program works only when it wins in every world.
+ */
+export const simulateAll = (worlds: readonly Board[], program: Program): Trace[] => worlds.map((b) => simulate(b, program));
+export const solvesAll = (worlds: readonly Board[], program: Program) => worlds.every((b) => solves(b, program));
 
 /**
  * The shortest list of steps from `s` that wins (collecting every pickup on

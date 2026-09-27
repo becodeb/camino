@@ -58,12 +58,25 @@ export interface LevelDef {
   solution: Program;
   /** 2do: the board is covered and only the cells next to Brote show. */
   fog?: boolean;
+  /**
+   * A new concept, shown by the ghost hand with real edits: it builds this
+   * program (the idea, not the answer). It plays by itself once, the first
+   * time the notebook is full (`full`) or a run without the idea fails
+   * (`fail`), and again from ✋ while the program has no loop.
+   */
+  intro?: { program: Program; after: 'full' | 'fail' };
 }
 
 const grass = (seed: number, cells: [number, number][]): Deco[] =>
   cells.map(([c, r], i) => ({ c, r, dx: ((seed * 7 + i * 13) % 30) - 15, dy: 22 + ((seed + i * 5) % 12), seed: seed * 10 + i }));
 const rock = (c: number, r: number, seed = 3): Obstacle => ({ c, r, kind: 'rock', seed });
 const ARROWS = ['left', 'up', 'down', 'right'];
+/** 2do: a one-row path to the right with rocks on it. */
+const strip = (cols: number, goal: number, rocks: number[], seed: number): Board => ({
+  cols, rows: 1, start: { c: 0, r: 0 }, goal: { c: goal, r: 0 }, goalKind: 'seed',
+  obstacles: rocks.map((c, i) => rock(c, 0, seed + i)), pickups: [], deco: [], seed,
+});
+const WALK_OR_JUMP: Program = [{ t: 'loop', count: 'goal', body: ['ifrock:right', 'right'] }];
 
 export const LEVELS: LevelDef[] = [
   {
@@ -127,6 +140,69 @@ export const LEVELS: LevelDef[] = [
     blockLabel: 'picture',
     slots: 5,
     solution: cmdProgram(['up', 'right', 'right', 'right', 'down']),
+  },
+  {
+    id: '1ro-1',
+    grade: '1ro',
+    page: 1,
+    title: 'Repetir: muchos pasos, pocos renglones',
+    say: 'Llevá a Brote hasta la semilla. Está lejos, y el cuaderno tiene pocos renglones.',
+    mode: 'program',
+    worlds: [{
+      cols: 9, rows: 3, start: { c: 0, r: 1 }, goal: { c: 8, r: 1 }, goalKind: 'seed',
+      obstacles: [], pickups: [], deco: grass(11, [[1, 0], [3, 2], [5, 0], [7, 2], [6, 0]]), seed: 85,
+    }],
+    blocks: ['right', 'repeat'],
+    blockLabel: 'picture-word',
+    slots: 3,
+    solution: [{ t: 'loop', count: 8, body: ['right'] }],
+    intro: { program: [{ t: 'loop', count: 3, body: ['right'] }], after: 'full' },
+  },
+  {
+    id: '1ro-2',
+    grade: '1ro',
+    page: 2,
+    title: 'La escalera: repetir → ↑',
+    say: 'Brote tiene que subir la escalera hasta la semilla. Mirá bien los escalones: se repiten.',
+    mode: 'program',
+    worlds: [{
+      cols: 5, rows: 5, start: { c: 0, r: 4 }, goal: { c: 4, r: 0 }, goalKind: 'seed',
+      // rocks line both sides of the stairs, so only the stairs lead up
+      obstacles: [rock(0, 3, 4), rock(1, 2, 6), rock(2, 1, 8), rock(3, 0, 10), rock(2, 4, 12), rock(3, 3, 14), rock(4, 2, 16)],
+      pickups: [], deco: grass(13, [[0, 0], [4, 4], [1, 0], [0, 1]]), seed: 96,
+    }],
+    blocks: ['right', 'up', 'repeat'],
+    blockLabel: 'picture-word',
+    slots: 3,
+    solution: [{ t: 'loop', count: 4, body: ['right', 'up'] }],
+  },
+  {
+    id: '2do-1',
+    grade: '2do',
+    page: 1,
+    title: 'Niebla: repetir hasta llegar, si hay piedra saltar',
+    say: 'Hay niebla: Brote solo ve lo que tiene al lado. Hacé que camine hasta la semilla, y que salte si hay una piedra.',
+    mode: 'program',
+    worlds: [strip(9, 8, [3, 6], 107)],
+    blocks: ['right', 'ifrock:right', 'repeat-goal'],
+    blockLabel: 'word-picture',
+    slots: 3,
+    solution: WALK_OR_JUMP,
+    fog: true,
+    intro: { program: [{ t: 'loop', count: 'goal', body: ['right'] }], after: 'fail' },
+  },
+  {
+    id: '2do-2',
+    grade: '2do',
+    page: 2,
+    title: 'Tres caminos, un programa',
+    say: 'Un solo programa para los tres caminos. Tiene que llegar a la semilla en los tres a la vez.',
+    mode: 'program',
+    worlds: [strip(8, 6, [2, 5], 118), strip(8, 7, [1, 4], 129), strip(8, 5, [3], 131)],
+    blocks: ['right', 'ifrock:right', 'repeat-goal'],
+    blockLabel: 'word-picture',
+    slots: 3,
+    solution: WALK_OR_JUMP,
   },
 ];
 

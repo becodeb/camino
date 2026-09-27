@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_PASSES, applyCommand, completeProgram, move, nextMove, shortestMoves, simulate, solves } from './engine';
-import { cmdProgram, initialState, parseCommand, type Board, type Program } from './model';
+import { MAX_PASSES, applyCommand, completeProgram, move, nextMove, shortestMoves, simulate, simulateAll, solves, solvesAll } from './engine';
+import { cmdProgram, initialState, parseCommand, visibleFrom, type Board, type Program } from './model';
 
 const board = (over: Partial<Board> = {}): Board => ({
   cols: 5, rows: 3, start: { c: 0, r: 1 }, goal: { c: 4, r: 1 }, goalKind: 'seed',
@@ -28,12 +28,25 @@ describe('commands', () => {
     expect(bump.crash).toEqual({ at: { c: 1, r: 1 }, out: false });
   });
 
-  it('a jump flies over a rock; "if rock" jumps only when there is one', () => {
+  it('a jump flies over a rock and lands two cells away', () => {
+    const b = board({ obstacles: [rock(1, 1)] });
+    expect(applyCommand(b, 'jump:right', initialState(b))).toMatchObject({ kind: 'jump', to: { c: 2, r: 1 }, cells: [{ c: 2, r: 1 }] });
+  });
+
+  it('a jump cannot land on a rock or off the board', () => {
+    const b = board({ obstacles: [rock(2, 1)] });
+    expect(applyCommand(b, 'jump:right', initialState(b))).toMatchObject({ kind: 'crash', crash: { at: { c: 2, r: 1 }, out: false } });
+    expect(applyCommand(b, 'jump:left', initialState(b))).toMatchObject({ kind: 'crash', crash: { out: true } });
+  });
+
+  it('"si hay piedra, saltar" is an if-then: a rock ahead is jumped, otherwise Brote only looks', () => {
     const b = board({ obstacles: [rock(1, 1)] });
     const s = initialState(b);
-    expect(applyCommand(b, 'jump:right', s)).toMatchObject({ kind: 'jump', to: { c: 2, r: 1 } });
     expect(applyCommand(b, 'ifrock:right', s)).toMatchObject({ kind: 'jump', to: { c: 2, r: 1 } });
-    expect(applyCommand(b, 'ifrock:up', s)).toMatchObject({ kind: 'move', to: { c: 0, r: 0 } });
+    const look = applyCommand(b, 'ifrock:up', s);
+    expect(look).toMatchObject({ kind: 'look', dir: 'up', cells: [], won: false });
+    expect(look.to).toEqual(s);
+    expect(look.crash).toBeUndefined();
   });
 });
 
@@ -84,13 +97,74 @@ describe('programs', () => {
     expect(solves(b, [{ t: 'loop', count: 2, body: ['right', 'up'] }])).toBe(false);
   });
 
-  it('"repeat until the goal" stops on the goal and gives up after MAX_PASSES', () => {
-    const b = board({ obstacles: [rock(2, 1)] });
-    expect(solves(b, [{ t: 'loop', count: 'goal', body: ['ifrock:right'] }])).toBe(true);
+  it('a counted repeat runs its body exactly `count` times, then the program goes on', () => {
+    const b = board({ goal: { c: 3, r: 0 } });
+    const t = simulate(b, [{ t: 'loop', count: 3, body: ['right'] }, { t: 'cmd', cmd: 'up' }]);
+    expect(t.outcome).toBe('win');
+    expect(t.steps.map((s) => s.cmd)).toEqual(['right', 'right', 'right', 'up']);
+    expect(t.steps[3].ref).toEqual({ item: 1 });
+  });
+
+  it('a repeat stops as soon as Brote wins, even with passes left', () => {
+    const t = simulate(board(), [{ t: 'loop', count: 10, body: ['right'] }]);
+    expect(t.outcome).toBe('win');
+    expect(t.steps).toHaveLength(4);
+  });
+
+  it('"repeat until the goal" with "if rock, jump" then a step walks any rocky path', () => {
+    const p: Program = [{ t: 'loop', count: 'goal', body: ['ifrock:right', 'right'] }];
+    const b = board({ cols: 8, rows: 1, start: { c: 0, r: 0 }, goal: { c: 7, r: 0 }, obstacles: [rock(2, 0), rock(5, 0)] });
+    const t = simulate(b, p);
+    expect(t.outcome).toBe('win');
+    expect(t.steps.map((s) => s.kind)).toEqual(['look', 'move', 'jump', 'move', 'jump', 'move']);
+    expect(t.steps.map((s) => s.ref.iter)).toEqual([0, 0, 1, 1, 2, 2]);
+  });
+
+  it('"repeat until the goal" gives up when a pass starts where an earlier one did', () => {
     const never = board({ cols: 3, rows: 3, start: { c: 0, r: 0 }, goal: { c: 2, r: 2 } });
     const t = simulate(never, [{ t: 'loop', count: 'goal', body: ['right', 'left'] }]);
     expect(t.outcome).toBe('short');
-    expect(t.steps).toHaveLength(MAX_PASSES * 2);
+    expect(t.steps).toHaveLength(2);
+    // an if that never fires does not move Brote: one look and it is over
+    const still = simulate(board(), [{ t: 'loop', count: 'goal', body: ['ifrock:right'] }]);
+    expect(still.outcome).toBe('short');
+    expect(still.steps).toHaveLength(1);
+  });
+
+  it('"repeat until the goal" is capped at MAX_PASSES', () => {
+    const long = board({ cols: MAX_PASSES + 10, rows: 1, start: { c: 0, r: 0 }, goal: { c: MAX_PASSES + 5, r: 0 } });
+    const t = simulate(long, [{ t: 'loop', count: 'goal', body: ['right'] }]);
+    expect(t.outcome).toBe('short');
+    expect(t.steps).toHaveLength(MAX_PASSES);
+  });
+});
+
+describe('several worlds at once', () => {
+  const p: Program = [{ t: 'loop', count: 'goal', body: ['ifrock:right', 'right'] }];
+  const a = board({ cols: 6, rows: 1, start: { c: 0, r: 0 }, goal: { c: 5, r: 0 }, obstacles: [rock(1, 0)] });
+  const b = board({ cols: 6, rows: 1, start: { c: 0, r: 0 }, goal: { c: 3, r: 0 }, obstacles: [rock(2, 0)] });
+
+  it('runs the same program in every world; it works only if it wins in all', () => {
+    const traces = simulateAll([a, b], p);
+    expect(traces.map((t) => t.outcome)).toEqual(['win', 'win']);
+    expect(solvesAll([a, b], p)).toBe(true);
+    expect(solvesAll([a, b], cmdProgram(['right', 'right', 'right']))).toBe(false);
+  });
+
+  it('step i comes from the same block in every world still going', () => {
+    const [ta, tb] = simulateAll([a, b], p);
+    const n = Math.min(ta.steps.length, tb.steps.length);
+    for (let i = 0; i < n; i++) expect(ta.steps[i].ref).toEqual(tb.steps[i].ref);
+  });
+});
+
+describe('fog', () => {
+  it('Brote sees his cell and the four next to it, never beyond', () => {
+    const b = board();
+    const seen = visibleFrom(b, { c: 0, r: 1 });
+    expect(seen).toEqual(expect.arrayContaining([{ c: 0, r: 1 }, { c: 1, r: 1 }, { c: 0, r: 0 }, { c: 0, r: 2 }]));
+    expect(seen).toHaveLength(4);
+    expect(seen.some((x) => x.c > 1)).toBe(false);
   });
 });
 
