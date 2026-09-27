@@ -18,6 +18,11 @@ export function InkDefs() {
         <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)">
           <line x1="0" y1="0" x2="0" y2="6" stroke="#2b2622" strokeWidth="1.6" opacity="0.55" />
         </pattern>
+        {/* the fog of 2do: soft pencil hatching, in two passes like a child shading */}
+        <pattern id="fog-hatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(-38)">
+          <line x1="0" y1="0" x2="0" y2="9" stroke="#47444c" strokeWidth="1.5" opacity="0.42" />
+          <line x1="4.5" y1="0" x2="4.5" y2="5" stroke="#47444c" strokeWidth="1.2" opacity="0.24" />
+        </pattern>
       </defs>
     </svg>
   );

@@ -9,7 +9,7 @@ import { el, rng, blob, wobblyPoly, wobblyLine, penLoop, spiral, smoothClosed, s
 import { tween, proc, wait, E, ABORT, engine } from '../../ink/anim.js';
 import { INK, type CharacterDef } from '../../ink/characters.js';
 import { onFrame, REDUCED } from '../runtime';
-import { DELTA, type Board, type Obstacle, type RobotState, type Trace, type TraceStep } from '../../game/model';
+import { DELTA, visibleFrom, type Board, type Cell, type Obstacle, type RobotState, type Trace, type TraceStep } from '../../game/model';
 
 export const S = 100;
 /** Space above the grid, in board units. */
@@ -96,6 +96,8 @@ export function drawPortrait(def: CharacterDef, svg: SVGSVGElement, look = { x: 
 }
 
 // ------------------------------------------------------------------ board view
+let fogN = 0;
+
 export class BoardView {
   readonly svg: SVGSVGElement;
   board: Board | null = null;
@@ -118,10 +120,10 @@ export class BoardView {
   constructor(svg: SVGSVGElement) {
     this.svg = svg;
     svg.textContent = '';
-    for (const n of ['floor', 'deco', 'marks', 'obst', 'goal', 'trail', 'shadow', 'actor', 'fx']) {
+    for (const n of ['floor', 'deco', 'marks', 'obst', 'goal', 'trail', 'fog', 'shadow', 'actor', 'fx']) {
       this.L[n] = el('g', { class: `layer-${n}` }, svg);
     }
-    for (const n of ['floor', 'deco', 'obst', 'trail']) this.L[n].setAttribute('filter', 'url(#boil)');
+    for (const n of ['floor', 'deco', 'obst', 'trail', 'fog']) this.L[n].setAttribute('filter', 'url(#boil)');
     this.unsub = onFrame((t, dt) => this.frame(t, dt));
     const move = (e: PointerEvent) => {
       const p = this.toBoard(e.clientX, e.clientY);
@@ -166,7 +168,8 @@ export class BoardView {
     const w = board.cols * S, h = board.rows * S;
     // extra room on top: characters in the first row and their jumps stick out of the grid
     this.svg.setAttribute('viewBox', `-16 -${TOP} ${w + 32} ${h + TOP + 16}`);
-    for (const n of ['floor', 'deco', 'marks', 'obst', 'goal', 'trail', 'fx']) this.L[n].textContent = '';
+    for (const n of ['floor', 'deco', 'marks', 'obst', 'goal', 'trail', 'fog', 'fx']) this.L[n].textContent = '';
+    this.fogTiles.clear();
     this.confetti = [];
     const R = rng(board.seed + 5);
     el('rect', { x: 0, y: 0, width: w, height: h, fill: '#f6efdf' }, this.L.floor);
@@ -208,6 +211,80 @@ export class BoardView {
     this.pos = { c: board.start.c, r: board.start.r, mask: 0 };
     this.setGoalOpen(board.pickups.length === 0, false);
     if (opts.pop) pops.forEach((n, i) => popAnim(n, { dur: 320, delay: 80 + i * 70 }));
+    if (this.fog) this.coverFog();
+  }
+
+  // ---------------------------------------------------------------- fog (2do)
+  /** The board is covered in pencil fog; Brote only sees the cells next to him. */
+  fog = false;
+  private fogTiles = new Map<string, SVGGElement>();
+
+  setFog(on: boolean) {
+    this.fog = on;
+    if (on) this.coverFog();
+    else this.clearFog();
+  }
+
+  /** Fog everywhere but around the start cell: a hatched pencil smudge per cell, overlapping into one cloud. */
+  private coverFog() {
+    const b = this.board;
+    if (!b) return;
+    this.clearFog();
+    // the fog stays on the sheet's grid: its puffs overlap each other, never the paper around
+    const id = `fog-clip-${b.seed}-${++fogN}`;
+    const cp = el('clipPath', { id }, this.L.fog);
+    el('rect', { x: -3, y: -3, width: b.cols * S + 6, height: b.rows * S + 6 }, cp);
+    const clip = el('g', { 'clip-path': `url(#${id})` }, this.L.fog);
+    for (let r = 0; r < b.rows; r++) {
+      for (let c = 0; c < b.cols; c++) {
+        const seed = b.seed * 31 + c * 7 + r * 13;
+        const g = el('g', { class: 'fog-tile' }, clip);
+        const d = blob(c * S + S / 2, r * S + S / 2, S * 0.7, S * 0.68, { wob: 0.1, n: 9, seed });
+        el('path', { d, fill: '#e3dac6' }, g);
+        el('path', { d, fill: 'url(#fog-hatch)' }, g);
+        // a couple of loose pencil strokes, like shading done in a hurry
+        const R = rng(seed);
+        for (let i = 0; i < 2; i++) {
+          const x = c * S + 18 + R() * 50, y = r * S + 24 + R() * 52;
+          el('path', { d: wobblyLine(x, y, x + 26 + R() * 12, y - 16 - R() * 8, { bow: 2, seed: seed + i }), stroke: '#47444c', 'stroke-width': 1.8, opacity: 0.35, fill: 'none', 'stroke-linecap': 'round' }, g);
+        }
+        g.style.transformBox = 'fill-box';
+        g.style.transformOrigin = 'center';
+        this.fogTiles.set(`${c},${r}`, g);
+      }
+    }
+    for (const cell of visibleFrom(b, b.start)) this.lift(cell, false);
+  }
+
+  private clearFog() {
+    this.L.fog.textContent = '';
+    this.fogTiles.clear();
+  }
+
+  /** The fog of one cell is rubbed out (an eraser, not a fade to blur). */
+  private lift(cell: Cell, animate = true, delay = 0) {
+    const k = `${cell.c},${cell.r}`;
+    const g = this.fogTiles.get(k);
+    if (!g) return;
+    this.fogTiles.delete(k);
+    if (!animate || REDUCED) { g.remove(); return; }
+    g.animate([{ transform: 'scale(1) rotate(0deg)', opacity: 1 }, { transform: 'scale(0.35) rotate(-12deg)', opacity: 0 }], { duration: 420, delay, easing: 'ease-in', fill: 'forwards' })
+      .finished.then(() => g.remove()).catch(() => g.remove());
+  }
+
+  /** Brote arrived at `cell`: he now sees it and the cells next to it. */
+  revealAround(cell: Cell) {
+    if (!this.fog || !this.board) return;
+    for (const x of visibleFrom(this.board, cell)) this.lift(x);
+  }
+
+  /** After a run the whole world shows, from where Brote stands outwards. */
+  revealAll() {
+    if (!this.fog) return;
+    for (const [k] of [...this.fogTiles]) {
+      const [c, r] = k.split(',').map(Number);
+      this.lift({ c, r }, true, 90 * (Math.abs(c - this.pos.c) + Math.abs(r - this.pos.r)));
+    }
   }
 
   /**
@@ -251,6 +328,7 @@ export class BoardView {
     this.setGoalOpen(b.pickups.length === 0, false);
     const home = feet(b.start.c, b.start.r);
     this.pos = { c: b.start.c, r: b.start.r, mask: 0 };
+    if (this.fog) this.coverFog();
     await a.act(async () => {
       if (Math.hypot(a.rig.x - home.x, a.rig.y - home.y) > 1) await a.poofTo(home);
       else await a.settle(150);
@@ -267,7 +345,15 @@ export class BoardView {
    * notebook can ring the running block. Resolves with the outcome once
    * Brote has finished reacting.
    */
-  async play(trace: Trace, opts: { onStep?: (s: TraceStep) => void; celebrate?: boolean; quiet?: boolean } = {}): Promise<'win' | 'crash' | 'short' | 'aborted'> {
+  async play(trace: Trace, opts: {
+    onStep?: (s: TraceStep) => void;
+    celebrate?: boolean;
+    quiet?: boolean;
+    /** Several boards: wait here before every step until the others are ready (see game/lockstep). */
+    gate?: () => Promise<void>;
+    /** The steps are over (before any celebration or puzzlement): the others need not wait any more. */
+    onDone?: () => void;
+  } = {}): Promise<'win' | 'crash' | 'short' | 'aborted'> {
     const a = this.actor, b = this.board;
     if (!a || !b) return 'aborted';
     this.running = true;
@@ -283,18 +369,20 @@ export class BoardView {
         this.pickupNodes.forEach((n) => n.setAttribute('opacity', '1'));
         this.setGoalOpen(b.pickups.length === 0, false);
         this.pos = { c: b.start.c, r: b.start.r, mask: 0 };
+        if (this.fog) this.coverFog();
         await a.poofTo(feet(b.start.c, b.start.r));
         await a.wait(150);
       }
       this.trail.start(a);
       for (const s of trace.steps) {
+        if (opts.gate) await opts.gate();
         opts.onStep?.(s);
         const outcome = await this.playStep(a, s, 'full');
         if (outcome === 'crash') { result = 'crash'; return; }
         if (s.won) { result = 'win'; return; }
         if (!REDUCED) await a.wait(90);
       }
-    });
+    }).finally(() => opts.onDone?.());
     this.trail.active = false;
     if (!ok) { this.running = false; return 'aborted'; }
     if (result === 'win') {
@@ -316,6 +404,14 @@ export class BoardView {
     const dir = { dx, dy };
     if (dx && Math.sign(a.rig.face) !== dx) await a.T({ face: dx }, REDUCED ? 1 : 150, E.inOut);
     if (dy) a.lookAt(0, dy, 800); else a.lookAt(dx, 0.1, 800);
+    if (s.kind === 'look') {
+      // "si hay piedra" and there is none: Brote leans and peeks ahead, and stays
+      if (REDUCED) { await a.wait(220); return 'ok'; }
+      await a.T({ lean: 8 * (dx || 0), sy: 1.05, sx: 0.97 }, 160, E.out);
+      await a.wait(140);
+      await a.T({ lean: 0, sy: 1, sx: 1 }, 160, E.inOut);
+      return 'ok';
+    }
     for (const cell of s.cells) {
       const to = feet(cell.c, cell.r);
       if (s.kind === 'jump' && !REDUCED) {
@@ -327,6 +423,7 @@ export class BoardView {
         await a.perform('step', to, dir);
       }
       this.pos = { c: cell.c, r: cell.r, mask: this.pos.mask };
+      this.revealAround(cell);
       for (const i of s.collected) {
         const p = b.pickups[i];
         if (p.c === cell.c && p.r === cell.r) this.collect(i);
@@ -423,11 +520,31 @@ export class BoardView {
       popAnim(drawSprout(g), { dur: 420, origin: '50% 100%' });
       cx += side * 22;
     }
-    const g = el('g', { class: 'goal-ring', filter: 'url(#boil)' }, this.L.fx);
-    const p = el('path', { d: penLoop(cx + 6, cy + 4, 64, 56, { seed: b.seed }), fill: 'none', stroke: '#3d6ea5', 'stroke-width': 3.6, 'stroke-linecap': 'round' }, g);
-    drawOn(p, 560, 160);
+    if (!this.L.fx.querySelector('.goal-ring')) this.goalRing(cx, cy);
     this.burstConfetti(cx, cy - 10);
     await a.act(() => a.perform('celebrate'));
+  }
+
+  private goalRing(cx: number, cy: number) {
+    const g = el('g', { class: 'goal-ring', filter: 'url(#boil)' }, this.L.fx);
+    const p = el('path', { d: penLoop(cx + 6, cy + 4, 64, 56, { seed: this.board!.seed }), fill: 'none', stroke: '#3d6ea5', 'stroke-width': 3.6, 'stroke-linecap': 'round' }, g);
+    drawOn(p, 560, 160);
+  }
+
+  /**
+   * One world of several reached its seed: the pen ring and a happy nod, no
+   * confetti yet (the page is won only when every world is).
+   */
+  async smallWin() {
+    const a = this.actor;
+    if (!a || !this.board) return;
+    this.goalRing(this.pos.c * S + S / 2, this.pos.r * S + S / 2);
+    await a.act(async () => {
+      a.rig.eyes = 'happy';
+      a.rig.mouth = 'grin';
+      await a.perform('nod');
+      await a.wait(250);
+    });
   }
 
   async puzzled() {
@@ -449,6 +566,9 @@ export class BoardView {
   }
 
   // ---------------------------------------------------------------- fx
+  /** Several worlds: a bump mark stays until the next run, so the sheet that failed is still marked at the end. */
+  keepBumps = false;
+
   /** Where Brote bumped: a small ink burst with a yellow star (never a red cross: nothing is "wrong"). */
   drawBump(x: number, y: number) {
     const outer = el('g', { class: 'bump-mark', transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})` }, this.L.fx);
@@ -459,6 +579,7 @@ export class BoardView {
     }
     el('path', { d: 'M0,-10 L2.8,-3 10,-3 4.4,1.8 6.4,9 0,4.8 -6.4,9 -4.4,1.8 -10,-3 -2.8,-3Z', fill: '#f0d27a', stroke: INK, 'stroke-width': 2, 'stroke-linejoin': 'round' }, g);
     popAnim(g, { dur: 260, origin: '50% 50%' });
+    if (this.keepBumps) return;
     setTimeout(() => {
       if (!outer.isConnected || REDUCED) return;
       g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' }).finished.then(() => outer.remove()).catch(() => {});

@@ -28,11 +28,16 @@ const HAND_SVG = `
   </g>
 </svg>`;
 
-/** One gesture of a demo: tap a target, point at targets, or drag one onto another (CSS selectors). */
+/**
+ * One gesture of a demo: tap a target, point at targets, or drag one onto
+ * another (CSS selectors). Help only shows the gesture; a concept demo also
+ * makes it happen: `apply` runs at the moment of the tap or the drop.
+ */
 export type DemoStep =
-  | { do: 'tap'; at: string }
+  | { do: 'tap'; at: string; apply?: () => void }
   | { do: 'point'; at: string[] }
-  | { do: 'drag'; from: string; to: string };
+  | { do: 'drag'; from: string; to: string; apply?: () => void }
+  | { do: 'wait'; ms: number };
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -94,7 +99,8 @@ export function playGhost(root: HTMLElement, steps: DemoStep[]): GhostRun {
     if (cancelled) return;
     const from = at;
     at = to;
-    const dur = REDUCED ? 1 : ms;
+    // short hops (tapping the same count again) are quick
+    const dur = REDUCED ? 1 : Math.max(160, ms * Math.min(1, Math.hypot(to.x - from.x, to.y - from.y) / 260));
     const anims = [hand.animate([{ transform: place(from) }, { transform: place(to) }], { duration: dur, easing: 'cubic-bezier(.4,.1,.3,1)', fill: 'forwards' })];
     if (carry) {
       // held by its lower left corner, so the hand never hides what it carries
@@ -121,12 +127,15 @@ export function playGhost(root: HTMLElement, steps: DemoStep[]): GhostRun {
     await hand.animate([{ opacity: 0 }, { opacity: 0.94 }], { duration: 260, fill: 'forwards' }).finished.catch(() => undefined);
     for (const s of steps) {
       if (cancelled) break;
-      if (s.do === 'tap') {
+      if (s.do === 'wait') {
+        await sleep(s.ms);
+      } else if (s.do === 'tap') {
         const el = one(root, s.at);
         if (!el) continue;
         await move(centerOf(el), 650);
         await press(true);
         ripple(at);
+        if (!cancelled) s.apply?.();
         await sleep(90);
         await press(false);
         await sleep(380);
@@ -154,6 +163,7 @@ export function playGhost(root: HTMLElement, steps: DemoStep[]): GhostRun {
         await move(centerOf(to), 950, copy);
         await press(false);
         ripple(at);
+        if (!cancelled) s.apply?.();
         await copy.animate([{ opacity: 0.9 }, { opacity: 0 }], { duration: 380, fill: 'forwards' }).finished.catch(() => undefined);
         copy.remove();
         await sleep(260);
