@@ -1,6 +1,6 @@
 // Screenshot tour with Playwright driving the system Chromium (no bundled browser needed).
 // PW=/tmp/pw node tools/shots.mjs <outDir> [base] [only]
-//   T1 scenarios are named t1-*, T2 scenarios t2-* (so `only=t2-` shoots the T2 tour).
+//   T1 scenarios are named t1-*, T2 scenarios t2-*, T3 scenarios t3-* (so `only=t2-` shoots the T2 tour).
 //   PW: a directory with playwright installed; base: the running app (default http://127.0.0.1:8797/)
 //   only: run the scenarios whose name contains this text.
 // Uses the ?debug hooks (window.__camino) to build programs and run them; waits in real time.
@@ -104,7 +104,89 @@ const T2 = [
   { name: '2do-2-win', size: [1280, 800], go: url('/nivel/2do-2'), run: (p) => runProgram(p, loop('goal', ['ifrock:right', 'right']), 12000) },
 ].map((s) => ({ ...s, name: `t2-${s.name}` }));
 
-const S = [...T1, ...T2];
+/** 3ro: every 150 ms, press the arrow towards the seed that lands first (like the tests' player). */
+const chase = async (p, ms) => {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    await cam(p, () => {
+      const c = window.__camino, s = c.sim();
+      if (!c.running() || s.busy || s.queue.length) return;
+      const t = s.seeds.filter((f) => !f.touched).sort((a, b) => b.y - a.y)[0];
+      if (t && t.c !== s.robot.c) c.press(t.c > s.robot.c ? 'right' : 'left');
+    });
+    await p.waitForTimeout(150);
+  }
+};
+const R = (d) => ({ hat: `key:${d}`, actions: [d] });
+const ARROWS4 = ['left', 'up', 'down', 'right'].map(R);
+const TOUCH = { hat: 'touch:seed', actions: ['score'] };
+const PATH1 = ['up', 'up', 'right', 'right', 'right', 'down', 'right', 'right', 'up', 'up'];
+
+const T3 = [
+  { name: 'home-1366', size: [1366, 768], go: url('/', '&stamps=sala4-1,sala4-2,sala5-1,sala5-2,1ro-1,1ro-2,2do-1,2do-2,3ro-1') },
+  { name: 'home-1280', size: [1280, 800], go: url('/') },
+  { name: '3ro-1-idle', size: [1366, 768], go: url('/nivel/3ro-1', '&nointro') },
+  { name: '3ro-1-intro', size: [1366, 768], go: url('/nivel/3ro-1'), run: async (p) => { await p.waitForTimeout(Number(process.env.INTRO_MS ?? 2600)); } },
+  { name: '3ro-1-intro-end', size: [1366, 768], go: url('/nivel/3ro-1'), run: async (p) => { await p.waitForTimeout(8000); } },
+  {
+    name: '3ro-1-shrug', size: [1366, 768], go: url('/nivel/3ro-1', '&nointro'),
+    run: async (p) => {
+      await cam(p, (x) => window.__camino.setRules(x), [R('right')]);
+      await p.waitForTimeout(300); await cam(p, () => window.__camino.start());
+      await cam(p, () => window.__camino.press('right')); await p.waitForTimeout(900);
+      await cam(p, () => window.__camino.press('up')); await p.waitForTimeout(Number(process.env.SHRUG_MS ?? 380));
+    },
+  },
+  {
+    name: '3ro-1-running', size: [1280, 800], go: url('/nivel/3ro-1', '&nointro'),
+    run: async (p) => {
+      await cam(p, (x) => window.__camino.setRules(x), [R('right'), R('up')]);
+      await p.waitForTimeout(300); await cam(p, () => window.__camino.start());
+      for (const d of ['up', 'up', 'right']) { await cam(p, (x) => window.__camino.press(x), d); await p.waitForTimeout(620); }
+      await cam(p, () => window.__camino.press('right')); await p.waitForTimeout(200);
+    },
+  },
+  {
+    name: '3ro-1-win', size: [1366, 768], go: url('/nivel/3ro-1', '&nointro'),
+    run: async (p) => {
+      await cam(p, (x) => window.__camino.setRules(x), ARROWS4);
+      await p.waitForTimeout(300); await cam(p, () => window.__camino.start());
+      for (const d of PATH1) { await cam(p, (x) => window.__camino.press(x), d); await p.waitForTimeout(620); }
+      await p.waitForTimeout(1400);
+    },
+  },
+  { name: '3ro-1-help', size: [1366, 768], go: url('/nivel/3ro-1', '&nointro'), run: async (p) => { await cam(p, (x) => window.__camino.setRules(x), [R('right')]); await p.waitForTimeout(300); await cam(p, () => window.__camino.help()); await p.waitForTimeout(1500); } },
+  { name: '3ro-2-idle', size: [1366, 768], go: url('/nivel/3ro-2') },
+  {
+    name: '3ro-2-nopoint', size: [1366, 768], go: url('/nivel/3ro-2'),
+    run: async (p) => { await cam(p, () => window.__camino.start()); await chase(p, Number(process.env.NOPOINT_MS ?? 9200)); },
+  },
+  {
+    name: '3ro-2-running', size: [1366, 768], go: url('/nivel/3ro-2'),
+    run: async (p) => {
+      await cam(p, (x) => window.__camino.setRules(x), [R('left'), R('right'), TOUCH]);
+      await p.waitForTimeout(300); await cam(p, () => window.__camino.start()); await chase(p, Number(process.env.RUN_MS ?? 11000));
+    },
+  },
+  {
+    name: '3ro-2-win', size: [1280, 800], go: url('/nivel/3ro-2'),
+    run: async (p) => {
+      await cam(p, (x) => window.__camino.setRules(x), [R('left'), R('right'), TOUCH]);
+      await p.waitForTimeout(300); await cam(p, () => window.__camino.start());
+      for (let i = 0; i < 90 && !(await cam(p, () => window.__camino.sim().won)); i++) await chase(p, 1000);
+      await p.waitForTimeout(1300);
+    },
+  },
+  // T2 fixes: (a) the lone strip gets a sky, (b) the jump stays on the sheet, (c) the tape strip sits on the culprit, (d) stone stairs
+  { name: 'fix-2do-1-idle', size: [1366, 768], go: url('/nivel/2do-1') },
+  { name: 'fix-2do-1-jump', size: [1366, 768], go: url('/nivel/2do-1'), run: (p) => runProgram(p, loop('goal', ['ifrock:right', 'right']), Number(process.env.JUMP_MS ?? 4350)) },
+  { name: 'fix-2do-2-jump', size: [1366, 768], go: url('/nivel/2do-2'), run: (p) => runProgram(p, loop('goal', ['ifrock:right', 'right']), Number(process.env.JUMP2_MS ?? 2050)) },
+  { name: 'fix-2do-2-fail', size: [1366, 768], go: url('/nivel/2do-2'), run: (p) => runProgram(p, loop('goal', ['right', 'ifrock:right']), 9000) },
+  { name: 'fix-1ro-2-idle', size: [1366, 768], go: url('/nivel/1ro-2') },
+  { name: 'fix-1ro-2-midrun', size: [1280, 800], go: url('/nivel/1ro-2'), run: (p) => runProgram(p, loop(4, ['right', 'up']), 3000) },
+].map((s) => ({ ...s, name: `t3-${s.name}` }));
+
+const S = [...T1, ...T2, ...T3];
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox', '--disable-gpu'] });
 try {

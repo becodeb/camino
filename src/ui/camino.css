@@ -157,6 +157,47 @@
 .sheets.is-multi .tape-r { top: -9px; }
 .sheets.is-multi .tape-l { bottom: -8px; }
 
+/* ------------------------------------------------ realtime mode (3ro): palette | rule cards | board, keys by ▶ */
+.level.mode-realtime {
+  /* the controls row holds the keys (two rows of keycaps): 10 top + 74 bar + 14 gap + 122 controls + 12 gap + 30 bottom + 22 sheet padding */
+  --board-h: calc(100dvh - 284px);
+  --sheet-w: min(100%, calc(var(--board-h) * var(--aspect) + 28px));
+  grid-template-columns: auto var(--notebook-w, 460px) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "bar bar bar" "palette program stage";
+  height: 100dvh;
+  padding-bottom: 30px;
+}
+.mode-realtime .controls { min-height: 122px; }
+.mode-realtime .zone-program .block-program { padding: 24px 12px 22px 44px; }
+.btn-play.is-running { --fill: var(--blue); }
+
+/* the arrow keys, drawn as keycaps in the keyboard's inverted T */
+.keypad {
+  margin-left: auto;
+  display: grid;
+  grid-template-columns: repeat(3, 64px);
+  grid-template-rows: 56px 56px;
+  gap: 4px 6px;
+  grid-template-areas: ". up ." "left down right";
+}
+.key-btn { display: grid; place-items: center; width: 64px; height: 56px; padding: 0; border: 0; background: none; cursor: pointer; touch-action: manipulation; }
+.key-btn .keycap { overflow: visible; transition: transform 0.1s ease-out; }
+.key-btn:active .keycap { transform: translateY(4px) scale(0.97); }
+.key-btn:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset: 2px; }
+.key-up { grid-area: up; }
+.key-down { grid-area: down; }
+.key-left { grid-area: left; }
+.key-right { grid-area: right; }
+
+/* the game is on: the lamp on the sheet's corner lights up and the sheet is outlined in blue pen */
+.mode-realtime .sheet { position: relative; }
+.play-lamp { position: absolute; z-index: 6; left: -18px; top: -26px; width: 50px; height: 56px; overflow: visible; pointer-events: none; }
+.play-lamp .lamp-rays { opacity: 0; transition: opacity 0.2s ease-out; }
+.play-lamp.is-on .lamp-rays { opacity: 1; animation: lamp-glow 1.1s ease-in-out infinite alternate; }
+@keyframes lamp-glow { from { opacity: 0.45; } to { opacity: 1; } }
+.sheet.is-playing::before { border-color: var(--blue-ink); border-width: 3.4px; }
+
 /* ------------------------------------------------ direct mode (sala 4): the board and four big arrows around it */
 .level.mode-direct {
   --cap: 80px;
@@ -299,5 +340,5 @@ a.page-card:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset:
   .controls { min-height: 72px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .next-page, .page-brote, .tramo-page .stamp.is-new { animation: none; }
+  .next-page, .page-brote, .tramo-page .stamp.is-new, .play-lamp.is-on .lamp-rays { animation: none; }
 }

@@ -52,10 +52,10 @@ export function useInstruction(level: LevelDef) {
 export function useGhost(root: React.RefObject<HTMLElement | null>) {
   const run = useRef<GhostRun | null>(null);
   useEffect(() => () => run.current?.cancel(), []);
-  return useCallback((steps: DemoStep[]): Promise<void> | null => {
+  return useCallback((steps: DemoStep[], opts?: { pace?: number }): Promise<void> | null => {
     const el = root.current;
     if (!el || run.current) return null;
-    const g = playGhost(el, steps);
+    const g = playGhost(el, steps, opts);
     run.current = g;
     return g.done.then(() => { if (run.current === g) run.current = null; });
   }, [root]);

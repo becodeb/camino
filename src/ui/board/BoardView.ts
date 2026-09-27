@@ -9,7 +9,7 @@ import { el, rng, blob, wobblyPoly, wobblyLine, penLoop, spiral, smoothClosed, s
 import { tween, proc, wait, E, ABORT, engine } from '../../ink/anim.js';
 import { INK, type CharacterDef } from '../../ink/characters.js';
 import { onFrame, REDUCED } from '../runtime';
-import { DELTA, obstacleAt, visibleFrom, type Board, type Cell, type Obstacle, type RobotState, type Trace, type TraceStep } from '../../game/model';
+import { DELTA, obstacleAt, visibleFrom, type Board, type Cell, type Dir, type Obstacle, type RobotState, type Trace, type TraceStep } from '../../game/model';
 
 export const S = 100;
 /** Space above the grid, in board units. */
@@ -141,7 +141,7 @@ export class BoardView {
   constructor(svg: SVGSVGElement) {
     this.svg = svg;
     svg.textContent = '';
-    for (const n of ['floor', 'deco', 'marks', 'obst', 'goal', 'trail', 'fog', 'shadow', 'actor', 'fx']) {
+    for (const n of ['floor', 'deco', 'marks', 'obst', 'goal', 'trail', 'fog', 'shadow', 'actor', 'rain', 'fx']) {
       this.L[n] = el('g', { class: `layer-${n}` }, svg);
     }
     for (const n of ['floor', 'deco', 'obst', 'trail', 'fog']) this.L[n].setAttribute('filter', 'url(#boil)');
@@ -192,7 +192,9 @@ export class BoardView {
     const f = this.frameT = opts.frame ?? frameOf(board);
     // extra room on top: characters in the first row and their jumps stick out of the grid
     this.svg.setAttribute('viewBox', `-16 -${f.top} ${w + 32 + f.right} ${h + f.top + f.bottom}`);
-    for (const n of ['floor', 'deco', 'marks', 'obst', 'goal', 'trail', 'fog', 'fx']) this.L[n].textContent = '';
+    for (const n of ['floor', 'deco', 'marks', 'obst', 'goal', 'trail', 'fog', 'rain', 'fx']) this.L[n].textContent = '';
+    this.fallers.clear();
+    this.jar = null;
     this.fogTiles.clear();
     this.confetti = [];
     const R = rng(board.seed + 5);
@@ -756,6 +758,196 @@ export class BoardView {
     },
   };
 
+  // ---------------------------------------------------------------- realtime games (3ro)
+  /** Seeds falling on their own. The engine owns their rows; the view glides them between ticks. */
+  private fallers = new Map<number, { g: SVGGElement; c: number; y: number; at: number }>();
+  /** Rows per tick and the tick length, to glide between two engine ticks. */
+  fall = { speed: 0, tickMs: 100 };
+  private jar: { slots: SVGGElement[]; digit: SVGTextElement; n: number; score: number } | null = null;
+  /** A quick step of the game is under way (a shrug must not stop it half way). */
+  private stepping = 0;
+
+  addFaller(id: number, c: number, y: number) {
+    const g = el('g', { 'data-faller': id }, this.L.rain);
+    const inner = el('g', { filter: 'url(#boil)' }, g);
+    seedArt(inner, this.board!.seed + id);
+    this.fallers.set(id, { g, c, y, at: now() });
+    this.placeFaller(this.fallers.get(id)!, now());
+    popAnim(inner, { dur: 300, origin: '50% 50%' });
+  }
+
+  /** The engine's rows for the seeds still falling (after a tick). */
+  syncFallers(seeds: readonly { id: number; y: number }[]) {
+    const t = now();
+    for (const f of seeds) {
+      const n = this.fallers.get(f.id);
+      if (n) { n.y = f.y; n.at = t; }
+    }
+  }
+
+  private placeFaller(f: { g: SVGGElement; c: number; y: number; at: number }, t: number) {
+    const y = f.y + this.fall.speed * Math.min(1, (t - f.at) / this.fall.tickMs);
+    f.g.setAttribute('transform', `translate(${f.c * S + S / 2} ${(y * S + S / 2).toFixed(1)})`);
+  }
+
+  private fallerAt(id: number) {
+    const f = this.fallers.get(id);
+    if (!f) return null;
+    this.fallers.delete(id);
+    return { f, x: f.c * S + S / 2, y: f.y * S + S / 2 };
+  }
+
+  /** A touch rule took the seed: a puff, "¡Mía!". */
+  collectFaller(id: number) {
+    const p = this.fallerAt(id);
+    if (!p) return;
+    this.puff(p.x, p.y);
+    p.f.g.remove();
+    this.actor?.bubble('¡Mía!');
+  }
+
+  /** No rule listens to touches: the seed goes through, Brote only watches it go by. */
+  passFaller(id: number) {
+    if (!this.fallers.has(id)) return;
+    this.actor?.lookAt(0, 0.9, 900);
+  }
+
+  /** A seed reached the ground: it squashes a little and sinks into the paper. */
+  loseFaller(id: number) {
+    const p = this.fallerAt(id);
+    if (!p) return;
+    const g = p.f.g.firstElementChild as SVGGElement | null;
+    if (!g || REDUCED) { p.f.g.remove(); return; }
+    g.style.transformBox = 'fill-box';
+    g.style.transformOrigin = '50% 100%';
+    g.animate([{ scale: '1 1', opacity: 1 }, { scale: '1.2 0.7', opacity: 0.9, offset: 0.25 }, { scale: '0.6 0.3', opacity: 0 }], { duration: 700, easing: 'ease-in', fill: 'forwards' })
+      .finished.then(() => p.f.g.remove()).catch(() => p.f.g.remove());
+  }
+
+  clearFallers() {
+    this.fallers.forEach((f) => f.g.remove());
+    this.fallers.clear();
+  }
+
+  /** The jar of points, on the right of the grid: `n` dotted seeds to fill, and the number above. */
+  setJar(n: number) {
+    const b = this.board;
+    if (!b) return;
+    const x0 = b.cols * S + 26, w = JAR_W - 34, bottom = b.rows * S, h = Math.min(210, b.rows * S * 0.62);
+    const g = el('g', { class: 'jar' }, this.L.deco);
+    const glass = wobblyPoly([[x0 + 8, bottom - h], [x0 + w - 8, bottom - h], [x0 + w, bottom - h + 22], [x0 + w - 4, bottom - 4], [x0 + 4, bottom - 4], [x0, bottom - h + 22]], { wob: 0.8, bow: 1.4, seed: b.seed + 3 });
+    el('path', { d: glass, transform: 'translate(3 4)', fill: 'rgba(84, 62, 38, 0.2)' }, g);
+    el('path', { d: glass, fill: '#eef0e4', stroke: INK, 'stroke-width': 3, 'stroke-linejoin': 'round' }, g);
+    el('path', { d: `M${x0 + 14},${bottom - h + 34} L${x0 + 12},${bottom - 30}`, stroke: '#fbf7ee', 'stroke-width': 5, 'stroke-linecap': 'round', opacity: 0.9 }, g);
+    el('path', { d: wobblyPoly([[x0 + 2, bottom - h - 12], [x0 + w - 2, bottom - h - 12], [x0 + w - 4, bottom - h + 2], [x0 + 4, bottom - h + 2]], { wob: 0.5, bow: 0.6, seed: b.seed + 4 }), fill: '#de8a56', stroke: INK, 'stroke-width': 2.6, 'stroke-linejoin': 'round' }, g);
+    // the seeds still to collect: dotted outlines, filled from the bottom up
+    const slots: SVGGElement[] = [];
+    const cols = 2, rowH = Math.min(40, (h - 40) / Math.ceil(n / cols));
+    for (let i = 0; i < n; i++) {
+      const cx = x0 + w / 2 + (i % cols ? 17 : -17) + (Math.floor(i / cols) % 2 ? 4 : -4);
+      const cy = bottom - 26 - Math.floor(i / cols) * rowH;
+      const slot = el('g', { transform: `translate(${cx.toFixed(1)} ${cy.toFixed(1)})` }, g);
+      el('path', { d: blob(0, 0, 13, 11, { wob: 0.05, n: 9, seed: b.seed + i }), fill: 'none', stroke: '#3d6ea5', 'stroke-width': 2.2, 'stroke-dasharray': '1.5 5', 'stroke-linecap': 'round' }, slot);
+      const full = el('g', { class: 'jar-seed', opacity: 0, transform: 'translate(0 -10) scale(0.9)' }, slot);
+      seedArt(full, b.seed + i + 30);
+      slots.push(full);
+    }
+    // the digit in Andika, the readers' face: in the hand font a 5 reads as an S
+    const digit = el('text', { x: x0 + w / 2, y: bottom - h - 26, 'text-anchor': 'middle', 'font-family': 'Andika, sans-serif', 'font-weight': 700, 'font-size': 54, fill: INK, class: 'jar-digit' }, g);
+    digit.textContent = '0';
+    this.jar = { slots, digit, n, score: 0 };
+  }
+
+  /** Where the seeds come from: a few pencil clouds along the top of a rain board. */
+  setClouds() {
+    const b = this.board;
+    if (!b) return;
+    const g = el('g', { class: 'clouds', opacity: 0.8 }, this.L.deco);
+    const R = rng(b.seed + 9);
+    for (let i = 0; i < 3; i++) {
+      const cx = (b.cols * S) * (0.15 + i * 0.35) + (R() - 0.5) * 40, cy = -this.frameT.top + 34 + R() * 8;
+      for (const [dx, dy, rx, ry] of [[0, 0, 36, 15], [28, -9, 24, 14], [-26, -3, 20, 11]]) {
+        el('path', { d: blob(cx + dx, cy + dy, rx, ry, { seed: b.seed + i * 7 + dx, n: 9 }), fill: '#fbf7ee', stroke: INK, 'stroke-width': 2, opacity: 0.85 }, g);
+      }
+    }
+  }
+
+  setScore(k: number) {
+    const j = this.jar;
+    if (!j) return;
+    const grew = k > j.score;
+    j.score = k;
+    j.digit.textContent = String(k);
+    j.slots.forEach((s, i) => s.setAttribute('opacity', i < k ? '1' : '0'));
+    if (grew) {
+      const s = j.slots[k - 1];
+      if (s) popAnim(s, { dur: 360, origin: '50% 100%' });
+      popAnim(j.digit, { dur: 320, origin: '50% 80%' });
+    }
+  }
+
+  /**
+   * One step of a running game: a quick hop to the next cell (`ms`, the
+   * engine's step), or a gentle bump against a rock or the edge.
+   */
+  async rtMove(s: { kind: string; to: RobotState; crash?: { at: Cell; out: boolean } }, dir: Dir, ms: number): Promise<void> {
+    const a = this.actor;
+    if (!a) return;
+    const [dx, dy] = DELTA[dir];
+    this.stepping++;
+    await a.act(async () => {
+      Object.assign(a.rig, { sx: 1, sy: 1, lean: 0, hop: 0, lift: 0, eyes: 'open', mouth: 'smile' });
+      if (dx && Math.sign(a.rig.face) !== dx) await a.T({ face: dx }, REDUCED ? 1 : 70, E.inOut);
+      a.lookAt(dx || 0, dy || 0.1, 700);
+      if (s.kind === 'crash') {
+        const here = feet(this.pos.c, this.pos.r);
+        const hit = s.crash!.out
+          ? { x: this.pos.c * S + S / 2 + dx * 50, y: this.pos.r * S + S / 2 + dy * 50 + (dx ? 20 : 0) }
+          : { x: s.crash!.at.c * S + S / 2 - dx * 26, y: s.crash!.at.r * S + S / 2 + 12 - dy * 26 };
+        a.onMark = () => this.drawBump(hit.x, hit.y);
+        await this.nudge(a, { x: here.x + dx * 100, y: here.y + dy * 100 }, { dx, dy });
+        a.mark();
+        return;
+      }
+      const to = feet(s.to.c, s.to.r);
+      const d = REDUCED ? 1 : ms * 0.86;
+      const bounce = proc(a, d, (p) => {
+        const k = Math.sin(p * Math.PI);
+        a.rig.hop = -k * 22;
+        a.rig.sy = 1 + k * 0.1;
+        a.rig.sx = 1 - k * 0.06;
+      });
+      await Promise.all([a.T({ x: to.x, y: to.y }, d, E.inOut), bounce]);
+      Object.assign(a.rig, { hop: 0, sx: 1, sy: 1 });
+      this.pos = { c: s.to.c, r: s.to.r, mask: s.to.mask };
+    }).finally(() => { this.stepping--; });
+  }
+
+  /** A key nobody listens to: Brote looks that way, shrugs, "¿?". Never stops a step under way. */
+  shrug(dir: Dir) {
+    const a = this.actor;
+    if (!a) return;
+    const [dx, dy] = DELTA[dir];
+    a.lookAt(dx || 0, dy || 0.1, 1000);
+    a.bubble('¿?');
+    if (this.stepping || REDUCED) return;
+    void a.act(async () => {
+      a.rig.mouth = 'wavy';
+      await a.T({ sy: 0.9, sx: 1.08 }, 90, E.out);
+      await a.T({ sy: 1.1, sx: 0.94, hop: -8, lean: 7 }, 150, E.out);
+      await a.T({ lean: -7 }, 170, E.inOut);
+      await a.T({ sy: 1, sx: 1, hop: 0, lean: 0 }, 200, E.inOut);
+      a.rig.mouth = 'smile';
+    });
+  }
+
+  /** Stop the game: seeds gone, jar empty, Brote home. */
+  async rtReset() {
+    this.clearFallers();
+    if (this.jar) this.setScore(0);
+    await this.reset();
+  }
+
   // ---------------------------------------------------------------- per frame
   private frame(t: number, dt: number) {
     if (!this.svg.isConnected) return;
@@ -764,6 +956,7 @@ export class BoardView {
       a.render(dt);
       this.trail.sample(a);
     }
+    if (this.fallers.size) { const tt = now(); this.fallers.forEach((f) => this.placeFaller(f, tt)); }
     if (this.goalNodes) {
       const gs = this.goalState;
       const bob = REDUCED || gs.hop || this.board?.goalKind === 'pot' ? 0 : Math.sin(t / 520) * 1.6;

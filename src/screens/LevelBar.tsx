@@ -6,7 +6,7 @@ import { Fragment } from 'react';
 import { CHARACTERS } from '../ink/characters.js';
 import { GRADES, levelsOf, type LevelDef } from '../game/levels';
 import { HelpIcon, SpeakerIcon } from '../ui/icons';
-import { PageIcon, PenRing, Portrait, PotIcon, SeedIcon, Stamp, ThenArrow } from '../ui/art';
+import { JarIcon, PageIcon, PenRing, Portrait, PotIcon, SeedIcon, Stamp, ThenArrow } from '../ui/art';
 
 export const BROTE = CHARACTERS[0];
 
@@ -36,17 +36,17 @@ export function TramoPages({ current, stamps }: { current: string; stamps: Reado
   );
 }
 
-/** The instruction, drawn: Brote, then what he goes to fetch, then where he takes it. */
+/** The instruction, drawn: Brote, then what he goes to fetch, then where he takes it (3ro page 2: seeds into the jar). */
 export function DrawnInstruction({ level }: { level: LevelDef }) {
   const b = level.worlds[0];
-  const chain = [...b.pickups.map(() => 'seed' as const), b.goalKind];
+  const chain = b.goalKind === 'none' ? ['seed' as const, 'jar' as const] : [...b.pickups.map(() => 'seed' as const), b.goalKind];
   return (
     <span className="drawn-task" aria-hidden="true">
       <Portrait def={BROTE} className="bar-face" />
       {chain.map((k, i) => (
         <Fragment key={i}>
           <ThenArrow />
-          {k === 'pot' ? <PotIcon size={42} /> : <SeedIcon size={42} />}
+          {k === 'pot' ? <PotIcon size={42} /> : k === 'jar' ? <JarIcon size={42} /> : <SeedIcon size={42} />}
         </Fragment>
       ))}
     </span>

@@ -115,6 +115,44 @@ export const PadArrow = memo(function PadArrow({ dir }: { dir: Dir }) {
   );
 });
 
+/** The jar of points (3ro page 2), for the drawn instruction. */
+export function JarIcon({ size = 40 }: { size?: number }) {
+  return (
+    <svg viewBox="-24 -26 48 52" width={size} height={size} aria-hidden="true" className="doodle">
+      <g filter="url(#rough)" stroke={INK} strokeLinejoin="round" strokeLinecap="round">
+        <path d="M-15,-8 L15,-8 L18,-1 L17,22 L-17,22 L-18,-1 Z" fill="#eef0e4" strokeWidth={2.6} />
+        <path d="M-17,-15 L17,-15 L16,-7 L-16,-7 Z" fill="#de8a56" strokeWidth={2.4} />
+        <path d={blob(-6, 13, 6, 5, { seed: 2, n: 8 })} fill="#f0d27a" strokeWidth={2} />
+        <path d={blob(7, 14, 6, 5, { seed: 3, n: 8 })} fill="#f0d27a" strokeWidth={2} />
+        <path d={blob(1, 4, 6, 5, { seed: 4, n: 8 })} fill="#f0d27a" strokeWidth={2} />
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * The game's lamp, stuck on the corner of the sheet: off (grey glass) while
+ * the rules wait, lit with rays while the game runs and they are listening.
+ */
+export function PlayLamp({ on }: { on: boolean }) {
+  return (
+    <svg className={`play-lamp${on ? ' is-on' : ''}`} viewBox="-30 -34 60 66" aria-hidden="true">
+      <g filter="url(#rough)" strokeLinecap="round" strokeLinejoin="round">
+        <g className="lamp-rays" stroke={PEN} strokeWidth={3}>
+          {[-150, -115, -65, -30, 0, 180].map((a) => {
+            const r = (a * Math.PI) / 180;
+            return <path key={a} d={`M${(Math.cos(r) * 22).toFixed(1)},${(Math.sin(r) * 22 - 6).toFixed(1)} L${(Math.cos(r) * 29).toFixed(1)},${(Math.sin(r) * 29 - 6).toFixed(1)}`} />;
+          })}
+        </g>
+        <path d={blob(0, -6, 15, 16, { seed: 5, n: 10 })} fill={on ? '#f0d27a' : '#e2dccd'} stroke={INK} strokeWidth={2.6} />
+        <path d="M-5,-4 Q0,-12 5,-4" fill="none" stroke={INK} strokeWidth={1.8} opacity={0.7} />
+        <path d="M-8,10 L8,10 L7,18 L-7,18 Z" fill="#9f937f" stroke={INK} strokeWidth={2.4} />
+        <path d="M-7,14 L7,14" stroke={INK} strokeWidth={1.6} />
+      </g>
+    </svg>
+  );
+}
+
 /** A pen loop around something (the page on screen). */
 export function PenRing({ seed = 1 }: { seed?: number }) {
   return (

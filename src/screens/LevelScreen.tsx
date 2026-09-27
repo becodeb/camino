@@ -24,6 +24,7 @@ import { cardCount, initialState, type Dir, type Program, type RobotState, type 
 import { stamp } from '../game/progress';
 import { BROTE } from './LevelBar';
 import { NextPage, RestartButton, Sheet, Shell, frameFor, useBoard, useDebugHooks, useGhost, useInstruction } from './levelKit';
+import { RealtimeLevel } from './RealtimeLevel';
 
 /** Short spoken lines (es-AR). The board says the rest. */
 const LINES = {
@@ -448,6 +449,6 @@ function ProgramLevel({ level }: { level: LevelDef }) {
 }
 
 export function LevelScreen({ level }: { level: LevelDef }) {
-  const Mode = useMemo(() => (level.mode === 'direct' ? DirectLevel : ProgramLevel), [level.mode]);
+  const Mode = useMemo(() => (level.mode === 'direct' ? DirectLevel : level.mode === 'realtime' ? RealtimeLevel : ProgramLevel), [level.mode]);
   return <Mode level={level} />;
 }

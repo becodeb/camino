@@ -85,6 +85,28 @@
 }
 @keyframes pin-in { 0% { scale: 1.8; opacity: 0; } 100% { scale: 1; opacity: 1; } }
 
+/* ------------------------------------------------ 3ro: rule cards */
+.rule-palette { gap: 12px; }
+.rule-palette .palette-rule { align-self: stretch; height: 0; border-top: 2.4px dotted rgba(43, 38, 34, 0.35); margin: 2px 0; }
+.rule-card { position: absolute; left: 0; top: 0; isolation: isolate; transition: transform 0.18s ease-out; }
+.rule-card::before, .rule-card::after { content: ""; position: absolute; inset: 0; border-radius: 12px 9px 13px 10px / 10px 13px 9px 12px; filter: url(#rough); pointer-events: none; }
+.rule-card::before { z-index: -1; background: rgba(251, 247, 238, 0.92); border: 2.2px solid rgba(43, 38, 34, 0.55); }
+.rule-card::after { z-index: -2; background: var(--shadow); transform: translate(3px, 4px); }
+.rule-card.is-active::before, .rule-card.is-target::before { border-color: var(--blue-ink); border-style: dashed; border-width: 2.6px; }
+.rule-card .card-ring { position: absolute; left: -12px; top: -12px; overflow: visible; pointer-events: none; opacity: 0; }
+.rule-card .card-ring path { fill: none; stroke: var(--blue-ink); stroke-width: 3.6; stroke-linecap: round; filter: url(#boil); }
+.rblk { position: absolute; display: block; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+.rblk-hat { z-index: 1; }
+.rblk-slot, .rblk-fresh { position: absolute; }
+.rblk-slot.is-empty .blk-hole, .rblk-fresh.is-calling .blk-hole { stroke: var(--blue-ink); }
+.rblk-fresh.is-calling { animation: slot-call 1.6s ease-in-out infinite; }
+.hat-face { justify-items: start; padding-left: 12px; }
+.hat-face .blk-labeled.is-word-picture .blk-word { font-size: 14px; max-width: none; }
+.hat-ear { position: absolute; right: 8px; top: -18px; overflow: visible; pointer-events: none; transform-origin: 14px 34px; }
+.hat-ear .ear-waves { opacity: 0.25; }
+.block-palette .rpblk .hat-ear { top: -14px; }
+.rpblk.is-hat { margin-top: 8px; }
+
 /* the count of a tape: a paper disc with the number (tap to change it) */
 .blk-count {
   position: relative;

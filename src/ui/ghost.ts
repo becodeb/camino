@@ -39,8 +39,6 @@ export type DemoStep =
   | { do: 'drag'; from: string; to: string; apply?: () => void }
   | { do: 'wait'; ms: number };
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
 export interface GhostRun {
   done: Promise<void>;
   cancel(): void;
@@ -76,9 +74,12 @@ const centerOf = (e: Element) => {
 /**
  * Plays a demo script. Targets that are not on screen are skipped; the whole
  * run is visual only (pointer-events none) and can be cancelled at any time.
+ * `pace` below 1 plays it faster (a short intro).
  */
-export function playGhost(root: HTMLElement, steps: DemoStep[]): GhostRun {
+export function playGhost(root: HTMLElement, steps: DemoStep[], opts: { pace?: number } = {}): GhostRun {
   let cancelled = false;
+  const pace = opts.pace ?? 1;
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms * pace));
   const host = layer();
   const hand = document.createElement('div');
   hand.className = 'ghost-hand';
@@ -100,7 +101,7 @@ export function playGhost(root: HTMLElement, steps: DemoStep[]): GhostRun {
     const from = at;
     at = to;
     // short hops (tapping the same count again) are quick
-    const dur = REDUCED ? 1 : Math.max(160, ms * Math.min(1, Math.hypot(to.x - from.x, to.y - from.y) / 260));
+    const dur = REDUCED ? 1 : Math.max(160, ms * pace * Math.min(1, Math.hypot(to.x - from.x, to.y - from.y) / 260));
     const anims = [hand.animate([{ transform: place(from) }, { transform: place(to) }], { duration: dur, easing: 'cubic-bezier(.4,.1,.3,1)', fill: 'forwards' })];
     if (carry) {
       // held by its lower left corner, so the hand never hides what it carries

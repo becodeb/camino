@@ -5,6 +5,11 @@ export const PlayIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7,4.5 L19.5,12.3 L6.5,19.6 Z" fill="#fbf6ea" stroke="#2b2622" strokeWidth="2.2" strokeLinejoin="round" /></svg>
 );
 
+/** A running game stops with the same button: a paper square. */
+export const StopIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.2,6.5 L17.6,6 L18,17.6 L6.4,18 Z" fill="#fbf6ea" stroke="#2b2622" strokeWidth="2.2" strokeLinejoin="round" /></svg>
+);
+
 /** "Next page": the demo's Otro icon, a sheet with a folded corner. */
 export const NextIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6,3.5 L15,3.5 L19,8 L19,20.5 L6,20.5 Z" fill="#fbf6ea" stroke="#2b2622" strokeWidth="2" strokeLinejoin="round" /><path d="M15,3.5 L15,8 L19,8" fill="none" stroke="#2b2622" strokeWidth="2" strokeLinejoin="round" /><path d="M9,13.5 L15.5,13.5 M12.8,10.8 L15.6,13.5 L12.8,16.2" fill="none" stroke="#3d6ea5" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>

@@ -15,7 +15,7 @@ const INK = '#2b2622';
 
 /** A small drawing of a level: its board, or its worlds stacked (2do page 2). */
 function LevelThumb({ level }: { level: LevelDef }) {
-  if (level.worlds.length === 1) return <BoardThumb b={level.worlds[0]} fog={level.fog} />;
+  if (level.worlds.length === 1) return <BoardThumb b={level.worlds[0]} fog={level.fog} rain={!!level.realtime?.spawner} keys={level.mode === 'realtime'} />;
   return (
     <span className="thumb-stack">
       {level.worlds.map((b, i) => <BoardThumb key={i} b={b} />)}
@@ -24,7 +24,7 @@ function LevelThumb({ level }: { level: LevelDef }) {
 }
 
 /** A small drawing of a board: grid, start mark, rocks, seeds, the goal; in the fog only what Brote sees. */
-const BoardThumb = memo(function BoardThumb({ b, fog }: { b: Board; fog?: boolean }) {
+const BoardThumb = memo(function BoardThumb({ b, fog, rain, keys }: { b: Board; fog?: boolean; rain?: boolean; keys?: boolean }) {
   const S = 40, w = b.cols * S, h = b.rows * S;
   const stone = b.obstacles.filter((o) => o.kind === 'earth');
   const R = rng(b.seed);
@@ -56,7 +56,20 @@ const BoardThumb = memo(function BoardThumb({ b, fog }: { b: Board; fog?: boolea
         {b.obstacles.filter((o) => o.kind !== 'earth').map((o, i) => (
           <path key={i} d={blob(cx(o.c), cy(o.r) + 4, 13, 9, { wob: 0.09, n: 8, seed: o.seed })} fill="#bdb09c" stroke={INK} strokeWidth={2} />
         ))}
-        {b.goalKind === 'pot' ? (
+        {rain && [[1, 0.2], [3, 1.3], [4, 0.6]].map(([c, r], i) => (
+          <g key={`rain${i}`}>
+            <path d={`M${cx(c)},${cy(r) - 30} L${cx(c)},${cy(r) - 12}`} stroke="#3d6ea5" strokeWidth={2} strokeDasharray="0.1 5" strokeLinecap="round" />
+            <ThumbSeed x={cx(c)} y={cy(r)} />
+          </g>
+        ))}
+        {keys && (
+          <g transform={`translate(${w - 34} ${h - 10})`} stroke={INK} strokeLinejoin="round">
+            <rect x={-4} y={-30} width={16} height={14} rx={3} fill="#fbf7ee" strokeWidth={1.6} />
+            {[-22, -4, 14].map((x) => <rect key={x} x={x} y={-13} width={16} height={14} rx={3} fill="#fbf7ee" strokeWidth={1.6} />)}
+          </g>
+        )}
+        {b.pickups.map((p, i) => <ThumbSeed key={i} x={cx(p.c)} y={cy(p.r)} />)}
+        {b.goalKind === 'none' ? null : b.goalKind === 'pot' ? (
           <g>
             <path d={wobblyPoly([[cx(b.goal.c) - 10, cy(b.goal.r) - 2], [cx(b.goal.c) + 10, cy(b.goal.r) - 2], [cx(b.goal.c) + 7, cy(b.goal.r) + 13], [cx(b.goal.c) - 7, cy(b.goal.r) + 13]], { wob: 0.3, bow: 0.4, seed: 2 })} fill="#d98a5f" stroke={INK} strokeWidth={2} strokeLinejoin="round" />
             <rect x={cx(b.goal.c) - 12} y={cy(b.goal.r) - 7} width={24} height={6} rx={2} fill="#de8a56" stroke={INK} strokeWidth={2} />

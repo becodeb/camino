@@ -307,6 +307,111 @@ export const BlockArt = memo(function BlockArt({ look, d, seed = 1, count, label
   );
 });
 
+// ------------------------------------------------------------------ 3ro: rule cards
+
+/** Hats are the yellow of events (the colour Scratch gives them too); "sumar" is lilac. */
+export const HAT_FILL = '#f3cf6e';
+export const SCORE_FILL = '#dccbe6';
+
+/** 3ro words (es-AR): the hats say when, the actions what. */
+export const RULE_WORDS: Record<string, string> = {
+  key: 'cuando\naprieto',
+  touch: 'siempre que\ntoque',
+  score: 'sumar\n1 punto',
+};
+
+/** A key of the keyboard with its arrow: the same keycap as the on-screen keys. */
+export const KeyCap = memo(function KeyCap({ dir, size }: { dir: Dir; size: number }) {
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true" className="keycap">
+      <path d="M8,7 Q8,4 11,4 L37,4 Q40,4 40,7 L41,39 Q41,43 37,43 L11,43 Q7,43 7,39 Z" fill="#9f937f" stroke={INK} strokeWidth={2.4} strokeLinejoin="round" />
+      <path d="M9,6 Q9,4 12,4 L36,4 Q39,4 39,6 L39,33 Q39,36 36,36 L12,36 Q9,36 9,33 Z" fill="#fbf7ee" stroke={INK} strokeWidth={2.4} strokeLinejoin="round" />
+      <g transform={`translate(24 20) rotate(${DIR_ROT[dir]}) translate(-24 -20)`} fill="none" stroke={INK} strokeWidth={3.4} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14,20 L32,20" />
+        <path d="M25,13 L32.5,20 L25,27" />
+      </g>
+    </svg>
+  );
+});
+
+/** "Siempre que toque una semilla": Brote's sprout touching a seed, with two touch marks. */
+export function TouchGlyph({ size }: { size: number }) {
+  return (
+    <svg viewBox="-24 -26 48 44" width={size} height={Math.round(size * 44 / 48)} aria-hidden="true" style={{ overflow: 'visible' }}>
+      <path d="M-4,4 C-6,-4 -2,-9 -4,-15" fill="none" stroke={INK} strokeWidth={2.4} strokeLinecap="round" />
+      <path d={blob(-4, 8, 11, 9.5, { wob: 0.05, n: 9, seed: 4 })} fill="#f0d27a" stroke={INK} strokeWidth={2.6} />
+      <path d="M-4,-12 Q-14,-24 -18,-20 Q-13,-10 -4,-12 Z" fill="#a4b86d" stroke={INK} strokeWidth={2} strokeLinejoin="round" />
+      <path d="M11,-6 L17,-10 M12,2 L19,1 M10,9 L15,14" stroke={PEN} strokeWidth={2.4} strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** "Sumar 1 punto": a seed dropping into a small jar. */
+export function JarGlyph({ size }: { size: number }) {
+  return (
+    <svg viewBox="-20 -26 40 46" width={Math.round(size * 40 / 46)} height={size} aria-hidden="true" style={{ overflow: 'visible' }}>
+      <path d="M-13,-4 L13,-4 L15,2 L14,17 L-14,17 L-15,2 Z" fill="#eef0e4" stroke={INK} strokeWidth={2.4} strokeLinejoin="round" />
+      <path d="M-14,-9 L14,-9 L13,-3 L-13,-3 Z" fill="#de8a56" stroke={INK} strokeWidth={2.2} strokeLinejoin="round" />
+      <path d={blob(-4, 10, 5, 4.4, { seed: 2, n: 8 })} fill="#f0d27a" stroke={INK} strokeWidth={1.8} />
+      <path d={blob(5, 11, 5, 4.4, { seed: 3, n: 8 })} fill="#f0d27a" stroke={INK} strokeWidth={1.8} />
+      <path d={blob(0, -20, 5.5, 4.8, { seed: 5, n: 8 })} fill="#f0d27a" stroke={INK} strokeWidth={2} />
+      <path d="M0,-13 L0,-10" stroke={PEN} strokeWidth={2.2} strokeLinecap="round" strokeDasharray="0.1 3.4" />
+    </svg>
+  );
+}
+
+/**
+ * The ear of a hat: a little antenna that is always listening. When the
+ * rule's trigger happens it twitches and its two sound arcs light up in blue
+ * pen (the level screen animates `.hat-ear` and `.ear-waves`).
+ */
+export function HatEar() {
+  return (
+    <svg className="hat-ear" viewBox="-14 -30 36 34" width={36} height={34} aria-hidden="true">
+      <path className="ear-stem" d="M0,2 C-2,-8 3,-14 1,-20" fill="none" stroke={INK} strokeWidth={2.6} strokeLinecap="round" />
+      <circle cx={1} cy={-22} r={5} fill="#de8a56" stroke={INK} strokeWidth={2.2} />
+      <g className="ear-waves" fill="none" stroke={PEN} strokeWidth={2.4} strokeLinecap="round">
+        <path d="M9,-28 Q13,-22 9,-16" />
+        <path d="M14,-32 Q20,-22 14,-12" />
+      </g>
+    </svg>
+  );
+}
+
+/** A hat block: a rounded cap (nothing goes above it, like "al empezar") with its word, picture and ear. */
+export const HatArt = memo(function HatArt({ hat, w, h, d, label }: { hat: string; w: number; h: number; d: Dims; label: BlockLabel }) {
+  const key = hat.startsWith('key:') ? (hat.slice(4) as Dir) : null;
+  return (
+    <>
+      <Paper d={startPath(w, h, d)} fill={HAT_FILL} w={w} h={h} />
+      <span className="blk-face hat-face" style={{ paddingTop: h * 0.16 }}>
+        <Labeled word={key ? RULE_WORDS.key : RULE_WORDS.touch} label={label}>
+          {key ? <KeyCap dir={key} size={Math.round(h * 0.62)} /> : <TouchGlyph size={Math.round(h * 0.6)} />}
+        </Labeled>
+      </span>
+      <HatEar />
+    </>
+  );
+});
+
+/** An action under a hat: an arrow card, or "sumar 1 punto". */
+export const ActionArt = memo(function ActionArt({ id, w, h, d, label, seed = 1 }: { id: string; w: number; h: number; d: Dims; label: BlockLabel; seed?: number }) {
+  if (id === 'score') {
+    return (
+      <>
+        <Paper d={cardPath(w, h, d)} fill={SCORE_FILL} w={w} h={h} />
+        <span className="blk-face"><Labeled word={RULE_WORDS.score} label={label}><JarGlyph size={Math.round(h * 0.6)} /></Labeled></span>
+      </>
+    );
+  }
+  return (
+    <>
+      <Paper d={cardPath(w, h, d)} fill={DIR_FILL[id as Dir]} w={w} h={h} />
+      <span className="blk-face"><Arrow dir={id as Dir} seed={seed} size={Math.round(h * 0.7)} /></span>
+    </>
+  );
+});
+
 export const blockStyle = (x: number, y: number, w: number, h: number): CSSProperties => ({
   width: w, height: h, transform: `translate(${x}px, ${y}px)`,
 });
