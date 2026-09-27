@@ -55,7 +55,7 @@ The school chains ScratchJr, Pilas Bloques, Code.org and Scratch. Each year chan
 ## Tasks
 
 - [x] T1 — Scaffold + port the shell, style, Brote, board and editor from habilidades; level runtime and level-select page; Sala 4 (direct control) and Sala 5 (sequence) levels. Route: delegated direct (writer trigger: 2+ non-trivial files).
-- [ ] T2 — 1ro (repeat, slot-limited notebook, ghost-hand intro) and 2do (fog, repeat-until, if; three worlds at once). Route: delegated direct.
+- [x] T2 — 1ro (repeat, slot-limited notebook, ghost-hand intro) and 2do (fog, repeat-until, if; three worlds at once). Route: delegated direct.
 - [ ] T3 — 3ro real-time rules engine: key events and "whenever touches" rules with a score. Route: delegated direct.
 - [ ] T4 — Parent pass: full screenshot tour, fixes list, LAN test instructions for the user.
 
@@ -68,6 +68,13 @@ The school chains ScratchJr, Pilas Bloques, Code.org and Scratch. Each year chan
   - Runtime for T2/T3: add a `LevelDef` to `LEVELS` in `src/game/levels.ts`; commands `jump:<dir>`, `ifrock:<dir>` and loops (`count` number or `'goal'`) already run in the engine; palette ids `repeat` / `repeat-goal`; `worlds[]` and `fog` exist in the type but the UI draws `worlds[0]` only; `mode: 'realtime'` falls back to the program screen until T3.
   - Engram mirror pending (engram MCP resolves cwd ~/projects as ambiguous).
 
+- 2026-09-27: T2 done (delegated writer). Commits `9b51f1f` (engine, levels, hints, lockstep, tests), `7929478` (block art and editor), `1628adf` (board: fog, look steps, lockstep gate), `e59b3b2` (level screen, home, shots tour).
+  - Checks: `npm run typecheck` clean; `npm test` 5 files, 91 tests passed; `npm run build` ok (JS 339 kB, 106 kB gzip). T2 tour (`tools/shots.mjs … t2-`, 23 shots at 1366×768 and 1280×800) and the T1 tour again: no console errors, no page scroll. Scripted browser check: 2do-1 auto demo after a failed flat run builds `repetir hasta llegar [→]`; ✋ on a low count taps without editing; ✋ without a loop replays the 1ro-1 demo; the full-notebook demo plays once.
+  - Levels: 1ro-1 (9×3, 8 steps, 3 lines, palette → + repetir), 1ro-2 (5×5 stairs lined by rocks, 3 lines), 2do-1 (9×1 strip in fog, rocks at 3 and 6), 2do-2 (three 8×1 strips, different rocks and goals). Tests prove no loop-free program fits and wins, the staircase only climbs with a repeat of → and ↑, no fixed list of steps and jumps solves the three worlds, and the fog hides seed and rocks at the start.
+  - Decisions: `ifrock:<dir>` is an if-then ("si hay piedra [saltar]", a C-block with the jump fixed inside; nothing happens without a rock, Brote peeks), so 2do programs read `repetir hasta llegar [si hay piedra saltar, →]` and the order matters in 2do-2. A "repetir hasta llegar" gives up as soon as a pass starts where an earlier one did. The loop is not a card (N lines = N cards). The count cycles 2→10 on tap and shows as a digit plus dots on the foot (ten-frame rows of five), filled per pass. The concept demo makes real edits (↺, repeat in, card in, count tap) and leaves the idea, not the answer (1ro-1: ×3; 2do-1: without the "si"); ✋ help stays gesture-only. Three worlds run in lockstep; a sheet that wins alone gets a ring and a nod, confetti only when all three win; the culprit block gets a strip of the failing sheet's tape. Fog is revealed around Brote per step and fully after the run; it returns on the next run or edit.
+  - Runtime for T3: `mode: 'realtime'` still falls back to the program screen. `move(board, state, dir)` is the one-step primitive (use it for key presses, as sala 4 does via `BoardView.playDirect`). `BoardView` has `play(trace, { onStep, gate, onDone, celebrate })`, `playDirect(step)`, `collect(i)` (pickups vanish with "¡Mía!"), `celebrate()`, `smallWin()`. Pickups are `Board.pickups` with a bitmask in `RobotState.mask`; a "+1 point" rule can reuse `applyCommand(...).collected`. No score or event model exists yet; `LevelDef` has no rule field.
+  - Engram mirror pending (engram MCP resolves cwd ~/projects as ambiguous).
+
 ## Next step
 
-Parent review of the T1 screenshots, then launch T2.
+Parent review of the T2 screenshots (scratchpad `t2-*.png`), then launch T3.
