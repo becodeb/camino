@@ -66,8 +66,16 @@ export interface CompleteParams { family: 'complete'; base: RepeatParams; holes:
  */
 export interface MelodyParams { family: 'melody'; motif: 2 | 3 | 4; count: [number, number]; pitches: 3 | 4 | 5; rest?: boolean }
 
+/**
+ * A guarda on squared paper (sheet 14): one pattern of `body` arrows (↑ ↓ →,
+ * going right) drawn `count` times. The notebook has `body` lines, so the
+ * border only fits with "repetir". Two arrows make a staircase; three or
+ * more, a band (as far up as down), except three that may climb a step.
+ */
+export interface GuardaParams { family: 'guarda'; body: 2 | 3 | 4; count: [number, number] }
+
 /** What the extras generator builds behind a door (curriculum/generate.ts). */
-export type ExtraParams = SequenceParams | RepeatParams | PredictParams | FixParams | CompleteParams | MelodyParams;
+export type ExtraParams = SequenceParams | RepeatParams | PredictParams | FixParams | CompleteParams | MelodyParams | GuardaParams;
 export type ExtraFamily = ExtraParams['family'];
 /** A door's extras: one family, or several taking turns (the i-th extra uses the i-th, round and round). */
 export type DoorExtras = ExtraParams | readonly ExtraParams[];

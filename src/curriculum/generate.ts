@@ -8,7 +8,8 @@
 // times; with steps around it, or as a long flat plan with a gold challenge),
 // `predict` (where does Brote end?), `fix` (one mistake to find), `complete`
 // (a count or a card missing), `melody` (a song on the xylophone: one motif
-// played several times, sheet 9).
+// played several times, sheet 9), `guarda` (a border on squared paper: one
+// pattern drawn several times, sheet 14).
 //
 // Deterministic: a sheet, a door and an index always give the same level
 // (the seed is shown in the dev drawer). Every level is proved by running its
@@ -26,11 +27,12 @@ import {
   DELTA, DIRS, HOLE, cardCount, cmdProgram, isHole, sameCell,
   type Board, type Cell, type Deco, type Dir, type Obstacle, type Program, type ProgramItem,
 } from '../game/model';
+import { guardaBoard, guardaKey, guardaTrace, type GuardaDef } from '../game/guarda';
 import { TONES, isPrimitive, melodyKey, noteCmd, xylophone, type MusicDef, type Pitch, type Tone } from '../game/music';
 import { riverize } from './boards';
 import {
   DOOR_LABEL, extraId, paramsAt,
-  type CompleteHole, type CompleteParams, type Door, type ExtraParams, type FixBug, type FixParams, type MelodyParams,
+  type CompleteHole, type CompleteParams, type Door, type ExtraParams, type FixBug, type FixParams, type GuardaParams, type MelodyParams,
   type PredictParams, type RepeatParams, type SequenceParams, type Sheet, type Zone,
 } from './model';
 
@@ -90,6 +92,8 @@ export interface Generated {
   hole?: CompleteHole;
   /** A song on the xylophone (the melody family): the board is the xylophone, the song the goal. */
   music?: MusicDef;
+  /** A border on squared paper (the guarda family): the board is the paper, the guide the goal. */
+  guarda?: GuardaDef;
 }
 
 const PALETTE_ORDER: readonly Dir[] = ['left', 'up', 'down', 'right'];
@@ -167,10 +171,10 @@ function keyOf(format: Format, b: Board, solution: Program, given?: Program, sav
 export function keyOfLevel(l: LevelDef): string | null {
   const b = l.worlds[0];
   if (l.worlds.length !== 1 || !b) return null;
-  if (l.music) {
-    // a song: the melody family's key (a free page has none)
-    if (!l.music.song) return null;
-    const f = formatOf(l), base = melodyKey(l.solution);
+  if (l.music || l.guarda) {
+    // a song or a guarda: its family's key (a free song has none)
+    if (l.music && !l.music.song) return null;
+    const f = formatOf(l), base = l.music ? melodyKey(l.solution) : guardaKey(l.solution);
     return f === 'fix' || f === 'complete' ? `${f}:${JSON.stringify(l.given)}:${base}` : base;
   }
   return keyOf(formatOf(l), b, l.solution, l.given, l.save);
@@ -516,6 +520,52 @@ function genMelody(p: MelodyParams, R: Rng): Generated | null {
   return null;
 }
 
+// ------------------------------------------------------------------ family: guarda (borders on squared paper)
+
+const GUARDA_ARROWS: readonly Dir[] = ['up', 'down', 'right'];
+
+/**
+ * The patterns of a guarda of `n` arrows (↑ ↓ →): they go right, they draw
+ * something (a line up or down), they are not a shorter pattern twice, and
+ * they stay in a band, as far up as down; a pattern of two or three arrows
+ * may also climb or go down one square (a staircase).
+ */
+export function guardaPatterns(n: GuardaParams['body']): Dir[][] {
+  const out: Dir[][] = [];
+  for (const seq of sequencesOf(GUARDA_ARROWS, n)) {
+    if (seq.length !== n) continue;
+    const dx = seq.filter((d) => d === 'right').length;
+    const dy = seq.filter((d) => d === 'down').length - seq.filter((d) => d === 'up').length;
+    if (dx < 1 || dx === n || Math.abs(dy) > (n <= 3 ? 1 : 0) || !isPrimitive(seq)) continue;
+    out.push(seq as Dir[]);
+  }
+  return out;
+}
+
+/**
+ * A guarda: one pattern drawn several times on a page of squared paper with
+ * one square of paper round the guide. The notebook has one line per arrow
+ * of the pattern, so no program without "repetir" can draw it; the palette
+ * has the pattern's arrows. Proved by drawing the reference.
+ */
+function genGuarda(p: GuardaParams, R: Rng, river: boolean): Generated | null {
+  const pats = guardaPatterns(p.body);
+  for (let tries = 0; tries < 60; tries++) {
+    const body = R.pick(pats);
+    const count = R.range(p.count[0], p.count[1]);
+    const moves = Array.from({ length: count }, () => body).flat();
+    const board = guardaBoard(moves, R.int(1e6), river ? 'river' : undefined);
+    const guarda: GuardaDef = { moves };
+    const solution: Program = [loopOf(count, body)];
+    if (guardaTrace(board, guarda, solution).outcome !== 'win') continue;
+    return {
+      board, solution, slots: p.body, blocks: [...PALETTE_ORDER.filter((d) => body.includes(d)), 'repeat'],
+      flat: moves.length, key: guardaKey(solution), guarda,
+    };
+  }
+  return null;
+}
+
 // ------------------------------------------------------------------ public API
 
 function genOf(params: ExtraParams, R: Rng, river: boolean): Generated | null {
@@ -532,6 +582,7 @@ function genOf(params: ExtraParams, R: Rng, river: boolean): Generated | null {
     case 'fix': return genFix(params, R, river);
     case 'complete': return genComplete(params, R, river);
     case 'melody': return genMelody(params, R);
+    case 'guarda': return genGuarda(params, R, river);
   }
 }
 
@@ -573,6 +624,7 @@ export function difficultyOf(g: Generated): number {
 /** Spoken on entering an extra (es-AR): the board says the rest. */
 function sayFor(g: Generated): string {
   if (g.music) return 'Tocá la tira de colores para escuchar la canción. Armala en el cuaderno: la parte que se repite va adentro de repetir.';
+  if (g.guarda) return 'Pasá la guarda en birome por arriba del lápiz. Buscá el dibujo que se repite y usá repetir.';
   if (g.format === 'predict') return '¿Dónde va a terminar Brote? Tocá ese lugar del tablero y después tocá Probar.';
   if (g.format === 'fix') return 'Brote se confundió. Probá, mirá dónde se equivoca y arreglá el cuaderno.';
   if (g.format === 'complete') return g.hole === 'count' ? '¿Cuántas veces hay que repetir? Contá los pasos y tocá el número.' : 'Falta un bloque. Poné el que va en el renglón vacío.';
@@ -630,6 +682,7 @@ export function extraRun(sheet: Sheet, door: Door, n: number): Extra[] {
           ...(g.given ? { given: g.given } : {}),
           ...(g.save ? { save: g.save } : {}),
           ...(g.music ? { music: g.music } : {}),
+          ...(g.guarda ? { guarda: g.guarda } : {}),
         },
       });
       break;

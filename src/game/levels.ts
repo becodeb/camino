@@ -4,6 +4,7 @@
 
 import type { Board, Deco, Obstacle, Program } from './model';
 import { cmdProgram } from './model';
+import type { GuardaDef } from './guarda';
 import type { MusicDef } from './music';
 import type { RealtimeDef, Rule } from './rules';
 
@@ -109,6 +110,12 @@ export interface LevelDef {
    * world is the xylophone as a board (`music.xylophone`).
    */
   music?: MusicDef;
+  /**
+   * 1ro's guardas (sheet 14): the page is won by drawing its border on the
+   * squared paper exactly (game/guarda.ts). The one world is the paper as a
+   * board: its cells are the points where the lines cross.
+   */
+  guarda?: GuardaDef;
 }
 
 const grass = (seed: number, cells: [number, number][]): Deco[] =>

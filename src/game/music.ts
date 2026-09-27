@@ -112,12 +112,7 @@ export function phrasesOf(program: Program): number[] {
   return out;
 }
 
-/** A tune is a motif played again when a shorter piece of it, repeated, makes it all (do mi do mi is do mi twice). */
-export function isPrimitive<T>(motif: readonly T[]): boolean {
-  const n = motif.length;
-  for (let d = 1; d < n; d++) if (n % d === 0 && motif.every((x, i) => x === motif[i % d])) return false;
-  return true;
-}
+export { isPrimitive } from './model';
 
 /**
  * What makes two music pages the same (to keep a run of extras free of

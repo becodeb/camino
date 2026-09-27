@@ -131,6 +131,13 @@ export const isWin = (b: Board, s: RobotState) => sameCell(s, b.goal) && s.mask 
 export const visibleFrom = (b: Board, at: Cell): Cell[] =>
   [at, ...Object.values(DELTA).map(([dc, dr]) => ({ c: at.c + dc, r: at.r + dr }))].filter((x) => inside(b, x.c, x.r));
 
+/** A motif is played (or walked) again when a shorter piece of it, repeated, makes it all: do mi do mi is do mi twice. */
+export function isPrimitive<T>(motif: readonly T[]): boolean {
+  const n = motif.length;
+  for (let d = 1; d < n; d++) if (n % d === 0 && motif.every((x, i) => x === motif[i % d])) return false;
+  return true;
+}
+
 /** Cards the child placed (a loop itself is not a card, nor is an empty line). */
 export const cardCount = (p: Program) =>
   p.reduce((n, it) => n + (it.t === 'cmd' ? (isHole(it.cmd) ? 0 : 1) : it.body.filter((c) => !isHole(c)).length), 0);

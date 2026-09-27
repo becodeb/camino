@@ -5,9 +5,10 @@ import { COUNT_MAX, COUNT_MIN } from '../game/hint';
 import { wins } from '../game/judge';
 import { HOLE, cardCount, cmdProgram, inside, isHole, obstacleAt, sameCell, type Board, type Program, type ProgramItem } from '../game/model';
 import { TONES, isPrimitive, noteCmd, toneOf, tonesOf, xylophone } from '../game/music';
+import { guardaBoard, guidePath, guideSegments } from '../game/guarda';
 import { DOORS, doorParams, paramsAt, type DoorExtras, type ExtraParams, type SequenceParams, type Sheet } from './model';
 import { PRIMER } from './primer';
-import { MELODY_PITCHES, difficultyOf, extraFor, extraRun, generate, hashSeed, keyOfLevel, patterns, type Extra } from './generate';
+import { MELODY_PITCHES, difficultyOf, extraFor, extraRun, generate, guardaPatterns, hashSeed, keyOfLevel, patterns, type Extra } from './generate';
 
 /**
  * Test-only sheets with no levels of their own, so every family and variant is
@@ -37,6 +38,11 @@ const LAB: Sheet[] = [
     { family: 'melody', motif: 2, count: [2, 3], pitches: 4 },
     { family: 'melody', motif: 3, count: [2, 4], pitches: 3 },
     { family: 'melody', motif: 4, count: [4, 5], pitches: 5, rest: true }),
+  lab(106, 'rio',
+    { family: 'guarda', body: 2, count: [2, 4] },
+    { family: 'guarda', body: 3, count: [2, 3] },
+    { family: 'guarda', body: 4, count: [3, 5] }),
+  lab(107, 'bosque', { family: 'guarda', body: 2, count: [3, 5] }, { family: 'guarda', body: 3, count: [3, 4] }, { family: 'guarda', body: 4, count: [3, 4] }),
 ];
 const WITH_EXTRAS = [...PRIMER.filter((s) => s.extras), ...LAB];
 const RUN = 8;
@@ -80,6 +86,16 @@ describe('the search', () => {
     for (const p of patterns(3)) expect(p).toHaveLength(3);
   });
 
+  it('guarda patterns go right and draw something: two arrows a step, four a band', () => {
+    expect(guardaPatterns(2).map((p) => p.join(' ')).sort()).toEqual(['down right', 'right down', 'right up', 'up right']);
+    expect(guardaPatterns(3)).toHaveLength(12);
+    const four = guardaPatterns(4);
+    expect(four).toHaveLength(12);
+    expect(four.map((p) => p.join(' '))).toContain('up right down right');
+    for (const p of four) expect(p.filter((d) => d === 'up').length).toBe(p.filter((d) => d === 'down').length);
+    for (const n of [2, 3, 4] as const) for (const p of guardaPatterns(n)) expect(p).not.toContain('left');
+  });
+
   it('knows a handmade level as the extra it would be', () => {
     const stairs = PRIMER.find((s) => s.n === 6)!.core[1].level; // the demo's staircase: 4 × [→ ↑]
     expect(keyOfLevel(stairs)).toBe('rep:rightup:4:-1');
@@ -111,10 +127,13 @@ function expectSane(e: Extra) {
   expect(e.level.worlds[0]).toBe(b);
   expect(e.level.slots).toBe(e.slots);
   expect(e.level.format).toBe(e.format);
-  if (e.music) {
-    // a song on the xylophone: the song is the goal
+  if (e.music || e.guarda) {
+    // a song on the xylophone, a guarda on squared paper: the song or the drawing is the goal
     expect(e.level.music).toBe(e.music);
-    expect(b).toEqual(xylophone(b.seed));
+    expect(e.level.guarda).toBe(e.guarda);
+    if (e.music) expect(b).toEqual(xylophone(b.seed));
+    else expect(b).toEqual(guardaBoard(e.guarda!.moves, b.seed, b.look));
+    expect(b.goalKind).toBe('none');
     expect(wins(e.level, e.solution)).toBe(true);
     expect(cardCount(e.solution)).toBeLessThanOrEqual(e.slots);
     for (const { cmd } of unroll(e.solution)) expect(e.blocks).toContain(cmd);
@@ -310,6 +329,35 @@ for (const sheet of WITH_EXTRAS) {
             expect(e.blocks).toEqual([...TONES.filter((t) => motif.includes(t)).map(noteCmd), 'repeat']);
             const cards = e.blocks.filter((x) => x !== 'repeat');
             for (const seq of sequences(cards, e.slots)) expect(wins(e.level, cmdProgram(seq))).toBe(false);
+          }
+        });
+      }
+
+      if (of('guarda').length) {
+        it(`${door}: guarda: one pattern drawn count times inside the page, and no program without "repetir" fits the notebook`, () => {
+          for (const { e, p } of of('guarda')) {
+            expect(e.solution).toHaveLength(1);
+            const loop = e.solution[0];
+            if (loop.t !== 'loop' || typeof loop.count !== 'number') throw new Error('a guarda without its repeat');
+            expect(loop.body).toHaveLength(p.body);
+            expect(e.slots).toBe(p.body);
+            expect(loop.count).toBeGreaterThanOrEqual(p.count[0]);
+            expect(loop.count).toBeLessThanOrEqual(p.count[1]);
+            expect(guardaPatterns(p.body).map((x) => x.join())).toContain(loop.body.join());
+            expect(e.guarda!.moves).toEqual(unroll(e.solution).map((x) => x.cmd));
+            expect(e.flat).toBe(e.guarda!.moves.length);
+            // the guide stays a square inside the paper
+            for (const pt of guidePath(e.board, e.guarda!)) {
+              expect(pt.c).toBeGreaterThanOrEqual(1);
+              expect(pt.r).toBeGreaterThanOrEqual(1);
+              expect(pt.c).toBeLessThanOrEqual(e.board.cols - 2);
+              expect(pt.r).toBeLessThanOrEqual(e.board.rows - 2);
+            }
+            // more segments than lines: a card draws one at most; and no flat program of the palette's arrows draws it
+            expect(guideSegments(e.board, e.guarda!).length).toBeGreaterThan(e.slots);
+            const arrows = e.blocks.filter((x) => x !== 'repeat');
+            expect(e.blocks).toEqual([...['left', 'up', 'down', 'right'].filter((d) => loop.body.includes(d)), 'repeat']);
+            for (const seq of sequences(arrows, e.slots)) expect(wins(e.level, cmdProgram(seq))).toBe(false);
           }
         });
       }
