@@ -1,7 +1,8 @@
 // Screenshot tour with Playwright driving the system Chromium (no bundled browser needed).
 // PW=/tmp/pw node tools/shots.mjs <outDir> [base] [only]
 //   T1 scenarios are named t1-*, T2 scenarios t2-*, T3 scenarios t3-* (so `only=t2-` shoots the T2 tour);
-//   1ro's year (feature primer-grado) is p1-* (its T1) and p2-* (its T2: the formats, sheets 3, 5, 10–13, the river).
+//   1ro's year (feature primer-grado) is p1-* (its T1), p2-* (its T2: the formats, sheets 3, 5, 10–13, the river)
+//   and p3a-* (its T3a: the music recess, sheet 9, and the guardas, sheet 14).
 //   PW: a directory with playwright installed; base: the running app (default http://127.0.0.1:8797/)
 //   only: run the scenarios whose name contains this text.
 // Uses the ?debug hooks (window.__camino) to build programs and run them; waits in real time.
@@ -228,7 +229,7 @@ const P1 = [
   { name: 'extra-hard-seq', size: [1280, 800], go: yr('/1ro/hoja/2/puerta/dificil/2'), progress: MIDYEAR },
   { name: 'dev-open', size: [1366, 768], go: yr('/1ro/hoja/6/puerta/media/1', '&dev'), progress: MIDYEAR },
   { name: 'dev-map', size: [1280, 800], go: yr('/1ro', '&dev'), progress: MIDYEAR },
-  { name: 'soon', size: [1366, 768], go: yr('/1ro/hoja/14', '&dev'), progress: MIDYEAR },
+  { name: 'soon', size: [1366, 768], go: yr('/1ro/hoja/16', '&dev'), progress: MIDYEAR },
 ].map((s) => ({ ...s, name: `p1-${s.name}` }));
 
 // ---------------------------------------------------------------- 1ro's year, T2: the formats, sheets 3, 5, 10–13, the river
@@ -333,7 +334,81 @@ const P2 = [
   { name: 'dev-gold', size: [1366, 768], go: yr('/1ro/hoja/11/1/oro', '&dev'), progress: LATE },
 ].map((s) => ({ ...s, name: `p2-${s.name}` }));
 
-const S = [...T1, ...T2, ...T3, ...P1, ...P2];
+// ---------------------------------------------------------------- 1ro's year, T3a: the music recess (sheet 9) and the guardas (sheet 14)
+const notes = (...ts) => ts.map((t) => ({ t: 'cmd', cmd: t === 'rest' ? 'rest' : `note:${t}` }));
+const nloop = (count, ...ts) => ({ t: 'loop', count, body: ts.map((t) => (t === 'rest' ? 'rest' : `note:${t}`)) });
+const cmds = (...ds) => ds.map((cmd) => ({ t: 'cmd', cmd }));
+const ALMENA = ['up', 'right', 'down', 'right'];
+/** Sets a program through the ?debug hooks and presses ▶ (the real button), waiting `ms` (or until the page is idle). */
+const runIt = async (p, program, ms) => {
+  await cam(p, (x) => window.__camino.setProgram(x), program);
+  await p.waitForTimeout(400);
+  await play(p);
+  if (ms == null) await idle(p, 700); else await p.waitForTimeout(ms);
+};
+/** Everything up to sheet 13 done, the teacher at sheet 17: the map shows 9 and 14 built. */
+const T3A = {
+  v: 1, seeds: 58, opened: 17, character: 'brote',
+  solved: solvedAll([
+    ...core(1, [1, 2, 3, 'jefe']), ...core(2, [1, 2, 3, 4]), ...core(3, [1, 2, 3, 4]), ...core(4, [1, 2, 3]), ...core(5, [1, 2, 3, 4]),
+    ...core(6, [1, 2, 3, 4]), ...core(8, [1, 2, 3]), ...core(9, [1, 2, 3, 4, 'jefe']), ...core(10, [1, 2, 3, 4]), ...core(11, [1, 2, 3, 4]),
+    ...core(12, [1, 2, 3, 4]), ...core(13, [1, 2, 3, 4]),
+  ]),
+  gold: {},
+};
+
+const P3A = [
+  { name: 'map-1366', size: [1366, 768], go: yr('/1ro'), progress: T3A },
+  // 9 · música: the copy page idle, listening, mid-run, a wrong note, won
+  { name: 'm9-copy-idle', size: [1366, 768], go: yr('/1ro/hoja/9/1'), progress: FRESH },
+  { name: 'm9-copy-listen', size: [1366, 768], go: yr('/1ro/hoja/9/1'), progress: FRESH, run: async (p) => { await p.click('.song-strip', { force: true }); await p.waitForTimeout(Number(process.env.LISTEN_MS ?? 1500)); } },
+  { name: 'm9-copy-midrun', size: [1366, 768], go: yr('/1ro/hoja/9/1'), progress: FRESH, run: (p) => runIt(p, notes('do', 're', 'mi', 'do'), Number(process.env.RUN_MS ?? 2250)) },
+  { name: 'm9-copy-wrong', size: [1366, 768], go: yr('/1ro/hoja/9/1'), progress: FRESH, run: async (p) => { await runIt(p, notes('do', 're', 'do', 'mi'), 0); await p.waitForSelector('.blk.is-culprit', { timeout: 20000 }); await p.waitForTimeout(Number(process.env.SHAKE_MS ?? 160)); } },
+  { name: 'm9-copy-won', size: [1366, 768], go: yr('/1ro/hoja/9/1'), progress: FRESH, run: (p) => runIt(p, notes('do', 're', 'mi', 'do')) },
+  { name: 'm9-copy-1280', size: [1280, 800], go: yr('/1ro/hoja/9/1'), progress: FRESH, run: async (p) => { await cam(p, (x) => window.__camino.setProgram(x), notes('do', 're')); await p.waitForTimeout(500); } },
+  // the chorus in a repeat
+  { name: 'm9-chorus-idle', size: [1366, 768], go: yr('/1ro/hoja/9/2'), progress: FRESH },
+  { name: 'm9-chorus-midrun', size: [1366, 768], go: yr('/1ro/hoja/9/2'), progress: FRESH, run: (p) => runIt(p, [nloop(3, 'do', 'mi', 'sol', 'mi')], Number(process.env.RUN_MS ?? 4000)) },
+  { name: 'm9-chorus-won', size: [1366, 768], go: yr('/1ro/hoja/9/2'), progress: FRESH, run: (p) => runIt(p, [nloop(3, 'do', 'mi', 'sol', 'mi')]) },
+  // how many times: the count missing, too few passes, the right count
+  { name: 'm9-count-idle', size: [1366, 768], go: yr('/1ro/hoja/9/3'), progress: FRESH },
+  { name: 'm9-count-short', size: [1366, 768], go: yr('/1ro/hoja/9/3'), progress: FRESH, run: async (p) => { for (let i = 0; i < 2; i++) { await p.click('.zone-program .tape-count', { force: true }); await p.waitForTimeout(260); } await play(p); await idle(p, 300); } },
+  { name: 'm9-count-won', size: [1366, 768], go: yr('/1ro/hoja/9/3'), progress: FRESH, run: async (p) => { for (let i = 0; i < 3; i++) { await p.click('.zone-program .tape-count', { force: true }); await p.waitForTimeout(260); } await play(p); await idle(p, 700); } },
+  // a free song, written on the strip as it is played
+  { name: 'm9-free-idle', size: [1366, 768], go: yr('/1ro/hoja/9/4'), progress: FRESH },
+  { name: 'm9-free-played', size: [1366, 768], go: yr('/1ro/hoja/9/4'), progress: FRESH, run: (p) => runIt(p, [notes('sol')[0], nloop(3, 'mi', 'rest', 'do'), ...notes('re', 'do')]) },
+  // Martinillo
+  { name: 'm9-boss-idle', size: [1366, 768], go: yr('/1ro/hoja/9/jefe'), progress: FRESH },
+  { name: 'm9-boss-midrun', size: [1366, 768], go: yr('/1ro/hoja/9/jefe'), progress: FRESH, run: (p) => runIt(p, [nloop(2, 'do', 're', 'mi', 'do'), nloop(2, 'mi', 'fa', 'sol', 'rest')], Number(process.env.RUN_MS ?? 6000)) },
+  { name: 'm9-boss-won', size: [1366, 768], go: yr('/1ro/hoja/9/jefe'), progress: FRESH, run: (p) => runIt(p, [nloop(2, 'do', 're', 'mi', 'do'), nloop(2, 'mi', 'fa', 'sol', 'rest')]) },
+  // one extra behind each door, and the doors page
+  { name: 'm9-extra-easy', size: [1366, 768], go: yr('/1ro/hoja/9/puerta/facil/1'), progress: T3A },
+  { name: 'm9-extra-medium', size: [1366, 768], go: yr('/1ro/hoja/9/puerta/media/1'), progress: T3A },
+  { name: 'm9-extra-hard', size: [1366, 768], go: yr('/1ro/hoja/9/puerta/dificil/1'), progress: T3A },
+  { name: 'm9-doors', size: [1366, 768], go: yr('/1ro/hoja/9/puertas'), progress: T3A },
+  // 14 · guardas: the first page idle, mid-run, a smudge, won; battlements with a repeat, short and won; the fence; the fix; the castle
+  { name: 'g14-first-idle', size: [1366, 768], go: yr('/1ro/hoja/14/1'), progress: FRESH },
+  { name: 'g14-first-midrun', size: [1366, 768], go: yr('/1ro/hoja/14/1'), progress: FRESH, run: (p) => runIt(p, cmds(...ALMENA, ...ALMENA), Number(process.env.RUN_MS ?? 3300)) },
+  { name: 'g14-first-smudge', size: [1366, 768], go: yr('/1ro/hoja/14/1'), progress: FRESH, run: async (p) => { await runIt(p, cmds('up', 'right', 'down', 'right', 'up', 'up', 'right', 'down'), null); await p.waitForTimeout(200); } },
+  { name: 'g14-first-won', size: [1366, 768], go: yr('/1ro/hoja/14/1'), progress: FRESH, run: (p) => runIt(p, cmds(...ALMENA, ...ALMENA)) },
+  { name: 'g14-first-1280', size: [1280, 800], go: yr('/1ro/hoja/14/1'), progress: FRESH, run: async (p) => { await cam(p, (x) => window.__camino.setProgram(x), cmds('up', 'right', 'down')); await p.waitForTimeout(500); } },
+  { name: 'g14-almenas-idle', size: [1366, 768], go: yr('/1ro/hoja/14/2'), progress: FRESH },
+  { name: 'g14-almenas-short', size: [1366, 768], go: yr('/1ro/hoja/14/2'), progress: FRESH, run: (p) => runIt(p, [{ t: 'loop', count: 3, body: ALMENA }], null) },
+  { name: 'g14-almenas-won', size: [1366, 768], go: yr('/1ro/hoja/14/2'), progress: FRESH, run: (p) => runIt(p, [{ t: 'loop', count: 4, body: ALMENA }]) },
+  { name: 'g14-fence-midrun', size: [1366, 768], go: yr('/1ro/hoja/14/3'), progress: FRESH, run: (p) => runIt(p, [{ t: 'loop', count: 4, body: ['up', 'right', 'down'] }], Number(process.env.RUN_MS ?? 4200)) },
+  { name: 'g14-fence-won', size: [1366, 768], go: yr('/1ro/hoja/14/3'), progress: FRESH, run: (p) => runIt(p, [{ t: 'loop', count: 4, body: ['up', 'right', 'down'] }]) },
+  { name: 'g14-fix-idle', size: [1366, 768], go: yr('/1ro/hoja/14/4'), progress: FRESH },
+  { name: 'g14-fix-smudge', size: [1366, 768], go: yr('/1ro/hoja/14/4'), progress: FRESH, run: async (p) => { await play(p); await p.waitForSelector('.blk.is-culprit', { timeout: 20000 }); await p.waitForTimeout(Number(process.env.SHAKE_MS ?? 160)); } },
+  { name: 'g14-fix-won', size: [1366, 768], go: yr('/1ro/hoja/14/4'), progress: FRESH, run: async (p) => { await p.click('.zone-program [data-ref="0:3"]', { force: true }); await p.waitForTimeout(400); await p.click('.zone-palette [data-cmd="down"]', { force: true }); await p.waitForTimeout(400); await play(p); await idle(p, 900); } },
+  { name: 'g14-boss-idle', size: [1366, 768], go: yr('/1ro/hoja/14/jefe'), progress: FRESH },
+  { name: 'g14-boss-won', size: [1366, 768], go: yr('/1ro/hoja/14/jefe'), progress: FRESH, run: (p) => runIt(p, [...cmds('up', 'up'), { t: 'loop', count: 3, body: ['right', 'down', 'right', 'up'] }, ...cmds('down', 'down')]) },
+  { name: 'g14-extra-easy', size: [1366, 768], go: yr('/1ro/hoja/14/puerta/facil/1'), progress: T3A },
+  { name: 'g14-extra-medium', size: [1366, 768], go: yr('/1ro/hoja/14/puerta/media/1'), progress: T3A },
+  { name: 'g14-extra-hard', size: [1366, 768], go: yr('/1ro/hoja/14/puerta/dificil/1'), progress: T3A },
+  { name: 'g14-doors', size: [1366, 768], go: yr('/1ro/hoja/14/puertas'), progress: { ...T3A, solved: { ...T3A.solved, ...solvedAll(core(14, [1, 2])) } } },
+].map((s) => ({ ...s, name: `p3a-${s.name}` }));
+
+const S = [...T1, ...T2, ...T3, ...P1, ...P2, ...P3A];
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox', '--disable-gpu'] });
 try {

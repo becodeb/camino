@@ -4,6 +4,9 @@
 // a reload keeps the progress; cleared or blocked storage does not break the app.
 // The practice formats (T2): a missing count is completed, a wrong block is fixed in place, a
 // wrong and a right prediction, a gold stamp earned through the gold seal; a reload keeps them.
+// The new mechanics (T3a): a song copied on the xylophone after listening to its strip, a wrong
+// note that stops the song and names its card, a guarda drawn on squared paper, a wrong arrow that
+// smudges it; a music page played with Web Audio missing or broken.
 // Exits non-zero on the first failure.
 // PW=/tmp/pw node tools/check-primer.mjs [base]
 import { createRequire } from 'node:module';
@@ -121,10 +124,10 @@ try {
   if ((await page.textContent('[data-dev="level-id"]')) !== '1ro-h6-jefe') fail('the drawer shows the boss id');
   await tap('.dev-drawer a[data-dev-door="hard"]');
   await expectHash('#/1ro/hoja/6/puerta/dificil/1', 'a dev jump to the hard door');
-  await tap('.dev-sheets a[data-dev-sheet="14"]');
-  await expectHash('#/1ro/hoja/14', 'a dev jump to a sheet not built yet');
-  if (!(await count('.soon'))) fail('sheet 14 should show its "próximamente" page');
-  ok('dev jumps: sheet 6, its boss (framed), its hard door, and sheet 14 (próximamente)');
+  await tap('.dev-sheets a[data-dev-sheet="15"]');
+  await expectHash('#/1ro/hoja/15', 'a dev jump to a sheet not built yet');
+  if (!(await count('.soon'))) fail('sheet 15 should show its "próximamente" page');
+  ok('dev jumps: sheet 6, its boss (framed), its hard door, and sheet 15 (próximamente)');
   await tap('.dev-drawer button:has-text("apagar")');
 
   // ---------------------------------------------------------------- a reload keeps the progress
@@ -249,6 +252,79 @@ try {
   await open('/1ro/hoja/3');
   await expectHash('#/1ro/hoja/3/3', 'sheet 3 opens on its first unsolved page after pages 1 and 2');
   ok('a reload keeps the gold stamp and the solved formats; sheet 3 now opens on its page 3');
+
+  // ---------------------------------------------------------------- the music recess (T3a): listen, copy, a wrong note
+  const note = (t) => `.zone-palette [data-cmd="${t === 'rest' ? 'rest' : `note:${t}`}"]`;
+  n0 = await seeds();
+  await open('/1ro/hoja/9/1');
+  if ((await count('.xylo-bar')) !== 5) fail('the music page should draw the five bars of the xylophone');
+  if ((await count('.song-strip .strip-notes > g')) !== 4) fail('the song strip should show the four notes of the song');
+  await press('.song-strip');
+  await page.waitForTimeout(700);
+  if (!(await count('.song-strip .strip-marks path'))) fail('a tap on the strip should play the song (its blue pen follows it)');
+  await page.waitForTimeout(2200);
+  for (const t of ['do', 're', 'do', 'mi']) await tap(note(t));
+  const song = await program();
+  if (song.map((it) => it.cmd).join(' ') !== 'note:do note:re note:do note:mi') fail(`taps should write do re do mi, wrote ${JSON.stringify(song)}`);
+  await press('.btn-play');
+  await page.waitForSelector('.zone-program .blk.is-culprit', { timeout: 20000 });
+  if ((await page.getAttribute('.zone-program .blk.is-culprit', 'data-ref')) !== '2') fail('the wrong note (the third card) should be the culprit');
+  if (!(await count('.song-strip .strip-ring'))) fail('the beat that was due should be circled on the strip');
+  await idle();
+  if (await count('.next-page')) fail('a wrong note should not win the page');
+  if ((await seeds()) !== n0) fail('a wrong note should not earn a seed');
+  ok('music: the strip plays the song on a tap; do re do mi stops on the third beat, its card shakes and the beat that was due is circled; no seed');
+  await press('.zone-program [data-ref="3"]');
+  await press('.zone-program [data-ref="2"]');
+  for (const t of ['mi', 'do']) await tap(note(t));
+  if ((await program()).map((it) => it.cmd).join(' ') !== 'note:do note:re note:mi note:do') fail('taps on the notebook take cards out, taps on the palette bring them back');
+  await press('.btn-play');
+  await won();
+  if ((await seeds()) !== n0 + 1) fail('the song played right should earn a seed');
+  if ((await count('.song-strip .strip-marks circle')) !== 4) fail('every beat played right should be ticked on the strip');
+  ok('music: two taps take the wrong notes out, two bring mi and do; the song plays right, every beat is ticked, a seed');
+
+  // ---------------------------------------------------------------- the guardas (T3a): draw, smudge, fix
+  n0 = await seeds();
+  await open('/1ro/hoja/14/1');
+  // the last arrow goes down off the pencil (↑ would only go back over the line just inked: that is fine)
+  const arrows = ['up', 'right', 'down', 'right', 'up', 'right', 'down', 'down'];
+  for (const d of arrows) await tap(`.zone-palette [data-cmd="${d}"]`);
+  await press('.btn-play');
+  await page.waitForSelector('.zone-program .blk.is-culprit', { timeout: 30000 });
+  if ((await page.getAttribute('.zone-program .blk.is-culprit', 'data-ref')) !== '7') fail('the last arrow (↓ instead of →) should be the culprit');
+  if (!(await count('.board .smudge'))) fail('a step off the pencil should smudge the ink');
+  await idle();
+  if (await count('.next-page')) fail('a smudged guarda should not win');
+  ok('guarda: seven arrows ink the pencil in blue, the eighth goes off it: the ink smudges and that card shakes');
+  await press('.zone-program [data-ref="7"]');
+  await tap('.zone-palette [data-cmd="right"]');
+  await press('.btn-play');
+  await won();
+  if (await count('.board .smudge')) fail('a new run starts from a clean page');
+  if ((await seeds()) !== n0 + 1) fail('the guarda drawn right should earn a seed');
+  if (!(await count('.board .goal-ring'))) fail('the finished guarda should get the blue loop round it');
+  ok('guarda: the wrong arrow out, → in: the guarda is drawn on a clean page, looped in blue pen, a seed');
+
+  // ---------------------------------------------------------------- the music page without Web Audio: silent, and nothing breaks
+  for (const kind of ['missing', 'broken']) {
+    const mute = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+    watch(mute);
+    await mute.addInitScript((k) => {
+      if (k === 'missing') { delete window.AudioContext; delete window.webkitAudioContext; Object.defineProperty(window, 'AudioContext', { value: undefined, configurable: true }); }
+      else Object.defineProperty(window, 'AudioContext', { value: class { constructor() { throw new Error('no audio device'); } }, configurable: true });
+    }, kind);
+    await mute.goto(`${base}?debug#/1ro/hoja/9/1`);
+    await mute.waitForTimeout(1100);
+    await mute.click('.song-strip', { force: true });
+    await mute.waitForTimeout(600);
+    await mute.click('.xylo-bar[data-bar="sol"]', { force: true });
+    for (const t of ['do', 're', 'mi', 'do']) { await mute.click(note(t)); await mute.waitForTimeout(260); }
+    await mute.click('.btn-play', { force: true });
+    await mute.waitForSelector('.next-page', { timeout: 30000 });
+    await mute.close();
+  }
+  ok('music with Web Audio missing, and with an AudioContext that throws: the strip, a bar, four notes and ▶ play silently and win');
 
   // ---------------------------------------------------------------- blocked storage: the app plays in memory
   const blocked = await browser.newPage({ viewport: { width: 1366, height: 768 } });
