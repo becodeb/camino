@@ -1,10 +1,14 @@
-// Hash routes: #/ the home page (the whole tramo), #/nivel/<id> one page.
+// Hash routes (curriculum/route.ts): #/ the home page (the whole tramo),
+// #/nivel/<id> one page of the demo, #/1ro the forest map of 1ro's year,
+// #/1ro/hoja/<n>/… a sheet of that year.
 
 import { useEffect, useState } from 'react';
 import { InkDefs } from './ui/InkDefs';
 import { HomeScreen } from './screens/HomeScreen';
 import { LevelScreen } from './screens/LevelScreen';
+import { ForestMap } from './screens/ForestMap';
 import { levelById } from './game/levels';
+import { parseRoute } from './curriculum/route';
 import './ui/runtime';
 
 function useHash() {
@@ -17,15 +21,23 @@ function useHash() {
   return hash;
 }
 
+function Screen({ hash }: { hash: string }) {
+  const route = parseRoute(hash);
+  if (route.screen === 'map') return <ForestMap />;
+  if (route.screen === 'level') {
+    const level = levelById(route.id);
+    if (level) return <LevelScreen key={level.id} level={level} />;
+  }
+  return <HomeScreen />;
+}
+
 export function App() {
   const hash = useHash();
-  const m = hash.match(/^#\/nivel\/([\w-]+)/);
-  const level = m ? levelById(m[1]) : null;
   useEffect(() => { window.scrollTo(0, 0); }, [hash]);
   return (
     <>
       <InkDefs />
-      {level ? <LevelScreen key={level.id} level={level} /> : <HomeScreen />}
+      <Screen hash={hash} />
     </>
   );
 }

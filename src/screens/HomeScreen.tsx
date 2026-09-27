@@ -10,6 +10,7 @@ import { visibleFrom, type Board } from '../game/model';
 import { stamp, useStamps } from '../game/progress';
 import { Portrait, Stamp } from '../ui/art';
 import { BROTE } from './LevelBar';
+import { MAP_HREF } from '../curriculum/route';
 
 const INK = '#2b2622';
 
@@ -113,6 +114,19 @@ function ThumbSeed({ x, y, big }: { x: number; y: number; big?: boolean }) {
   );
 }
 
+/** 1ro's tab opens the whole year: a little tree says there is a forest behind it. */
+function TabTree() {
+  return (
+    <svg className="tab-tree" viewBox="-13 -30 26 32" aria-hidden="true">
+      <g stroke={INK} strokeLinejoin="round" strokeLinecap="round">
+        <path d="M-2.5,0 L2.5,0 L2,-9 L-2,-9 Z" fill="#b08560" strokeWidth={1.8} />
+        <path d={blob(0, -17, 10, 9, { seed: 4, n: 8 })} fill="#a4b86d" strokeWidth={2} />
+        <path d="M-4,-17 q2,2 4,0" fill="none" strokeWidth={1.2} opacity={0.5} />
+      </g>
+    </svg>
+  );
+}
+
 function PageCard({ level, stamped, next }: { level: LevelDef; stamped: boolean; next: boolean }) {
   return (
     <a className={`page-card cut${next ? ' is-next' : ''}${stamped ? ' is-done' : ''}`} href={`#/nivel/${level.id}`} aria-label={`${level.title}${stamped ? ' (hecha)' : ''}`}>
@@ -139,14 +153,16 @@ export function HomeScreen() {
     <main className="home">
       <header className="home-head">
         <h1 className="home-title">Camino</h1>
-        <p className="home-note">Sala 4 a 3er grado · dos hojas por grado</p>
+        <p className="home-note">Sala 4 a 3er grado · dos hojas por grado · el año entero de 1ro, en su pestaña</p>
       </header>
       <ol className="books">
         {GRADES.map((g, gi) => {
           const pages = levelsOf(g.id);
           return (
             <li key={g.id} className="book" style={{ '--tab': g.color, '--tilt': `${gi % 2 ? 0.6 : -0.5}deg` } as CSSProperties}>
-              <span className="book-tab">{g.label}</span>
+              {g.id === '1ro'
+                ? <a className="book-tab is-year" href={MAP_HREF} aria-label="1ro: el año completo, el mapa del bosque">{g.label}<TabTree /></a>
+                : <span className="book-tab">{g.label}</span>}
               <div className="book-sheet">
                 <span className="tape tape-r" aria-hidden="true" />
                 {[1, 2].map((n) => {

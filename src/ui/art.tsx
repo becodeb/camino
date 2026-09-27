@@ -19,10 +19,15 @@ export function Portrait({ def, mood = 'smile', className }: { def: CharacterDef
   return <svg ref={ref} className={className} viewBox="-52 -100 104 104" aria-hidden="true" />;
 }
 
-/** The rubber stamp of a finished page: a double ring and a sprouting seed, in red ink. */
-export const Stamp = memo(function Stamp({ seed = 1, className }: { seed?: number; className?: string }) {
+/**
+ * The rubber stamp of a finished page: a double ring and a sprouting seed, in
+ * red ink. Inside another SVG (the map) it takes a place: `x`, `y` (its
+ * centre) and `size`.
+ */
+export const Stamp = memo(function Stamp({ seed = 1, className, x, y, size }: { seed?: number; className?: string; x?: number; y?: number; size?: number }) {
+  const place = size != null ? { x: (x ?? 0) - size / 2, y: (y ?? 0) - size / 2, width: size, height: size } : {};
   return (
-    <svg className={`stamp ${className ?? ''}`} viewBox="0 0 100 100" aria-hidden="true">
+    <svg className={`stamp ${className ?? ''}`} viewBox="0 0 100 100" aria-hidden="true" {...place}>
       <g filter="url(#rough)" fill="none" stroke={STAMP} strokeLinecap="round" strokeLinejoin="round" opacity="0.88">
         <path d={blob(50, 50, 44, 43, { wob: 0.02, n: 14, seed })} strokeWidth={5.5} />
         <path d={blob(50, 50, 35, 34, { wob: 0.025, n: 12, seed: seed + 1 })} strokeWidth={2.2} strokeDasharray="3 5" />

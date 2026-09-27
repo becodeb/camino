@@ -1,0 +1,58 @@
+/* 1ro's year: the forest map, the sheet pages (their bar, the doors, the boss
+   frame), the seed pouch and the dev drawer. On top of notebook.css and
+   camino.css: same tokens, the same cut-paper primitive, the same ink. */
+
+/* ------------------------------------------------ the forest map */
+.map {
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 4px;
+  padding: 8px 22px 26px;
+}
+.map-head { display: flex; align-items: center; gap: 18px; padding: 0 8px; min-height: 56px; }
+.map-title { margin: 0; font: 400 38px/1 var(--hand); }
+.map-note { margin: 0; flex: 1; font-size: 15px; color: var(--ink-2); }
+.map-stage { min-height: 0; display: grid; place-items: center; }
+.map-sheet {
+  /* the page keeps the map's shape: as wide as the height below the header allows */
+  width: min(100%, calc((100dvh - 118px) * var(--map-aspect)));
+  aspect-ratio: var(--map-aspect);
+  padding: 8px;
+}
+.map-sheet .tape-r { right: -10px; }
+.map-sheet .tape-l { left: -12px; }
+.map-svg { display: block; width: 100%; height: 100%; overflow: hidden; }
+.stop-no { font: 700 30px var(--body); }
+.stop { outline: none; }
+a.stop { cursor: pointer; }
+.stop .stop-in { transform-box: fill-box; transform-origin: 50% 70%; transition: transform 0.15s ease-out; }
+a.stop:hover .stop-in { transform: translateY(-6px) rotate(-1.5deg); }
+a.stop:active .stop-in { transform: translate(2px, 3px); }
+.stop.is-future { opacity: 0.42; }
+.stop.is-future.is-soon { opacity: 0.5; }
+.stop-focus { opacity: 0; fill: none; stroke: var(--blue-ink); stroke-width: 3; stroke-dasharray: 6 7; }
+a.stop:focus-visible .stop-focus { opacity: 1; }
+.map-brote { pointer-events: none; }
+.map-brote .bob { animation: brote-wait 2.4s ease-in-out infinite; }
+
+/* the home's 1ro tab opens the year */
+.book-tab.is-year { display: inline-flex; align-items: flex-end; gap: 4px; text-decoration: none; cursor: pointer; transition: transform 0.15s ease-out; }
+.book-tab.is-year:hover { transform: translateY(-3px); }
+.book-tab.is-year:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset: 4px; }
+.tab-tree { width: 20px; height: 24px; margin: -8px -4px -2px 0; overflow: visible; }
+
+/* ------------------------------------------------ the seed pouch */
+.seed-pouch { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.pouch-in { display: block; width: 44px; height: 50px; }
+.pouch-art { width: 100%; height: 100%; overflow: visible; display: block; }
+.pouch-in.is-popped { animation: pouch-bump 420ms ease-out; }
+.pouch-count { min-width: 1.4em; font: 700 22px/1 var(--body); color: var(--ink); }
+.pouch-count.is-popped { animation: pop-in 360ms ease-out both; }
+@keyframes pouch-bump { 0% { scale: 1; } 35% { scale: 1.16 0.86; } 65% { scale: 0.94 1.08; } 100% { scale: 1; } }
+.flying-seed { position: fixed; left: 0; top: 0; z-index: 90; width: 44px; height: 44px; pointer-events: none; }
+.flying-seed svg { overflow: visible; }
+
+@media (prefers-reduced-motion: reduce) {
+  .map-brote .bob, .pouch-in.is-popped, .pouch-count.is-popped { animation: none; }
+}
