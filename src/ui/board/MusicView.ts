@@ -411,6 +411,12 @@ export class MusicView extends BoardView {
     this.listenRun++;
   }
 
+  /** The page goes away: a song still being listened to stops too (its notes would go on sounding). */
+  destroy() {
+    this.stopListening();
+    super.destroy();
+  }
+
   // ---------------------------------------------------------------- running
 
   /** One beat of a run: a hop onto the note's bar and its sound, or a silence with the eyes closed. */

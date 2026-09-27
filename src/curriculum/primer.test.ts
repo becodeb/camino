@@ -219,11 +219,12 @@ describe('every level of the built sheets', () => {
           it('its gold challenge: the same board with the fewest lines that win, and "repetir"', () => {
             const g = goldLevel(l)!;
             expect(g.worlds).toBe(l.worlds);
+            expect(g.guarda).toBe(l.guarda);
             expect(g.blocks).toContain('repeat');
-            expect(solves(b, g.solution)).toBe(true);
+            expect(wins(g, g.solution)).toBe(true);
             expect(cardCount(g.solution)).toBe(g.slots);
             expect(g.slots!).toBeLessThan(l.slots!);
-            for (const p of programsWith(cmdsOf(g), true, g.slots! - 1)) expect(solves(b, p), JSON.stringify(p)).toBe(false);
+            for (const p of programsWith(cmdsOf(g), true, g.slots! - 1)) expect(wins(g, p), JSON.stringify(p)).toBe(false);
           });
         }
       });
@@ -367,9 +368,10 @@ describe('what each sheet teaches', () => {
     const [first, battlements, fence, fixIt] = s.core.map((c) => c.level);
     for (const l of levelsOf(14)) expect(l.guarda, l.id).toBeDefined();
     expect(s.core.filter((c) => c.essential).map((c) => c.level.page)).toEqual([1, 2]);
-    // plain arrows: the pattern twice, no repeat in the palette
+    // plain arrows: the pattern twice, no repeat in the palette; the gold seal asks for the repeat
     expect(hasLoop(first.solution)).toBe(false);
     expect(first.blocks).not.toContain('repeat');
+    expect(first.save?.solution).toEqual([{ t: 'loop', count: 2, body: ['up', 'right', 'down', 'right'] }]);
     expect(unroll(first.solution).map((x) => x.cmd).join(' ')).toBe('up right down right up right down right');
     // the same pattern, longer: only a repeat of four arrows fits
     expect(battlements.solution).toEqual([{ t: 'loop', count: 4, body: ['up', 'right', 'down', 'right'] }]);

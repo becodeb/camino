@@ -391,6 +391,8 @@ const P3A = [
   { name: 'g14-first-midrun', size: [1366, 768], go: yr('/1ro/hoja/14/1'), progress: FRESH, run: (p) => runIt(p, cmds(...ALMENA, ...ALMENA), Number(process.env.RUN_MS ?? 3300)) },
   { name: 'g14-first-smudge', size: [1366, 768], go: yr('/1ro/hoja/14/1'), progress: FRESH, run: async (p) => { await runIt(p, cmds('up', 'right', 'down', 'right', 'up', 'up', 'right', 'down'), null); await p.waitForTimeout(200); } },
   { name: 'g14-first-won', size: [1366, 768], go: yr('/1ro/hoja/14/1'), progress: FRESH, run: (p) => runIt(p, cmds(...ALMENA, ...ALMENA)) },
+  { name: 'g14-gold', size: [1366, 768], go: yr('/1ro/hoja/14/1/oro'), progress: T3A },
+  { name: 'g14-gold-won', size: [1366, 768], go: yr('/1ro/hoja/14/1/oro'), progress: T3A, run: (p) => runIt(p, [{ t: 'loop', count: 2, body: ALMENA }]) },
   { name: 'g14-first-1280', size: [1280, 800], go: yr('/1ro/hoja/14/1'), progress: FRESH, run: async (p) => { await cam(p, (x) => window.__camino.setProgram(x), cmds('up', 'right', 'down')); await p.waitForTimeout(500); } },
   { name: 'g14-almenas-idle', size: [1366, 768], go: yr('/1ro/hoja/14/2'), progress: FRESH },
   { name: 'g14-almenas-short', size: [1366, 768], go: yr('/1ro/hoja/14/2'), progress: FRESH, run: (p) => runIt(p, [{ t: 'loop', count: 3, body: ALMENA }], null) },

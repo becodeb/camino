@@ -501,6 +501,8 @@ export const SHEET_14: Built = {
       blocks: ['up', 'down', 'right'],
       slots: 8,
       solution: cmdProgram(times(2, ...ALMENA)),
+      // the gold seal: the same guarda in four lines, with "repetir"
+      save: { slots: 4, solution: [loop(2, ALMENA)], blocks: ['up', 'down', 'right', 'repeat'] },
     })),
     essential(coreLevel(14, 2, {
       title: 'Almenas con repetir',
