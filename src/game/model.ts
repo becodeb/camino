@@ -15,9 +15,10 @@ export interface Deco extends Cell { dx: number; dy: number; seed: number }
 /**
  * What waits at the goal: the seed itself (sala 4, sala 5 level 1), or a pot
  * where Brote plants the seeds it picked up (it only "opens" once every
- * pickup is collected).
+ * pickup is collected). `none`: no goal cell, the page is won another way
+ * (3ro page 2, by points).
  */
-export type GoalKind = 'seed' | 'pot';
+export type GoalKind = 'seed' | 'pot' | 'none';
 
 export interface Board {
   cols: number;

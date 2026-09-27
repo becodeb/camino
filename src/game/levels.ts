@@ -4,6 +4,7 @@
 
 import type { Board, Deco, Obstacle, Program } from './model';
 import { cmdProgram } from './model';
+import type { RealtimeDef, Rule } from './rules';
 
 export type GradeId = 'sala4' | 'sala5' | '1ro' | '2do' | '3ro';
 
@@ -20,7 +21,7 @@ export const GRADES: readonly { id: GradeId; label: string; color: string }[] = 
  * How the child drives Brote:
  * - `direct`: big arrow buttons, each tap is one step right away (sala 4). No program.
  * - `program`: blocks stacked under the start block, then ▶ Probar (sala 5 → 2do).
- * - `realtime`: rules that react to events while the game runs (3ro; engine added in T3).
+ * - `realtime`: rule cards that keep reacting while the game runs (3ro, game/rules.ts).
  */
 export type Mode = 'direct' | 'program' | 'realtime';
 
@@ -30,7 +31,7 @@ export type Mode = 'direct' | 'program' | 'realtime';
  */
 export type BlockLabel = 'picture' | 'picture-word' | 'word-picture';
 
-/** A palette entry: a command id (see model.CommandId) or a C-block. */
+/** A palette entry: a command id (see model.CommandId), a C-block, or (3ro) a hat or an action of game/rules. */
 export type PaletteBlock = string | 'repeat' | 'repeat-goal';
 
 export interface LevelDef {
@@ -65,6 +66,8 @@ export interface LevelDef {
    * (`fail`), and again from ✋ while the program has no loop.
    */
   intro?: { program: Program; after: 'full' | 'fail' };
+  /** 3ro: the rules, how the page is won and what falls from the sky. `solution` stays empty. */
+  realtime?: RealtimeDef;
 }
 
 const grass = (seed: number, cells: [number, number][]): Deco[] =>
@@ -77,6 +80,8 @@ const strip = (cols: number, goal: number, rocks: number[], seed: number): Board
   obstacles: rocks.map((c, i) => rock(c, 0, seed + i)), pickups: [], deco: [], seed,
 });
 const WALK_OR_JUMP: Program = [{ t: 'loop', count: 'goal', body: ['ifrock:right', 'right'] }];
+/** 3ro: one rule per arrow key, each moving Brote that way. */
+const arrowRule = (d: 'left' | 'up' | 'down' | 'right'): Rule => ({ hat: `key:${d}`, actions: [d] });
 
 export const LEVELS: LevelDef[] = [
   {
@@ -203,6 +208,55 @@ export const LEVELS: LevelDef[] = [
     blockLabel: 'word-picture',
     slots: 3,
     solution: WALK_OR_JUMP,
+  },
+  {
+    id: '3ro-1',
+    grade: '3ro',
+    page: 1,
+    title: 'Mi primer juego: cuando aprieto una flecha, Brote se mueve',
+    say: 'Ahora armás un juego. Poné reglas: cuando aprieto una flecha, Brote se mueve. Tocá Probar y jugá con las flechas hasta la semilla.',
+    mode: 'realtime',
+    worlds: [{
+      cols: 6, rows: 4, start: { c: 0, r: 3 }, goal: { c: 5, r: 0 }, goalKind: 'seed',
+      // a wall near the start and one near the seed: → and ↑ are not enough, the way round needs ↓
+      obstacles: [rock(2, 3, 21), rock(2, 2, 23), rock(4, 1, 25), rock(4, 0, 27)],
+      pickups: [], deco: grass(17, [[0, 0], [1, 3], [5, 3], [3, 0]]), seed: 141,
+    }],
+    blocks: ['key:left', 'key:up', 'key:down', 'key:right', 'left', 'up', 'down', 'right'],
+    blockLabel: 'word-picture',
+    solution: [],
+    realtime: {
+      initial: [],
+      // in the order ✋ builds them: the rules the way needs first
+      solution: [arrowRule('right'), arrowRule('up'), arrowRule('down'), arrowRule('left')],
+      win: { kind: 'goal' },
+      maxActions: 2,
+      intro: arrowRule('right'),
+    },
+  },
+  {
+    id: '3ro-2',
+    grade: '3ro',
+    page: 2,
+    title: 'Siempre que Brote toque una semilla, suma un punto',
+    say: 'Caen semillas del cielo. Juntá cinco. Hace falta una regla nueva: siempre que Brote toque una semilla, suma un punto.',
+    mode: 'realtime',
+    worlds: [{
+      // no goal cell: the page is won by points
+      cols: 6, rows: 4, start: { c: 2, r: 3 }, goal: { c: 0, r: 0 }, goalKind: 'none',
+      obstacles: [], pickups: [], deco: grass(19, [[0, 1], [4, 0], [5, 2], [1, 2]]), seed: 152,
+    }],
+    blocks: ['key:left', 'key:right', 'touch:seed', 'left', 'right', 'score'],
+    blockLabel: 'word-picture',
+    solution: [],
+    realtime: {
+      initial: [arrowRule('left'), arrowRule('right')],
+      solution: [arrowRule('left'), arrowRule('right'), { hat: 'touch:seed', actions: ['score'] }],
+      win: { kind: 'score', n: 5 },
+      // slow and calm: a seed every 3 to 4 seconds, about 8 seconds to fall
+      spawner: { every: [30, 42], speed: 0.045, seed: 7, first: 10 },
+      maxActions: 2,
+    },
   },
 ];
 

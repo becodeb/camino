@@ -45,18 +45,27 @@ describe('every level', () => {
       it('has sane boards: start, goal, pickups inside and free', () => {
         expect(level.worlds.length).toBeGreaterThan(0);
         for (const b of level.worlds) {
-          for (const cell of [b.start, b.goal, ...b.pickups]) {
+          const goal = b.goalKind === 'none' ? [] : [b.goal];
+          for (const cell of [b.start, ...goal, ...b.pickups]) {
             expect(inside(b, cell.c, cell.r)).toBe(true);
             expect(obstacleAt(b, cell.c, cell.r)).toBeUndefined();
           }
-          expect(sameCell(b.start, b.goal)).toBe(false);
+          if (b.goalKind !== 'none') expect(sameCell(b.start, b.goal)).toBe(false);
+          else expect(level.realtime?.win.kind).toBe('score');
           if (b.pickups.length) expect(b.goalKind).toBe('pot');
         }
       });
 
-      it('its reference solution wins in every world', () => {
-        for (const b of level.worlds) expect(simulate(b, level.solution).outcome).toBe('win');
-      });
+      if (level.mode !== 'realtime') {
+        it('its reference solution wins in every world', () => {
+          for (const b of level.worlds) expect(simulate(b, level.solution).outcome).toBe('win');
+        });
+      } else {
+        it('is a game of rules (its reference rules are played in rules.test)', () => {
+          expect(level.realtime).toBeDefined();
+          expect(level.solution).toEqual([]);
+        });
+      }
 
       it('the solution only uses blocks from its palette', () => {
         for (const cmd of commandsOf(level.solution)) expect(level.blocks).toContain(cmd);

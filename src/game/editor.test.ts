@@ -88,7 +88,7 @@ describe('block editor model', () => {
   });
 
   it('building every level reference program block by block gives exactly that program', () => {
-    for (const level of LEVELS) {
+    for (const level of LEVELS.filter((l) => l.mode !== 'realtime')) {
       const built = build(level.solution);
       expect(JSON.stringify(built)).toBe(JSON.stringify(level.solution));
       for (const b of level.worlds) expect(solves(b, built)).toBe(true);
