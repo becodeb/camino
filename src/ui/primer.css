@@ -122,7 +122,7 @@ a.door-btn:hover .door-in, a.boss-btn:hover .boss-in { transform: translateY(-6p
 a.door-btn:active .door-in, a.boss-btn:active .boss-in { transform: translate(2px, 3px); }
 .door-leaf { transform-box: fill-box; transform-origin: 0% 50%; transition: transform 0.22s cubic-bezier(.3,.6,.35,1); }
 a.door-btn:hover .door-leaf, a.door-btn:focus-visible .door-leaf { transform: scaleX(0.78) skewY(-4deg); }
-.door-btn.is-shut, .boss-btn.is-shut { opacity: 0.5; cursor: default; }
+.door-btn.is-shut, .boss-btn.is-shut { filter: saturate(0.25) brightness(1.1); cursor: default; }
 a.door-btn:focus-visible .door-in, a.boss-btn:focus-visible .boss-in { outline: 3px dashed var(--blue-ink); outline-offset: 6px; }
 .door-count-n { font: 700 22px var(--body); fill: var(--ink); }
 .doors-next { align-self: end; margin-bottom: 18px; }
