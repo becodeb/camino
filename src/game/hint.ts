@@ -29,6 +29,13 @@ export type Hint =
 
 const emptyLike = (b: Block): Block => (b.t === 'loop' ? { t: 'loop', count: b.count === 'goal' ? 'goal' : COUNT_MIN, body: [] } : b);
 
+/**
+ * Whether a program already wins: the page's worlds (a walk that must win in
+ * each of them), or the page's own judge (a song, a guarda: game/judge.ts).
+ */
+export type Judge = readonly Board[] | ((program: Program) => boolean);
+const winsBy = (j: Judge, p: Program) => (typeof j === 'function' ? j(p) : solvesAll(j, p));
+
 /** The first place where `program` leaves `solution`, as the gesture that fixes it. */
 function divergence(program: Program, solution: Program): Hint {
   const n = Math.max(program.length, solution.length);
@@ -68,8 +75,8 @@ function divergence(program: Program, solution: Program): Hint {
  * run; otherwise the first difference with the reference solution is fixed.
  * On a full notebook an extra card has to leave before another can come in.
  */
-export function nextHint(worlds: readonly Board[], program: Program, solution: Program, slots?: number): Hint {
-  if (program.length && solvesAll(worlds, program)) return { kind: 'run' };
+export function nextHint(worlds: Judge, program: Program, solution: Program, slots?: number): Hint {
+  if (program.length && winsBy(worlds, program)) return { kind: 'run' };
   const h = divergence(program, solution);
   if (h.kind === 'add' && h.block.t === 'cmd' && slots != null && cardCount(program) >= slots) {
     return { kind: 'remove', ref: lastExtraCard(program, solution) };
@@ -92,8 +99,8 @@ export type LinesHint =
   /** Tap the count of tape `item` this many times. */
   | { kind: 'count'; item: number; taps: number };
 
-export function linesHint(worlds: readonly Board[], program: Program, target: Program): LinesHint {
-  if (cardCount(program) && solvesAll(worlds, program)) return { kind: 'run' };
+export function linesHint(worlds: Judge, program: Program, target: Program): LinesHint {
+  if (cardCount(program) && winsBy(worlds, program)) return { kind: 'run' };
   const line = (have: string, want: string, ref: BlockRef): LinesHint | null => {
     if (have === want) return null;
     return have === HOLE ? { kind: 'fill', ref, cmd: want } : { kind: 'empty', ref };

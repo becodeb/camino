@@ -110,6 +110,27 @@ export function simulate(b: Board, program: Program, opts: { from?: RobotState }
 export const solves = (b: Board, program: Program) => simulate(b, program).outcome === 'win';
 
 /**
+ * The cards a program plays, in order, each with where it came from: empty
+ * lines are skipped, a repeat plays its body `count` times (a count still
+ * missing, or "until the goal", plays no pass). For the pages whose program is
+ * not a walk to a goal: a song (music.ts), a guarda (guarda.ts).
+ */
+export function unroll(program: Program): { cmd: string; ref: CardRef }[] {
+  const out: { cmd: string; ref: CardRef }[] = [];
+  program.forEach((it, item) => {
+    if (it.t === 'cmd') {
+      if (!isHole(it.cmd)) out.push({ cmd: it.cmd, ref: { item } });
+      return;
+    }
+    const passes = typeof it.count === 'number' ? it.count : 0;
+    for (let iter = 0; iter < passes; iter++) {
+      it.body.forEach((cmd, inner) => { if (!isHole(cmd)) out.push({ cmd, ref: { item, inner, iter } }); });
+    }
+  });
+  return out;
+}
+
+/**
  * One program in several worlds at once (2do page 2). Every block runs as
  * exactly one step in every world, so while two worlds are both still going,
  * their step `i` comes from the same block: the notebook can follow all of

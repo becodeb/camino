@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { shortestMoves, shortestPlan, simulate, solves } from '../game/engine';
+import { shortestMoves, shortestPlan, simulate, solves, unroll } from '../game/engine';
 import { differences, formatOf } from '../game/formats';
 import { COUNT_MAX, COUNT_MIN } from '../game/hint';
+import { wins } from '../game/judge';
 import { HOLE, cardCount, cmdProgram, inside, isHole, obstacleAt, sameCell, type Board, type Program, type ProgramItem } from '../game/model';
+import { TONES, isPrimitive, noteCmd, toneOf, tonesOf, xylophone } from '../game/music';
 import { DOORS, doorParams, paramsAt, type DoorExtras, type ExtraParams, type SequenceParams, type Sheet } from './model';
 import { PRIMER } from './primer';
-import { difficultyOf, extraFor, extraRun, generate, hashSeed, keyOfLevel, patterns, type Extra } from './generate';
+import { MELODY_PITCHES, difficultyOf, extraFor, extraRun, generate, hashSeed, keyOfLevel, patterns, type Extra } from './generate';
 
 /**
  * Test-only sheets with no levels of their own, so every family and variant is
@@ -31,6 +33,10 @@ const LAB: Sheet[] = [
     { family: 'repeat', body: 1, count: [4, 6], pickups: 0, save: true },
     { family: 'repeat', body: 2, count: [3, 4], pickups: 0, pre: [1, 1], post: [1, 1] },
     [{ family: 'repeat', body: 2, count: [3, 4], pickups: 1, pre: [1, 2], post: [1, 2] }, { family: 'fix', base: { family: 'repeat', body: 2, count: [3, 4], pickups: 1 }, bugs: ['extra', 'count'] }]),
+  lab(105, 'bosque',
+    { family: 'melody', motif: 2, count: [2, 3], pitches: 4 },
+    { family: 'melody', motif: 3, count: [2, 4], pitches: 3 },
+    { family: 'melody', motif: 4, count: [4, 5], pitches: 5, rest: true }),
 ];
 const WITH_EXTRAS = [...PRIMER.filter((s) => s.extras), ...LAB];
 const RUN = 8;
@@ -105,6 +111,15 @@ function expectSane(e: Extra) {
   expect(e.level.worlds[0]).toBe(b);
   expect(e.level.slots).toBe(e.slots);
   expect(e.level.format).toBe(e.format);
+  if (e.music) {
+    // a song on the xylophone: the song is the goal
+    expect(e.level.music).toBe(e.music);
+    expect(b).toEqual(xylophone(b.seed));
+    expect(wins(e.level, e.solution)).toBe(true);
+    expect(cardCount(e.solution)).toBeLessThanOrEqual(e.slots);
+    for (const { cmd } of unroll(e.solution)) expect(e.blocks).toContain(cmd);
+    return;
+  }
   const f = formatOf(e.level);
   if (f === 'predict') {
     expect(b.goalKind).toBe('none');
@@ -267,6 +282,34 @@ for (const sheet of WITH_EXTRAS) {
                 expect(solves(e.board, tried), a).toBe(a === d.to);
               }
             }
+          }
+        });
+      }
+
+      if (of('melody').length) {
+        it(`${door}: melody: one real motif played count times, and no program without "repetir" fits the notebook`, () => {
+          for (const { e, p } of of('melody')) {
+            expect(e.solution).toHaveLength(1);
+            const loop = e.solution[0];
+            if (loop.t !== 'loop' || typeof loop.count !== 'number') throw new Error('a melody without its repeat');
+            expect(loop.body).toHaveLength(p.motif);
+            expect(e.slots).toBe(p.motif);
+            expect(loop.count).toBeGreaterThanOrEqual(p.count[0]);
+            expect(loop.count).toBeLessThanOrEqual(p.count[1]);
+            const motif = loop.body.map(toneOf);
+            expect(isPrimitive(motif)).toBe(true);
+            expect(new Set(motif.filter((t) => t !== 'rest')).size).toBeGreaterThanOrEqual(2);
+            expect(motif[0]).not.toBe('rest');
+            for (const t of motif) {
+              if (t === 'rest') expect(p.rest).toBe(true);
+              else expect(MELODY_PITCHES[p.pitches]).toContain(t);
+            }
+            expect(e.music!.song).toEqual(tonesOf(e.solution));
+            expect(e.flat).toBe(e.music!.song!.length);
+            // the palette: the motif's notes in the xylophone's order, then "repetir"
+            expect(e.blocks).toEqual([...TONES.filter((t) => motif.includes(t)).map(noteCmd), 'repeat']);
+            const cards = e.blocks.filter((x) => x !== 'repeat');
+            for (const seq of sequences(cards, e.slots)) expect(wins(e.level, cmdProgram(seq))).toBe(false);
           }
         });
       }

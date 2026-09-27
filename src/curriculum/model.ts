@@ -57,8 +57,17 @@ export interface FixParams { family: 'fix'; base: SequenceParams | RepeatParams;
 export type CompleteHole = 'count' | 'card';
 export interface CompleteParams { family: 'complete'; base: RepeatParams; holes: CompleteHole[] }
 
+/**
+ * A song on the xylophone (sheet 9): one motif of `motif` beats played
+ * `count` times. The notebook has `motif` lines, so the song only fits with
+ * "repetir". `pitches`: the notes it may use (3: do mi sol, always in tune
+ * together; 4: and re; 5: do to sol); `rest`: one beat may be a silence
+ * (never the first).
+ */
+export interface MelodyParams { family: 'melody'; motif: 2 | 3 | 4; count: [number, number]; pitches: 3 | 4 | 5; rest?: boolean }
+
 /** What the extras generator builds behind a door (curriculum/generate.ts). */
-export type ExtraParams = SequenceParams | RepeatParams | PredictParams | FixParams | CompleteParams;
+export type ExtraParams = SequenceParams | RepeatParams | PredictParams | FixParams | CompleteParams | MelodyParams;
 export type ExtraFamily = ExtraParams['family'];
 /** A door's extras: one family, or several taking turns (the i-th extra uses the i-th, round and round). */
 export type DoorExtras = ExtraParams | readonly ExtraParams[];

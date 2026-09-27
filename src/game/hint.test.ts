@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { countTaps, linesHint, nextCount, nextHint } from './hint';
+import { judgeOf } from './judge';
 import { HOLE, cmdProgram, type Board, type Program } from './model';
+import { xylophone, type Tone } from './music';
 
 const line = (over: Partial<Board> = {}): Board => ({
   cols: 9, rows: 3, start: { c: 0, r: 1 }, goal: { c: 8, r: 1 }, goalKind: 'seed',
@@ -93,5 +95,19 @@ describe('the next hint for loop programs', () => {
     // the arrow first, then the "if": same cards in the wrong order, the first one leaves
     const swapped: Program = [{ t: 'loop', count: 'goal', body: ['right', 'ifrock:right'] }];
     expect(nextHint([clear, rocky], swapped, ref, 3)).toEqual({ kind: 'remove', ref: { item: 0, inner: 0 } });
+  });
+});
+
+describe('help judged by the page itself (a song, not a walk)', () => {
+  const song: Tone[] = ['do', 'mi', 'sol', 'mi', 'do', 'mi', 'sol', 'mi'];
+  const page = { worlds: [xylophone(3)], music: { song } };
+  const ref: Program = [{ t: 'loop', count: 2, body: ['note:do', 'note:mi', 'note:sol', 'note:mi'] }];
+
+  it('▶ once the song is right, the next note to bring, the wrong one to take out, the count', () => {
+    expect(nextHint(judgeOf(page), ref, ref, 4)).toEqual({ kind: 'run' });
+    expect(nextHint(judgeOf(page), [{ t: 'loop', count: 2, body: ['note:do', 'note:mi'] }], ref, 4)).toEqual({ kind: 'add', block: { t: 'cmd', cmd: 'note:sol' }, slot: { tape: 0, at: 2 } });
+    expect(nextHint(judgeOf(page), [{ t: 'loop', count: 2, body: ['note:do', 'note:re', 'note:sol', 'note:mi'] }], ref, 4)).toEqual({ kind: 'remove', ref: { item: 0, inner: 1 } });
+    expect(nextHint(judgeOf(page), [{ t: 'loop', count: 3, body: ref[0].t === 'loop' ? ref[0].body : [] }], ref, 4)).toEqual({ kind: 'count', item: 0, taps: 8 });
+    expect(linesHint(judgeOf(page), [{ t: 'loop', count: 0, body: ['note:do', 'note:mi', 'note:sol', 'note:mi'] }], ref)).toEqual({ kind: 'count', item: 0, taps: 1 });
   });
 });

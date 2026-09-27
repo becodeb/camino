@@ -4,6 +4,7 @@
 
 import type { Board, Deco, Obstacle, Program } from './model';
 import { cmdProgram } from './model';
+import type { MusicDef } from './music';
 import type { RealtimeDef, Rule } from './rules';
 
 export type GradeId = 'sala4' | 'sala5' | '1ro' | '2do' | '3ro';
@@ -102,6 +103,12 @@ export interface LevelDef {
   given?: Program;
   /** The gold-stamp challenge of the page, if it has one. */
   save?: SaveChallenge;
+  /**
+   * 1ro's music recess (sheet 9): the notebook holds note cards and the page
+   * is won by playing its song on the xylophone (game/music.ts). The one
+   * world is the xylophone as a board (`music.xylophone`).
+   */
+  music?: MusicDef;
 }
 
 const grass = (seed: number, cells: [number, number][]): Deco[] =>

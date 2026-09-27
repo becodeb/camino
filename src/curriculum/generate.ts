@@ -7,7 +7,8 @@
 // Families: `sequence` (flat plans), `repeat` (one pattern walked several
 // times; with steps around it, or as a long flat plan with a gold challenge),
 // `predict` (where does Brote end?), `fix` (one mistake to find), `complete`
-// (a count or a card missing).
+// (a count or a card missing), `melody` (a song on the xylophone: one motif
+// played several times, sheet 9).
 //
 // Deterministic: a sheet, a door and an index always give the same level
 // (the seed is shown in the dev drawer). Every level is proved by running its
@@ -25,11 +26,12 @@ import {
   DELTA, DIRS, HOLE, cardCount, cmdProgram, isHole, sameCell,
   type Board, type Cell, type Deco, type Dir, type Obstacle, type Program, type ProgramItem,
 } from '../game/model';
+import { TONES, isPrimitive, melodyKey, noteCmd, xylophone, type MusicDef, type Pitch, type Tone } from '../game/music';
 import { riverize } from './boards';
 import {
   DOOR_LABEL, extraId, paramsAt,
-  type CompleteHole, type CompleteParams, type Door, type ExtraParams, type FixBug, type FixParams, type PredictParams,
-  type RepeatParams, type SequenceParams, type Sheet, type Zone,
+  type CompleteHole, type CompleteParams, type Door, type ExtraParams, type FixBug, type FixParams, type MelodyParams,
+  type PredictParams, type RepeatParams, type SequenceParams, type Sheet, type Zone,
 } from './model';
 
 export const GENERATOR_VERSION = 'camino-extras/1';
@@ -86,6 +88,8 @@ export interface Generated {
   /** Fix: the mistake. Complete: what is missing. For the difficulty and the dev drawer. */
   bug?: FixBug;
   hole?: CompleteHole;
+  /** A song on the xylophone (the melody family): the board is the xylophone, the song the goal. */
+  music?: MusicDef;
 }
 
 const PALETTE_ORDER: readonly Dir[] = ['left', 'up', 'down', 'right'];
@@ -163,6 +167,12 @@ function keyOf(format: Format, b: Board, solution: Program, given?: Program, sav
 export function keyOfLevel(l: LevelDef): string | null {
   const b = l.worlds[0];
   if (l.worlds.length !== 1 || !b) return null;
+  if (l.music) {
+    // a song: the melody family's key (a free page has none)
+    if (!l.music.song) return null;
+    const f = formatOf(l), base = melodyKey(l.solution);
+    return f === 'fix' || f === 'complete' ? `${f}:${JSON.stringify(l.given)}:${base}` : base;
+  }
   return keyOf(formatOf(l), b, l.solution, l.given, l.save);
 }
 
@@ -472,6 +482,40 @@ function genComplete(p: CompleteParams, R: Rng, river: boolean): Generated | nul
   return null;
 }
 
+// ------------------------------------------------------------------ family: melody (the music recess)
+
+/** The notes a door may use: a major triad (always in tune together), the triad and re, the five bars. */
+export const MELODY_PITCHES: Record<MelodyParams['pitches'], readonly Pitch[]> = {
+  3: ['do', 'mi', 'sol'],
+  4: ['do', 're', 'mi', 'sol'],
+  5: ['do', 're', 'mi', 'fa', 'sol'],
+};
+
+/**
+ * A song made of one motif played several times. The motif is a real one:
+ * at least two different notes, not a shorter motif twice (do mi do mi is
+ * do mi), a silence never on its first beat. The notebook has one line per
+ * beat of the motif, so no program without "repetir" can play the song; the
+ * palette has the motif's notes (and the silence) in the xylophone's order.
+ */
+function genMelody(p: MelodyParams, R: Rng): Generated | null {
+  const pitches = MELODY_PITCHES[p.pitches];
+  for (let tries = 0; tries < 400; tries++) {
+    const motif: Tone[] = Array.from({ length: p.motif }, () => R.pick(pitches));
+    if (p.rest && p.motif >= 3 && R.chance(0.5)) motif[1 + R.int(p.motif - 1)] = 'rest';
+    if (new Set(motif.filter((t) => t !== 'rest')).size < 2 || !isPrimitive(motif)) continue;
+    const count = R.range(p.count[0], p.count[1]);
+    const solution: Program = [loopOf(count, motif.map(noteCmd))];
+    const song = Array.from({ length: count }, () => motif).flat();
+    return {
+      board: xylophone(R.int(1e6)), solution, slots: p.motif,
+      blocks: [...TONES.filter((t) => motif.includes(t)).map(noteCmd), 'repeat'],
+      flat: song.length, key: melodyKey(solution), music: { song },
+    };
+  }
+  return null;
+}
+
 // ------------------------------------------------------------------ public API
 
 function genOf(params: ExtraParams, R: Rng, river: boolean): Generated | null {
@@ -487,6 +531,7 @@ function genOf(params: ExtraParams, R: Rng, river: boolean): Generated | null {
     }
     case 'fix': return genFix(params, R, river);
     case 'complete': return genComplete(params, R, river);
+    case 'melody': return genMelody(params, R);
   }
 }
 
@@ -527,6 +572,7 @@ export function difficultyOf(g: Generated): number {
 
 /** Spoken on entering an extra (es-AR): the board says the rest. */
 function sayFor(g: Generated): string {
+  if (g.music) return 'Tocá la tira de colores para escuchar la canción. Armala en el cuaderno: la parte que se repite va adentro de repetir.';
   if (g.format === 'predict') return '¿Dónde va a terminar Brote? Tocá ese lugar del tablero y después tocá Probar.';
   if (g.format === 'fix') return 'Brote se confundió. Probá, mirá dónde se equivoca y arreglá el cuaderno.';
   if (g.format === 'complete') return g.hole === 'count' ? '¿Cuántas veces hay que repetir? Contá los pasos y tocá el número.' : 'Falta un bloque. Poné el que va en el renglón vacío.';
@@ -583,6 +629,7 @@ export function extraRun(sheet: Sheet, door: Door, n: number): Extra[] {
           ...(g.format ? { format: g.format } : {}),
           ...(g.given ? { given: g.given } : {}),
           ...(g.save ? { save: g.save } : {}),
+          ...(g.music ? { music: g.music } : {}),
         },
       });
       break;
