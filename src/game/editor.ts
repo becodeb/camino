@@ -4,14 +4,20 @@
 // (model.ts), the one the engine runs.
 // Ported from habilidades (app/src/areas/algorithmic/editor.ts @ 9b90d1d)
 // without its event log; `emptySlots` draws the notebook's N lines (rule 8).
+// "Complete" and "fix" pages use fixed lines instead (holesOf, writeLine,
+// resolveLinesDrop): nothing slides, a block leaves an empty line behind.
 
-import type { Program, ProgramItem } from './model';
+import { HOLE, cardCount, isHole, type Program, type ProgramItem } from './model';
 
 /** What is being placed: a command block or a repeat C-block (a tape). */
 export type Block = ProgramItem;
 
 /** A block in the program: a top-level item, or a card inside a tape. */
 export interface BlockRef { item: number; inner?: number }
+
+/** A block's key: `item`, or `item:inner` for a card inside a tape (also a trace step's ref). */
+export const refKey = (r: BlockRef | null | undefined) => (r ? (r.inner == null ? `${r.item}` : `${r.item}:${r.inner}`) : '');
+export const sameRef = (a: BlockRef | null | undefined, b: BlockRef | null | undefined) => !!a && !!b && refKey(a) === refKey(b);
 
 /** A gap between blocks: before top-level item `at`, or inside tape `tape` before card `at`. */
 export type Slot = { at: number; tape?: undefined } | { tape: number; at: number };
@@ -20,10 +26,8 @@ export const isInner = (s: Slot): s is { tape: number; at: number } => s.tape !=
 export const slotKey = (s: Slot | null | undefined) => (s ? (isInner(s) ? `${s.tape}:${s.at}` : `${s.at}`) : '');
 export const sameSlot = (a: Slot | null | undefined, b: Slot | null | undefined) => slotKey(a) === slotKey(b) && !!a === !!b;
 
-/** Cards the child has placed (a tape itself is not a card), as model.cardCount. */
-export function cards(p: Program): number {
-  return p.reduce((n, it) => n + (it.t === 'cmd' ? 1 : it.body.length), 0);
-}
+/** Cards the child has placed (a tape itself is not a card, nor an empty line), as model.cardCount. */
+export const cards = cardCount;
 
 const blockCards = (b: Block) => (b.t === 'cmd' ? 1 : b.body.length);
 
@@ -94,6 +98,76 @@ export function appendSlot(p: Program, activeTape: number | null | undefined, bl
   return { at: p.length };
 }
 
+// ------------------------------------------------------------------ fixed lines (complete and fix pages)
+// Every line of the notebook stays where it is: a block taken out leaves its
+// line empty (model.HOLE), a block brought in fills an empty line. Tapes never
+// move; their counts are tapped.
+
+/** The empty lines, in reading order (a tape's cards after the tape). */
+export function holesOf(p: Program): BlockRef[] {
+  const out: BlockRef[] = [];
+  p.forEach((it, item) => {
+    if (it.t === 'cmd') { if (isHole(it.cmd)) out.push({ item }); }
+    else it.body.forEach((c, inner) => { if (isHole(c)) out.push({ item, inner }); });
+  });
+  return out;
+}
+
+/** The command on a line (`HOLE` for an empty one), or null when there is no such line (a tape itself is not a line). */
+export function lineAt(p: Program, ref: BlockRef): string | null {
+  const it = p[ref.item];
+  if (!it) return null;
+  if (ref.inner == null) return it.t === 'cmd' ? it.cmd : null;
+  return it.t === 'loop' && ref.inner < it.body.length ? it.body[ref.inner] : null;
+}
+
+/** The program with `cmd` written on the line at `ref` (`HOLE` empties it). Throws when there is no such line. */
+export function writeLine(p: Program, ref: BlockRef, cmd: string): Program {
+  if (lineAt(p, ref) == null) throw new Error(`no line at ${refKey(ref)}`);
+  const next = structuredClone(p);
+  const it = next[ref.item];
+  if (ref.inner == null) (it as Extract<ProgramItem, { t: 'cmd' }>).cmd = cmd;
+  else (it as Extract<ProgramItem, { t: 'loop' }>).body[ref.inner] = cmd;
+  return next;
+}
+
+export const emptyLine = (p: Program, ref: BlockRef) => writeLine(p, ref, HOLE);
+
+/**
+ * The empty line a block dropped at (x, y) lands on — canvas coordinates of a
+ * layout with fixed lines — or null. A little tolerance around each line:
+ * fingers are wide.
+ */
+export function holeAt(layout: Layout, x: number, y: number, pad = 16): BlockRef | null {
+  let best: { ref: BlockRef; d: number } | null = null;
+  for (const it of layout.items) {
+    if (!it.hole || !it.ref) continue;
+    if (x < it.x - pad * 2 || x > it.x + it.w + pad * 2 || y < it.y - pad || y > it.y + it.h + pad) continue;
+    const d = Math.abs(y - (it.y + it.h / 2));
+    if (!best || d < best.d) best = { ref: it.ref, d };
+  }
+  return best?.ref ?? null;
+}
+
+/**
+ * A release on a notebook with fixed lines. Palette → an empty line fills
+ * it; a line → another empty line moves the block there (its own line is
+ * left empty); a line → off the notebook empties it; a line dropped back on
+ * the notebook anywhere else goes back where it was. Tapes do not move.
+ */
+export function resolveLinesDrop(p: Program, src: DragSource, target: BlockRef | null, opts: { overProgram: boolean }): DropResult {
+  if (src.block.t === 'loop') return { program: null, outcome: 'noop' };
+  const cmd = src.block.cmd;
+  if (src.from === 'program' && target && sameRef(target, src.ref)) return { program: null, outcome: 'noop' };
+  if (target && lineAt(p, target) !== HOLE) target = null;
+  if (src.from === 'palette') {
+    return target ? { program: writeLine(p, target, cmd), outcome: 'add' } : { program: null, outcome: 'cancel' };
+  }
+  if (target) return { program: writeLine(emptyLine(p, src.ref), target, cmd), outcome: 'move' };
+  if (opts.overProgram) return { program: null, outcome: 'cancel' };
+  return { program: emptyLine(p, src.ref), outcome: 'remove' };
+}
+
 // ------------------------------------------------------------------ layout
 
 /** Sizes in CSS pixels. `compact` is used on phones and for long programs. */
@@ -137,6 +211,8 @@ export interface Placed {
   slot?: Slot;
   /** Slot inside an active tape (taps go there) or where "something is missing". */
   active?: boolean;
+  /** An empty line in place (fixed lines): `ref` is the line. */
+  hole?: boolean;
 }
 
 export interface LayoutOptions {
@@ -152,6 +228,8 @@ export interface LayoutOptions {
   emptySlots?: number;
   /** The tape receiving taps: it shows a slot at the end of its mouth. */
   activeTape?: number | null;
+  /** Fixed lines: the empty line receiving taps (its refKey); by default the first one. */
+  activeHole?: string | null;
 }
 
 export interface Layout {
@@ -193,6 +271,11 @@ export function layoutProgram(p: Program, o: LayoutOptions = {}): Layout {
       items.push({ key: 'gap', kind: 'gap', x: 0, y, w: gapW, h: gapH, slot: { at: i } });
       y += gapH;
     }
+    if (it.t === 'cmd' && isHole(it.cmd)) {
+      items.push({ key: keyOf('hole'), kind: 'slot', x: 0, y, w: d.w, h: d.h, ref: { item: i }, slot: { at: i }, hole: true });
+      y += d.h;
+      return;
+    }
     if (it.t === 'cmd') {
       const cond = isCond(it.cmd);
       const h = cond ? d.arm + d.condMouth + d.foot : d.h;
@@ -212,6 +295,11 @@ export function layoutProgram(p: Program, o: LayoutOptions = {}): Layout {
         items.push({ key: `${tapeKey}/gap`, kind: 'gap', x: d.spine, y: iy, w: gapW, h: gapH, slot: { tape: i, at: j } });
         iy += gapH;
         innerW = Math.max(innerW, gapW);
+      }
+      if (isHole(cmd)) {
+        items.push({ key: `${tapeKey}/hole#${j}`, kind: 'slot', x: d.spine, y: iy, w: d.w, h: d.h, ref: { item: i, inner: j }, slot: { tape: i, at: j }, hole: true });
+        iy += d.h;
+        return;
       }
       const n = inner.get(cmd) ?? 0;
       inner.set(cmd, n + 1);
@@ -252,6 +340,10 @@ export function layoutProgram(p: Program, o: LayoutOptions = {}): Layout {
     items.push({ key: `end${n}`, kind: 'slot', x: 0, y, w: d.w, h: d.h, slot: { at: p.length }, active: n === 0 });
     y += d.h;
   }
+  // fixed lines: the empty line that takes the next tap
+  const holes = items.filter((it) => it.hole);
+  const taking = o.activeHole === undefined ? holes[0] : holes.find((it) => refKey(it.ref) === o.activeHole);
+  if (taking) taking.active = true;
   return { items, height: y, width };
 }
 

@@ -34,6 +34,34 @@ export type BlockLabel = 'picture' | 'picture-word' | 'word-picture';
 /** A palette entry: a command id (see model.CommandId), a C-block, or (3ro) a hat or an action of game/rules. */
 export type PaletteBlock = string | 'repeat' | 'repeat-goal';
 
+/**
+ * The practice formats of a program page (1ro's year, game/formats.ts):
+ * - `solve` (the default): an empty notebook of `slots` lines.
+ * - `complete`: `given` arrives partly built. Its cards and counts are pinned
+ *   to the page; its empty lines (model.HOLE) and missing counts (0) are the
+ *   child's. `solution` is `given` filled in.
+ * - `fix`: `given` arrives complete with exactly one mistake (a wrong arrow,
+ *   a count too short, an extra card in a repeat). Every line can be changed
+ *   in place. `solution` is `given` fixed in place (an extra card becomes an
+ *   empty line), so the two differ in exactly one line or count.
+ * - `predict`: `given` is read-only (and equals `solution`); the child taps
+ *   the cell where Brote will end, then ▶ plays it. The board has no goal.
+ */
+export type Format = 'solve' | 'complete' | 'fix' | 'predict';
+
+/**
+ * Save blocks: after a page is solved, a gold seal offers the same board with
+ * fewer notebook lines (the fewest cards that win); solving it stamps the page
+ * in gold. Optional, never in the way.
+ */
+export interface SaveChallenge {
+  slots: number;
+  /** A program of `slots` cards that wins (the tests prove none with fewer does). */
+  solution: Program;
+  /** The palette of the challenge; by default the page's blocks and "repetir". */
+  blocks?: PaletteBlock[];
+}
+
 export interface LevelDef {
   /** Stable id used in the URL: `#/nivel/<id>`. */
   id: string;
@@ -68,6 +96,12 @@ export interface LevelDef {
   intro?: { program: Program; after: 'full' | 'fail' };
   /** 3ro: the rules, how the page is won and what falls from the sky. `solution` stays empty. */
   realtime?: RealtimeDef;
+  /** 1ro's practice format (see Format); a plain page when absent. */
+  format?: Format;
+  /** What the notebook starts with on complete, fix and predict pages. */
+  given?: Program;
+  /** The gold-stamp challenge of the page, if it has one. */
+  save?: SaveChallenge;
 }
 
 const grass = (seed: number, cells: [number, number][]): Deco[] =>

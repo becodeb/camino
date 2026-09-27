@@ -2,7 +2,7 @@
 // No DOM, no timing: the board view only animates the trace this returns.
 
 import {
-  DELTA, DIRS, cmdProgram, fullMask, initialState, inside, isWin, obstacleAt, parseCommand, sameCell,
+  DELTA, DIRS, cmdProgram, fullMask, initialState, inside, isHole, isWin, obstacleAt, parseCommand, sameCell,
   type Board, type CardRef, type Cell, type Dir, type Program, type RobotState, type Trace, type TraceStep,
 } from './model';
 
@@ -62,7 +62,8 @@ export function move(b: Board, s: RobotState, dir: Dir): StepResult {
 
 /**
  * Runs a program. Stops at the first crash, as soon as Brote wins (even with
- * blocks left, like habilidades), or when the program ends ("short").
+ * blocks left, like habilidades), or when the program ends ("short"). Empty
+ * lines are skipped where they are, so every step still names its block.
  */
 export function simulate(b: Board, program: Program, opts: { from?: RobotState } = {}): Trace {
   let s = opts.from ?? initialState(b);
@@ -83,6 +84,7 @@ export function simulate(b: Board, program: Program, opts: { from?: RobotState }
   for (let item = 0; item < program.length; item++) {
     const it = program[item];
     if (it.t === 'cmd') {
+      if (isHole(it.cmd)) continue;
       if (exec(it.cmd, { item }) === 'stop') return finish();
       continue;
     }
@@ -97,6 +99,7 @@ export function simulate(b: Board, program: Program, opts: { from?: RobotState }
         starts.add(stateKey(s));
       }
       for (let inner = 0; inner < it.body.length; inner++) {
+        if (isHole(it.body[inner])) continue;
         if (exec(it.body[inner], { item, inner, iter }) === 'stop') return finish();
       }
     }

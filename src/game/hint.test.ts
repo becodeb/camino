@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { countTaps, nextCount, nextHint } from './hint';
-import { cmdProgram, type Board, type Program } from './model';
+import { countTaps, linesHint, nextCount, nextHint } from './hint';
+import { HOLE, cmdProgram, type Board, type Program } from './model';
 
 const line = (over: Partial<Board> = {}): Board => ({
   cols: 9, rows: 3, start: { c: 0, r: 1 }, goal: { c: 8, r: 1 }, goalKind: 'seed',
@@ -15,6 +15,33 @@ describe('the count of a repeat', () => {
     expect(countTaps(3, 8)).toBe(5);
     expect(countTaps(10, 8)).toBe(7);
     expect(countTaps(4, 4)).toBe(0);
+  });
+
+  it('a missing count (0) takes its first tap to 2', () => {
+    expect(nextCount(0)).toBe(2);
+    expect(countTaps(0, 2)).toBe(1);
+    expect(countTaps(0, 6)).toBe(5);
+  });
+});
+
+describe('help on a notebook with fixed lines', () => {
+  const w = [line()];
+  const target: Program = [{ t: 'loop', count: 7, body: ['right'] }, { t: 'cmd', cmd: 'right' }];
+
+  it('a card that does not belong leaves first; then its line gets the right card', () => {
+    expect(linesHint(w, [{ t: 'loop', count: 7, body: ['right'] }, { t: 'cmd', cmd: 'up' }], target)).toEqual({ kind: 'empty', ref: { item: 1 } });
+    expect(linesHint(w, [{ t: 'loop', count: 7, body: ['right'] }, { t: 'cmd', cmd: HOLE }], target)).toEqual({ kind: 'fill', ref: { item: 1 }, cmd: 'right' });
+  });
+
+  it('the count, from a missing one or a wrong one', () => {
+    expect(linesHint(w, [{ t: 'loop', count: 0, body: ['right'] }, { t: 'cmd', cmd: 'right' }], target)).toEqual({ kind: 'count', item: 0, taps: 6 });
+    expect(linesHint(w, [{ t: 'loop', count: 5, body: ['right'] }, { t: 'cmd', cmd: 'right' }], target)).toEqual({ kind: 'count', item: 0, taps: 2 });
+  });
+
+  it('an extra card in a repeat leaves (the reference keeps its line empty); a winning notebook: ▶', () => {
+    const fixed: Program = [{ t: 'loop', count: 4, body: ['right', HOLE] }];
+    expect(linesHint(w, [{ t: 'loop', count: 4, body: ['right', 'up'] }], fixed)).toEqual({ kind: 'empty', ref: { item: 0, inner: 1 } });
+    expect(linesHint(w, target, target)).toEqual({ kind: 'run' });
   });
 });
 

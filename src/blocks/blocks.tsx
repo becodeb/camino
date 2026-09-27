@@ -12,7 +12,7 @@ import { memo, type CSSProperties, type ReactNode } from 'react';
 import { blob, penLoop, smoothOpen, wobblyLine } from '../ink/ink.js';
 import type { Dims } from '../game/editor';
 import type { BlockLabel } from '../game/levels';
-import { parseCommand, type CardRef, type Dir } from '../game/model';
+import { parseCommand, type Dir } from '../game/model';
 
 export const INK = '#2b2622';
 export const TAPE_FILL = '#eadcb2';
@@ -33,8 +33,7 @@ export const WORDS: Record<string, string> = {
 export const DIR_FILL: Record<Dir, string> = { up: '#a9c3de', down: '#f2d98c', left: '#eeb3ac', right: '#eeac7f' };
 const DIR_ROT: Record<Dir, number> = { up: -90, right: 0, down: 90, left: 180 };
 
-export const refKey = (r: CardRef | { item: number; inner?: number } | null | undefined) =>
-  (r ? (r.inner == null ? `${r.item}` : `${r.item}:${r.inner}`) : '');
+export { refKey } from '../game/editor';
 
 /** A pen circle drawn around something (current step, hint). */
 export function Ring({ seed = 1, tone = 'blue', dur = 260 }: { seed?: number; tone?: 'blue' | 'hint'; dur?: number }) {

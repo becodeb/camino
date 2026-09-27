@@ -4,14 +4,15 @@
 
 import { solvesAll } from './engine';
 import type { Block, BlockRef, Slot } from './editor';
-import { cardCount, type Board, type Program } from './model';
+import { HOLE, cardCount, type Board, type Program } from './model';
 
-/** The counts a tape cycles through when its number is tapped. */
+/** The counts a tape cycles through when its number is tapped. A missing count (0) starts at the first. */
 export const COUNT_MIN = 2;
 export const COUNT_MAX = 10;
-export const nextCount = (n: number) => (n >= COUNT_MAX ? COUNT_MIN : n + 1);
-/** Taps on the count to go from `from` to `to` (it wraps from 10 back to 2). */
-export const countTaps = (from: number, to: number) => {
+export const nextCount = (n: number) => (n < COUNT_MIN || n >= COUNT_MAX ? COUNT_MIN : n + 1);
+/** Taps on the count to go from `from` to `to` (it wraps from 10 back to 2; a missing count takes one tap to 2). */
+export const countTaps = (from: number, to: number): number => {
+  if (from < COUNT_MIN) return 1 + countTaps(COUNT_MIN, to);
   const span = COUNT_MAX - COUNT_MIN + 1;
   return (((to - from) % span) + span) % span;
 };
@@ -74,6 +75,46 @@ export function nextHint(worlds: readonly Board[], program: Program, solution: P
     return { kind: 'remove', ref: lastExtraCard(program, solution) };
   }
   return h;
+}
+
+/**
+ * Help on a notebook with fixed lines (complete and fix pages): the first
+ * line, in reading order, where the child's program differs from the page's
+ * reference written in place. A card that does not belong leaves first; an
+ * empty line gets its card; then the count. A program that already wins: ▶.
+ */
+export type LinesHint =
+  | { kind: 'run' }
+  /** Take the block on this line out. */
+  | { kind: 'empty'; ref: BlockRef }
+  /** Bring this card to this empty line. */
+  | { kind: 'fill'; ref: BlockRef; cmd: string }
+  /** Tap the count of tape `item` this many times. */
+  | { kind: 'count'; item: number; taps: number };
+
+export function linesHint(worlds: readonly Board[], program: Program, target: Program): LinesHint {
+  if (cardCount(program) && solvesAll(worlds, program)) return { kind: 'run' };
+  const line = (have: string, want: string, ref: BlockRef): LinesHint | null => {
+    if (have === want) return null;
+    return have === HOLE ? { kind: 'fill', ref, cmd: want } : { kind: 'empty', ref };
+  };
+  for (let item = 0; item < Math.min(program.length, target.length); item++) {
+    const a = program[item], b = target[item];
+    if (a.t === 'cmd' && b.t === 'cmd') {
+      const h = line(a.cmd, b.cmd, { item });
+      if (h) return h;
+      continue;
+    }
+    if (a.t !== 'loop' || b.t !== 'loop') continue;
+    for (let inner = 0; inner < Math.min(a.body.length, b.body.length); inner++) {
+      const h = line(a.body[inner], b.body[inner], { item, inner });
+      if (h) return h;
+    }
+    if (typeof a.count === 'number' && typeof b.count === 'number' && a.count !== b.count) {
+      return { kind: 'count', item, taps: countTaps(a.count, b.count) };
+    }
+  }
+  return { kind: 'run' };
 }
 
 /** The card to take out first on a full notebook: the last one past the solution, or else the last card. */

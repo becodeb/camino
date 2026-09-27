@@ -10,17 +10,33 @@
 //   #/1ro/hoja/<n>/puertas                 the three doors and the boss page
 //   #/1ro/hoja/<n>/puerta/<door>/<i>       the i-th extra behind a door (facil | media | dificil)
 //   #/1ro/hoja/<n>/jefe                    the boss
+//   …/oro after a level page               its gold-stamp challenge (save blocks)
 
 import { DOORS, bossId, coreId, extraId, isBuilt, type Door, type Sheet } from './model';
 import { PRIMER, sheetByN } from './primer';
 import { sheetState, type Progress } from './progress';
 
+/** A level page (core, extra, boss) may be its gold-stamp challenge: the same board with fewer lines. */
 export type SheetPage =
   | { kind: 'entry' }
-  | { kind: 'core'; k: number }
+  | { kind: 'core'; k: number; gold?: true }
   | { kind: 'doors' }
-  | { kind: 'extra'; door: Door; i: number }
-  | { kind: 'boss' };
+  | { kind: 'extra'; door: Door; i: number; gold?: true }
+  | { kind: 'boss'; gold?: true };
+
+/** The page itself, not its gold challenge. */
+export function plainPage(page: SheetPage): SheetPage {
+  if (!('gold' in page)) return page;
+  const out: { gold?: true } = { ...page };
+  delete out.gold;
+  return out as SheetPage;
+}
+
+/** The gold challenge of a level page (the page itself for the doors and the entry). */
+export const goldPage = (page: SheetPage): SheetPage =>
+  (page.kind === 'core' || page.kind === 'extra' || page.kind === 'boss' ? { ...plainPage(page), gold: true } as SheetPage : page);
+
+export const isGold = (page: SheetPage) => 'gold' in page && !!page.gold;
 
 export type Route =
   | { screen: 'home' }
@@ -36,12 +52,13 @@ export const MAP_HREF = '#/1ro';
 
 export function sheetHref(n: number, page: SheetPage = { kind: 'entry' }): string {
   const base = `#/1ro/hoja/${n}`;
+  const gold = isGold(page) ? '/oro' : '';
   switch (page.kind) {
     case 'entry': return base;
-    case 'core': return `${base}/${page.k}`;
+    case 'core': return `${base}/${page.k}${gold}`;
     case 'doors': return `${base}/puertas`;
-    case 'extra': return `${base}/puerta/${DOOR_SLUG[page.door]}/${page.i}`;
-    case 'boss': return `${base}/jefe`;
+    case 'extra': return `${base}/puerta/${DOOR_SLUG[page.door]}/${page.i}${gold}`;
+    case 'boss': return `${base}/jefe${gold}`;
   }
 }
 
@@ -54,8 +71,10 @@ export function parseRoute(hash: string): Route {
   if (!m) return { screen: 'home' };
   const n = Number(m[1]);
   if (!sheetByN(n)) return { screen: 'map' };
-  const rest = m[2] ?? '';
-  const sheet = (page: SheetPage): Route => ({ screen: 'sheet', n, page });
+  const all = m[2] ?? '';
+  const gold = /\/oro$/.test(all);
+  const rest = gold ? all.replace(/\/oro$/, '') : all;
+  const sheet = (page: SheetPage): Route => ({ screen: 'sheet', n, page: gold ? goldPage(page) : page });
   if (!rest) return sheet({ kind: 'entry' });
   if (rest === 'puertas') return sheet({ kind: 'doors' });
   if (rest === 'jefe') return sheet({ kind: 'boss' });
@@ -63,7 +82,7 @@ export function parseRoute(hash: string): Route {
   const x = rest.match(/^puerta\/(\w+)(?:\/(\d+))?$/);
   const door = x ? doorOfSlug(x[1]) : null;
   if (x && door) return sheet({ kind: 'extra', door, i: Math.max(1, Number(x[2] ?? 1)) });
-  return sheet({ kind: 'entry' });
+  return { screen: 'sheet', n, page: { kind: 'entry' } };
 }
 
 // ------------------------------------------------------------------ what is open
@@ -95,15 +114,20 @@ export function entryPage(s: Sheet, p: Progress): SheetPage {
   return k >= 0 ? { kind: 'core', k: k + 1 } : { kind: 'doors' };
 }
 
-/** Where "next page" leads: the next core level, then the doors; the next extra of the same door; after the boss, the map. */
-export function nextHref(s: Sheet, page: SheetPage): string {
+/**
+ * Where "next page" leads: the next core level, then the doors; the next
+ * extra of the same door; after the boss, the map. A gold challenge leads
+ * where its page does.
+ */
+export function nextHref(s: Sheet, from: SheetPage): string {
+  const page = plainPage(from);
   if (page.kind === 'core') return page.k < s.core.length ? sheetHref(s.n, { kind: 'core', k: page.k + 1 }) : sheetHref(s.n, { kind: 'doors' });
   if (page.kind === 'extra') return sheetHref(s.n, { ...page, i: page.i + 1 });
   if (page.kind === 'boss') return MAP_HREF;
   return sheetHref(s.n, { kind: 'doors' });
 }
 
-/** The level id of a page, when it is a level. */
+/** The level id of a page, when it is a level (a gold challenge counts as its page). */
 export function levelIdOf(s: Sheet, page: SheetPage): string | null {
   if (page.kind === 'core') return coreId(s, page.k);
   if (page.kind === 'extra') return extraId(s, page.door, page.i);

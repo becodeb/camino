@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DOORS, bossId, coreId, extraId, isBuilt } from './model';
 import { PRIMER, sheetByN } from './primer';
-import { EMPTY, STORAGE_KEY, createProgressStore, grant, openSheet, parse, sheetState, solve, type Backing } from './progress';
+import { EMPTY, STORAGE_KEY, createProgressStore, earnGold, grant, openSheet, parse, sheetState, solve, type Backing } from './progress';
 
 /** An in-memory Web Storage; `broken` throws on every call, like blocked site data. */
 function fakeStorage(broken = false): Backing & { data: Map<string, string> } {
@@ -58,6 +58,21 @@ describe('progress transitions', () => {
     expect(parse(JSON.stringify({ v: 1, solved: { a: true, b: true } })).seeds).toBe(2);
   });
 
+  it('a gold stamp is kept apart from the seeds, and solves its page if it was not yet', () => {
+    const a = earnGold(solve(EMPTY, '1ro-h11-1'), '1ro-h11-1');
+    expect(a.gold['1ro-h11-1']).toBe(true);
+    expect(a.seeds).toBe(1);
+    expect(earnGold(a, '1ro-h11-1')).toBe(a);
+    const b = earnGold(EMPTY, '1ro-h11-2');
+    expect(b.solved['1ro-h11-2']).toBe(true);
+    expect(b.seeds).toBe(1);
+    expect(sheetState(PRIMER[10], earnGold(b, '1ro-h11-jefe')).gold).toBe(2);
+    expect(sheetState(PRIMER[0], b).gold).toBe(0); // sheet 1 is not sheet 11
+    expect(parse(JSON.stringify(a))).toEqual(a);
+    // stored before gold stamps existed
+    expect(parse(JSON.stringify({ v: 1, solved: { a: true }, seeds: 1 })).gold).toEqual({});
+  });
+
   it('a sheet is complete (stamped) when every core level is solved', () => {
     const s = { ...PRIMER[0], core: [{ level: {} as never, essential: true }, { level: {} as never }] };
     let p = solve(EMPTY, coreId(s, 1));
@@ -68,6 +83,7 @@ describe('progress transitions', () => {
     expect(st.complete).toBe(true);
     expect(st.bossSolved).toBe(true);
     expect(st.extras).toEqual({ easy: 0, medium: 2, hard: 0 });
+    expect(st.gold).toBe(0);
   });
 });
 

@@ -3,7 +3,10 @@ import type { LevelDef } from '../game/levels';
 import { DOORS, bossId, coreId, extraId, type Sheet } from './model';
 import { PRIMER } from './primer';
 import { EMPTY, openSheet, solve } from './progress';
-import { MAP_HREF, bossOpen, currentSheet, doorsOpen, entryPage, levelIdOf, nextExtra, nextHref, parseRoute, sheetHref, sheetOpen, type SheetPage } from './route';
+import {
+  MAP_HREF, bossOpen, currentSheet, doorsOpen, entryPage, goldPage, isGold, levelIdOf, nextExtra, nextHref, parseRoute, plainPage, sheetHref, sheetOpen,
+  type SheetPage,
+} from './route';
 
 /** A built sheet: three core levels, the first and the third essential, and a boss. */
 const built = (n: number): Sheet => ({
@@ -20,6 +23,21 @@ describe('routes', () => {
     ];
     for (const page of pages) expect(parseRoute(sheetHref(4, page))).toEqual({ screen: 'sheet', n: 4, page });
     expect(sheetHref(4, { kind: 'extra', door: 'medium', i: 2 })).toBe('#/1ro/hoja/4/puerta/media/2');
+  });
+
+  it('a level page\'s gold challenge is the page plus /oro, and leads where the page does', () => {
+    const pages: SheetPage[] = [{ kind: 'core', k: 2, gold: true }, { kind: 'boss', gold: true }, { kind: 'extra', door: 'medium', i: 3, gold: true }];
+    for (const page of pages) {
+      expect(parseRoute(sheetHref(11, page))).toEqual({ screen: 'sheet', n: 11, page });
+      expect(isGold(page)).toBe(true);
+      expect(isGold(plainPage(page))).toBe(false);
+      expect(goldPage(plainPage(page))).toEqual(page);
+      expect(nextHref(built(11), page)).toBe(nextHref(built(11), plainPage(page)));
+      expect(levelIdOf(built(11), page)).toBe(levelIdOf(built(11), plainPage(page)));
+    }
+    expect(sheetHref(11, { kind: 'core', k: 2, gold: true })).toBe('#/1ro/hoja/11/2/oro');
+    expect(parseRoute('#/1ro/hoja/11/puertas/oro')).toEqual({ screen: 'sheet', n: 11, page: { kind: 'doors' } });
+    expect(goldPage({ kind: 'doors' })).toEqual({ kind: 'doors' });
   });
 
   it('keeps the demo routes and falls back sensibly', () => {
@@ -58,7 +76,7 @@ describe('the child\'s way through a sheet', () => {
     expect(doorsOpen(s, p)).toBe(true);
     expect(bossOpen(s, p)).toBe(false);
     expect(bossOpen(s, solve(p, coreId(s, 2)))).toBe(true);
-    expect(doorsOpen(PRIMER[2], EMPTY)).toBe(false); // a sheet not built yet has no doors
+    expect(doorsOpen({ ...PRIMER[2], core: [] }, EMPTY)).toBe(false); // a sheet not built yet has no doors
   });
 
   it('each door continues from its first unsolved extra', () => {
@@ -80,7 +98,7 @@ describe('the map', () => {
     expect(sheetOpen(built(1), EMPTY)).toBe(true);
     expect(sheetOpen(built(2), EMPTY)).toBe(false);
     expect(sheetOpen(built(2), openSheet(EMPTY, 2))).toBe(true);
-    expect(sheetOpen(PRIMER[2], openSheet(EMPTY, 17))).toBe(false);
+    expect(sheetOpen({ ...PRIMER[2], core: [] }, openSheet(EMPTY, 17))).toBe(false); // not built: "próximamente"
   });
 
   it('Brote waits on the first open sheet that is not complete', () => {

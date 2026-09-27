@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_PASSES, applyCommand, completeProgram, move, nextMove, shortestMoves, simulate, simulateAll, solves, solvesAll } from './engine';
-import { cmdProgram, initialState, parseCommand, visibleFrom, type Board, type Program } from './model';
+import { HOLE, cardCount, cmdProgram, initialState, parseCommand, visibleFrom, type Board, type Program } from './model';
 
 const board = (over: Partial<Board> = {}): Board => ({
   cols: 5, rows: 3, start: { c: 0, r: 1 }, goal: { c: 4, r: 1 }, goalKind: 'seed',
@@ -129,6 +129,19 @@ describe('programs', () => {
     const still = simulate(board(), [{ t: 'loop', count: 'goal', body: ['ifrock:right'] }]);
     expect(still.outcome).toBe('short');
     expect(still.steps).toHaveLength(1);
+  });
+
+  it('an empty line does nothing and keeps every step pointing at its own block', () => {
+    const t = simulate(board(), [{ t: 'cmd', cmd: 'right' }, { t: 'cmd', cmd: HOLE }, { t: 'loop', count: 2, body: [HOLE, 'right'] }]);
+    expect(t.steps.map((s) => s.ref)).toEqual([{ item: 0 }, { item: 2, inner: 1, iter: 0 }, { item: 2, inner: 1, iter: 1 }]);
+    expect(t.final).toMatchObject({ c: 3, r: 1 });
+    expect(cardCount([{ t: 'cmd', cmd: HOLE }, { t: 'loop', count: 3, body: ['up', HOLE] }])).toBe(1);
+  });
+
+  it('a missing count (0) makes no pass: Brote does not move', () => {
+    const t = simulate(board(), [{ t: 'loop', count: 0, body: ['right'] }]);
+    expect(t.outcome).toBe('short');
+    expect(t.steps).toHaveLength(0);
   });
 
   it('"repeat until the goal" is capped at MAX_PASSES', () => {

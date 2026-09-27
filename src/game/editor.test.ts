@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 // Ported from habilidades (editor.test.ts @ 9b90d1d), without the event log.
 import {
-  DIMS, appendSlot, cards, homeSlot, insertAt, layoutProgram, moveBlock, refusal, removeAt, resolveDrop, slotAt,
+  DIMS, appendSlot, cards, emptyLine, holeAt, holesOf, homeSlot, insertAt, layoutProgram, lineAt, moveBlock, refusal, removeAt,
+  resolveDrop, resolveLinesDrop, slotAt, writeLine,
   type Block, type Slot,
 } from './editor';
 import { solves } from './engine';
 import { LEVELS } from './levels';
-import type { Program } from './model';
+import { HOLE, type Program } from './model';
 
 const cmd = (id: string): Block => ({ t: 'cmd', cmd: id });
 const tape = (count: number | 'goal' = 2, body: string[] = []): Block => ({ t: 'loop', count, body });
@@ -154,6 +155,58 @@ describe('the notebook lines', () => {
     const G = layoutProgram([cmd('a')], { emptySlots: 2, gap: { at: 1 }, gapBlock: cmd('x') });
     expect(G.items.map((i) => i.kind)).toEqual(['start', 'cmd', 'gap', 'slot']);
     expect(G.height).toBe(L.height);
+  });
+});
+
+describe('fixed lines (complete and fix pages)', () => {
+  const p: Program = [cmd('a'), cmd(HOLE), tape(3, ['b', HOLE])];
+
+  it('empty lines are drawn in place, and the first one takes the next tap', () => {
+    const L = layoutProgram(p, { emptySlots: 0 });
+    expect(L.items.map((i) => i.kind)).toEqual(['start', 'cmd', 'slot', 'loop', 'cmd', 'slot']);
+    const holes = L.items.filter((i) => i.hole);
+    expect(holes.map((h) => h.ref)).toEqual([{ item: 1 }, { item: 2, inner: 1 }]);
+    expect(holes.map((h) => !!h.active)).toEqual([true, false]);
+    expect(holes[1].x).toBe(DIMS.spine);
+    // a line keeps its height when it is emptied: nothing slides
+    const full = layoutProgram([cmd('a'), cmd('x'), tape(3, ['b', 'y'])], { emptySlots: 0 });
+    expect(L.height).toBe(full.height);
+    const second = layoutProgram(p, { emptySlots: 0, activeHole: '2:1' });
+    expect(second.items.filter((i) => i.hole).map((h) => !!h.active)).toEqual([false, true]);
+  });
+
+  it('finds, reads, writes and empties lines; a tape is not a line', () => {
+    expect(holesOf(p)).toEqual([{ item: 1 }, { item: 2, inner: 1 }]);
+    expect(lineAt(p, { item: 0 })).toBe('a');
+    expect(lineAt(p, { item: 2 })).toBeNull();
+    expect(writeLine(p, { item: 1 }, 'z')[1]).toEqual(cmd('z'));
+    expect(emptyLine(p, { item: 2, inner: 0 })[2]).toEqual(tape(3, [HOLE, HOLE]));
+    expect(p[1]).toEqual(cmd(HOLE)); // never mutated
+    expect(() => writeLine(p, { item: 2 }, 'z')).toThrow();
+  });
+
+  it('maps a pointer to the empty line under it', () => {
+    const L = layoutProgram(p, { emptySlots: 0 });
+    const [first, second] = L.items.filter((i) => i.hole);
+    expect(holeAt(L, first.x + 20, first.y + 10)).toEqual({ item: 1 });
+    expect(holeAt(L, second.x + 20, second.y + second.h - 4)).toEqual({ item: 2, inner: 1 });
+    const a = L.items[1];
+    expect(holeAt(L, a.x + 20, a.y + a.h / 2 - 12)).toBeNull(); // over a written line
+  });
+
+  it('drops: palette → an empty line; a line → another empty line; a line → off the page empties it', () => {
+    expect(resolveLinesDrop(p, { from: 'palette', block: cmd('z') }, { item: 1 }, { overProgram: true }))
+      .toEqual({ program: [cmd('a'), cmd('z'), tape(3, ['b', HOLE])], outcome: 'add' });
+    expect(resolveLinesDrop(p, { from: 'palette', block: cmd('z') }, null, { overProgram: true }).outcome).toBe('cancel');
+    // a written line is not a target: nothing is overwritten
+    expect(resolveLinesDrop(p, { from: 'palette', block: cmd('z') }, { item: 0 }, { overProgram: true }).outcome).toBe('cancel');
+    expect(resolveLinesDrop(p, { from: 'program', ref: { item: 0 }, block: cmd('a') }, { item: 2, inner: 1 }, { overProgram: true }))
+      .toEqual({ program: [cmd(HOLE), cmd(HOLE), tape(3, ['b', 'a'])], outcome: 'move' });
+    expect(resolveLinesDrop(p, { from: 'program', ref: { item: 2, inner: 0 }, block: cmd('b') }, null, { overProgram: false }))
+      .toEqual({ program: [cmd('a'), cmd(HOLE), tape(3, [HOLE, HOLE])], outcome: 'remove' });
+    expect(resolveLinesDrop(p, { from: 'program', ref: { item: 0 }, block: cmd('a') }, null, { overProgram: true }).outcome).toBe('cancel');
+    expect(resolveLinesDrop(p, { from: 'program', ref: { item: 0 }, block: cmd('a') }, { item: 0 }, { overProgram: true }).outcome).toBe('noop');
+    expect(resolveLinesDrop(p, { from: 'program', ref: { item: 2 }, block: tape(3, ['b', HOLE]) }, null, { overProgram: false }).outcome).toBe('noop');
   });
 });
 

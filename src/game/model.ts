@@ -55,7 +55,8 @@ export function parseCommand(id: string): { kind: CommandKind; dir: Dir } {
 /**
  * A program: blocks stacked under the start block. A loop (C-block) repeats
  * its body `count` times, or until Brote is on the goal (`'goal'`). One
- * level of nesting, as the editor draws it.
+ * level of nesting, as the editor draws it. A count of 0 is a count still
+ * missing (a "complete" page): the loop makes no pass.
  */
 export type ProgramItem =
   | { t: 'cmd'; cmd: string }
@@ -63,6 +64,14 @@ export type ProgramItem =
 export type Program = ProgramItem[];
 
 export const cmdProgram = (ids: string[]): Program => ids.map((cmd) => ({ t: 'cmd', cmd }));
+
+/**
+ * An empty line of the notebook. On "complete" and "fix" pages every line
+ * stays in place: a block taken out leaves its line empty, and a line can be
+ * missing from the start. An empty line does nothing when the program runs.
+ */
+export const HOLE = '';
+export const isHole = (cmd: string) => cmd === HOLE;
 
 /** Where a primitive came from: the item index, the card inside a loop, and the loop pass. */
 export interface CardRef { item: number; inner?: number; iter?: number }
@@ -114,5 +123,6 @@ export const isWin = (b: Board, s: RobotState) => sameCell(s, b.goal) && s.mask 
 export const visibleFrom = (b: Board, at: Cell): Cell[] =>
   [at, ...Object.values(DELTA).map(([dc, dr]) => ({ c: at.c + dc, r: at.r + dr }))].filter((x) => inside(b, x.c, x.r));
 
-/** Cards the child placed (a loop itself is not a card). */
-export const cardCount = (p: Program) => p.reduce((n, it) => n + (it.t === 'cmd' ? 1 : it.body.length), 0);
+/** Cards the child placed (a loop itself is not a card, nor is an empty line). */
+export const cardCount = (p: Program) =>
+  p.reduce((n, it) => n + (it.t === 'cmd' ? (isHole(it.cmd) ? 0 : 1) : it.body.filter((c) => !isHole(c)).length), 0);

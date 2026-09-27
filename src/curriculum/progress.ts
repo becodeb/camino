@@ -19,6 +19,11 @@ export interface Progress {
   v: 1;
   /** Solved level ids (see curriculum/model: coreId, extraId, bossId). */
   solved: Readonly<Record<string, true>>;
+  /**
+   * Pages stamped in gold: their save-blocks challenge was solved (the ids of
+   * the pages themselves). No seed: T4 grows rare flowers from them.
+   */
+  gold: Readonly<Record<string, true>>;
   /** One per first solve of a level, plus what the dev drawer grants. */
   seeds: number;
   /** The sheet the teacher opened for the class: later sheets wait (faded on the map). */
@@ -27,7 +32,7 @@ export interface Progress {
   character: string;
 }
 
-export const EMPTY: Progress = Object.freeze({ v: 1, solved: Object.freeze({}), seeds: 0, opened: 1, character: 'brote' });
+export const EMPTY: Progress = Object.freeze({ v: 1, solved: Object.freeze({}), gold: Object.freeze({}), seeds: 0, opened: 1, character: 'brote' });
 
 // ------------------------------------------------------------------ pure transitions
 
@@ -35,6 +40,13 @@ export const EMPTY: Progress = Object.freeze({ v: 1, solved: Object.freeze({}), 
 export function solve(p: Progress, id: string): Progress {
   if (p.solved[id]) return p;
   return { ...p, solved: { ...p.solved, [id]: true }, seeds: p.seeds + 1 };
+}
+
+/** Stamps a page in gold (its save-blocks challenge); the page counts as solved too. */
+export function earnGold(p: Progress, id: string): Progress {
+  if (p.gold[id]) return p;
+  const base = p.solved[id] ? p : solve(p, id);
+  return { ...base, gold: { ...base.gold, [id]: true } };
 }
 
 export const grant = (p: Progress, n: number): Progress => ({ ...p, seeds: Math.max(0, p.seeds + Math.round(n)) });
@@ -48,11 +60,17 @@ export function parse(raw: string | null | undefined): Progress {
   try {
     const o = JSON.parse(raw) as Partial<Progress> | null;
     if (!o || o.v !== 1) return EMPTY;
-    const solved: Record<string, true> = {};
-    if (o.solved && typeof o.solved === 'object') for (const k of Object.keys(o.solved)) solved[k] = true;
+    const ids = (x: unknown) => {
+      const out: Record<string, true> = {};
+      if (x && typeof x === 'object') for (const k of Object.keys(x)) out[k] = true;
+      return out;
+    };
+    const solved = ids(o.solved);
     return {
       v: 1,
       solved,
+      // stored before gold stamps existed: none yet
+      gold: ids(o.gold),
       seeds: Number.isFinite(o.seeds) ? Math.max(0, Math.round(o.seeds!)) : Object.keys(solved).length,
       opened: clampSheet(Number(o.opened)),
       character: typeof o.character === 'string' ? o.character : 'brote',
@@ -74,6 +92,8 @@ export interface SheetState {
   bossSolved: boolean;
   /** Extras solved behind each door. */
   extras: Record<Door, number>;
+  /** Pages of the sheet (core, boss, extras) stamped in gold. */
+  gold: number;
 }
 
 export function sheetState(s: Sheet, p: Progress): SheetState {
@@ -92,6 +112,7 @@ export function sheetState(s: Sheet, p: Progress): SheetState {
     complete: core.length > 0 && coreSolved === core.length,
     bossSolved: !!p.solved[bossId(s)],
     extras,
+    gold: Object.keys(p.gold).filter((k) => k.startsWith(`${s.grade}-h${s.n}-`)).length,
   };
 }
 
