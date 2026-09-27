@@ -1,0 +1,146 @@
+/* The block editor: notched paper blocks in the notebook style.
+   Ported from habilidades (app/src/areas/algorithmic/ui/blocks.css @ 9b90d1d). */
+
+.block-palette { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+.pblk, .blk {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.pblk { cursor: pointer; flex: none; }
+.block-palette.can-drag .pblk { cursor: grab; }
+.pblk:disabled { cursor: default; }
+.pblk:disabled .blk-face, .pblk:disabled .blk-arm { opacity: 0.55; }
+.pblk:hover:not(:disabled) .blk-face svg { transform: scale(1.08) rotate(-3deg); }
+.blk-face svg { transition: transform 0.15s ease-out; }
+.pblk:focus-visible, .blk:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset: 5px; }
+.pblk .ring, .blk .ring {
+  position: absolute;
+  inset: -10px;
+  width: calc(100% + 20px);
+  height: calc(100% + 20px);
+  pointer-events: none;
+  overflow: visible;
+}
+
+.blk-shape { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.blk-face { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.blk-face svg { overflow: visible; }
+.blk-arm {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 2px 12px;
+  pointer-events: none;
+}
+.blk-arm > svg { overflow: visible; flex: none; }
+.blk-arm .blk-count { pointer-events: auto; }
+.blk-mouth-sign { position: absolute; pointer-events: none; }
+.blk-hole {
+  fill: rgba(251, 247, 238, 0.55);
+  stroke: rgba(43, 38, 34, 0.38);
+  stroke-width: 2.4;
+  stroke-dasharray: 6 6;
+  stroke-linecap: round;
+}
+
+/* the count of a tape: a paper disc with the number (tap to change it) */
+.blk-count {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2.6px solid var(--ink);
+  background: var(--sheet);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  filter: url(#rough);
+}
+.blk-count b { font: 700 20px/1 var(--body); }
+button.blk-count { cursor: pointer; }
+button.blk-count:disabled { cursor: default; }
+
+/* ------------------------------------------------ the program */
+.block-program { user-select: none; -webkit-user-select: none; }
+.block-canvas { position: relative; }
+.blk {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transition: transform 0.18s ease-out, opacity 0.15s ease-out, translate 0.18s ease-out, scale 0.18s ease-out;
+}
+.blk-cmd, .blk-loop, .blk-cond { cursor: grab; }
+.block-program.read-only .blk { cursor: default; }
+.blk:disabled { cursor: default; }
+.blk-start { pointer-events: none; }
+.blk-slot { cursor: pointer; }
+.blk-slot.is-gap .blk-hole, .blk-slot.is-active .blk-hole { stroke: var(--blue-ink); fill: rgba(114, 152, 193, 0.12); stroke-width: 2.8; }
+.blk-slot.is-hinted, .blk-slot.is-calling { animation: slot-call 1.6s ease-in-out infinite; }
+@keyframes slot-call { 0%, 100% { scale: 1; } 50% { scale: 1.06; } }
+.blk-slot.is-hinted .blk-hole, .blk-slot.is-calling .blk-hole { stroke: var(--blue-ink); }
+.blk-loop.is-active .blk-arm { text-decoration: none; }
+.blk.is-done { opacity: 0.55; }
+.blk.is-current { translate: 10px 0; scale: 1.05; opacity: 1; z-index: 2; }
+.blk.is-hinted, .blk.is-placed { translate: 6px 0; }
+.blk.is-selected { translate: 12px 0; scale: 1.05; z-index: 2; }
+.blk-loop.is-current { translate: 0 0; scale: 1; }
+.blk-loop.is-current .blk-count { transform: scale(1.12) rotate(-4deg); }
+.block-program.is-dragging .blk-slot:not(.is-gap) { opacity: 0.5; }
+
+/* the click of a snap: two blue ticks drawn at the joint, then gone */
+.snap-marks { position: absolute; left: -14px; top: -12px; overflow: visible; pointer-events: none; }
+.snap-marks path {
+  fill: none;
+  stroke: var(--blue-ink);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: pen-draw 140ms 120ms ease-out forwards, snap-fade 300ms 520ms ease-in forwards;
+}
+@keyframes snap-fade { to { opacity: 0; } }
+@keyframes pen-draw { to { stroke-dashoffset: 0; } }
+
+/* rings drawn with a pen: the running block */
+.ring path {
+  fill: none;
+  stroke: var(--blue-ink);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: pen-draw 260ms ease-out forwards;
+}
+.ring-hint path { stroke-width: 3.8; }
+
+/* ------------------------------------------------ the block in the hand */
+.blk-ghost { position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; }
+.blk-ghost-in { position: absolute; inset: 0; rotate: -5deg; scale: 1.08; transform-origin: 30% 30%; }
+body:has(.blk-ghost:not(.is-flying)) { cursor: grabbing; }
+
+@media (max-width: 600px), (max-height: 700px) {
+  .blk-count { width: 34px; height: 34px; }
+  .blk-count b { font-size: 17px; }
+  .block-palette { gap: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ring path { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .snap-marks path { stroke-dashoffset: 0; }
+}
