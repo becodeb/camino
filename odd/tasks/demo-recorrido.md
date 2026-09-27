@@ -54,7 +54,7 @@ The school chains ScratchJr, Pilas Bloques, Code.org and Scratch. Each year chan
 
 ## Tasks
 
-- [ ] T1 — Scaffold + port the shell, style, Brote, board and editor from habilidades; level runtime and level-select page; Sala 4 (direct control) and Sala 5 (sequence) levels. Route: delegated direct (writer trigger: 2+ non-trivial files).
+- [x] T1 — Scaffold + port the shell, style, Brote, board and editor from habilidades; level runtime and level-select page; Sala 4 (direct control) and Sala 5 (sequence) levels. Route: delegated direct (writer trigger: 2+ non-trivial files).
 - [ ] T2 — 1ro (repeat, slot-limited notebook, ghost-hand intro) and 2do (fog, repeat-until, if; three worlds at once). Route: delegated direct.
 - [ ] T3 — 3ro real-time rules engine: key events and "whenever touches" rules with a score. Route: delegated direct.
 - [ ] T4 — Parent pass: full screenshot tour, fixes list, LAN test instructions for the user.
@@ -62,7 +62,12 @@ The school chains ScratchJr, Pilas Bloques, Code.org and Scratch. Each year chan
 ## Progress
 
 - 2026-09-27: repo created (`main` empty root commit, branch `feat/demo-recorrido`). Feature document created.
+- 2026-09-27: T1 done (delegated writer). Commits `bbc4e40` (scaffold + ported style), `104016c` (level runtime, engine, editor model, tests), `e29c013` (home, level screen, sala 4 and sala 5).
+  - Checks: `npm run typecheck` clean; `npm test` 3 files, 45 tests passed; `npm run build` ok (JS 321 kB, 101 kB gzip). Screenshots of every level (idle, mid-run, bump, closed pot, short, win, help) at 1366×768, 1280×800 and 1920×1080 via `tools/shots.mjs`: no console errors, no horizontal or vertical page scroll.
+  - Decisions: a pot that still waits for its seed is closed and Brote bumps its lid (diegetic "seed first"); direct mode (sala 4) has no Probar, only ↺ and ✋ plus the arrows; the bar shows the whole tramo (10 pages, pages of grades not built yet drawn dashed); failure marks are a small ink burst with a yellow star, never a red cross.
+  - Runtime for T2/T3: add a `LevelDef` to `LEVELS` in `src/game/levels.ts`; commands `jump:<dir>`, `ifrock:<dir>` and loops (`count` number or `'goal'`) already run in the engine; palette ids `repeat` / `repeat-goal`; `worlds[]` and `fog` exist in the type but the UI draws `worlds[0]` only; `mode: 'realtime'` falls back to the program screen until T3.
+  - Engram mirror pending (engram MCP resolves cwd ~/projects as ambiguous).
 
 ## Next step
 
-Launch T1 writer.
+Parent review of the T1 screenshots, then launch T2.
