@@ -1,9 +1,11 @@
 // Screenshot tour with Playwright driving the system Chromium (no bundled browser needed).
 // PW=/tmp/pw node tools/shots.mjs <outDir> [base] [only]
-//   T1 scenarios are named t1-*, T2 scenarios t2-*, T3 scenarios t3-* (so `only=t2-` shoots the T2 tour).
+//   T1 scenarios are named t1-*, T2 scenarios t2-*, T3 scenarios t3-* (so `only=t2-` shoots the T2 tour);
+//   1ro's year (feature primer-grado) is p1-*.
 //   PW: a directory with playwright installed; base: the running app (default http://127.0.0.1:8797/)
 //   only: run the scenarios whose name contains this text.
 // Uses the ?debug hooks (window.__camino) to build programs and run them; waits in real time.
+// A scenario with `progress` starts from that stored progress (curriculum/progress.ts), `null` from none.
 import { createRequire } from 'node:module';
 
 const { chromium } = createRequire(`${process.env.PW ?? '/tmp/pw'}/`)('playwright');
@@ -186,7 +188,50 @@ const T3 = [
   { name: 'fix-1ro-2-midrun', size: [1280, 800], go: url('/nivel/1ro-2'), run: (p) => runProgram(p, loop(4, ['right', 'up']), 3000) },
 ].map((s) => ({ ...s, name: `t3-${s.name}` }));
 
-const S = [...T1, ...T2, ...T3];
+// ---------------------------------------------------------------- 1ro's year: the map, the sheets, doors, boss, extras, dev
+const solvedAll = (ids) => Object.fromEntries(ids.map((id) => [id, true]));
+const core = (n, ks) => ks.map((k) => `1ro-h${n}-${k}`);
+/** Sheets 1 and 2 done (with their bosses and a few extras), sheet 4 started, the teacher at sheet 6. */
+const MIDYEAR = {
+  v: 1, seeds: 17, opened: 6, character: 'brote',
+  solved: solvedAll([...core(1, [1, 2, 3, 'jefe', 'easy-1', 'easy-2', 'medium-1']), ...core(2, [1, 2, 3, 4, 'jefe', 'easy-1', 'hard-1']), ...core(4, [1, 3])]),
+};
+const yr = (hash, q = '') => url(hash, q);
+
+const P1 = [
+  { name: 'map-fresh-1366', size: [1366, 768], go: yr('/1ro'), progress: null },
+  { name: 'map-fresh-1280', size: [1280, 800], go: yr('/1ro'), progress: null },
+  { name: 'map-progress-1366', size: [1366, 768], go: yr('/1ro'), progress: MIDYEAR },
+  { name: 'map-progress-1280', size: [1280, 800], go: yr('/1ro'), progress: MIDYEAR },
+  { name: 'home-1366', size: [1366, 768], go: url('/'), progress: null },
+  { name: 'sheet1-core1', size: [1366, 768], go: yr('/1ro/hoja/1/1'), progress: null },
+  { name: 'sheet2-core1', size: [1366, 768], go: yr('/1ro/hoja/2/1'), progress: MIDYEAR },
+  { name: 'sheet4-core1', size: [1366, 768], go: yr('/1ro/hoja/4/1'), progress: MIDYEAR },
+  { name: 'sheet6-core1', size: [1366, 768], go: yr('/1ro/hoja/6/1'), progress: MIDYEAR },
+  { name: 'sheet8-core1', size: [1366, 768], go: yr('/1ro/hoja/8/1'), progress: MIDYEAR },
+  { name: 'sheet6-core1-1280', size: [1280, 800], go: yr('/1ro/hoja/6/1'), progress: MIDYEAR },
+  { name: 'sheet2-long-12', size: [1366, 768], go: yr('/1ro/hoja/2/jefe'), progress: MIDYEAR },
+  {
+    name: 'sheet1-win', size: [1366, 768], go: yr('/1ro/hoja/1/1'), progress: null,
+    run: async (p) => { await cam(p, () => window.__camino.setProgram(window.__camino.level.solution)); await p.waitForTimeout(400); cam(p, () => { void window.__camino.run(); }); await p.waitForTimeout(6500); },
+  },
+  {
+    name: 'sheet6-intro', size: [1366, 768], go: yr('/1ro/hoja/6/1'), progress: MIDYEAR,
+    run: async (p) => { for (const id of ['right', 'up', 'right']) { await cam(p, (x) => window.__camino.tapPalette(x), id); await p.waitForTimeout(380); } await p.waitForTimeout(Number(process.env.INTRO_MS ?? 4200)); },
+  },
+  { name: 'doors', size: [1366, 768], go: yr('/1ro/hoja/2/puertas'), progress: MIDYEAR },
+  { name: 'doors-shut-1280', size: [1280, 800], go: yr('/1ro/hoja/4/puertas'), progress: { ...MIDYEAR, solved: solvedAll(core(4, [1])) } },
+  { name: 'boss', size: [1366, 768], go: yr('/1ro/hoja/6/jefe'), progress: MIDYEAR },
+  { name: 'extra-easy', size: [1366, 768], go: yr('/1ro/hoja/4/puerta/facil/1'), progress: MIDYEAR },
+  { name: 'extra-medium', size: [1366, 768], go: yr('/1ro/hoja/6/puerta/media/1'), progress: MIDYEAR },
+  { name: 'extra-hard', size: [1366, 768], go: yr('/1ro/hoja/8/puerta/dificil/1'), progress: MIDYEAR },
+  { name: 'extra-hard-seq', size: [1280, 800], go: yr('/1ro/hoja/2/puerta/dificil/2'), progress: MIDYEAR },
+  { name: 'dev-open', size: [1366, 768], go: yr('/1ro/hoja/6/puerta/media/1', '&dev'), progress: MIDYEAR },
+  { name: 'dev-map', size: [1280, 800], go: yr('/1ro', '&dev'), progress: MIDYEAR },
+  { name: 'soon', size: [1366, 768], go: yr('/1ro/hoja/5', '&dev'), progress: MIDYEAR },
+].map((s) => ({ ...s, name: `p1-${s.name}` }));
+
+const S = [...T1, ...T2, ...T3, ...P1];
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox', '--disable-gpu'] });
 try {
@@ -195,6 +240,9 @@ try {
     const page = await browser.newPage({ viewport: { width: s.size[0], height: s.size[1] }, deviceScaleFactor: 1 });
     page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errs.push(m.text()); });
     page.on('pageerror', (e) => errs.push(e.message));
+    if (s.progress !== undefined) {
+      await page.addInitScript((p) => { try { localStorage.clear(); if (p) localStorage.setItem('camino.progress.v1', p); } catch { /* no storage */ } }, s.progress ? JSON.stringify(s.progress) : '');
+    }
     await page.goto(s.go);
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(1200);
