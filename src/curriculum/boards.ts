@@ -85,7 +85,7 @@ export function carvedBoard(start: [number, number], moves: readonly Dir[], o: {
 }
 
 type LevelBits = Pick<LevelDef, 'title' | 'say' | 'worlds' | 'blocks' | 'slots' | 'solution'>
-  & Partial<Pick<LevelDef, 'intro' | 'format' | 'given' | 'save'>>;
+  & Partial<Pick<LevelDef, 'intro' | 'format' | 'given' | 'save' | 'music'>>;
 
 /** A core level of a sheet of 1ro: a program page, blocks with picture and word. */
 export const coreLevel = (sheet: number, k: number, l: LevelBits): LevelDef =>

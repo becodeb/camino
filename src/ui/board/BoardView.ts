@@ -133,7 +133,8 @@ export class BoardView {
   pos: RobotState = { c: 0, r: 0, mask: 0 };
   onCharacterTap: (() => void) | null = null;
   private unsub: () => void;
-  private lastInput = now();
+  /** The last time the child touched the page (Brote falls asleep 16 s after it). */
+  protected lastInput = now();
   private nextFidget = now() + 5000;
   private idleTimer: number;
   running = false;
@@ -501,7 +502,7 @@ export class BoardView {
    * One step of a trace. `bump` is how a crash looks: the full bump (dizzy,
    * program mode) or a gentle one (direct control, sala 4).
    */
-  private async playStep(a: Actor, s: TraceStep, bump: 'full' | 'gentle'): Promise<'ok' | 'crash'> {
+  protected async playStep(a: Actor, s: TraceStep, bump: 'full' | 'gentle'): Promise<'ok' | 'crash'> {
     const b = this.board!;
     const [dx, dy] = DELTA[s.dir];
     const dir = { dx, dy };
@@ -608,6 +609,9 @@ export class BoardView {
     return ok ? res.out : 'aborted';
   }
 
+  /** A card was just brought to the notebook (a music page rings its note); nothing on a plain board. */
+  cardAdded(_cmd: string): void {}
+
   collect(i: number) {
     const n = this.pickupNodes[i];
     if (!n) return;
@@ -647,7 +651,7 @@ export class BoardView {
     else await a.act(() => a.perform('celebrate'));
   }
 
-  private goalRing(cx: number, cy: number) {
+  protected goalRing(cx: number, cy: number) {
     const g = el('g', { class: 'goal-ring', filter: 'url(#boil)' }, this.L.fx);
     const p = el('path', { d: penLoop(cx + 6, cy + 4, 64, 56, { seed: this.board!.seed }), fill: 'none', stroke: '#3d6ea5', 'stroke-width': 3.6, 'stroke-linecap': 'round' }, g);
     drawOn(p, 560, 160);

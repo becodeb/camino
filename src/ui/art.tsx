@@ -8,6 +8,7 @@ import { blob, leaf, penLoop, wobblyLine, wobblyPoly } from '../ink/ink.js';
 import type { CharacterDef } from '../ink/characters.js';
 import type { Dir } from '../game/model';
 import { drawPortrait } from './board/BoardView';
+import { BAR_FILL, barPath } from './noteArt';
 
 const INK = '#2b2622';
 const PEN = '#3d6ea5';
@@ -98,6 +99,23 @@ export function GuessIcon({ size = 42 }: { size?: number }) {
         <path d={wobblyPoly([[-19, -18], [19, -19], [18, 19], [-18, 18]], { wob: 0.6, bow: 0.8, seed: 6 })} fill="#f6efdf" stroke={INK} strokeWidth={2.2} />
         <path d={blob(0, 2, 11, 10, { seed: 3, n: 9 })} fill="rgba(114, 152, 193, 0.18)" stroke="none" />
         <path d={penLoop(0, 2, 13, 12, { seed: 4 })} fill="none" stroke={PEN} strokeWidth={3} />
+      </g>
+    </svg>
+  );
+}
+
+/** The drawn instruction of a music page: a strip of paper with three coloured bars on it, sounding. */
+export function SongIcon({ size = 44 }: { size?: number }) {
+  return (
+    <svg viewBox="-26 -22 58 44" width={size} height={size} aria-hidden="true" className="doodle">
+      <g filter="url(#rough)" strokeLinejoin="round" strokeLinecap="round">
+        <path d={wobblyPoly([[-23, -14], [17, -15], [18, 14], [-22, 15]], { wob: 0.5, bow: 0.8, seed: 8 })} transform="translate(2 2.5)" fill="rgba(84, 62, 38, 0.2)" />
+        <path d={wobblyPoly([[-23, -14], [17, -15], [18, 14], [-22, 15]], { wob: 0.5, bow: 0.8, seed: 8 })} fill="#fbf7ee" stroke={INK} strokeWidth={2.2} />
+        {(['do', 'mi', 'sol'] as const).map((p, i) => (
+          <path key={p} d={barPath(-13 + i * 11.5, 0, 7, [20, 15, 10.5][i], 1.8, i + 2)} fill={BAR_FILL[p]} stroke={INK} strokeWidth={1.8} />
+        ))}
+        <path d="M22,-7 Q26.5,0 22,7" fill="none" stroke={PEN} strokeWidth={2.4} />
+        <path d="M27,-13 Q34,0 27,13" fill="none" stroke={PEN} strokeWidth={2.4} />
       </g>
     </svg>
   );

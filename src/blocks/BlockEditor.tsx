@@ -23,7 +23,7 @@ import {
 import type { Pins } from '../game/formats';
 import type { BlockLabel, PaletteBlock } from '../game/levels';
 import { cardCount, type Program } from '../game/model';
-import { BlockArt, Pips, Ring, SnapMarks, blockStyle, fillOf, isCond, refKey, type BlockLook } from './blocks';
+import { BlockArt, Pips, Ring, SnapMarks, blockStyle, cardName, fillOf, isCond, refKey, type BlockLook } from './blocks';
 import './blocks.css';
 
 export interface Marks {
@@ -135,8 +135,10 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
   const p = { ...props, label: props.label ?? 'picture' };
   const mode: LinesMode = p.lines ?? 'free';
   const fixed = mode === 'fixed', read = mode === 'read', still = mode !== 'free';
-  const rows = p.program.reduce((n, it) => n + (it.t === 'cmd' ? 1 : it.body.length + 1), 0) + Math.max(0, (p.maxCards ?? 0) - cardCount(p.program));
-  const size = sizeForRows(rows);
+  // a repeat's arms take about a line and a half; the palette must fit too (a music page brings seven blocks)
+  const rows = p.program.reduce((n, it) => n + (it.t === 'cmd' ? 1 : it.body.length + 1.5), 0) + Math.max(0, (p.maxCards ?? 0) - cardCount(p.program));
+  const paletteRows = p.blocks.reduce((n, id) => n + (id === 'repeat' || id === 'repeat-goal' ? 2.3 : isCond(id) ? 1.9 : 1), 0);
+  const size = sizeForRows(Math.max(rows, paletteRows));
   const d: Dims = useMemo(() => dimsFor(p.label, size), [p.label, size]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -413,7 +415,7 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
             className={`pblk${look.kind !== 'cmd' ? ' is-c' : ''}`}
             style={{ width: look.w, height: look.h, '--r-cut': CUTS[i % 2] } as CSSProperties}
             disabled={p.disabled}
-            aria-label={`Bloque ${id}`}
+            aria-label={`Bloque ${cardName(id)}`}
             data-cmd={id}
             onPointerDown={down({ from: 'palette', block })}
             onClick={(e) => { const el = e.currentTarget; click(() => p.onTapPalette(block, el))(); }}
@@ -554,7 +556,7 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
         className={cls.join(' ')}
         style={style}
         disabled={p.disabled || read}
-        aria-label={`Bloque ${it.cmd}`}
+        aria-label={`Bloque ${cardName(it.cmd!)}`}
         onPointerDown={down(src)}
         onClick={click(() => p.onTapBlock(ref))}
       >

@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { BoardView } from '../ui/board/BoardView';
+import { MusicView } from '../ui/board/MusicView';
 import { type DemoStep } from '../ui/ghost';
 import { speak } from '../ui/speech';
 import { PlayIcon } from '../ui/icons';
@@ -23,9 +24,11 @@ import { PadArrow } from '../ui/art';
 import { paletteBlock, useBlockEditor, type Marks } from '../blocks/BlockEditor';
 import { refKey } from '../blocks/blocks';
 import { appendSlot, emptyLine, holesOf, insertAt, refusal, removeAt, writeLine, type Block, type BlockRef, type DragSource, type DropResult, type Slot } from '../game/editor';
-import { completeProgram, move, nextMove, simulate, simulateAll } from '../game/engine';
+import { completeProgram, move, nextMove, simulate, unroll } from '../game/engine';
 import { formatOf, hasFixedLines, pinsOf, startProgram } from '../game/formats';
 import { COUNT_MIN, countTaps, linesHint, nextCount, nextHint } from '../game/hint';
+import { judgeOf, tracesOf } from '../game/judge';
+import { tonesOf } from '../game/music';
 import { Lockstep } from '../game/lockstep';
 import { type LevelDef } from '../game/levels';
 import { cardCount, initialState, sameCell, type Cell, type Dir, type Program, type RobotState, type TraceStep } from '../game/model';
@@ -48,6 +51,10 @@ const LINES = {
   guessFirst: 'Primero tocá en el tablero dónde va a terminar Brote.',
   /** Predict: Brote ended somewhere else. */
   missed: 'Mirá dónde terminó Brote. Tocá otro lugar y probá de nuevo.',
+  /** Music (sheet 9): an empty notebook, the song played right, a free song played. */
+  emptyNotes: 'Poné notas en el cuaderno.',
+  song: '¡Sonó igual! ¡Qué linda canción!',
+  concert: '¡Qué linda canción!',
 };
 
 // ------------------------------------------------------------------ direct control (sala 4)
@@ -138,13 +145,14 @@ function DirectLevel({ level }: { level: LevelDef }) {
 /** Several worlds (2do page 2): each sheet has its own tape colour, and a block that bumped there gets a strip of it. */
 const WORLD_TONES = ['rgba(114, 152, 193, 0.8)', 'rgba(240, 210, 122, 0.9)', 'rgba(231, 163, 160, 0.9)'];
 
-/** One BoardView per world, each on its own taped sheet. */
+/** One BoardView per world, each on its own taped sheet (a music page's is the xylophone). */
 function useBoards(level: LevelDef) {
   const svgs = useRef<(SVGSVGElement | null)[]>([]);
   const views = useRef<BoardView[]>([]);
   useEffect(() => {
     views.current = level.worlds.map((b, i) => {
-      const v = new BoardView(svgs.current[i]!);
+      const svg = svgs.current[i]!;
+      const v = level.music ? new MusicView(svg, level.music, level.solution) : new BoardView(svg);
       v.setBoard(b, { pop: true, frame: frameFor(level) });
       if (level.fog) v.setFog(true);
       v.keepBumps = level.worlds.length > 1;
@@ -166,7 +174,7 @@ function Sheets({ level, svgs }: { level: LevelDef; svgs: React.RefObject<(SVGSV
           {nav.decor}
           <span className="tape tape-l" aria-hidden="true" />
           <span className="tape tape-r" aria-hidden="true" />
-          <svg ref={(el) => { svgs.current[i] = el; }} className="board" role="img" aria-label={`Tablero ${multi ? `${i + 1} ` : ''}de ${b.cols} por ${b.rows}`} />
+          <svg ref={(el) => { svgs.current[i] = el; }} className="board" role="img" aria-label={level.music ? 'El xilofón y la canción' : `Tablero ${multi ? `${i + 1} ` : ''}de ${b.cols} por ${b.rows}`} />
         </div>
       ))}
     </div>
@@ -204,6 +212,9 @@ function ProgramLevel({ level }: { level: LevelDef }) {
   const maxCards = level.slots;
   const loops = level.blocks.some((b) => b === 'repeat' || b === 'repeat-goal');
   const busy = () => runningRef.current || demoRef.current;
+  /** A free music page (sheet 9) stays playable once won: its song can change and play again. */
+  const replay = !!level.music?.free;
+  const locked = won && !replay;
 
   const glance = (el: Element | null) => {
     const r = el?.getBoundingClientRect();
@@ -290,7 +301,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
   };
 
   const tapPalette = (block: Block, el: HTMLElement) => {
-    if (busy() || won) return;
+    if (busy() || locked) return;
     if (fixedLines) {
       // the card lands on the empty line that takes taps (the one just emptied, or the first)
       if (block.t !== 'cmd') return;
@@ -298,6 +309,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
       const to = holes.find((r) => refKey(r) === marks.activeHole) ?? holes[0];
       if (!to) { full(block, el); return; }
       edited(writeLine(program, to, block.cmd));
+      views.current[0]?.cardAdded(block.cmd);
       glance(el);
       return;
     }
@@ -308,11 +320,12 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     }
     // a repeat added by a tap takes the next taps inside it (as in habilidades)
     edited(insertAt(program, slot, block), block.t === 'loop' ? { activeTape: slot.at } : {});
+    if (block.t === 'cmd') views.current[0]?.cardAdded(block.cmd);
     glance(el);
   };
 
   const tapBlock = (ref: BlockRef) => {
-    if (busy() || won) return;
+    if (busy() || locked) return;
     if (fixedLines) {
       // a tap takes a block out and leaves its line empty (it takes the next tap); what is taped on stays
       const k = refKey(ref);
@@ -328,6 +341,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     if (res.outcome === 'rejected' && res.reason === 'full') full(null, null);
     if (!res.program) return;
     edited(res.program, fixedLines && res.outcome === 'remove' && src.from === 'program' ? { activeHole: refKey(src.ref) } : {});
+    if (res.outcome === 'add' && src.block.t === 'cmd') views.current[0]?.cardAdded(src.block.cmd);
   };
 
   /** The counted repeat whose number is the child's (not taped on), last one first. */
@@ -335,7 +349,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
 
   const run = async () => {
     const vs = views.current;
-    if (!vs.length || busy() || won) return;
+    if (!vs.length || busy() || locked) return;
     if (format === 'complete') {
       // something still missing: nothing runs, the empty line or the number calls
       const counts = program.findIndex((it) => it.t === 'loop' && it.count === 0);
@@ -346,7 +360,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
       }
     }
     if (!cardCount(program)) {
-      speak(LINES.empty);
+      speak(level.music ? LINES.emptyNotes : LINES.empty);
       setMarks((m) => ({ ...m, hintSlot: true }));
       document.querySelectorAll<HTMLElement>('.block-palette .pblk').forEach((b, i) => b.animate?.([{ translate: '0 0' }, { translate: '0 -12px' }, { translate: '0 0' }], { duration: 320, delay: i * 70, easing: 'ease-out' }));
       return;
@@ -355,7 +369,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     setRunning(true);
     setMarks({});
     const multi = vs.length > 1;
-    const traces = simulateAll(level.worlds, program);
+    const traces = tracesOf(level, program);
     const lock = new Lockstep(vs.length);
     const done = new Set<string>();
     let last = -1;
@@ -392,7 +406,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
       if (multi) await Promise.all(vs.map((v) => v.celebrate()));
       const line = nav.won(level, program);
       setWon(true);
-      speak(line || LINES.won);
+      speak(line || (level.music ? (level.music.free ? LINES.concert : LINES.song) : LINES.won));
     } else if (results.includes('crash')) {
       const crashed = traces.map((t, w) => ({ t, w })).filter(({ t }) => t.outcome === 'crash');
       const keys = crashed.map(({ t }) => refKey(t.steps[t.crashAt!].ref));
@@ -430,29 +444,44 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     return document.querySelector('.zone-program [data-key="end0"]') ? '.zone-program [data-key="end0"]' : `.zone-program [data-ref="${program.length - 1}"]`;
   };
 
+  /** The xylophone of a music page, to listen to its song. */
+  const music = () => (views.current[0] instanceof MusicView ? views.current[0] : null);
+
   /**
    * The ghost hand shows the next thing to do. Flat programs (sala 5): take
    * out the first block that cannot lead to the goal, or bring the next useful
-   * arrow, or press ▶. Programs with loops: without a loop, the concept demo
-   * again; with one, the first place where the program leaves the reference
-   * solution (a card to add or take out, taps on the count), or ▶.
+   * arrow, or press ▶. Programs with loops, and songs: without a loop, the
+   * concept demo again (if the page has one); then the first place where the
+   * program leaves the reference solution (a card to add or take out, taps on
+   * the count), or ▶. A song still unwritten: first a tap on its strip (listen).
+   * A free song: notes until it has enough, then ▶.
    */
   const help = () => {
-    if (busy() || won) return;
+    if (busy() || locked) return;
+    const judge = judgeOf(level);
     if (fixedLines) {
       // the first line that differs from the page's reference: out with it, in with the right card, the count, or ▶
-      const h = linesHint(level.worlds, program, level.solution);
+      const h = linesHint(judge, program, level.solution);
       if (h.kind === 'run') ghost([{ do: 'tap', at: '.btn-play' }]);
       else if (h.kind === 'empty') ghost([{ do: 'drag', from: `.zone-program [data-ref="${refKey(h.ref)}"]`, to: '.zone-palette' }]);
       else if (h.kind === 'fill') ghost([{ do: 'drag', from: `.zone-palette [data-cmd="${h.cmd}"]`, to: `.zone-program [data-hole="${refKey(h.ref)}"]` }]);
       else ghost(Array.from({ length: Math.min(h.taps, 9) }, () => ({ do: 'tap' as const, at: `.zone-program [data-ref="${h.item}"] .tape-count` })));
       return;
     }
-    if (loops) {
+    const free = level.music?.free;
+    if (free) {
+      const notes = tonesOf(program).filter((t) => t !== 'rest').length;
+      const sample = unroll(level.solution);
+      if (notes >= free.min || !sample.length) ghost([{ do: 'tap', at: '.btn-play' }]);
+      else ghost([{ do: 'drag', from: `.zone-palette [data-cmd="${sample[cardCount(program) % sample.length].cmd}"]`, to: '.zone-program .blk-slot.is-active' }]);
+      return;
+    }
+    if (loops || level.music) {
       if (!hasLoop(program) && level.intro) { playIntro(); return; }
-      const h = nextHint(level.worlds, program, level.solution, maxCards);
+      const h = nextHint(judge, program, level.solution, maxCards);
+      const listen: DemoStep[] = level.music?.song && !cardCount(program) ? [{ do: 'tap', at: '.song-strip', apply: () => void music()?.listen() }] : [];
       if (h.kind === 'run') ghost([{ do: 'tap', at: '.btn-play' }]);
-      else if (h.kind === 'add') ghost([{ do: 'drag', from: `.zone-palette [data-cmd="${paletteIdOf(h.block)}"]`, to: slotTarget(h.slot) }]);
+      else if (h.kind === 'add') ghost([...listen, { do: 'drag', from: `.zone-palette [data-cmd="${paletteIdOf(h.block)}"]`, to: slotTarget(h.slot) }]);
       else if (h.kind === 'remove') ghost([{ do: 'drag', from: `.zone-program [data-ref="${refKey(h.ref)}"]`, to: '.zone-palette' }]);
       else ghost(Array.from({ length: Math.min(h.taps, 9) }, () => ({ do: 'tap' as const, at: `.zone-program [data-ref="${h.item}"] .tape-count` })));
       return;
@@ -474,6 +503,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
 
   useDebugHooks({
     level, program, setProgram: (p: Program) => edited(structuredClone(p)), run, help, restart, playIntro,
+    listen: () => music()?.listen(),
     tapPalette: (id: string) => {
       const el = document.querySelector<HTMLElement>(`.zone-palette [data-cmd="${id}"]`);
       if (el) tapPalette(paletteBlock(id), el);
@@ -485,7 +515,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     label: level.blockLabel,
     program,
     marks,
-    disabled: running || won,
+    disabled: running || locked,
     inert: demoing,
     maxCards: fixedLines ? undefined : maxCards,
     shake,
@@ -519,7 +549,8 @@ function ProgramLevel({ level }: { level: LevelDef }) {
       </section>
       <section className="level-stage" aria-label="Tablero">
         <div className="controls">
-          {won ? <NextPage level={level} /> : (
+          {won && <NextPage level={level} />}
+          {(!won || replay) && (
             <button type="button" className="btn btn-play cut" onClick={() => void run()} disabled={running} aria-label="Probar">
               <PlayIcon /><span>Probar</span>
             </button>

@@ -25,7 +25,7 @@ import { BossPageArt, DoorArt, Tree, Pine, Bush, Tuft, StopArt, River, Reeds, Li
 import { BROTE, Bar } from './LevelBar';
 import { LevelScreen } from './LevelScreen';
 import { LevelNavContext, Quit, useGhost, type LevelNav } from './levelKit';
-import { BoardThumb } from '../ui/thumbs';
+import { PageThumb } from '../ui/thumbs';
 import { GoldSeal, PlanNote, SeedPouch, flySeed, recallPlan, rememberPlan } from './yearKit';
 
 const LINES = {
@@ -399,12 +399,11 @@ function DoorsPage({ sheet }: { sheet: Sheet }) {
 
 /** The boss page on the doors page: the framed page with a drawing of its board, and its stamp once won. */
 function BossPage({ sheet, done }: { sheet: Sheet; done: boolean }) {
-  const b = sheet.boss!.worlds[0];
   return (
     <g className="boss-in">
       <g transform="rotate(4) scale(2.3)">
         <BossPageArt seed={sheet.n}>
-          <BoardThumb b={b} place={{ x: -26, y: -28, width: 52, height: 58 }} />
+          <PageThumb level={sheet.boss!} place={{ x: -26, y: -28, width: 52, height: 58 }} />
         </BossPageArt>
       </g>
       {done && <Stamp seed={sheet.n + 5} x={62} y={82} size={96} />}

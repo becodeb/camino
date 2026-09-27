@@ -3,8 +3,10 @@ import { completeProgram, shortestMoves, simulate, solves } from '../game/engine
 import { holesOf, writeLine } from '../game/editor';
 import { differences, formatOf, goldLevel, hasHoles, pinsOf } from '../game/formats';
 import { COUNT_MAX, COUNT_MIN } from '../game/hint';
+import { traceOf, wins } from '../game/judge';
 import { LEVELS, levelById, type LevelDef } from '../game/levels';
 import { HOLE, cardCount, cmdProgram, inside, isHole, obstacleAt, sameCell, type Program, type ProgramItem } from '../game/model';
+import { phrasesOf, toneOf, tonesOf, xylophone } from '../game/music';
 import { DOORS, bossId, coreId, isBuilt } from './model';
 import { PRIMER, sheetByN } from './primer';
 
@@ -14,6 +16,10 @@ const hasLoop = (p: Program) => p.some((it) => it.t === 'loop');
 const levelsOf = (n: number) => { const s = sheetByN(n)!; return [...s.core.map((c) => c.level), s.boss!]; };
 const loopsOf = (p: Program) => p.filter((it): it is Extract<ProgramItem, { t: 'loop' }> => it.t === 'loop');
 const walked = (l: LevelDef, p: Program) => { const b = l.worlds[0]; return [b.start, ...simulate(b, p).steps.flatMap((s) => s.cells)]; };
+/** A page whose goal is not a walk on its board (a song). */
+const staged = (l: LevelDef) => !!l.music;
+/** How much a flat program would have to play: the song's beats. */
+const targetLength = (l: LevelDef) => l.music?.song?.length ?? 0;
 
 /** Every flat list of `alphabet` with 1..max arrows. */
 function* sequences(alphabet: readonly string[], max: number): Generator<string[]> {
@@ -39,8 +45,8 @@ function* programsWith(arrows: readonly string[], loops: boolean, slots: number)
 const programsOf = (l: LevelDef) => programsWith(cmdsOf(l), l.blocks.includes('repeat'), l.slots!);
 
 describe('the built sheets of 1ro', () => {
-  it('are 1 to 6, 8 and 10 to 13', () => {
-    expect(BUILT.map((s) => s.n)).toEqual([1, 2, 3, 4, 5, 6, 8, 10, 11, 12, 13]);
+  it('are 1 to 6, 8 to 13', () => {
+    expect(BUILT.map((s) => s.n)).toEqual([1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13]);
   });
 
   for (const s of BUILT) {
@@ -89,7 +95,7 @@ describe('every level of the built sheets', () => {
             expect(obstacleAt(b, cell.c, cell.r)).toBeUndefined();
           }
           expect(sameCell(b.start, b.goal)).toBe(false);
-          expect(b.goalKind).toBe(f === 'predict' ? 'none' : b.pickups.length ? 'pot' : 'seed');
+          expect(b.goalKind).toBe(f === 'predict' || staged(l) ? 'none' : b.pickups.length ? 'pot' : 'seed');
           for (const x of b.ford ?? []) expect(obstacleAt(b, x.c, x.r)).toBeUndefined();
         });
 
@@ -106,7 +112,7 @@ describe('every level of the built sheets', () => {
         }
 
         it('its reference program wins, fits the notebook and uses only its palette', () => {
-          expect(simulate(b, l.solution).outcome).toBe('win');
+          expect(traceOf(l, l.solution).outcome).toBe('win');
           expect(cardCount(l.solution)).toBeLessThanOrEqual(l.slots!);
           if (f === 'solve') {
             for (const it of l.solution) {
@@ -120,8 +126,8 @@ describe('every level of the built sheets', () => {
           it('fix: exactly one mistake, which Brote shows (a bump right on it, or a repeat that stops short)', () => {
             const d = differences(l.given!, l.solution);
             expect(d).toHaveLength(1);
-            expect(solves(b, l.given!)).toBe(false);
-            const t = simulate(b, l.given!);
+            expect(wins(l, l.given!)).toBe(false);
+            const t = traceOf(l, l.given!);
             if (d[0].kind === 'count') {
               expect(t.outcome).toBe('short');
               expect(d[0].from).toBeLessThan(d[0].to as number);
@@ -141,16 +147,16 @@ describe('every level of the built sheets', () => {
             const d = differences(l.given!, l.solution);
             expect(d.length).toBeGreaterThan(0);
             for (const x of d) expect(x.from).toBe(x.kind === 'count' ? 0 : HOLE);
-            expect(solves(b, l.given!)).toBe(false);
+            expect(wins(l, l.given!)).toBe(false);
             // each missing piece, the rest filled in: only the reference's answer wins
             for (const x of d) {
               if (x.kind === 'count') {
                 for (let n = COUNT_MIN; n <= COUNT_MAX; n++) {
                   const tried = l.solution.map((it, i) => (i === x.item && it.t === 'loop' ? { ...it, count: n } : it));
-                  expect(solves(b, tried), `count ${n}`).toBe(n === x.to);
+                  expect(wins(l, tried), `count ${n}`).toBe(n === x.to);
                 }
               } else {
-                for (const a of cmdsOf(l)) expect(solves(b, writeLine(l.solution, x.ref, a)), a).toBe(a === x.to);
+                for (const a of cmdsOf(l)) expect(wins(l, writeLine(l.solution, x.ref, a)), a).toBe(a === x.to);
               }
             }
             const pins = pinsOf(l);
@@ -160,15 +166,37 @@ describe('every level of the built sheets', () => {
           });
         }
 
-        if (f === 'solve' && !hasLoop(l.solution)) {
+        if (f === 'solve' && !hasLoop(l.solution) && !staged(l)) {
           it('flat: the notebook has exactly as many lines as the shortest plan', () => {
             expect(shortestMoves(b)!.length).toBe(l.slots);
             expect(completeProgram(b, [], l.blocks, l.slots!)).not.toBeNull();
           });
         }
-        if (f === 'solve' && hasLoop(l.solution)) {
+        if (f === 'solve' && !hasLoop(l.solution) && staged(l) && !l.music?.free) {
+          it('flat: the notebook has exactly as many lines as the song has beats', () => {
+            expect(cardCount(l.solution)).toBe(l.slots);
+            expect(targetLength(l)).toBe(l.slots);
+          });
+        }
+        if (f === 'solve' && hasLoop(l.solution) && !staged(l)) {
           it('needs "repetir": no plan without it fits the notebook', () => {
             for (const seq of sequences(cmdsOf(l), l.slots!)) expect(solves(b, cmdProgram(seq))).toBe(false);
+          });
+        }
+        if (f === 'solve' && hasLoop(l.solution) && staged(l) && !l.music?.free) {
+          it('needs "repetir": the song has more beats than the notebook has lines (a card plays one)', () => {
+            expect(targetLength(l)).toBeGreaterThan(l.slots!);
+            for (const seq of sequences(cmdsOf(l), Math.min(l.slots!, 4))) expect(wins(l, cmdProgram(seq))).toBe(false);
+          });
+        }
+        if (l.music) {
+          it('a music page: the xylophone is its board, its notebook holds note cards, its song its reference\'s', () => {
+            expect(b).toEqual(xylophone(b.seed));
+            for (const c of cmdsOf(l)) expect(toneOf(c), c).not.toBeNull();
+            if (l.music!.song) {
+              expect(tonesOf(l.solution)).toEqual(l.music!.song);
+              expect(phrasesOf(l.solution).reduce((a, n) => a + n, 0)).toBe(l.music!.song.length);
+            }
           });
         }
 
@@ -291,6 +319,32 @@ describe('what each sheet teaches', () => {
       expect(loops).toHaveLength(2);
       expect(JSON.stringify(loops[0])).not.toBe(JSON.stringify(loops[1]));
     }
+  });
+
+  it('9 · the music recess: copy a song, a chorus that only fits in a repeat, count its passes, a free song, and Martinillo', () => {
+    const s = sheetByN(9)!;
+    const [copy, chorus, count, free] = s.core.map((c) => c.level);
+    for (const l of levelsOf(9)) expect(l.music, l.id).toBeDefined();
+    expect(s.core.filter((c) => c.essential).map((c) => c.level.page)).toEqual([1, 2]);
+    // listen and copy: a flat song, no repeat in the palette
+    expect(hasLoop(copy.solution)).toBe(false);
+    expect(copy.blocks).not.toContain('repeat');
+    // the chorus: one repeat, and a song longer than the notebook
+    expect(chorus.solution.filter((it) => it.t === 'loop')).toHaveLength(1);
+    expect(chorus.music!.song!.length).toBeGreaterThan(chorus.slots!);
+    // how many times does it sound: only the count is missing (no palette), one count plays the song
+    expect(count.format).toBe('complete');
+    expect(differences(count.given!, count.solution).every((d) => d.kind === 'count')).toBe(true);
+    expect(count.blocks).toEqual([]);
+    // a free song: any notes, a silence and a repeat to play with
+    expect(free.music!.free!.min).toBeGreaterThan(1);
+    expect(free.blocks).toContain('repeat');
+    expect(free.blocks).toContain('rest');
+    // Martinillo (traditional): every phrase twice, the second one held with a silence; two repeats
+    const boss = s.boss!;
+    expect(boss.music!.song).toEqual('do re mi do do re mi do mi fa sol rest mi fa sol rest'.split(' '));
+    expect(boss.solution.filter((it) => it.t === 'loop')).toHaveLength(2);
+    expect(phrasesOf(boss.solution)).toEqual([4, 4, 4, 4]);
   });
 
   it('10 · repeat again by the river: patterns of one, two and three blocks on stepping stones', () => {

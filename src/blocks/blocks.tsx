@@ -13,6 +13,8 @@ import { blob, penLoop, smoothOpen, wobblyLine } from '../ink/ink.js';
 import type { Dims } from '../game/editor';
 import type { BlockLabel } from '../game/levels';
 import { parseCommand, type Dir } from '../game/model';
+import { toneOf, type Tone } from '../game/music';
+import { BAR_DARK, BAR_FILL, NOTE_CARD, REST_PATH, barPath, toneSeed } from '../ui/noteArt';
 
 export const INK = '#2b2622';
 export const TAPE_FILL = '#eadcb2';
@@ -116,16 +118,58 @@ export function Labeled({ word, label, children }: { word?: string; label: Block
   return <span className={`blk-labeled is-${label}`}>{label === 'word-picture' && <Word text={word} />}{children}{label === 'picture-word' && <Word text={word} />}</span>;
 }
 
-/** The drawing on a command block: an arrow for a step; a jump arc and "saltar" for a jump. */
+/** Bar lengths on a note card (a 48-unit box): do the longest, sol the shortest, like the xylophone. */
+const CARD_BAR: Record<Exclude<Tone, 'rest'>, number> = { do: 44, re: 38.5, mi: 33, fa: 27.5, sol: 22 };
+
+/**
+ * A note card's drawing (sheet 9), no word: the note's xylophone bar in its
+ * colour, as long as the note is low, with its facet and two nails; the
+ * silence is the rest sign in ink.
+ */
+export const NoteGlyph = memo(function NoteGlyph({ tone, size }: { tone: Tone; size: number }) {
+  if (tone === 'rest') {
+    return (
+      <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true" className="arrow-art note-art">
+        <path d={REST_PATH} fill="none" stroke={INK} strokeWidth={4.6} strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  const h = CARD_BAR[tone], w = 19, s = toneSeed(tone);
+  const bar = barPath(24, 24, w, h, 3.2, s);
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true" className="arrow-art note-art">
+      <path d={bar} transform="translate(2.5 3)" fill="rgba(84, 62, 38, 0.22)" />
+      <path d={bar} fill={BAR_DARK[tone]} />
+      <path d={barPath(22.8, 22.6, w - 4, h - 4, 2.6, s + 1)} fill={BAR_FILL[tone]} />
+      <path d={bar} fill="none" stroke={INK} strokeWidth={2.6} strokeLinejoin="round" />
+      <circle cx={24} cy={24 - h * 0.32} r={2.1} fill={INK} />
+      <circle cx={24} cy={24 + h * 0.32} r={2.1} fill={INK} />
+    </svg>
+  );
+});
+
+/** What a card is called, for screen readers: the notes by name, the rest by its id. */
+export const cardName = (cmd: string) => {
+  const t = toneOf(cmd);
+  return t ? (t === 'rest' ? 'silencio' : `nota ${t}`) : cmd;
+};
+
+/** The drawing on a command block: an arrow for a step; a jump arc and "saltar" for a jump; a note's bar. */
 export function CommandArt({ cmd, seed = 1, size, label = 'picture' }: { cmd: string; seed?: number; size: number; label?: BlockLabel }) {
+  const tone = toneOf(cmd);
+  if (tone) return <NoteGlyph tone={tone} size={size} />;
   const { kind, dir } = parseCommand(cmd);
   if (kind === 'jump') return <Labeled word={WORDS.jump} label={label}><JumpGlyph dir={dir} size={label === 'picture' ? size : Math.round(size * 0.72)} /></Labeled>;
   if (kind === 'ifrock') return <Labeled word={WORDS.ifrock} label={label}><RockGlyph size={Math.round(size * 0.72)} /></Labeled>;
   return <Arrow dir={dir} seed={seed} size={size} />;
 }
 
-/** The card colour of a command: its direction's; the "si" block its own. */
-export const fillOf = (cmd: string) => (parseCommand(cmd).kind === 'ifrock' ? COND_FILL : DIR_FILL[parseCommand(cmd).dir]);
+/** The card colour of a command: its direction's; the "si" block its own; a note the tint of its bar. */
+export const fillOf = (cmd: string) => {
+  const tone = toneOf(cmd);
+  if (tone) return NOTE_CARD[tone];
+  return parseCommand(cmd).kind === 'ifrock' ? COND_FILL : DIR_FILL[parseCommand(cmd).dir];
+};
 /** Commands drawn as a C-shape with a fixed mouth: "si hay piedra [saltar]". */
 export const isCond = (cmd: string) => cmd.startsWith('ifrock:');
 

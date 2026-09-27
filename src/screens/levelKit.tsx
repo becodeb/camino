@@ -10,6 +10,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { BoardView, aspectOf, frameOf, type Frame } from '../ui/board/BoardView';
+import { MUSIC_FRAME } from '../ui/board/MusicView';
 import { playGhost, type DemoStep, type GhostRun } from '../ui/ghost';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { RestartIcon } from '../ui/icons';
@@ -22,12 +23,12 @@ import { BROTE, LevelBar, TramoPages } from './LevelBar';
 
 export const DEBUG = typeof location !== 'undefined' && location.search.includes('debug');
 
-/** The paper around a level's board(s): headroom for one-row paths and for games, room for the jar of points. */
-export const frameFor = (level: LevelDef): Frame => frameOf(level.worlds[0], {
+/** The paper around a level's board(s): headroom for one-row paths and for games, room for the jar of points; a music page's for its song strip. */
+export const frameFor = (level: LevelDef): Frame => (level.music ? MUSIC_FRAME : frameOf(level.worlds[0], {
   worlds: level.worlds.length,
   game: level.mode === 'realtime',
   jar: level.realtime?.win.kind === 'score',
-});
+}));
 
 /** The board: one BoardView on one <svg>, rebuilt per level. */
 export function useBoard(level: LevelDef) {

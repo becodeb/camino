@@ -6,6 +6,42 @@ import { memo } from 'react';
 import { blob, leaf, rng, wobblyLine, wobblyPoly } from '../ink/ink.js';
 import type { LevelDef } from '../game/levels';
 import { visibleFrom, type Board } from '../game/model';
+import { PITCHES } from '../game/music';
+import { BAR_DARK, BAR_FILL, BAR_LEN, REST_PATH, barPath } from './noteArt';
+
+type Place = { x: number; y: number; width: number; height: number };
+
+/** A small drawing of any page (the boss page of a sheet): its board, or its song and xylophone. */
+export function PageThumb({ level, place }: { level: LevelDef; place?: Place }) {
+  if (level.music) return <MusicThumb level={level} place={place} />;
+  return <BoardThumb b={level.worlds[0]} place={place} />;
+}
+
+/** A music page, small: its song strip (the first beats) and the xylophone under it. */
+export function MusicThumb({ level, place }: { level: LevelDef; place?: Place }) {
+  const song = (level.music?.song ?? []).slice(0, 16);
+  const slot = song.length ? Math.min(24, 196 / song.length) : 24;
+  return (
+    <svg className="thumb" viewBox="0 0 240 206" aria-hidden="true" {...place}>
+      <g filter="url(#rough)" strokeLinejoin="round" strokeLinecap="round">
+        <path d={wobblyPoly([[6, 10], [234, 12], [233, 84], [7, 82]], { wob: 1, bow: 1.4, seed: 3 })} fill="#fbf7ee" stroke={INK} strokeWidth={2.4} />
+        {song.map((t, i) => {
+          const x = 22 + slot / 2 + i * slot;
+          return t === 'rest'
+            ? <path key={i} d={REST_PATH} transform={`translate(${x - 9} ${47 - 9}) scale(0.375)`} fill="none" stroke={INK} strokeWidth={5} />
+            : <path key={i} d={barPath(x, 47, Math.min(13, slot * 0.56), BAR_LEN[t] * 0.34, 2.4, i + 1)} fill={BAR_FILL[t]} stroke={INK} strokeWidth={1.8} />;
+        })}
+        {[-1, 1].map((s) => (
+          <path key={s} d={wobblyPoly([[16, 152 + s * 30 - 5], [224, 152 + s * 17 - 5], [224, 152 + s * 17 + 5], [16, 152 + s * 30 + 5]], { wob: 0.6, bow: 0.8, seed: s + 5 })} fill="#b08560" stroke={INK} strokeWidth={2} />
+        ))}
+        {PITCHES.map((p, i) => (
+          <path key={p} d={barPath(40 + i * 40, 152, 28, BAR_LEN[p] * 0.52, 4, i + 7)} fill={BAR_FILL[p]} stroke={INK} strokeWidth={2.2} />
+        ))}
+        {PITCHES.map((p, i) => <path key={`f${p}`} d={`M${53 + i * 40},${152 - BAR_LEN[p] * 0.2} L${53 + i * 40},${152 + BAR_LEN[p] * 0.2}`} stroke={BAR_DARK[p]} strokeWidth={3} />)}
+      </g>
+    </svg>
+  );
+}
 
 const INK = '#2b2622';
 

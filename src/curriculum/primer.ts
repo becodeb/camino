@@ -5,9 +5,9 @@
 // of the built sheets live in primerLevels.ts; a door may take several
 // families of extras in turns (a fix, then a predict…).
 
-import type { CompleteHole, Door, DoorExtras, ExtraParams, FixBug, RepeatParams, SequenceParams } from './model';
+import type { CompleteHole, Door, DoorExtras, ExtraParams, FixBug, MelodyParams, RepeatParams, SequenceParams } from './model';
 import type { Sheet } from './model';
-import { SHEET_1, SHEET_10, SHEET_11, SHEET_12, SHEET_13, SHEET_2, SHEET_3, SHEET_4, SHEET_5, SHEET_6, SHEET_8 } from './primerLevels';
+import { SHEET_1, SHEET_10, SHEET_11, SHEET_12, SHEET_13, SHEET_2, SHEET_3, SHEET_4, SHEET_5, SHEET_6, SHEET_8, SHEET_9 } from './primerLevels';
 
 /** Extras of flat plans (review and long plans): the board, the plan's length and what is on it grow by door. */
 const seq = (cols: number, rows: number, steps: [number, number], pickups: number, rocks: number): SequenceParams =>
@@ -23,6 +23,9 @@ const fixOf = (base: SequenceParams | RepeatParams, ...bugs: FixBug[]): ExtraPar
 /** Something missing on a repeat level. */
 const completeOf = (base: RepeatParams, ...holes: CompleteHole[]): ExtraParams => ({ family: 'complete', base, holes });
 const doors = (easy: DoorExtras, medium: DoorExtras, hard: DoorExtras): Record<Door, DoorExtras> => ({ easy, medium, hard });
+/** Songs on the xylophone: a motif of `motif` beats played several times, from the notes of `pitches` (and a silence). */
+const mel = (motif: MelodyParams['motif'], count: [number, number], pitches: MelodyParams['pitches'], rest = false): ExtraParams =>
+  ({ family: 'melody', motif, count, pitches, ...(rest ? { rest } : {}) });
 
 export const PRIMER: Sheet[] = [
   {
@@ -109,9 +112,12 @@ export const PRIMER: Sheet[] = [
   {
     n: 9, grade: '1ro', kind: 'recreo', zone: 'bosque', builtIn: 'T3',
     title: 'Recreo: música',
-    say: 'Recreo: armá una canción. El estribillo se repite.',
+    say: 'Recreo: tocamos canciones en el xilofón. El estribillo se repite.',
     plan: 'Build a song; the chorus is a repeat.',
-    core: [],
+    ...SHEET_9,
+    // a motif of two, three and four notes played several times (the hard door may hold a silence)
+    extras: doors(mel(2, [3, 4], 3), mel(3, [3, 4], 4), mel(4, [3, 4], 5, true)),
+    preview: 'Después del recreo, llegamos al río.',
   },
   {
     n: 10, grade: '1ro', kind: 'camino', zone: 'rio', builtIn: 'T2',

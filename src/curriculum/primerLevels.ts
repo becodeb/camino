@@ -9,6 +9,7 @@ import { levelById, type LevelDef, type PaletteBlock } from '../game/levels';
 import { shortestPlan } from '../game/engine';
 import { arrowsIn, hasHoles, hasLoop } from '../game/formats';
 import { HOLE, cardCount, cmdProgram, type Board, type Dir, type Program } from '../game/model';
+import { PITCHES, noteCmd, xylophone, type Tone } from '../game/music';
 import { ARROWS, bossLevel, carvedBoard, coreLevel, loop, openBoard } from './boards';
 import { coreId, type CoreLevel, type Sheet } from './model';
 
@@ -431,6 +432,53 @@ export const SHEET_12: Built = {
     say: 'Bajá al valle, juntá la semilla y subí hasta la maceta. Uno de los dos repetir está roto: arreglalo.',
     ...fix(carvedBoard([0, 0], [...times(3, 'right', 'down'), ...times(3, 'right', 'up')], { seed: 2209, seedAt: 6, look: 'river' }),
       [loop(3, ['right', 'down']), loop(2, ['right', 'up'])], [loop(3, ['right', 'down']), loop(3, ['right', 'up'])]),
+  }),
+};
+
+// ------------------------------------------------------------------ 9 · Recreo: música (sequence and repeat, on a xylophone)
+
+const notes = (...ts: Tone[]): string[] => ts.map(noteCmd);
+const beats = (n: number, ...ts: Tone[]): Tone[] => Array.from({ length: n }, () => ts).flat();
+/** A song page: the xylophone is its board, its song the goal; the palette its notes in the xylophone's order. */
+const song = (seed: number, tones: Tone[], solution: Program, palette: string[]) => ({
+  worlds: [xylophone(seed)], music: { song: tones }, solution, slots: cardCount(solution), blocks: palette as PaletteBlock[],
+});
+/** Martinillo (Frère Jacques, traditional): its first half, every phrase sung twice; the silence holds "¿dónde estás?" one beat longer. */
+const MARTINILLO: Tone[] = [...beats(2, 'do', 're', 'mi', 'do'), ...beats(2, 'mi', 'fa', 'sol', 'rest')];
+
+export const SHEET_9: Built = {
+  core: [
+    essential(coreLevel(9, 1, {
+      title: 'Escuchá y copiá la canción',
+      say: 'Tocá la tira de colores para escuchar la canción. Después armala igual en el cuaderno, nota por nota, y tocá Probar.',
+      ...song(1901, ['do', 're', 'mi', 'do'], cmdProgram(notes('do', 're', 'mi', 'do')), notes('do', 're', 'mi')),
+    })),
+    essential(coreLevel(9, 2, {
+      title: 'El estribillo es un repetir',
+      say: 'Esta canción repite tres veces lo mismo: es el estribillo. Entera no entra en el cuaderno: usá repetir.',
+      ...song(1902, beats(3, 'do', 'mi', 'sol', 'mi'), [loop(3, notes('do', 'mi', 'sol', 'mi'))], [...notes('do', 'mi', 'sol'), 'repeat']),
+    })),
+    plain(coreLevel(9, 3, {
+      title: '¿Cuántas veces suena?',
+      say: 'Escuchá la canción y contá cuántas veces suena sol, mi. Después tocá el número del repetir.',
+      ...complete(xylophone(1903), [loop(0, notes('sol', 'mi'))], [loop(4, notes('sol', 'mi'))]),
+      music: { song: beats(4, 'sol', 'mi') },
+    })),
+    plain(coreLevel(9, 4, {
+      title: 'Tu canción',
+      say: 'Ahora inventá tu propia canción con las notas. Cuando esté lista, tocá Probar y Brote la toca.',
+      worlds: [xylophone(1904)],
+      music: { free: { min: 3 } },
+      blocks: [...notes(...PITCHES, 'rest'), 'repeat'],
+      slots: 6,
+      // a sample tune, for the help and the tests
+      solution: [loop(2, notes('do', 'mi')), { t: 'cmd', cmd: noteCmd('sol') }],
+    })),
+  ],
+  boss: bossLevel(9, {
+    title: 'Martinillo',
+    say: 'Martinillo: cada parte se canta dos veces. Escuchala en la tira y armala con dos repetir. Donde no suena nada, va el silencio.',
+    ...song(1909, MARTINILLO, [loop(2, notes('do', 're', 'mi', 'do')), loop(2, notes('mi', 'fa', 'sol', 'rest'))], [...notes(...PITCHES, 'rest'), 'repeat']),
   }),
 };
 

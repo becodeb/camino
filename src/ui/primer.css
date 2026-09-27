@@ -143,6 +143,15 @@ a.gold-seal:active { transform: translate(2px, 3px); }
 .plan-card { width: 26px; height: 22px; display: grid; place-items: center; border: 1.8px solid var(--ink); border-radius: 5px 4px 6px 4px; }
 .plan-card svg { overflow: visible; }
 
+/* ------------------------------------------------ the music recess (sheet 9): the song strip and the bars take taps */
+.song-strip, .xylo-bar { cursor: pointer; }
+.song-strip:focus { outline: none; }
+.song-strip:focus-visible .strip-paper { stroke: var(--blue-ink); stroke-dasharray: 8 6; }
+.level[data-busy="true"] .song-strip, .level[data-busy="true"] .xylo-bar { pointer-events: none; }
+/* the strip's sound calls a few times when the page opens: "tap me to listen" */
+.strip-waves { transform-box: fill-box; transform-origin: 0% 50%; animation: strip-call 1.3s ease-in-out 1s 3; }
+@keyframes strip-call { 0%, 100% { scale: 1; } 50% { scale: 1.35; } }
+
 /* ------------------------------------------------ predict: the cells take a tap, the ring shows where */
 .cell-pick { fill: rgba(114, 152, 193, 0.14); opacity: 0; cursor: pointer; transition: opacity 0.12s ease-out; }
 .cell-pick:hover { opacity: 1; }
