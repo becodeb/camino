@@ -6,10 +6,19 @@
 
 import { simulate } from './engine';
 import { refKey, type BlockRef } from './editor';
-import { isHole, type Board, type Cell, type Program } from './model';
+import { isHole, type Board, type Cell, type Dir, type Program } from './model';
 import type { Format, LevelDef } from './levels';
 
 export const formatOf = (l: Pick<LevelDef, 'format'>): Format => l.format ?? 'solve';
+
+/** The palette's order of the arrows. */
+export const ARROW_ORDER: readonly Dir[] = ['left', 'up', 'down', 'right'];
+/** The arrows some programs use, in the palette's order. */
+export const arrowsIn = (...ps: Program[]): Dir[] =>
+  ARROW_ORDER.filter((d) => ps.some((p) => p.some((it) => (it.t === 'cmd' ? it.cmd === d : it.body.includes(d)))));
+export const hasLoop = (p: Program) => p.some((it) => it.t === 'loop');
+/** The program has empty lines (a complete page with cards to bring). */
+export const hasHoles = (p: Program) => p.some((it) => (it.t === 'cmd' ? isHole(it.cmd) : it.body.some(isHole)));
 
 /** Pages whose lines stay in place: a block taken out leaves its line empty. */
 export const hasFixedLines = (l: Pick<LevelDef, 'format'>) => formatOf(l) === 'complete' || formatOf(l) === 'fix';

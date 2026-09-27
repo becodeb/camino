@@ -18,7 +18,7 @@
 import { rng } from '../ink/ink.js';
 import { shortestPlan, simulate, solves } from '../game/engine';
 import { writeLine, emptyLine } from '../game/editor';
-import { NO_GOAL, formatOf } from '../game/formats';
+import { NO_GOAL, arrowsIn as arrowsOf, formatOf } from '../game/formats';
 import { COUNT_MAX, COUNT_MIN } from '../game/hint';
 import type { Format, LevelDef, PaletteBlock, SaveChallenge } from '../game/levels';
 import {
@@ -94,8 +94,6 @@ const OPPOSITE: Record<Dir, Dir> = { up: 'down', down: 'up', left: 'right', righ
 const key = (c: number, r: number) => `${c},${r}`;
 const cellOf = (R: Rng, cols: number, rows: number): Cell => ({ c: R.int(cols), r: R.int(rows) });
 const loopOf = (count: number, body: readonly string[]): ProgramItem => ({ t: 'loop', count, body: [...body] });
-/** The arrows a program uses, in the palette's order. */
-const arrowsOf = (...ps: Program[]): Dir[] => PALETTE_ORDER.filter((d) => ps.some((p) => p.some((it) => (it.t === 'cmd' ? it.cmd === d : it.body.includes(d)))));
 
 /** A few tufts of grass on free cells (decoration only), like the handmade levels. */
 function grass(b: Board, busy: Set<string>, R: Rng, n: number): Deco[] {

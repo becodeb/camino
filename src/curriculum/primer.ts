@@ -1,18 +1,28 @@
 // 1er grado · Repetir: the whole year as 17 sheets (the approved activities
 // plan, section "1er grado"). Sheets 1–9 walk the forest, 10–17 follow the
 // river. A sheet with no core levels is not built yet: the map shows it as
-// "próximamente" (reachable in dev mode); T2–T4 fill them in. The levels of
-// the built sheets live in primerLevels.ts.
+// "próximamente" (reachable in dev mode); T3–T4 fill in the rest. The levels
+// of the built sheets live in primerLevels.ts; a door may take several
+// families of extras in turns (a fix, then a predict…).
 
-import type { Door, ExtraParams, Sheet } from './model';
-import { SHEET_1, SHEET_2, SHEET_4, SHEET_6, SHEET_8 } from './primerLevels';
+import type { CompleteHole, Door, DoorExtras, ExtraParams, FixBug, RepeatParams, SequenceParams } from './model';
+import type { Sheet } from './model';
+import { SHEET_1, SHEET_10, SHEET_11, SHEET_12, SHEET_13, SHEET_2, SHEET_3, SHEET_4, SHEET_5, SHEET_6, SHEET_8 } from './primerLevels';
 
 /** Extras of flat plans (review and long plans): the board, the plan's length and what is on it grow by door. */
-const seq = (cols: number, rows: number, steps: [number, number], pickups: number, rocks: number): ExtraParams =>
+const seq = (cols: number, rows: number, steps: [number, number], pickups: number, rocks: number): SequenceParams =>
   ({ family: 'sequence', cols, rows, steps, pickups, rocks });
-/** Extras that need "repetir": the pattern's length and the number of passes grow by door. */
-const rep = (body: 1 | 2 | 3, count: [number, number], pickups: 0 | 1 = 0): ExtraParams => ({ family: 'repeat', body, count, pickups });
-const doors = (easy: ExtraParams, medium: ExtraParams, hard: ExtraParams): Record<Door, ExtraParams> => ({ easy, medium, hard });
+/** Extras that need "repetir": the pattern's length and the number of passes grow by door (and steps around it, or a gold challenge). */
+const rep = (body: 1 | 2 | 3, count: [number, number], pickups: 0 | 1 = 0, more: Partial<Pick<RepeatParams, 'pre' | 'post' | 'save'>> = {}): RepeatParams =>
+  ({ family: 'repeat', body, count, pickups, ...more });
+/** Where does Brote end: a flat program, or one repeat. */
+const pred = (cols: number, rows: number, steps: [number, number], rocks: number, loop?: { body: 1 | 2; count: [number, number] }): ExtraParams =>
+  ({ family: 'predict', cols, rows, steps, rocks, ...(loop ? { loop } : {}) });
+/** One mistake to find, on a level of `base`. */
+const fixOf = (base: SequenceParams | RepeatParams, ...bugs: FixBug[]): ExtraParams => ({ family: 'fix', base, bugs });
+/** Something missing on a repeat level. */
+const completeOf = (base: RepeatParams, ...holes: CompleteHole[]): ExtraParams => ({ family: 'complete', base, holes });
+const doors = (easy: DoorExtras, medium: DoorExtras, hard: DoorExtras): Record<Door, DoorExtras> => ({ easy, medium, hard });
 
 export const PRIMER: Sheet[] = [
   {
@@ -38,7 +48,14 @@ export const PRIMER: Sheet[] = [
     title: 'Brote se confundió',
     say: 'Brote se confundió de camino. ¿Lo ayudás a arreglarlo?',
     plan: 'Fix and predict formats, still without repeat.',
-    core: [],
+    ...SHEET_3,
+    // every door takes turns: a plan with one wrong arrow, then "where does Brote end?"
+    extras: doors(
+      [fixOf(seq(4, 3, [3, 4], 0, 1), 'arrow'), pred(4, 3, [3, 4], 1)],
+      [fixOf(seq(5, 3, [5, 6], 1, 2), 'arrow'), pred(5, 4, [5, 6], 2)],
+      [fixOf(seq(5, 4, [7, 8], 1, 3), 'arrow', 'extra'), pred(6, 4, [7, 8], 3)],
+    ),
+    preview: 'Mañana los caminos son tan largos que no entran en el cuaderno.',
   },
   {
     n: 4, grade: '1ro', kind: 'camino', zone: 'bosque', builtIn: 'T1',
@@ -55,7 +72,14 @@ export const PRIMER: Sheet[] = [
     title: '¿Cuántas veces?',
     say: '¿Cuántas veces hay que repetir? Contá los pasos.',
     plan: 'Complete the count; count the passes with the dots.',
-    core: [],
+    ...SHEET_5,
+    // the count to complete (only one wins: the path turns after the repeat), then a repeat to follow with the dots
+    extras: doors(
+      [completeOf(rep(1, [3, 5], 0, { post: [1, 1] }), 'count'), pred(5, 3, [3, 5], 1, { body: 1, count: [3, 5] })],
+      [completeOf(rep(1, [5, 8], 0, { post: [1, 1] }), 'count'), pred(6, 4, [4, 8], 2, { body: 2, count: [2, 4] })],
+      [completeOf(rep(2, [3, 4], 0, { post: [1, 2] }), 'count'), pred(7, 5, [6, 8], 3, { body: 2, count: [3, 4] })],
+    ),
+    preview: 'Se vienen escalones.',
   },
   {
     n: 6, grade: '1ro', kind: 'camino', zone: 'bosque', builtIn: 'T1',
@@ -94,28 +118,42 @@ export const PRIMER: Sheet[] = [
     title: 'Vuelta: el río',
     say: 'Llegamos al río. Repasamos repetir con piedras y agua.',
     plan: 'Review repeat in the new zone.',
-    core: [],
+    ...SHEET_10,
+    extras: doors(rep(1, [4, 7]), rep(2, [3, 4]), rep(3, [3, 4], 1)),
+    preview: 'Mañana, a ahorrar bloques.',
   },
   {
     n: 11, grade: '1ro', kind: 'camino', zone: 'rio', builtIn: 'T2',
     title: 'Ahorrá',
     say: 'Buscá lo que se repite en tu camino y ahorrá renglones.',
     plan: 'Find the pattern in their own solution; gold stamp.',
-    core: [],
+    ...SHEET_11,
+    // a long flat plan first, then the gold challenge with "repetir"
+    // one arrow gives few different paths: a wide count keeps a run of extras free of repeats
+    extras: doors(rep(1, [4, 8], 0, { save: true }), rep(2, [3, 4], 0, { save: true }), rep(3, [3, 3], 0, { save: true })),
+    preview: 'Un repetir se rompió…',
   },
   {
     n: 12, grade: '1ro', kind: 'camino', zone: 'rio', builtIn: 'T2',
     title: 'El repetir roto',
     say: 'Este repetir está roto. ¿Qué le pasa?',
     plan: 'Fix a wrong count or an extra block inside.',
-    core: [],
+    ...SHEET_12,
+    extras: doors(fixOf(rep(1, [4, 7]), 'count'), fixOf(rep(2, [3, 4]), 'count', 'extra'), fixOf(rep(3, [3, 3], 1), 'extra', 'arrow')),
+    preview: '¿Y si hay pasos antes y después del repetir?',
   },
   {
     n: 13, grade: '1ro', kind: 'camino', zone: 'rio', builtIn: 'T2',
     title: 'Antes y después',
     say: 'Unos pasos, un repetir, y otros pasos más.',
     plan: 'Steps, a repeat, then steps again.',
-    core: [],
+    ...SHEET_13,
+    extras: doors(
+      [rep(1, [3, 5], 0, { pre: [1, 1] }), rep(1, [3, 5], 0, { post: [1, 1] })],
+      [rep(2, [2, 3], 0, { pre: [1, 1], post: [1, 1] }), completeOf(rep(2, [2, 3], 0, { pre: [1, 1], post: [1, 1] }), 'card')],
+      rep(2, [3, 4], 1, { pre: [1, 2], post: [1, 2] }),
+    ),
+    preview: 'Con repetir se pintan guardas.',
   },
   {
     n: 14, grade: '1ro', kind: 'camino', zone: 'rio', builtIn: 'T3',
