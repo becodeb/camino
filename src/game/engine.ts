@@ -141,32 +141,59 @@ export function nextMove(b: Board, s: RobotState): Dir | null {
 }
 
 /**
- * Program help for flat programs (sala 5): a winning program of plain blocks
- * that starts with `prefix` and fits in `slots` cards, or null when `prefix`
- * cannot be completed. Tries shorter completions first.
+ * The shortest list of commands (from `commands`, in that order of
+ * preference) that wins from `from`, or null. Breadth-first over Brote's
+ * states (cell + seeds collected): a closed pot is a wall, a peek that finds
+ * nothing is no move. Proves generated levels solvable and measures them;
+ * completes a child's flat program for the help.
+ */
+export function shortestPlan(b: Board, commands: readonly string[], from: RobotState = initialState(b), maxDepth = 40): string[] | null {
+  if (isWin(b, from)) return [];
+  const prev = new Map<string, { parent: string | null; cmd: string | null; depth: number }>([[stateKey(from), { parent: null, cmd: null, depth: 0 }]]);
+  let frontier: RobotState[] = [from];
+  while (frontier.length) {
+    const next: RobotState[] = [];
+    for (const s of frontier) {
+      const k = stateKey(s);
+      const depth = prev.get(k)!.depth;
+      if (depth >= maxDepth) continue;
+      for (const cmd of commands) {
+        const st = applyCommand(b, cmd, s);
+        if (st.kind === 'crash' || st.kind === 'look') continue;
+        const nk = stateKey(st.to);
+        if (prev.has(nk)) continue;
+        prev.set(nk, { parent: k, cmd, depth: depth + 1 });
+        if (st.won) return unwind(prev, nk);
+        next.push(st.to);
+      }
+    }
+    frontier = next;
+  }
+  return null;
+}
+
+function unwind(prev: Map<string, { parent: string | null; cmd: string | null }>, k: string): string[] {
+  const out: string[] = [];
+  for (let cur: string | null = k; cur; cur = prev.get(cur)!.parent) {
+    const cmd = prev.get(cur)!.cmd;
+    if (cmd) out.unshift(cmd);
+  }
+  return out;
+}
+
+/**
+ * Program help for flat programs (sala 5, 1ro's long plans): a winning
+ * program of plain blocks that starts with `prefix` and fits in `slots`
+ * cards, or null when `prefix` cannot be completed. The shortest completion
+ * (a search over states, so twelve lines cost nothing).
  */
 export function completeProgram(b: Board, prefix: string[], blocks: readonly string[], slots: number): string[] | null {
   if (prefix.length > slots) return null;
   const pre = simulate(b, cmdProgram(prefix));
   if (pre.outcome === 'win') return prefix;
   if (pre.outcome === 'crash') return null;
-  const room = slots - prefix.length;
-  let found: string[] | null = null;
-  const dfs = (s: RobotState, acc: string[], depth: number): boolean => {
-    if (acc.length === depth) return false;
-    for (const cmd of blocks) {
-      const st = applyCommand(b, cmd, s);
-      if (st.kind === 'crash') continue;
-      const next = [...acc, cmd];
-      if (st.won) { found = next; return true; }
-      if (dfs(st.to, next, depth)) return true;
-    }
-    return false;
-  };
-  for (let depth = 1; depth <= room; depth++) {
-    if (dfs(pre.final, [], depth)) return [...prefix, ...found!];
-  }
-  return null;
+  const rest = shortestPlan(b, blocks, pre.final, slots - prefix.length);
+  return rest ? [...prefix, ...rest] : null;
 }
 
 /** Every pickup collected, for the goal to "open". */

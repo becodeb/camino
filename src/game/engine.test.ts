@@ -196,4 +196,16 @@ describe('help', () => {
     expect(completeProgram(b, ['down'], arrows, 3)).toBeNull(); // too far now
     expect(completeProgram(b, ['up', 'right', 'right'], arrows, 3)).toEqual(['up', 'right', 'right']);
   });
+
+  it('completes a twelve-line plan through two seeds at once (a search over states, not over programs)', () => {
+    const b = board({ cols: 7, rows: 4, start: { c: 0, r: 3 }, goal: { c: 6, r: 3 }, goalKind: 'pot', pickups: [{ c: 0, r: 0 }, { c: 6, r: 0 }] });
+    const arrows = ['left', 'up', 'down', 'right'];
+    const t = performance.now();
+    const full = completeProgram(b, [], arrows, 12)!;
+    expect(full).toHaveLength(12);
+    expect(solves(b, cmdProgram(full))).toBe(true);
+    expect(completeProgram(b, ['down'], arrows, 12)).toBeNull();
+    expect(completeProgram(b, ['right'], arrows, 12)).toBeNull(); // one step the wrong way: no longer fits
+    expect(performance.now() - t).toBeLessThan(200);
+  });
 });

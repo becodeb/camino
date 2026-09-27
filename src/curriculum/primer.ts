@@ -44,7 +44,8 @@ export const PRIMER: Sheet[] = [
     say: 'Hay caminos muy largos y pocos renglones. Vas a aprender algo nuevo.',
     plan: 'Not enough lines → repeat with one block (the demo level 1ro-1 and its ghost-hand intro).',
     core: [],
-    extras: doors(rep(1, [3, 4]), rep(1, [5, 7]), rep(1, [8, 10], 1)),
+    // one arrow gives few different paths: wide counts keep a run of extras free of repeats
+    extras: doors(rep(1, [3, 5]), rep(1, [5, 8]), rep(1, [8, 10], 1)),
     preview: '¿Cuántas veces hay que repetir?',
   },
   {
