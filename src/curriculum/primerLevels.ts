@@ -9,6 +9,7 @@ import { levelById, type LevelDef, type PaletteBlock } from '../game/levels';
 import { shortestPlan } from '../game/engine';
 import { arrowsIn, hasHoles, hasLoop } from '../game/formats';
 import { HOLE, cardCount, cmdProgram, type Board, type Dir, type Program } from '../game/model';
+import { guardaBoard } from '../game/guarda';
 import { PITCHES, noteCmd, xylophone, type Tone } from '../game/music';
 import { ARROWS, bossLevel, carvedBoard, coreLevel, loop, openBoard } from './boards';
 import { coreId, type CoreLevel, type Sheet } from './model';
@@ -479,6 +480,58 @@ export const SHEET_9: Built = {
     title: 'Martinillo',
     say: 'Martinillo: cada parte se canta dos veces. Escuchala en la tira y armala con dos repetir. Donde no suena nada, va el silencio.',
     ...song(1909, MARTINILLO, [loop(2, notes('do', 're', 'mi', 'do')), loop(2, notes('mi', 'fa', 'sol', 'rest'))], [...notes(...PITCHES, 'rest'), 'repeat']),
+  }),
+};
+
+// ------------------------------------------------------------------ 14 · Guardas (borders on squared paper, by the river)
+
+/** Battlements: up a square, along, down, along. */
+const ALMENA: Dir[] = ['up', 'right', 'down', 'right'];
+/** A guarda page: a page of the squared notebook on the riverbank, the border in pencil. */
+const guarda = (seed: number, moves: Dir[]) => ({ worlds: [guardaBoard(moves, seed, 'river')], guarda: { moves } });
+/** A castle: a tower up, battlements along its top three times, a tower down. */
+const CASTLE: Dir[] = ['up', 'up', ...times(3, 'right', 'down', 'right', 'up'), 'down', 'down'];
+
+export const SHEET_14: Built = {
+  core: [
+    essential(coreLevel(14, 1, {
+      title: 'Una guarda de almenas',
+      say: 'Brote pinta una guarda en el cuaderno cuadriculado: pasá con flechas por arriba del lápiz. Cada flecha es un lado de un cuadradito.',
+      ...guarda(2401, times(2, ...ALMENA)),
+      blocks: ['up', 'down', 'right'],
+      slots: 8,
+      solution: cmdProgram(times(2, ...ALMENA)),
+    })),
+    essential(coreLevel(14, 2, {
+      title: 'Almenas con repetir',
+      say: 'Esta guarda es más larga y no entra en el cuaderno. Buscá el dibujo que se repite y usá repetir.',
+      ...guarda(2402, times(4, ...ALMENA)),
+      blocks: ['up', 'down', 'right', 'repeat'],
+      slots: 4,
+      solution: [loop(4, ALMENA)],
+    })),
+    plain(coreLevel(14, 3, {
+      title: 'Una cerca: tres flechas',
+      say: 'Una cerca de palitos. Mirá bien cómo se dibuja un palito: se repiten tres flechas.',
+      ...guarda(2403, times(4, 'up', 'right', 'down')),
+      blocks: ['up', 'down', 'right', 'repeat'],
+      slots: 3,
+      solution: [loop(4, ['up', 'right', 'down'])],
+    })),
+    plain(coreLevel(14, 4, {
+      title: 'La guarda que se mancha',
+      say: 'Esta guarda se mancha. Probá, mirá dónde se equivoca Brote, sacá esa flecha y poné la buena.',
+      ...fix(guardaBoard(times(3, 'right', 'up', 'right', 'down'), 2404, 'river'), [loop(3, ['right', 'up', 'right', 'up'])], [loop(3, ['right', 'up', 'right', 'down'])]),
+      guarda: { moves: times(3, 'right', 'up', 'right', 'down') },
+    })),
+  ],
+  boss: bossLevel(14, {
+    title: 'El castillo: antes, repetir y después',
+    say: 'Un castillo: primero una torre, después las almenas que se repiten, y al final otra torre. Ocho renglones.',
+    ...guarda(2409, CASTLE),
+    blocks: ['up', 'down', 'right', 'repeat'],
+    slots: 8,
+    solution: [cmd('up'), cmd('up'), loop(3, ['right', 'down', 'right', 'up']), cmd('down'), cmd('down')],
   }),
 };
 

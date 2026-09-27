@@ -104,7 +104,7 @@ export function DevDrawer({ route }: { route: Route }) {
         <p className="dev-where">{where(route)}</p>
         <p className="dev-id">
           nivel <code data-dev="level-id">{levelId ?? '—'}</code> · semilla <code data-dev="seed">{extra?.seed ?? '—'}</code>
-          {here && <> · <span data-dev="format">{FORMAT_LABEL[formatOf(here)]}{here.save ? ' + oro' : ''}{here.music ? ' · música' : ''}</span></>}
+          {here && <> · <span data-dev="format">{FORMAT_LABEL[formatOf(here)]}{here.save ? ' + oro' : ''}{here.music ? ' · música' : ''}{here.guarda ? ' · guarda' : ''}</span></>}
         </p>
         <div className="dev-row">
           <button type="button" onClick={markSolved} disabled={!levelId || (route.screen === 'sheet' && !!(onGold ? p.gold[levelId] : p.solved[levelId]))}>{onGold ? 'marcar oro' : 'marcar resuelto'}</button>

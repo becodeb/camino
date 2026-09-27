@@ -7,6 +7,8 @@ import { traceOf, wins } from '../game/judge';
 import { LEVELS, levelById, type LevelDef } from '../game/levels';
 import { HOLE, cardCount, cmdProgram, inside, isHole, obstacleAt, sameCell, type Program, type ProgramItem } from '../game/model';
 import { phrasesOf, toneOf, tonesOf, xylophone } from '../game/music';
+import { guardaBoard, guardaTrace, guidePath, guideSegments } from '../game/guarda';
+import { unroll } from '../game/engine';
 import { DOORS, bossId, coreId, isBuilt } from './model';
 import { PRIMER, sheetByN } from './primer';
 
@@ -16,10 +18,10 @@ const hasLoop = (p: Program) => p.some((it) => it.t === 'loop');
 const levelsOf = (n: number) => { const s = sheetByN(n)!; return [...s.core.map((c) => c.level), s.boss!]; };
 const loopsOf = (p: Program) => p.filter((it): it is Extract<ProgramItem, { t: 'loop' }> => it.t === 'loop');
 const walked = (l: LevelDef, p: Program) => { const b = l.worlds[0]; return [b.start, ...simulate(b, p).steps.flatMap((s) => s.cells)]; };
-/** A page whose goal is not a walk on its board (a song). */
-const staged = (l: LevelDef) => !!l.music;
-/** How much a flat program would have to play: the song's beats. */
-const targetLength = (l: LevelDef) => l.music?.song?.length ?? 0;
+/** A page whose goal is not a walk on its board (a song, a guarda). */
+const staged = (l: LevelDef) => !!l.music || !!l.guarda;
+/** What a flat program would have to make, one card each: the song's beats, the guarda's segments. */
+const targetLength = (l: LevelDef) => l.music?.song?.length ?? (l.guarda ? guideSegments(l.worlds[0], l.guarda).length : 0);
 
 /** Every flat list of `alphabet` with 1..max arrows. */
 function* sequences(alphabet: readonly string[], max: number): Generator<string[]> {
@@ -45,8 +47,8 @@ function* programsWith(arrows: readonly string[], loops: boolean, slots: number)
 const programsOf = (l: LevelDef) => programsWith(cmdsOf(l), l.blocks.includes('repeat'), l.slots!);
 
 describe('the built sheets of 1ro', () => {
-  it('are 1 to 6, 8 to 13', () => {
-    expect(BUILT.map((s) => s.n)).toEqual([1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13]);
+  it('are 1 to 6, 8 to 14', () => {
+    expect(BUILT.map((s) => s.n)).toEqual([1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14]);
   });
 
   for (const s of BUILT) {
@@ -173,7 +175,7 @@ describe('every level of the built sheets', () => {
           });
         }
         if (f === 'solve' && !hasLoop(l.solution) && staged(l) && !l.music?.free) {
-          it('flat: the notebook has exactly as many lines as the song has beats', () => {
+          it('flat: the notebook has exactly as many lines as the song has beats (the guarda, segments)', () => {
             expect(cardCount(l.solution)).toBe(l.slots);
             expect(targetLength(l)).toBe(l.slots);
           });
@@ -187,6 +189,19 @@ describe('every level of the built sheets', () => {
           it('needs "repetir": the song has more beats than the notebook has lines (a card plays one)', () => {
             expect(targetLength(l)).toBeGreaterThan(l.slots!);
             for (const seq of sequences(cmdsOf(l), Math.min(l.slots!, 4))) expect(wins(l, cmdProgram(seq))).toBe(false);
+          });
+        }
+        if (l.guarda) {
+          it('a guarda page: squared paper with a square round the guide, arrows in the notebook, the guide its reference\'s drawing', () => {
+            expect(b).toEqual(guardaBoard(l.guarda!.moves, b.seed, b.look));
+            for (const c of cmdsOf(l)) expect(['up', 'down', 'right']).toContain(c);
+            for (const p of guidePath(b, l.guarda!)) {
+              expect(p.c).toBeGreaterThanOrEqual(1);
+              expect(p.r).toBeGreaterThanOrEqual(1);
+              expect(p.c).toBeLessThanOrEqual(b.cols - 2);
+              expect(p.r).toBeLessThanOrEqual(b.rows - 2);
+            }
+            if (f !== 'fix') expect(unroll(l.solution).map((x) => x.cmd)).toEqual(l.guarda!.moves);
           });
         }
         if (l.music) {
@@ -345,6 +360,35 @@ describe('what each sheet teaches', () => {
     expect(boss.music!.song).toEqual('do re mi do do re mi do mi fa sol rest mi fa sol rest'.split(' '));
     expect(boss.solution.filter((it) => it.t === 'loop')).toHaveLength(2);
     expect(phrasesOf(boss.solution)).toEqual([4, 4, 4, 4]);
+  });
+
+  it('14 · guardas: two battlements with plain arrows, longer ones and a fence that need a repeat, a smudge to fix, a castle with steps around the repeat', () => {
+    const s = sheetByN(14)!;
+    const [first, battlements, fence, fixIt] = s.core.map((c) => c.level);
+    for (const l of levelsOf(14)) expect(l.guarda, l.id).toBeDefined();
+    expect(s.core.filter((c) => c.essential).map((c) => c.level.page)).toEqual([1, 2]);
+    // plain arrows: the pattern twice, no repeat in the palette
+    expect(hasLoop(first.solution)).toBe(false);
+    expect(first.blocks).not.toContain('repeat');
+    expect(unroll(first.solution).map((x) => x.cmd).join(' ')).toBe('up right down right up right down right');
+    // the same pattern, longer: only a repeat of four arrows fits
+    expect(battlements.solution).toEqual([{ t: 'loop', count: 4, body: ['up', 'right', 'down', 'right'] }]);
+    // three arrows: the pen goes up the post it came down (the drawing counts, not the order)
+    expect(fence.solution[0]).toMatchObject({ t: 'loop', body: ['up', 'right', 'down'] });
+    expect(guideSegments(fence.worlds[0], fence.guarda!).length).toBeLessThan(fence.guarda!.moves.length);
+    // fix: the wrong arrow smudges in the first pass, right where it is
+    expect(fixIt.format).toBe('fix');
+    const t = guardaTrace(fixIt.worlds[0], fixIt.guarda!, fixIt.given!);
+    expect(t.steps[t.crashAt!].crash?.out).toBe(false);
+    // the castle: steps before and after the repeat; no lone repeat of the notebook's lines draws it
+    const boss = s.boss!;
+    const at = boss.solution.findIndex((it) => it.t === 'loop');
+    expect(at).toBeGreaterThan(0);
+    expect(at).toBeLessThan(boss.solution.length - 1);
+    for (const body of sequences(['up', 'down', 'right'], boss.slots!)) {
+      for (let n = COUNT_MIN; n <= COUNT_MAX; n++) expect(wins(boss, [{ t: 'loop', count: n, body }]), `${body} ×${n}`).toBe(false);
+    }
+    expect(boss.worlds[0].look).toBe('river');
   });
 
   it('10 · repeat again by the river: patterns of one, two and three blocks on stepping stones', () => {

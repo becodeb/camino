@@ -5,9 +5,9 @@
 // of the built sheets live in primerLevels.ts; a door may take several
 // families of extras in turns (a fix, then a predict…).
 
-import type { CompleteHole, Door, DoorExtras, ExtraParams, FixBug, MelodyParams, RepeatParams, SequenceParams } from './model';
+import type { CompleteHole, Door, DoorExtras, ExtraParams, FixBug, GuardaParams, MelodyParams, RepeatParams, SequenceParams } from './model';
 import type { Sheet } from './model';
-import { SHEET_1, SHEET_10, SHEET_11, SHEET_12, SHEET_13, SHEET_2, SHEET_3, SHEET_4, SHEET_5, SHEET_6, SHEET_8, SHEET_9 } from './primerLevels';
+import { SHEET_1, SHEET_10, SHEET_11, SHEET_12, SHEET_13, SHEET_14, SHEET_2, SHEET_3, SHEET_4, SHEET_5, SHEET_6, SHEET_8, SHEET_9 } from './primerLevels';
 
 /** Extras of flat plans (review and long plans): the board, the plan's length and what is on it grow by door. */
 const seq = (cols: number, rows: number, steps: [number, number], pickups: number, rocks: number): SequenceParams =>
@@ -26,6 +26,8 @@ const doors = (easy: DoorExtras, medium: DoorExtras, hard: DoorExtras): Record<D
 /** Songs on the xylophone: a motif of `motif` beats played several times, from the notes of `pitches` (and a silence). */
 const mel = (motif: MelodyParams['motif'], count: [number, number], pitches: MelodyParams['pitches'], rest = false): ExtraParams =>
   ({ family: 'melody', motif, count, pitches, ...(rest ? { rest } : {}) });
+/** Guardas on squared paper: a pattern of `body` arrows drawn several times. */
+const gua = (body: GuardaParams['body'], count: [number, number]): ExtraParams => ({ family: 'guarda', body, count });
 
 export const PRIMER: Sheet[] = [
   {
@@ -166,7 +168,10 @@ export const PRIMER: Sheet[] = [
     title: 'Guardas',
     say: 'Con repetir se pintan guardas para el cuaderno.',
     plan: 'Repeat to draw notebook borders.',
-    core: [],
+    ...SHEET_14,
+    // a staircase of two arrows, a pattern of three, battlements of four: longer patterns behind bigger doors
+    extras: doors(gua(2, [3, 5]), gua(3, [3, 4]), gua(4, [3, 4])),
+    preview: 'La próxima, armás un nivel con pocos renglones para un compañero.',
   },
   {
     n: 15, grade: '1ro', kind: 'taller', zone: 'rio', builtIn: 'T3',

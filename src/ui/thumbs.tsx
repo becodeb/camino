@@ -7,6 +7,7 @@ import { blob, leaf, rng, wobblyLine, wobblyPoly } from '../ink/ink.js';
 import type { LevelDef } from '../game/levels';
 import { visibleFrom, type Board } from '../game/model';
 import { PITCHES } from '../game/music';
+import { guidePath } from '../game/guarda';
 import { BAR_DARK, BAR_FILL, BAR_LEN, REST_PATH, barPath } from './noteArt';
 
 type Place = { x: number; y: number; width: number; height: number };
@@ -14,7 +15,27 @@ type Place = { x: number; y: number; width: number; height: number };
 /** A small drawing of any page (the boss page of a sheet): its board, or its song and xylophone. */
 export function PageThumb({ level, place }: { level: LevelDef; place?: Place }) {
   if (level.music) return <MusicThumb level={level} place={place} />;
+  if (level.guarda) return <GuardaThumb level={level} place={place} />;
   return <BoardThumb b={level.worlds[0]} place={place} />;
+}
+
+/** A guarda page, small: the squared paper and its border, finished in blue pen. */
+export function GuardaThumb({ level, place }: { level: LevelDef; place?: Place }) {
+  const b = level.worlds[0];
+  const S = 40, w = b.cols * S, h = b.rows * S;
+  const pt = (c: { c: number; r: number }) => [c.c * S + S / 2, c.r * S + S / 2] as const;
+  const path = level.guarda ? guidePath(b, level.guarda).map(pt) : [];
+  return (
+    <svg className="thumb" viewBox={`-6 -6 ${w + 12} ${h + 12}`} aria-hidden="true" {...place}>
+      <g filter="url(#rough)" strokeLinecap="round" strokeLinejoin="round">
+        <path d={wobblyPoly([[0, 0], [w, 0], [w, h], [0, h]], { wob: 0.8, bow: 1.2, seed: b.seed })} fill="#fdfbf4" stroke={INK} strokeWidth={2.4} />
+        {Array.from({ length: b.cols }, (_, c) => <path key={`c${c}`} d={`M${c * S + S / 2},3 L${c * S + S / 2},${h - 3}`} stroke="#9dbbd8" strokeWidth={1.6} />)}
+        {Array.from({ length: b.rows }, (_, r) => <path key={`r${r}`} d={`M3,${r * S + S / 2} L${w - 3},${r * S + S / 2}`} stroke="#9dbbd8" strokeWidth={1.6} />)}
+        <path d={`M8,3 L8,${h - 3}`} stroke="#c9574a" strokeOpacity={0.55} strokeWidth={1.8} />
+        {path.length > 1 && <path d={`M${path.map(([x, y]) => `${x},${y}`).join(' L')}`} fill="none" stroke="#3d6ea5" strokeWidth={5} />}
+      </g>
+    </svg>
+  );
 }
 
 /** A music page, small: its song strip (the first beats) and the xylophone under it. */

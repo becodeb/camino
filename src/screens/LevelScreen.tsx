@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { BoardView } from '../ui/board/BoardView';
+import { GuardaView } from '../ui/board/GuardaView';
 import { MusicView } from '../ui/board/MusicView';
 import { type DemoStep } from '../ui/ghost';
 import { speak } from '../ui/speech';
@@ -145,14 +146,14 @@ function DirectLevel({ level }: { level: LevelDef }) {
 /** Several worlds (2do page 2): each sheet has its own tape colour, and a block that bumped there gets a strip of it. */
 const WORLD_TONES = ['rgba(114, 152, 193, 0.8)', 'rgba(240, 210, 122, 0.9)', 'rgba(231, 163, 160, 0.9)'];
 
-/** One BoardView per world, each on its own taped sheet (a music page's is the xylophone). */
+/** One BoardView per world, each on its own taped sheet (a music page's is the xylophone, a guarda's the squared paper). */
 function useBoards(level: LevelDef) {
   const svgs = useRef<(SVGSVGElement | null)[]>([]);
   const views = useRef<BoardView[]>([]);
   useEffect(() => {
     views.current = level.worlds.map((b, i) => {
       const svg = svgs.current[i]!;
-      const v = level.music ? new MusicView(svg, level.music, level.solution) : new BoardView(svg);
+      const v = level.music ? new MusicView(svg, level.music, level.solution) : level.guarda ? new GuardaView(svg, level.guarda) : new BoardView(svg);
       v.setBoard(b, { pop: true, frame: frameFor(level) });
       if (level.fog) v.setFog(true);
       v.keepBumps = level.worlds.length > 1;
@@ -174,7 +175,7 @@ function Sheets({ level, svgs }: { level: LevelDef; svgs: React.RefObject<(SVGSV
           {nav.decor}
           <span className="tape tape-l" aria-hidden="true" />
           <span className="tape tape-r" aria-hidden="true" />
-          <svg ref={(el) => { svgs.current[i] = el; }} className="board" role="img" aria-label={level.music ? 'El xilofón y la canción' : `Tablero ${multi ? `${i + 1} ` : ''}de ${b.cols} por ${b.rows}`} />
+          <svg ref={(el) => { svgs.current[i] = el; }} className="board" role="img" aria-label={level.music ? 'El xilofón y la canción' : level.guarda ? 'La guarda en el cuaderno' : `Tablero ${multi ? `${i + 1} ` : ''}de ${b.cols} por ${b.rows}`} />
         </div>
       ))}
     </div>
@@ -476,7 +477,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
       else ghost([{ do: 'drag', from: `.zone-palette [data-cmd="${sample[cardCount(program) % sample.length].cmd}"]`, to: '.zone-program .blk-slot.is-active' }]);
       return;
     }
-    if (loops || level.music) {
+    if (loops || level.music || level.guarda) {
       if (!hasLoop(program) && level.intro) { playIntro(); return; }
       const h = nextHint(judge, program, level.solution, maxCards);
       const listen: DemoStep[] = level.music?.song && !cardCount(program) ? [{ do: 'tap', at: '.song-strip', apply: () => void music()?.listen() }] : [];

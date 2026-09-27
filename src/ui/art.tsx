@@ -121,6 +121,22 @@ export function SongIcon({ size = 44 }: { size?: number }) {
   );
 }
 
+/** The drawn instruction of a guarda page: a scrap of squared paper with a border of battlements in blue pen. */
+export function GuardaIcon({ size = 44 }: { size?: number }) {
+  const sq = [-12, -4, 4, 12];
+  return (
+    <svg viewBox="-24 -20 48 40" width={size} height={size} aria-hidden="true" className="doodle">
+      <g filter="url(#rough)" strokeLinejoin="round" strokeLinecap="round">
+        <path d={wobblyPoly([[-21, -16], [20, -17], [21, 16], [-20, 17]], { wob: 0.5, bow: 0.8, seed: 9 })} transform="translate(2 2.5)" fill="rgba(84, 62, 38, 0.2)" />
+        <path d={wobblyPoly([[-21, -16], [20, -17], [21, 16], [-20, 17]], { wob: 0.5, bow: 0.8, seed: 9 })} fill="#fdfbf4" stroke={INK} strokeWidth={2.2} />
+        {sq.map((v) => <path key={`v${v}`} d={`M${v},-14 L${v},14`} stroke="#9dbbd8" strokeWidth={1.3} />)}
+        {sq.map((v) => <path key={`h${v}`} d={`M-18,${v} L18,${v}`} stroke="#9dbbd8" strokeWidth={1.3} />)}
+        <path d="M-16,4 L-12,4 L-12,-4 L-4,-4 L-4,4 L4,4 L4,-4 L12,-4 L12,4 L16,4" fill="none" stroke={PEN} strokeWidth={3} />
+      </g>
+    </svg>
+  );
+}
+
 /** Several seeds to gather, drawn as a little heap (the bar's instruction stays short with three or more). */
 export function SeedsIcon({ n, size = 42 }: { n: number; size?: number }) {
   const k = Math.min(n, 4);
