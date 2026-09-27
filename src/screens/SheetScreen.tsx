@@ -21,7 +21,7 @@ import type { LevelDef } from '../game/levels';
 import { useDev } from '../ui/devMode';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { NextPageArt, PageIcon, PenRing, Portrait, Stamp, ThenArrow } from '../ui/art';
-import { BossPageArt, DoorArt, Tree, Pine, Bush, Tuft, StopArt, INK } from '../ui/forestArt';
+import { BossPageArt, DoorArt, Tree, Pine, Bush, Tuft, StopArt, River, Reeds, LilyPad, INK } from '../ui/forestArt';
 import { BROTE, Bar } from './LevelBar';
 import { LevelScreen } from './LevelScreen';
 import { LevelNavContext, Quit, useGhost, type LevelNav } from './levelKit';
@@ -114,7 +114,8 @@ function sheetNav(sheet: Sheet, page: SheetPage): LevelNav {
       if (!level.save || !(won || progress.get().solved[level.id])) return null;
       return <GoldSeal id={level.id} href={sheetHref(sheet.n, goldPage(page))} fresh={won} />;
     },
-    notebook: gold && base ? <PlanNote plan={recallPlan(id) ?? base.solution} /> : undefined,
+    // the child's own plan from this visit; otherwise the long way the pattern walks
+    notebook: gold && base ? <PlanNote plan={recallPlan(id) ?? base.save?.solution ?? base.solution} /> : undefined,
     next: () => { location.hash = nextHref(sheet, page); },
     quit: MAP_HREF,
     say: (level) => {
@@ -264,6 +265,41 @@ function PencilSky() {
   );
 }
 
+/**
+ * The doors of a river sheet stand on the sandy bank: the river runs behind
+ * them with its lily pads, the far bank has reeds, flat stones and reeds on
+ * the near bank instead of the forest's trees.
+ */
+function RiverScenery() {
+  const stones: [number, number, number][] = [[92, GROUND + 38, 1.2], [590, GROUND + 60, 1], [1150, GROUND + 44, 1.1]];
+  return (
+    <g className="doors-scenery is-river">
+      <clipPath id="doors-river-clip"><rect x={0} y={0} width={1200} height={600} /></clipPath>
+      <PencilSky />
+      <path d="M0,196 Q300,186 600,194 T1200,190 L1200,300 L0,300 Z" fill="#f3e8cf" />
+      <path d={`M0,392 L1200,392 L1200,600 L0,600 Z`} fill="#f3e8cf" />
+      {/* the river's banks run a little past the page: clipped to it */}
+      <g clipPath="url(#doors-river-clip)"><River w={1200} top={262} bottom={404} seed={6} /></g>
+      {[[150, 312, 17], [650, 352, 14], [1050, 300, 16]].map(([x, y, r], i) => <LilyPad key={i} x={x} y={y} r={r} seed={i + 3} />)}
+      {[[40, 262], [470, 258], [860, 264], [1180, 258]].map(([x, y], i) => <Reeds key={`far${i}`} x={x} y={y} seed={i + 11} />)}
+      {stones.map(([x, y, s], i) => (
+        <g key={i} transform={`translate(${x} ${y}) scale(${s})`} stroke={INK} strokeLinejoin="round">
+          <path d={blob(3, 5, 40, 17, { seed: i + 30, n: 10 })} fill="rgba(84, 62, 38, 0.2)" stroke="none" />
+          <path d={blob(0, 0, 40, 17, { seed: i + 30, n: 10 })} fill="#ddd4c3" strokeWidth={2.6} />
+          <path d={`M-18,-6 q10,-5 22,-3`} fill="none" stroke="#fbf7ee" strokeWidth={2.4} strokeLinecap="round" />
+        </g>
+      ))}
+      {[[345, GROUND + 6], [598, GROUND + 4], [860, GROUND + 6], [22, GROUND + 70], [1100, GROUND + 100]].map(([x, y], i) => <Reeds key={`near${i}`} x={x} y={y} seed={i + 21} />)}
+      {[[250, 540], [720, 548], [960, 530]].map(([x, y], i) => (
+        <g key={`p${i}`} stroke={INK} strokeWidth={1.4} fill="#d8c9a6" opacity={0.8}>
+          <ellipse cx={x} cy={y} rx={5} ry={3.5} />
+          <ellipse cx={x + 12} cy={y + 5} rx={3.5} ry={2.5} />
+        </g>
+      ))}
+    </g>
+  );
+}
+
 /** The seeds earned behind a door, under it: a few little seeds and the count. */
 function DoorCount({ n }: { n: number }) {
   if (!n) return null;
@@ -299,7 +335,7 @@ function DoorsPage({ sheet }: { sheet: Sheet }) {
 
   const help = () => { ghost([{ do: 'point', at: [open ? '.door-btn' : '.bar-door'] }]); };
 
-  const scenery: ReactNode = (
+  const scenery: ReactNode = sheet.zone === 'rio' ? <RiverScenery /> : (
     <g className="doors-scenery">
       <PencilSky />
       <path d={`M0,${GROUND} Q300,${GROUND - 14} 600,${GROUND - 4} T1200,${GROUND - 8} L1200,600 L0,600 Z`} fill="#eef0da" />
