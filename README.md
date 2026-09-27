@@ -21,7 +21,10 @@ Port **8797** (8795/8796 belong to habilidades).
 | Path | What |
 |---|---|
 | `src/game/levels.ts` | The demo's ten levels, each one declarative `LevelDef` |
-| `src/game/engine.ts` | Pure engine: commands, programs → traces, the breadth-first solver (`shortestPlan`), help search |
+| `src/game/engine.ts` | Pure engine: commands, programs → traces, the breadth-first solver (`shortestPlan`), help search, `unroll` (the cards a program plays) |
+| `src/game/judge.ts` | What a program does on any kind of page (a walk, a song, a guarda) as the engine's `Trace`: `tracesOf`, `wins`, `judgeOf` |
+| `src/game/music.ts` | 1ro's music recess: note cards, the xylophone as a board, a song played as a trace |
+| `src/game/guarda.ts` | 1ro's guardas: borders drawn on squared paper, the guide, a drawing as a trace |
 | `src/game/editor.ts` | Pure block-editor model (insert, move, drop, layout) |
 | `src/game/hint.ts` | ✋ for programs with loops: the next gesture, from the level's reference solution |
 | `src/game/lockstep.ts` | Keeps several boards stepping together (one program, three worlds) |
@@ -30,7 +33,7 @@ Port **8797** (8795/8796 belong to habilidades).
 | `src/curriculum/` | 1ro's year: the sheet model, the 17 sheets, their levels, the extras generator, the progress store, the routes |
 | `src/screens/` | Home (the tramo), the level screens (direct, program, the 3ro game), the forest map, a sheet's pages and doors, the dev drawer; shared pieces in `levelKit.tsx` and `yearKit.tsx` |
 | `src/blocks/` | The block editor and the rule-card editor on screen |
-| `src/ui/` | Drawn board (`board/BoardView.ts`), the year's drawings (`forestArt.tsx`), board thumbnails, ink filters, speech, ghost hand, dev-mode flag, CSS |
+| `src/ui/` | Drawn board (`board/BoardView.ts`, and its subclasses `MusicView.ts` and `GuardaView.ts`), the year's drawings (`forestArt.tsx`, `noteArt.ts`), board thumbnails, ink filters, speech, the xylophone's synth (`sound.ts`), ghost hand, dev-mode flag, CSS |
 | `tools/shots.mjs` | Screenshot tour with Playwright + system Chromium (`?debug` hooks) |
 | `tools/check-3ro.mjs` | Scripted browser check of the 3ro pages through the real UI (taps, a drag, the keyboard) |
 | `tools/check-primer.mjs` | Scripted browser check of 1ro's year through the real UI (map, pages, seeds, dev drawer, storage) |
@@ -50,7 +53,7 @@ Routes (`src/curriculum/route.ts`):
 | `…/oro` after a level page | That page's gold-stamp challenge (save blocks), e.g. `#/1ro/hoja/11/2/oro` |
 
 Adding `?debug` exposes `window.__camino` for scripted screenshots
-(`PW=/tmp/pw node tools/shots.mjs <outDir> [base] [t1-|t2-|t3-|p1-|p2-]`; `&nointro` skips the 3ro intro;
+(`PW=/tmp/pw node tools/shots.mjs <outDir> [base] [t1-|t2-|t3-|p1-|p2-|p3a-]`; `&nointro` skips the 3ro intro;
 `PW` is any directory with `playwright` installed).
 
 ## Pages of the demo
@@ -67,7 +70,16 @@ The demo's stamps live in memory only: a reload starts the tramo over.
 
 ## 1ro's year
 
-Seventeen sheets (one per class): the forest (1–9), then the river (10–17). A sheet has 3–4 short **core** pages (one or two **essential**, marked with a red bookmark: the teacher's minimum), three **doors** of generated extras (easy, medium, hard: sprouts of growing size) and an optional **boss** with a frame of its own. The doors open when the essential pages are solved, the boss when the whole core is. Every first solve earns a **seed** that flies into the pouch (T4 plants them in a garden). Built so far: sheets 1–6, 8 and 10–13; the rest show a "próximamente" page. The river's boards have their own look: a sandy bank with reeds, water Brote cannot step in, stepping stones across it.
+Seventeen sheets (one per class): the forest (1–9), then the river (10–17). A sheet has 3–4 short **core** pages (one or two **essential**, marked with a red bookmark: the teacher's minimum), three **doors** of generated extras (easy, medium, hard: sprouts of growing size) and an optional **boss** with a frame of its own. The doors open when the essential pages are solved, the boss when the whole core is. Every first solve earns a **seed** that flies into the pouch (T4 plants them in a garden). Built so far: sheets 1–6 and 8–14; the rest show a "próximamente" page. The river's boards have their own look: a sandy bank with reeds, water Brote cannot step in, stepping stones across it.
+
+**Two sheets are not walks** (`LevelDef.music`, `LevelDef.guarda`; the formats above work on them too):
+
+| Sheet | The page | Won when | Fails diegetically by |
+|---|---|---|---|
+| 9 · Recreo: música | Note cards (a coloured xylophone bar each, do to sol, or the rest sign); Brote hops the bars of a big xylophone on the grass and each one rings (Web Audio, `ui/sound.ts`, quiet); the song to copy is taped above as a strip of bars, a tap plays it | The notebook plays the song beat by beat; a free page (`music.free`) wins with a few notes and stays playable | The first wrong beat stops the song: its card shakes, the beat that was due is circled on the strip and its bar blinks; a song cut short circles its next beat |
+| 14 · Guardas | Arrows on a page of the squared notebook lying on the riverbank; the guarda is a faint pencil line; Brote walks the paper's lines and inks each segment in blue pen | Every segment of the pencil is inked (going back over ink is fine) | A step off the pencil smudges the ink and its card shakes; a guarda cut short leaves the pencil still to ink calling |
+
+Everything still shows without sound: a bar that rings also dips, lights up and floats a note.
 
 **Practice formats** (`LevelDef.format`, `game/formats.ts`), all wordless, with the same three controls:
 
@@ -85,7 +97,7 @@ Seventeen sheets (one per class): the forest (1–9), then the river (10–17). 
 | `curriculum/primer.ts` | The 17 sheets: kind, zone, titles, spoken intro, extras per door, preview line |
 | `curriculum/primerLevels.ts` | The handmade core pages and bosses of the built sheets; format helpers (`fix`, `fixPlan`, `complete`, `predict`, `withGold`) |
 | `curriculum/boards.ts` | Board builders: open boards (rocks, puddles, water, stepping stones, no goal for predict), paths carved in stone or across the river (`look: 'river'`), level shells |
-| `curriculum/generate.ts` | The extras generator (families `sequence`, `repeat` with steps around it or a gold challenge, `predict`, `fix`, `complete`), seeded and proved by the engine |
+| `curriculum/generate.ts` | The extras generator (families `sequence`, `repeat` with steps around it or a gold challenge, `predict`, `fix`, `complete`, `melody`, `guarda`), seeded and proved by the engine |
 | `curriculum/progress.ts` | The child's progress, local and versioned: solved pages, gold stamps, seeds |
 | `curriculum/route.ts` | URLs, the page a sheet opens on, "next page", what is open, Brote's sheet |
 | `game/formats.ts` | What a page starts with and pins, where Brote ends, how a fix differs from its reference, the gold challenge |
@@ -95,6 +107,8 @@ Seventeen sheets (one per class): the forest (1–9), then the river (10–17). 
 **Add a generator family.** Add a variant to `ExtraParams` (`model.ts`), a `gen<Family>(params, rng)` in `generate.ts` that returns a `Generated` (board, reference program, notebook lines, palette, a `key` that identifies the puzzle, and `format`/`given`/`save` when the page is not a plain one) and dispatch it in `genOf()`; `generate.test.ts` runs every sheet's doors (and four test-only lab sheets that exercise every family, forest and river) through the generic checks (sane, proved, harder by door, no repeats in a run or with the sheet's own levels) and each family adds its own. The same seeds give the same extras (the river only changes the look).
 
 **Add a format.** A field on `LevelDef` and its handling in `screens/LevelScreen.tsx` (`ProgramLevel` for notebook formats, `PredictLevel` for predict); the fixed-lines editing lives in `game/editor.ts` (`holesOf`, `writeLine`, `holeAt`, `resolveLinesDrop`) and `BlockEditor` (`lines: 'fixed' | 'read'`, `pinned`). The sheet screen passes a sheet's extras through `LevelNav` (`won(level, program)` may return the line to say, `gold(level, won)` draws the seal, `notebook` the note in the notebook).
+
+**Add a kind of page** (like the music and the guardas, whose goal is not a walk): a field on `LevelDef`, a pure `…Trace(board, def, program)` that returns the engine's `Trace` (a step per card, `crash` on the culprit, `won` on the last step) and its branch in `game/judge.ts`; a `BoardView` subclass that draws the world in `setBoard` and animates the trace in `play` (same contract: `onStep`, the outcome), picked in `useBoards` (`LevelScreen.tsx`) with its frame in `frameFor` (`levelKit.tsx`). The notebook, the three controls, the formats, the help (`hint.ts` takes the page's judge), the seeds and the gold seal come for free. Give it a drawn instruction (`LevelBar.tsx`), a thumbnail (`PageThumb`) and a generator family keyed like its levels (`keyOfLevel`).
 
 **Progress API** (`curriculum/progress.ts`). Pure transitions over a `Progress` value (`solve`, `earnGold`, `grant`, `openSheet`, `chooseCharacter`, `parse`, `sheetState`) and one store, `progress` (`get`, `update(fn)`, `reset`, `subscribe`; `useProgress()` in React). It is saved under the localStorage key `camino.progress.v1` (`gold` was added in T2; older stored values read as no gold); every storage access is wrapped, so with storage blocked it plays in memory. The next iteration can swap the backing for accounts through `createProgressStore(backing)`.
 
