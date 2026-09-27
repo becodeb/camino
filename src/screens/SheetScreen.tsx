@@ -10,6 +10,7 @@
 // where they belong through LevelNavContext.
 
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { blob } from '../ink/ink.js';
 import { DOORS, DOOR_LABEL, bossId, coreId, isBuilt, type Door, type Sheet } from '../curriculum/model';
 import { sheetByN } from '../curriculum/primer';
 import { progress, sheetState, solve, useProgress } from '../curriculum/progress';
@@ -177,7 +178,7 @@ function BossIcon({ done, here }: { done: boolean; here: boolean }) {
 
 // ------------------------------------------------------------------ the boss's frame
 
-/** Around the board's sheet: an inner line of green ink, a sprig of leaves in each corner, a red pennant. */
+/** Around the board's sheet: a vine of leaves and berries (CSS), a sprig of leaves in each corner. */
 function BossFrame() {
   return (
     <span className="boss-frame" aria-hidden="true">
@@ -193,13 +194,6 @@ function BossFrame() {
           </g>
         </svg>
       ))}
-      <svg className="boss-flag" viewBox="-6 -48 44 52">
-        <g stroke={INK} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M0,2 L0,-44" strokeWidth={3} />
-          <path d="M0,-44 L32,-35 L0,-25 Z" fill="#c9574a" strokeWidth={2.4} />
-          <path d="M6,-38 L18,-35" stroke="#fbf7ee" strokeWidth={2} opacity={0.8} />
-        </g>
-      </svg>
     </span>
   );
 }
@@ -216,6 +210,22 @@ function DoorsTask() {
       <ThenArrow />
       <span className="task-door"><DoorIcon size="easy" /></span>
     </span>
+  );
+}
+
+/** Two clouds and the sun in pencil over the doors, like the sky of a lone path on the board. */
+function PencilSky() {
+  const clouds: [number, number, number][] = [[330, 118, 1], [640, 80, 4]];
+  return (
+    <g opacity={0.75} stroke={INK} strokeLinecap="round">
+      {clouds.map(([x, y, sd]) => [blob(x, y, 40, 18, { seed: sd, n: 9 }), blob(x + 34, y - 11, 30, 18, { seed: sd + 3, n: 8 }), blob(x - 30, y - 4, 22, 13, { seed: sd + 6, n: 8 })]
+        .map((d, i) => <path key={`${x}-${i}`} d={d} fill="#fbf7ee" strokeWidth={2} />))}
+      <circle cx={1090} cy={92} r={26} fill="#f0d27a" strokeWidth={2.2} />
+      {Array.from({ length: 8 }, (_, i) => {
+        const a = (i / 8) * Math.PI * 2;
+        return <path key={i} d={`M${(1090 + Math.cos(a) * 35).toFixed(1)},${(92 + Math.sin(a) * 35).toFixed(1)} L${(1090 + Math.cos(a) * 47).toFixed(1)},${(92 + Math.sin(a) * 47).toFixed(1)}`} strokeWidth={2} />;
+      })}
+    </g>
   );
 }
 
@@ -256,6 +266,7 @@ function DoorsPage({ sheet }: { sheet: Sheet }) {
 
   const scenery: ReactNode = (
     <g className="doors-scenery">
+      <PencilSky />
       <path d={`M0,${GROUND} Q300,${GROUND - 14} 600,${GROUND - 4} T1200,${GROUND - 8} L1200,600 L0,600 Z`} fill="#eef0da" />
       <path d={`M0,${GROUND} Q300,${GROUND - 14} 600,${GROUND - 4} T1200,${GROUND - 8}`} fill="none" stroke={INK} strokeWidth={2.2} opacity={0.5} />
       <Pine x={70} y={GROUND + 6} s={1.6} seed={901} />

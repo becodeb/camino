@@ -9,10 +9,10 @@
 // engine's breadth-first search over Brote's states (cell + seeds collected).
 
 import { rng } from '../ink/ink.js';
-import { shortestPlan, solves } from '../game/engine';
+import { shortestPlan, simulate, solves } from '../game/engine';
 import type { LevelDef, PaletteBlock } from '../game/levels';
 import {
-  DELTA, DIRS, cmdProgram,
+  DELTA, DIRS, cmdProgram, sameCell,
   type Board, type Cell, type Deco, type Dir, type Obstacle, type Program,
 } from '../game/model';
 import { DOOR_LABEL, extraId, type Door, type ExtraParams, type Sheet } from './model';
@@ -77,6 +77,29 @@ function grass(b: Board, busy: Set<string>, R: Rng, n: number): Deco[] {
   return R.shuffle(free).slice(0, n).map((x, i) => ({ ...x, dx: R.int(30) - 15, dy: 22 + R.int(12), seed: b.seed * 10 + i }));
 }
 
+// ------------------------------------------------------------------ what makes two levels the same
+
+/** A flat plan: where Brote starts, where he goes, the seeds and what is in the way. */
+const seqKey = (b: Board) => `seq:${JSON.stringify([b.start, b.goal, b.pickups, b.obstacles.filter((o) => o.kind !== 'earth').map((o) => [o.c, o.r])])}`;
+/** A repeat: the pattern, the passes, and where on the path the seed waits (-1: none). */
+const repKey = (body: readonly string[], count: number, pickupAt: number) => `rep:${body.join('')}:${count}:${pickupAt}`;
+
+/**
+ * The key a handmade level would have as an extra (null when no family makes
+ * it): the extras behind a sheet's doors never repeat its core or its boss.
+ */
+export function keyOfLevel(l: LevelDef): string | null {
+  const b = l.worlds[0];
+  if (l.worlds.length !== 1 || !b) return null;
+  if (l.solution.every((it) => it.t === 'cmd')) return seqKey(b);
+  const only = l.solution[0];
+  if (l.solution.length !== 1 || only.t !== 'loop' || typeof only.count !== 'number') return null;
+  const t = simulate(b, l.solution);
+  const cells = [b.start, ...t.steps.flatMap((s) => s.cells)];
+  const pickupAt = b.pickups.length ? cells.findIndex((c) => sameCell(c, b.pickups[0])) : -1;
+  return repKey(only.body, only.count, pickupAt);
+}
+
 // ------------------------------------------------------------------ family: sequence
 
 /**
@@ -114,10 +137,7 @@ function genSequence(p: Extract<ExtraParams, { family: 'sequence' }>, R: Rng): G
       if (!direct || direct.length >= plan.length) continue;
     }
     board.deco = grass(board, taken, R, Math.min(4, Math.round((p.cols * p.rows) / 5)));
-    return {
-      board, solution: cmdProgram(plan), slots: plan.length, blocks: [...ARROWS], flat: plan.length,
-      key: `seq:${JSON.stringify([start, goal, pickups, obstacles.map((o) => [o.c, o.r])])}`,
-    };
+    return { board, solution: cmdProgram(plan), slots: plan.length, blocks: [...ARROWS], flat: plan.length, key: seqKey(board) };
   }
   return null;
 }
@@ -185,10 +205,7 @@ function genRepeat(p: Extract<ExtraParams, { family: 'repeat' }>, R: Rng): Gener
     if (!flat || flat.length <= p.body) continue; // the loop must be needed
     const busy = new Set([...onPath, ...obstacles.map((o) => key(o.c, o.r))]);
     board.deco = grass(board, busy, R, line ? 4 : 0);
-    return {
-      board, solution, slots: p.body, blocks: [...blocks, 'repeat'], flat: flat.length,
-      key: `rep:${body.join('')}:${count}:${pickupAt}`,
-    };
+    return { board, solution, slots: p.body, blocks: [...blocks, 'repeat'], flat: flat.length, key: repKey(body, count, pickupAt) };
   }
   return null;
 }
@@ -232,8 +249,9 @@ export interface Extra extends Generated {
 const runs = new Map<string, Extra[]>();
 
 /**
- * The first `n` extras behind a door, in order. A run never repeats a level:
- * when a seed gives one already seen, the next seed is tried.
+ * The first `n` extras behind a door, in order. A run never repeats a level,
+ * nor one of the sheet's own (its core and its boss): when a seed gives one
+ * already seen, the next seed is tried.
  */
 export function extraRun(sheet: Sheet, door: Door, n: number): Extra[] {
   const params = sheet.extras?.[door];
@@ -241,7 +259,8 @@ export function extraRun(sheet: Sheet, door: Door, n: number): Extra[] {
   const id = `${sheet.grade}/${sheet.n}/${door}/${JSON.stringify(params)}`;
   const run = runs.get(id) ?? [];
   runs.set(id, run);
-  const seen = new Set(run.map((e) => e.key));
+  const own = [...sheet.core.map((c) => c.level), ...(sheet.boss ? [sheet.boss] : [])].map(keyOfLevel);
+  const seen = new Set([...own.filter((k): k is string => !!k), ...run.map((e) => e.key)]);
   for (let i = run.length + 1; run.length < n; i++) {
     for (let attempt = 0; ; attempt++) {
       const g = generate(params, hashSeed(GENERATOR_VERSION, sheet.grade, sheet.n, door, i, attempt));

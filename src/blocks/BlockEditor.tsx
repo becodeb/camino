@@ -67,10 +67,21 @@ export interface EditorProps {
 /** Big blocks for small hands: every target well over 48 px. */
 export const DIMS_KIDS: Dims = { w: 104, h: 72, start: 72, arm: 62, spine: 24, foot: 30, cw: 160, condMouth: 44 };
 
+/**
+ * Long flat plans (1ro's 11 and 12 lines): the whole notebook must fit under
+ * the bar of a 768 px screen without scrolling, so its lines get a little
+ * shorter (76 × 46, still a wide target).
+ */
+export const DIMS_TIGHT: Dims = { w: 76, h: 46, start: 44, arm: 42, spine: 18, foot: 18, cw: 112, condMouth: 34 };
+
+/** How big the blocks are drawn: big for small hands, smaller as the notebook holds more lines. */
+export type BlockSize = 'kids' | 'compact' | 'tight';
+export const sizeForRows = (rows: number): BlockSize => (rows > 10 ? 'tight' : rows > 7 ? 'compact' : 'kids');
+
 /** The blocks' sizes for a grade: C-blocks with words ahead of their picture (2do) need a wider arm. */
-export function dimsFor(label: BlockLabel, compact = false): Dims {
-  const d = compact ? DIMS : DIMS_KIDS;
-  return label === 'word-picture' ? { ...d, cw: compact ? 150 : 180 } : d;
+export function dimsFor(label: BlockLabel, size: BlockSize = 'kids'): Dims {
+  const d = size === 'tight' ? DIMS_TIGHT : size === 'compact' ? DIMS : DIMS_KIDS;
+  return label === 'word-picture' ? { ...d, cw: size === 'kids' ? 180 : 150 } : d;
 }
 
 /**
@@ -102,7 +113,8 @@ interface Fly { key: number; look: BlockLook; x: number; y: number; to: { x: num
 export function useBlockEditor(props: EditorProps): { palette: ReactNode; program: ReactNode } {
   const p = { ...props, label: props.label ?? 'picture' };
   const rows = p.program.reduce((n, it) => n + (it.t === 'cmd' ? 1 : it.body.length + 1), 0) + Math.max(0, (p.maxCards ?? 0) - cardCount(p.program));
-  const d: Dims = useMemo(() => dimsFor(p.label, rows > 7), [p.label, rows > 7]);
+  const size = sizeForRows(rows);
+  const d: Dims = useMemo(() => dimsFor(p.label, size), [p.label, size]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);

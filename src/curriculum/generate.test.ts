@@ -3,7 +3,7 @@ import { shortestMoves, shortestPlan, simulate, solves } from '../game/engine';
 import { cardCount, cmdProgram, inside, obstacleAt, sameCell } from '../game/model';
 import { DOORS, type ExtraParams } from './model';
 import { PRIMER } from './primer';
-import { difficultyOf, extraFor, extraRun, generate, hashSeed, patterns } from './generate';
+import { difficultyOf, extraFor, extraRun, generate, hashSeed, keyOfLevel, patterns } from './generate';
 
 const WITH_EXTRAS = PRIMER.filter((s) => s.extras);
 const RUN = 8;
@@ -31,6 +31,14 @@ describe('the search', () => {
     expect(patterns(1)).toHaveLength(4);
     expect(patterns(2)).toHaveLength(8);
     for (const p of patterns(3)) expect(p).toHaveLength(3);
+  });
+
+  it('knows a handmade level as the extra it would be', () => {
+    const stairs = PRIMER.find((s) => s.n === 6)!.core[1].level; // the demo's staircase: 4 × [→ ↑]
+    expect(keyOfLevel(stairs)).toBe('rep:rightup:4:-1');
+    const flat = PRIMER.find((s) => s.n === 1)!.core[0].level;
+    expect(keyOfLevel(flat)).toMatch(/^seq:/);
+    expect(keyOfLevel(PRIMER.find((s) => s.n === 4)!.boss!)).toBeNull(); // two repeats: no family makes it
   });
 
   it('is deterministic in the seed', () => {
@@ -91,9 +99,11 @@ for (const sheet of WITH_EXTRAS) {
         });
       }
 
-      it(`${door}: no level repeats within a run`, () => {
+      it(`${door}: no level repeats within a run, nor one of the sheet's own levels`, () => {
         expect(new Set(run.map((e) => e.key)).size).toBe(run.length);
         expect(new Set(run.map((e) => e.level.id)).size).toBe(run.length);
+        const own = [...sheet.core.map((c) => c.level), ...(sheet.boss ? [sheet.boss] : [])].map(keyOfLevel);
+        for (const e of run) expect(own).not.toContain(e.key);
       });
     }
 

@@ -134,7 +134,7 @@ function Stop({ sheet, p, here, unlocked }: { sheet: Sheet; p: Progress; here: b
       <ellipse className="stop-focus" cx={0} cy={2} rx={62} ry={64} />
       {here && <StopRing seed={sheet.n} />}
       <StopArt n={sheet.n} look={look} soon={!built} mark={MARK[sheet.kind] ?? 'none'} seed={sheet.n * 11} />
-      {done && <Stamp seed={sheet.n + 2} x={22} y={26} size={68} className="map-stamp" />}
+      {done && <Stamp seed={sheet.n + 2} x={30} y={36} size={60} className="map-stamp" />}
     </g>
   );
   const cls = `stop is-${look}${future ? ' is-future' : ''}${built ? '' : ' is-soon'}${done ? ' is-done' : ''}${here ? ' is-here' : ''}`;

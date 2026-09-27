@@ -1,9 +1,11 @@
 // 1er grado · Repetir: the whole year as 17 sheets (the approved activities
 // plan, section "1er grado"). Sheets 1–9 walk the forest, 10–17 follow the
 // river. A sheet with no core levels is not built yet: the map shows it as
-// "próximamente" (reachable in dev mode); T2–T4 fill them in.
+// "próximamente" (reachable in dev mode); T2–T4 fill them in. The levels of
+// the built sheets live in primerLevels.ts.
 
 import type { Door, ExtraParams, Sheet } from './model';
+import { SHEET_1, SHEET_2, SHEET_4, SHEET_6, SHEET_8 } from './primerLevels';
 
 /** Extras of flat plans (review and long plans): the board, the plan's length and what is on it grow by door. */
 const seq = (cols: number, rows: number, steps: [number, number], pickups: number, rocks: number): ExtraParams =>
@@ -18,7 +20,7 @@ export const PRIMER: Sheet[] = [
     title: 'Llegada al bosque',
     say: 'Llegamos al bosque. Brote quiere recorrerlo con vos.',
     plan: 'Review sala 5 plans (arrows in the notebook, then ▶); choose a character (placeholder: Brote, T4 builds the choice).',
-    core: [],
+    ...SHEET_1,
     extras: doors(seq(4, 3, [3, 4], 0, 1), seq(5, 3, [5, 6], 1, 2), seq(5, 4, [7, 8], 1, 3)),
     preview: 'Mañana los caminos son más largos.',
   },
@@ -27,7 +29,7 @@ export const PRIMER: Sheet[] = [
     title: 'Caminos largos',
     say: 'Hoy los caminos son largos. Juntá las semillas en orden.',
     plan: '8–12 step plans collecting things in order; still no repeat.',
-    core: [],
+    ...SHEET_2,
     extras: doors(seq(5, 4, [7, 8], 1, 2), seq(6, 4, [9, 10], 2, 3), seq(7, 4, [11, 12], 2, 4)),
     preview: 'Brote se va a confundir…',
   },
@@ -43,9 +45,9 @@ export const PRIMER: Sheet[] = [
     title: 'Otra vez',
     say: 'Hay caminos muy largos y pocos renglones. Vas a aprender algo nuevo.',
     plan: 'Not enough lines → repeat with one block (the demo level 1ro-1 and its ghost-hand intro).',
-    core: [],
+    ...SHEET_4,
     // one arrow gives few different paths: wide counts keep a run of extras free of repeats
-    extras: doors(rep(1, [3, 5]), rep(1, [5, 8]), rep(1, [8, 10], 1)),
+    extras: doors(rep(1, [3, 5]), rep(1, [5, 9]), rep(1, [8, 10], 1)),
     preview: '¿Cuántas veces hay que repetir?',
   },
   {
@@ -60,7 +62,7 @@ export const PRIMER: Sheet[] = [
     title: 'La escalera',
     say: 'Mirá los escalones: se repiten de a dos.',
     plan: 'Repeat a two-block pattern (the demo level 1ro-2, the carved staircase).',
-    core: [],
+    ...SHEET_6,
     extras: doors(rep(2, [2, 3]), rep(2, [3, 4]), rep(2, [4, 5], 1)),
     preview: 'La próxima, vos armás un nivel.',
   },
@@ -76,7 +78,7 @@ export const PRIMER: Sheet[] = [
     title: 'Zigzag',
     say: 'Ahora los caminos hacen zigzag. Buscá los tres pasos que se repiten.',
     plan: 'Three-block patterns.',
-    core: [],
+    ...SHEET_8,
     extras: doors(rep(2, [3, 4]), rep(3, [2, 3]), rep(3, [3, 4], 1)),
     preview: 'Se viene el recreo con música.',
   },
