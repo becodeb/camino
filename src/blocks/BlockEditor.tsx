@@ -374,7 +374,7 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
     const blockNode = it.kind === 'loop' ? base[ref.item] : { t: 'cmd' as const, cmd: it.cmd! };
     const look = { ...lookOf(blockNode, d), w: it.w, h: it.h, ...(it.mouth != null ? { mouth: it.mouth } : {}) };
     const pins = (m.pins ?? []).filter((x) => x.key === k).map((x, j) => (
-      <span key={x.tone} className="blk-pin" style={{ background: x.tone, right: -14 + j * -10, top: -8 + j * 14 } as CSSProperties} aria-hidden="true" />
+      <span key={x.tone} className="blk-pin" style={{ background: x.tone, right: -20, top: `calc(50% - 8px + ${j * 16}px)` } as CSSProperties} aria-hidden="true" />
     ));
     const src: DragSource = { from: 'program', ref, block: blockNode };
     const cls = ['blk', `blk-${look.kind}`];

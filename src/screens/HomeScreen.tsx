@@ -26,6 +26,7 @@ function LevelThumb({ level }: { level: LevelDef }) {
 /** A small drawing of a board: grid, start mark, rocks, seeds, the goal; in the fog only what Brote sees. */
 const BoardThumb = memo(function BoardThumb({ b, fog }: { b: Board; fog?: boolean }) {
   const S = 40, w = b.cols * S, h = b.rows * S;
+  const stone = b.obstacles.filter((o) => o.kind === 'earth');
   const R = rng(b.seed);
   const cx = (c: number) => c * S + S / 2, cy = (r: number) => r * S + S / 2;
   const seen = fog ? visibleFrom(b, b.start) : [];
@@ -36,6 +37,7 @@ const BoardThumb = memo(function BoardThumb({ b, fog }: { b: Board; fog?: boolea
       <defs><clipPath id={`thumb-clip-${b.seed}`}><rect x={0} y={0} width={w} height={h} /></clipPath></defs>
       <g filter="url(#rough)">
         <rect x={0} y={0} width={w} height={h} fill="#f6efdf" />
+        {stone.map((o, i) => <rect key={`s${i}`} x={o.c * S - 0.5} y={o.r * S - 0.5} width={S + 1} height={S + 1} fill="#d6c9b0" />)}
         {Array.from({ length: b.cols - 1 }, (_, i) => (
           <path key={`c${i}`} d={wobblyLine((i + 1) * S, 2, (i + 1) * S + (R() - 0.5) * 2, h - 2, { bow: 1, seed: i + b.seed })} stroke={INK} strokeOpacity={0.35} strokeWidth={1.4} fill="none" />
         ))}
@@ -45,10 +47,15 @@ const BoardThumb = memo(function BoardThumb({ b, fog }: { b: Board; fog?: boolea
         <path d={wobblyPoly([[0, 0], [w, 0], [w, h], [0, h]], { wob: 0.8, bow: 1.2, seed: b.seed })} fill="none" stroke={INK} strokeWidth={2.4} strokeLinejoin="round" />
         <ellipse cx={cx(b.start.c)} cy={cy(b.start.r) + 13} rx={14} ry={4.5} fill="none" stroke="#3d6ea5" strokeWidth={2} strokeDasharray="1.5 4.5" strokeLinecap="round" />
         <ThumbBrote x={cx(b.start.c)} y={cy(b.start.r)} />
-        {b.obstacles.map((o, i) => (
+        {stone.map((o, i) => (o.r > 0 && !stone.some((x) => x.c === o.c && x.r === o.r - 1)
+          ? <path key={`t${i}`} d={wobblyLine(o.c * S, o.r * S, o.c * S + S, o.r * S, { bow: 0.6, seed: o.seed })} stroke={INK} strokeWidth={2.2} fill="none" />
+          : null))}
+        {stone.map((o, i) => (o.c > 0 && !stone.some((x) => x.c === o.c - 1 && x.r === o.r)
+          ? <path key={`v${i}`} d={wobblyLine(o.c * S, o.r * S, o.c * S, o.r * S + S, { bow: 0.6, seed: o.seed + 1 })} stroke={INK} strokeWidth={2.2} fill="none" />
+          : null))}
+        {b.obstacles.filter((o) => o.kind !== 'earth').map((o, i) => (
           <path key={i} d={blob(cx(o.c), cy(o.r) + 4, 13, 9, { wob: 0.09, n: 8, seed: o.seed })} fill="#bdb09c" stroke={INK} strokeWidth={2} />
         ))}
-        {b.pickups.map((p, i) => <ThumbSeed key={i} x={cx(p.c)} y={cy(p.r)} />)}
         {b.goalKind === 'pot' ? (
           <g>
             <path d={wobblyPoly([[cx(b.goal.c) - 10, cy(b.goal.r) - 2], [cx(b.goal.c) + 10, cy(b.goal.r) - 2], [cx(b.goal.c) + 7, cy(b.goal.r) + 13], [cx(b.goal.c) - 7, cy(b.goal.r) + 13]], { wob: 0.3, bow: 0.4, seed: 2 })} fill="#d98a5f" stroke={INK} strokeWidth={2} strokeLinejoin="round" />

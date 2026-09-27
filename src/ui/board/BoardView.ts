@@ -9,18 +9,39 @@ import { el, rng, blob, wobblyPoly, wobblyLine, penLoop, spiral, smoothClosed, s
 import { tween, proc, wait, E, ABORT, engine } from '../../ink/anim.js';
 import { INK, type CharacterDef } from '../../ink/characters.js';
 import { onFrame, REDUCED } from '../runtime';
-import { DELTA, visibleFrom, type Board, type Cell, type Obstacle, type RobotState, type Trace, type TraceStep } from '../../game/model';
+import { DELTA, obstacleAt, visibleFrom, type Board, type Cell, type Obstacle, type RobotState, type Trace, type TraceStep } from '../../game/model';
 
 export const S = 100;
 /** Space above the grid, in board units. */
 export const TOP = 46;
+/** A one-row path alone on its sheet gets a sky: room for Brote's jumps, and a landscape so the sheet fills its zone. */
+const SKY = 320;
+/** Stacked one-row sheets (2do page 2): a little headroom, and Brote hops low on them (see `low`). */
+const LOW_TOP = 100;
+/** 3ro page 2: room on the right of the grid for the jar of points. */
+export const JAR_W = 150;
 const SCALE = 1.1;
 const CONFETTI = ['#de8a56', '#c9574a', '#e7a3a0', '#7298c1', '#f0d27a', '#a4b86d'];
 const PERSIST = ['leaves', 'leafNew', 'roll', 'size'];
 const now = () => performance.now();
 export const feet = (c: number, r: number) => ({ x: c * S + S / 2, y: r * S + 78 });
+/** The paper around the grid, in board units: headroom above, the jar's room on the right, a margin below. */
+export interface Frame { top: number; right: number; bottom: number }
+
+/**
+ * The frame of a board: one-row paths get headroom for their jumps (a whole
+ * sky when the path is alone on its sheet, a little when three sheets are
+ * stacked); a game needs room above the grid (hops, falling seeds); the jar
+ * of points sits on the right.
+ */
+export function frameOf(b: Board, o: { worlds?: number; game?: boolean; jar?: boolean } = {}): Frame {
+  // a game (3ro) is won in the top row: Brote's celebration stays on the sheet; seeds appear up there too
+  const top = b.rows === 1 ? ((o.worlds ?? 1) > 1 ? LOW_TOP : SKY) : o.game ? 128 : TOP;
+  return { top, right: o.jar ? JAR_W : 0, bottom: 16 };
+}
+
 /** Width / height of a board's viewBox, so the sheet around it can keep its shape. */
-export const aspectOf = (b: Board) => (b.cols * S + 32) / (b.rows * S + TOP + 16);
+export const aspectOf = (b: Board, f: Frame = frameOf(b)) => (b.cols * S + 32 + f.right) / (b.rows * S + f.top + f.bottom);
 
 type Rig = Record<string, any>;
 
@@ -163,11 +184,14 @@ export class BoardView {
   }
 
   // ---------------------------------------------------------------- drawing
-  setBoard(board: Board, opts: { pop?: boolean } = {}) {
+  frameT: Frame = { top: TOP, right: 0, bottom: 16 };
+
+  setBoard(board: Board, opts: { pop?: boolean; frame?: Frame } = {}) {
     this.board = board;
     const w = board.cols * S, h = board.rows * S;
+    const f = this.frameT = opts.frame ?? frameOf(board);
     // extra room on top: characters in the first row and their jumps stick out of the grid
-    this.svg.setAttribute('viewBox', `-16 -${TOP} ${w + 32} ${h + TOP + 16}`);
+    this.svg.setAttribute('viewBox', `-16 -${f.top} ${w + 32 + f.right} ${h + f.top + f.bottom}`);
     for (const n of ['floor', 'deco', 'marks', 'obst', 'goal', 'trail', 'fog', 'fx']) this.L[n].textContent = '';
     this.fogTiles.clear();
     this.confetti = [];
@@ -179,7 +203,9 @@ export class BoardView {
     for (let r = 1; r < board.rows; r++) {
       el('path', { d: wobblyLine(2, r * S + (R() - 0.5) * 2, w - 2, r * S + (R() - 0.5) * 2, { bow: 1.6, seed: r * 13 + board.seed, segs: 4, jit: 1 }), stroke: INK, 'stroke-width': 1.8, opacity: 0.42, fill: 'none', 'stroke-linecap': 'round' }, this.L.floor);
     }
+    if (board.obstacles.some((o) => o.kind === 'earth')) drawStone(this.L.floor, board);
     el('path', { d: wobblyPoly([[0, 0], [w, 0], [w, h], [0, h]], { wob: 1.5, bow: 2.5, seed: board.seed }), fill: 'none', stroke: INK, 'stroke-width': 3, 'stroke-linejoin': 'round' }, this.L.floor);
+    if (f.top >= 150) drawSky(this.L.deco, board, f.top);
 
     for (const d of board.deco) {
       const x = d.c * S + S / 2 + d.dx, y = d.r * S + d.dy + 50;
@@ -196,6 +222,7 @@ export class BoardView {
 
     const pops: SVGElement[] = [];
     for (const o of board.obstacles) {
+      if (o.kind === 'earth') continue;
       const g = el('g', { transform: `translate(${o.c * S + S / 2} ${o.r * S + S / 2})` }, this.L.obst);
       pops.push(drawObstacle(g, o));
     }
@@ -204,10 +231,13 @@ export class BoardView {
       pops.push(drawPickup(g, board.seed + i));
       return g;
     });
-    const gOuter = el('g', { transform: `translate(${board.goal.c * S + S / 2} ${board.goal.r * S + S / 2 + 6})`, 'data-guide': 'target' }, this.L.goal);
-    this.goalNodes = board.goalKind === 'pot' ? drawPot(gOuter, board.seed) : drawSeedGoal(gOuter, board.seed);
+    this.goalNodes = null;
+    if (board.goalKind !== 'none') {
+      const gOuter = el('g', { transform: `translate(${board.goal.c * S + S / 2} ${board.goal.r * S + S / 2 + 6})`, 'data-guide': 'target' }, this.L.goal);
+      this.goalNodes = board.goalKind === 'pot' ? drawPot(gOuter, board.seed) : drawSeedGoal(gOuter, board.seed);
+      pops.push(this.goalNodes.mover);
+    }
     Object.assign(this.goalState, { hop: 0, dx: 0, spin: 0, scale: 1 });
-    pops.push(this.goalNodes.mover);
     this.pos = { c: board.start.c, r: board.start.r, mask: 0 };
     this.setGoalOpen(board.pickups.length === 0, false);
     if (opts.pop) pops.forEach((n, i) => popAnim(n, { dur: 320, delay: 80 + i * 70 }));
@@ -414,7 +444,10 @@ export class BoardView {
     }
     for (const cell of s.cells) {
       const to = feet(cell.c, cell.r);
-      if (s.kind === 'jump' && !REDUCED) {
+      if (this.low && !REDUCED) {
+        // a stacked sheet has little headroom: a low hop, and a jump is only a higher one
+        await this.lowHop(a, to, s.kind === 'jump' ? 34 : 12, s.kind === 'jump' ? 560 : 420);
+      } else if (s.kind === 'jump' && !REDUCED) {
         // a jump is a step with a big arc on top: the character's own step, lifted
         const lift = proc(a, 520, (p) => { a.rig.lift = -Math.sin(p * Math.PI) * 58; });
         await Promise.all([a.perform('step', to, dir), lift]);
@@ -455,6 +488,20 @@ export class BoardView {
       return 'crash';
     }
     return 'ok';
+  }
+
+  /** A one-row sheet stacked with others: too little headroom for Brote's own springy step. */
+  get low() { return this.board?.rows === 1 && this.frameT.top < 130; }
+
+  private async lowHop(a: Actor, to: { x: number; y: number }, arc: number, ms: number) {
+    const bounce = proc(a, ms, (p) => {
+      const k = Math.sin(p * Math.PI);
+      a.rig.hop = -k * arc;
+      a.rig.sy = 1 + k * 0.04;
+      a.rig.sx = 1 - k * 0.03;
+    });
+    await Promise.all([a.T({ x: to.x, y: to.y }, ms, E.inOut), bounce]);
+    Object.assign(a.rig, { hop: 0, sx: 1, sy: 1 });
   }
 
   /** A gentle bump for the youngest: lean into it, squash, a small "¡Uy!", back. No dizziness. */
@@ -507,7 +554,7 @@ export class BoardView {
     const cy = this.pos.r * S + S / 2;
     if (b.goalKind === 'seed') {
       tween('goal', this.goalState, { hop: -60, dx: 48, spin: 360, scale: 0.8 }, REDUCED ? 1 : 520, E.out3).catch(() => {});
-    } else {
+    } else if (b.goalKind === 'pot') {
       // Brote hops aside so the pot shows, and the seed he planted sprouts
       const side = b.goal.c > 0 ? -1 : 1;
       await a.act(async () => {
@@ -522,7 +569,9 @@ export class BoardView {
     }
     if (!this.L.fx.querySelector('.goal-ring')) this.goalRing(cx, cy);
     this.burstConfetti(cx, cy - 10);
-    await a.act(() => a.perform('celebrate'));
+    // on a stacked sheet the big celebration jumps would land on the sheet above: two happy nods instead
+    if (this.low) await a.act(async () => { a.rig.eyes = 'happy'; a.rig.mouth = 'grin'; await a.perform('nod'); await a.perform('nod'); await a.wait(500); });
+    else await a.act(() => a.perform('celebrate'));
   }
 
   private goalRing(cx: number, cy: number) {
@@ -592,8 +641,9 @@ export class BoardView {
     const maxX = b ? b.cols * S + 10 : 510;
     const w = Math.max(56, text.length * 10.5 + 24);
     // in the top row the bubble would stick out of the sheet: it goes beside the head instead
-    const high = y - 12 - 45 < -TOP;
-    if (high) { x += (x < maxX / 2 ? 1 : -1) * (w / 2 + 34); y = -TOP + 57; }
+    const top = this.frameT.top;
+    const high = y - 12 - 45 < -top;
+    if (high) { x += (x < maxX / 2 ? 1 : -1) * (w / 2 + 34); y = -top + 57; }
     const cx = Math.min(maxX - w / 2, Math.max(-10 + w / 2, x));
     const outer = el('g', { transform: `translate(${cx.toFixed(1)} ${(y - 12).toFixed(1)})` }, this.L.fx);
     const inner = el('g', {}, outer);
@@ -1042,6 +1092,65 @@ function drawObstacle(parent: SVGGElement, o: Obstacle) {
 }
 
 
+
+/**
+ * Stone (1ro's staircase): every `earth` cell is part of one mass. Each cell
+ * is filled and bricked; an ink line runs only where the mass meets open
+ * floor, so the steps show as one staircase, and each tread (a stone top with
+ * floor above it) gets a lighter edge to stand on.
+ */
+function drawStone(parent: SVGGElement, b: Board) {
+  const isStone = (c: number, r: number) => obstacleAt(b, c, r)?.kind === 'earth';
+  const g = el('g', { class: 'stone' }, parent);
+  const cells = b.obstacles.filter((o) => o.kind === 'earth');
+  for (const o of cells) {
+    const x = o.c * S, y = o.r * S;
+    el('rect', { x: x - 1, y: y - 1, width: S + 2, height: S + 2, fill: '#d6c9b0' }, g);
+  }
+  for (const o of cells) {
+    const x = o.c * S, y = o.r * S;
+    const R = rng(o.seed);
+    // two courses of bricks
+    for (const [yy, off] of [[y + 34, 0], [y + 67, 1]] as const) {
+      el('path', { d: wobblyLine(x + 4, yy, x + S - 4, yy + (R() - 0.5) * 2, { bow: 1, seed: o.seed + yy }), stroke: INK, 'stroke-width': 1.6, opacity: 0.35, fill: 'none', 'stroke-linecap': 'round' }, g);
+      const jx = x + (off ? 30 : 62) + (R() - 0.5) * 8;
+      el('path', { d: `M${jx.toFixed(1)},${yy + 2} L${(jx + 1).toFixed(1)},${yy + 30}`, stroke: INK, 'stroke-width': 1.6, opacity: 0.3, 'stroke-linecap': 'round' }, g);
+    }
+    const tread = !isStone(o.c, o.r - 1) && o.r > 0;
+    if (tread) el('rect', { x: x, y: y, width: S, height: 14, fill: '#ece2cc' }, g);
+    const edge = (x1: number, y1: number, x2: number, y2: number, k: number) =>
+      el('path', { d: wobblyLine(x1, y1, x2, y2, { bow: 1.4, seed: o.seed * 4 + k }), stroke: INK, 'stroke-width': 3, fill: 'none', 'stroke-linecap': 'round' }, g);
+    if (o.r > 0 && !isStone(o.c, o.r - 1)) edge(x, y, x + S, y, 1);
+    if (o.r < b.rows - 1 && !isStone(o.c, o.r + 1)) edge(x, y + S, x + S, y + S, 2);
+    if (o.c > 0 && !isStone(o.c - 1, o.r)) edge(x, y, x, y + S, 3);
+    if (o.c < b.cols - 1 && !isStone(o.c + 1, o.r)) edge(x + S, y, x + S, y + S, 4);
+  }
+}
+
+/** The sky over a lone one-row path: far hills, two clouds, all in pencil so the path stays the subject. */
+function drawSky(parent: SVGGElement, b: Board, top: number) {
+  const w = b.cols * S;
+  const R = rng(b.seed + 11);
+  const g = el('g', { class: 'sky', opacity: 0.75 }, parent);
+  const base = -8;
+  const pts: [number, number][] = [[0, base]];
+  const humps = Math.max(3, Math.round(b.cols / 2.5));
+  for (let i = 0; i <= humps * 2; i++) pts.push([(i / (humps * 2)) * w, base - (i % 2 ? 30 + R() * 34 : 6 + R() * 10)]);
+  pts.push([w, base]);
+  el('path', { d: `${smoothOpen(pts)} L${w},${base} L0,${base} Z`, fill: '#e3e5c6' }, g);
+  el('path', { d: smoothOpen(pts.slice(1, -1)), fill: 'none', stroke: INK, 'stroke-width': 2, opacity: 0.55, 'stroke-linecap': 'round' }, g);
+  for (let i = 0; i < 2; i++) {
+    const cx = w * (0.22 + i * 0.5) + R() * 60, cy = -top * (0.62 - i * 0.12);
+    const d = [blob(cx, cy, 34, 16, { seed: b.seed + i, n: 9 }), blob(cx + 30, cy - 10, 26, 16, { seed: b.seed + i + 3, n: 8 }), blob(cx - 26, cy - 4, 20, 12, { seed: b.seed + i + 6, n: 8 })];
+    for (const p of d) el('path', { d: p, fill: '#fbf7ee', stroke: INK, 'stroke-width': 2, opacity: 0.8 }, g);
+  }
+  const sx = w - 70, sy = -top * 0.66;
+  el('circle', { cx: sx, cy: sy, r: 22, fill: '#f0d27a', stroke: INK, 'stroke-width': 2.2 }, g);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    el('path', { d: `M${(sx + Math.cos(a) * 30).toFixed(1)},${(sy + Math.sin(a) * 30).toFixed(1)} L${(sx + Math.cos(a) * 40).toFixed(1)},${(sy + Math.sin(a) * 40).toFixed(1)}`, stroke: INK, 'stroke-width': 2, 'stroke-linecap': 'round', opacity: 0.7 }, g);
+  }
+}
 
 interface GoalNodes {
   outer: SVGGElement;

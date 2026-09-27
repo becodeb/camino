@@ -7,7 +7,8 @@ export const DIRS: readonly Dir[] = ['up', 'right', 'down', 'left'];
 export const DELTA: Record<Dir, readonly [number, number]> = { up: [0, -1], right: [1, 0], down: [0, 1], left: [-1, 0] };
 
 export interface Cell { c: number; r: number }
-export type ObstacleKind = 'rock' | 'puddle' | 'blot';
+/** `earth`: a stone step or a stone wall (1ro's staircase), drawn as one mass with its neighbours. */
+export type ObstacleKind = 'rock' | 'puddle' | 'blot' | 'earth';
 export interface Obstacle extends Cell { kind: ObstacleKind; seed: number }
 /** A tuft of grass drawn on the floor (decoration only). */
 export interface Deco extends Cell { dx: number; dy: number; seed: number }

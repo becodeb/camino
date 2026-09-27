@@ -80,6 +80,15 @@ const strip = (cols: number, goal: number, rocks: number[], seed: number): Board
   obstacles: rocks.map((c, i) => rock(c, 0, seed + i)), pickups: [], deco: [], seed,
 });
 const WALK_OR_JUMP: Program = [{ t: 'loop', count: 'goal', body: ['ifrock:right', 'right'] }];
+/** A stone mass: every cell of the board but `path` (1ro's staircase is carved into it). */
+const carved = (cols: number, rows: number, path: [number, number][], seed: number): Obstacle[] => {
+  const out: Obstacle[] = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    if (!path.some(([pc, pr]) => pc === c && pr === r)) out.push({ c, r, kind: 'earth', seed: seed + c * 5 + r });
+  }
+  return out;
+};
+const STAIRS: [number, number][] = [[0, 4], [1, 4], [1, 3], [2, 3], [2, 2], [3, 2], [3, 1], [4, 1], [4, 0]];
 /** 3ro: one rule per arrow key, each moving Brote that way. */
 const arrowRule = (d: 'left' | 'up' | 'down' | 'right'): Rule => ({ hat: `key:${d}`, actions: [d] });
 
@@ -172,9 +181,9 @@ export const LEVELS: LevelDef[] = [
     mode: 'program',
     worlds: [{
       cols: 5, rows: 5, start: { c: 0, r: 4 }, goal: { c: 4, r: 0 }, goalKind: 'seed',
-      // rocks line both sides of the stairs, so only the stairs lead up
-      obstacles: [rock(0, 3, 4), rock(1, 2, 6), rock(2, 1, 8), rock(3, 0, 10), rock(2, 4, 12), rock(3, 3, 14), rock(4, 2, 16)],
-      pickups: [], deco: grass(13, [[0, 0], [4, 4], [1, 0], [0, 1]]), seed: 96,
+      // the stairs are carved in stone: steps below, a stone wall above, so only the stairs lead up
+      obstacles: carved(5, 5, STAIRS, 96),
+      pickups: [], deco: [], seed: 96,
     }],
     blocks: ['right', 'up', 'repeat'],
     blockLabel: 'picture-word',

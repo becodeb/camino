@@ -7,24 +7,23 @@
 // Failure is diegetic: Brote bumps or looks around, the block that tripped
 // him shakes, the empty line calls. There is no "incorrect" anywhere.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { BoardView, aspectOf } from '../ui/board/BoardView';
-import { playGhost, type DemoStep, type GhostRun } from '../ui/ghost';
-import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
-import { PlayIcon, RestartIcon } from '../ui/icons';
-import { NextPageArt, PadArrow } from '../ui/art';
-import { notebookWidth, paletteBlock, useBlockEditor, type Marks } from '../blocks/BlockEditor';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { BoardView } from '../ui/board/BoardView';
+import { type DemoStep } from '../ui/ghost';
+import { speak } from '../ui/speech';
+import { PlayIcon } from '../ui/icons';
+import { PadArrow } from '../ui/art';
+import { paletteBlock, useBlockEditor, type Marks } from '../blocks/BlockEditor';
 import { refKey } from '../blocks/blocks';
 import { appendSlot, insertAt, refusal, removeAt, type Block, type BlockRef, type DropResult, type Slot } from '../game/editor';
 import { completeProgram, move, nextMove, simulateAll } from '../game/engine';
 import { COUNT_MIN, countTaps, nextCount, nextHint } from '../game/hint';
 import { Lockstep } from '../game/lockstep';
-import { nextLevel, type LevelDef } from '../game/levels';
-import { cardCount, cmdProgram, initialState, type Dir, type Program, type RobotState, type TraceStep } from '../game/model';
-import { stamp, useStamps } from '../game/progress';
-import { BROTE, LevelBar } from './LevelBar';
-
-const DEBUG = typeof location !== 'undefined' && location.search.includes('debug');
+import { type LevelDef } from '../game/levels';
+import { cardCount, initialState, type Dir, type Program, type RobotState, type TraceStep } from '../game/model';
+import { stamp } from '../game/progress';
+import { BROTE } from './LevelBar';
+import { NextPage, RestartButton, Sheet, Shell, frameFor, useBoard, useDebugHooks, useGhost, useInstruction } from './levelKit';
 
 /** Short spoken lines (es-AR). The board says the rest. */
 const LINES = {
@@ -34,112 +33,6 @@ const LINES = {
   introRepeat: 'Mirá: repetir hace la misma flecha muchas veces. Tocá el número para cambiar cuántas.',
   introGoal: 'Mirá: repetir hasta llegar hace caminar a Brote hasta la semilla.',
 };
-
-// ------------------------------------------------------------------ shared pieces
-
-/** The board: one BoardView on one <svg>, rebuilt per level. */
-function useBoard(level: LevelDef) {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const viewRef = useRef<BoardView | null>(null);
-  useEffect(() => {
-    const v = new BoardView(svgRef.current!);
-    viewRef.current = v;
-    v.setBoard(level.worlds[0], { pop: true });
-    v.setCharacter(BROTE);
-    return () => { v.destroy(); viewRef.current = null; };
-  }, [level]);
-  return { svgRef, viewRef };
-}
-
-/** Speaks the instruction when the page opens (after the first tap if the browser asks for one). */
-function useInstruction(level: LevelDef) {
-  useEffect(() => {
-    let off = () => {};
-    const t = setTimeout(() => { off = speakWhenAllowed(level.say); }, 450);
-    return () => { clearTimeout(t); off(); stopSpeaking(); };
-  }, [level]);
-  return useCallback(() => speak(level.say), [level]);
-}
-
-/** The ghost hand, one at a time, cancelled when the page goes away. */
-function useGhost(root: React.RefObject<HTMLElement | null>) {
-  const run = useRef<GhostRun | null>(null);
-  useEffect(() => () => run.current?.cancel(), []);
-  return useCallback((steps: DemoStep[]): Promise<void> | null => {
-    const el = root.current;
-    if (!el || run.current) return null;
-    const g = playGhost(el, steps);
-    run.current = g;
-    return g.done.then(() => { if (run.current === g) run.current = null; });
-  }, [root]);
-}
-
-function goNext(level: LevelDef) {
-  const n = nextLevel(level.id);
-  location.hash = n ? `#/nivel/${n.id}` : '#/';
-}
-
-function Sheet({ svgRef, level }: { svgRef: React.RefObject<SVGSVGElement | null>; level: LevelDef }) {
-  const b = level.worlds[0];
-  return (
-    <div className="sheet" data-zone="stage">
-      <span className="tape tape-l" aria-hidden="true" />
-      <span className="tape tape-r" aria-hidden="true" />
-      <svg ref={svgRef} className="board" role="img" aria-label={`Tablero de ${b.cols} por ${b.rows}`} />
-    </div>
-  );
-}
-
-function NextPage({ level }: { level: LevelDef }) {
-  return (
-    <button type="button" className="next-page cut pop-in" aria-label="Hoja siguiente" onClick={() => goNext(level)}>
-      <NextPageArt />
-    </button>
-  );
-}
-
-function RestartButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
-  return (
-    <button type="button" className="btn btn-restart cut" onClick={onClick} disabled={disabled} aria-label="Volver a empezar" title="Volver a empezar">
-      <RestartIcon />
-    </button>
-  );
-}
-
-function Quit() {
-  return <a className="quit" href="#/">salir</a>;
-}
-
-interface ShellProps {
-  level: LevelDef;
-  mode: 'direct' | 'program';
-  rootRef: React.RefObject<HTMLElement | null>;
-  onSpeak: () => void;
-  onHelp: () => void;
-  busy: boolean;
-  children: ReactNode;
-}
-
-function Shell({ level, mode, rootRef, onSpeak, onHelp, busy, children }: ShellProps) {
-  const stamps = useStamps();
-  return (
-    <main
-      ref={rootRef}
-      className={`level mode-${mode}`}
-      data-level={level.id}
-      data-busy={busy ? 'true' : undefined}
-      style={{
-        '--aspect': aspectOf(level.worlds[0]).toFixed(3),
-        '--n': level.worlds.length,
-        '--notebook-w': `${notebookWidth(level.blocks, level.blockLabel)}px`,
-      } as CSSProperties}
-    >
-      <LevelBar level={level} stamps={stamps} onSpeak={onSpeak} onHelp={onHelp} />
-      {children}
-      <Quit />
-    </main>
-  );
-}
 
 // ------------------------------------------------------------------ direct control (sala 4)
 
@@ -235,7 +128,7 @@ function useBoards(level: LevelDef) {
   useEffect(() => {
     views.current = level.worlds.map((b, i) => {
       const v = new BoardView(svgs.current[i]!);
-      v.setBoard(b, { pop: true });
+      v.setBoard(b, { pop: true, frame: frameFor(level) });
       if (level.fog) v.setFog(true);
       v.keepBumps = level.worlds.length > 1;
       v.setCharacter(BROTE);
@@ -552,16 +445,6 @@ function ProgramLevel({ level }: { level: LevelDef }) {
       </section>
     </Shell>
   );
-}
-
-// ------------------------------------------------------------------ test hooks
-
-/** Automation hooks for screenshots, only with ?debug in the URL (never always-on). */
-function useDebugHooks(hooks: Record<string, unknown>) {
-  useEffect(() => {
-    if (!DEBUG) return;
-    (window as unknown as { __camino: unknown }).__camino = { ...hooks, cmdProgram, stamp };
-  });
 }
 
 export function LevelScreen({ level }: { level: LevelDef }) {
