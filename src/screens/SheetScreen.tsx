@@ -13,9 +13,10 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { blob } from '../ink/ink.js';
 import { DOORS, DOOR_LABEL, bossId, coreId, isBuilt, type Door, type Sheet } from '../curriculum/model';
 import { sheetByN } from '../curriculum/primer';
-import { progress, sheetState, solve, useProgress } from '../curriculum/progress';
+import { earnGold, progress, sheetState, solve, useProgress } from '../curriculum/progress';
 import { extraFor } from '../curriculum/generate';
-import { MAP_HREF, bossOpen, doorsOpen, entryPage, nextExtra, nextHref, sheetHref, type SheetPage } from '../curriculum/route';
+import { MAP_HREF, bossOpen, doorsOpen, entryPage, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type SheetPage } from '../curriculum/route';
+import { goldLevel } from '../game/formats';
 import type { LevelDef } from '../game/levels';
 import { useDev } from '../ui/devMode';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
@@ -25,26 +26,36 @@ import { BROTE, Bar } from './LevelBar';
 import { LevelScreen } from './LevelScreen';
 import { LevelNavContext, Quit, useGhost, type LevelNav } from './levelKit';
 import { BoardThumb } from '../ui/thumbs';
-import { SeedPouch, flySeed } from './yearKit';
+import { GoldSeal, PlanNote, SeedPouch, flySeed, recallPlan, rememberPlan } from './yearKit';
 
 const LINES = {
   doors: '¡Terminaste la hoja! Elegí una puerta para seguir jugando. La planta más grande es la más difícil.',
   doorsShut: 'Las puertas se abren cuando terminás las páginas con cinta roja.',
+  /** A page with a gold challenge, won: the seal is offered. */
+  goldReady: '¡Lo lograste! ¿Te animás con menos renglones? Tocá el sello dorado.',
+  /** The gold challenge, won. */
+  goldWon: '¡Sello dorado! Ahorraste bloques.',
 };
 
 /** Sheets whose own line was already said in this visit (it is said once, before the first page's). */
 const introduced = new Set<number>();
 
-/** The level of a page of a built sheet, or null. */
+/** The level of a page of a built sheet (its gold challenge on a gold page), or null. */
 export function levelOf(sheet: Sheet, page: SheetPage): LevelDef | null {
-  if (page.kind === 'core') return sheet.core[page.k - 1]?.level ?? null;
-  if (page.kind === 'extra') return extraFor(sheet, page.door, page.i)?.level ?? null;
-  if (page.kind === 'boss') return sheet.boss ?? null;
-  return null;
+  const plain = plainPage(page);
+  const base = plain.kind === 'core' ? sheet.core[plain.k - 1]?.level ?? null
+    : plain.kind === 'extra' ? extraFor(sheet, plain.door, plain.i)?.level ?? null
+      : plain.kind === 'boss' ? sheet.boss ?? null
+        : null;
+  if (!base) return null;
+  return isGold(page) ? goldLevel(base) : base;
 }
 
-const pageLabel = (page: SheetPage) =>
-  page.kind === 'core' ? `${page.k}` : page.kind === 'extra' ? `puerta ${DOOR_LABEL[page.door]} ${page.i}` : page.kind === 'boss' ? 'jefe' : 'puertas';
+const pageLabel = (page: SheetPage) => {
+  const p = plainPage(page);
+  const label = p.kind === 'core' ? `${p.k}` : p.kind === 'extra' ? `puerta ${DOOR_LABEL[p.door]} ${p.i}` : p.kind === 'boss' ? 'jefe' : 'puertas';
+  return isGold(page) ? `${label} · oro` : label;
+};
 
 function Redirect({ to }: { to: string }) {
   useEffect(() => { location.replace(to); }, [to]);
@@ -57,7 +68,8 @@ export function SheetScreen({ n, page }: { n: number; page: SheetPage }) {
   if (page.kind === 'entry') return <Redirect to={sheetHref(n, entryPage(sheet, progress.get()))} />;
   if (page.kind === 'doors') return <DoorsPage sheet={sheet} />;
   const level = levelOf(sheet, page);
-  if (!level) return <Redirect to={sheetHref(n)} />;
+  // a gold challenge a page does not have: the page itself
+  if (!level) return <Redirect to={isGold(page) ? sheetHref(n, plainPage(page)) : sheetHref(n)} />;
   return <SheetLevel sheet={sheet} page={page} level={level} />;
 }
 
@@ -72,16 +84,37 @@ function SheetLevel({ sheet, page, level }: { sheet: Sheet; page: SheetPage; lev
   );
 }
 
-/** How a level page behaves inside a sheet. */
+/**
+ * How a level page behaves inside a sheet. A page with a gold challenge,
+ * once solved, shows the gold seal in its sheet's corner (a link to the
+ * challenge); the challenge stamps the page in gold, earns no seed, and shows
+ * the child's own long plan on a note in the notebook.
+ */
 function sheetNav(sheet: Sheet, page: SheetPage): LevelNav {
+  const gold = isGold(page);
+  /** The page's own id (a gold challenge counts as its page). */
+  const id = levelIdOf(sheet, page)!;
+  const base = gold ? levelOf(sheet, plainPage(page)) : null;
   return {
     pages: () => <SheetPages sheet={sheet} current={page} />,
-    title: (level) => <><b>Hoja {sheet.n} · {pageLabel(page)}</b> {page.kind === 'extra' ? sheet.title : level.title}</>,
-    won: (level) => {
+    title: (level) => <><b>Hoja {sheet.n} · {pageLabel(page)}</b> {page.kind === 'extra' ? sheet.title : (base ?? level).title}</>,
+    won: (level, program) => {
+      if (gold) {
+        progress.update((p) => earnGold(p, id));
+        return LINES.goldWon;
+      }
+      if (level.save && program) rememberPlan(level.id, program);
       const before = progress.get().seeds;
       progress.update((p) => solve(p, level.id));
       if (progress.get().seeds > before) flySeed(document.querySelector('.level .sheet [data-guide="target"]'));
+      return level.save && !progress.get().gold[level.id] ? LINES.goldReady : undefined;
     },
+    gold: (level, won) => {
+      if (gold) return <GoldSeal id={id} trying fresh={won} />;
+      if (!level.save || !(won || progress.get().solved[level.id])) return null;
+      return <GoldSeal id={level.id} href={sheetHref(sheet.n, goldPage(page))} fresh={won} />;
+    },
+    notebook: gold && base ? <PlanNote plan={recallPlan(id) ?? base.solution} /> : undefined,
     next: () => { location.hash = nextHref(sheet, page); },
     quit: MAP_HREF,
     say: (level) => {
@@ -90,7 +123,7 @@ function sheetNav(sheet: Sheet, page: SheetPage): LevelNav {
       return `${sheet.say} ${level.say}`;
     },
     decor: page.kind === 'boss' ? <BossFrame /> : undefined,
-    className: page.kind === 'boss' ? 'is-boss' : undefined,
+    className: [page.kind === 'boss' ? 'is-boss' : '', gold ? 'is-gold' : ''].filter(Boolean).join(' ') || undefined,
     aside: <SeedPouch />,
   };
 }
@@ -123,6 +156,7 @@ export function SheetPages({ sheet, current }: { sheet: Sheet; current: SheetPag
   const open = dev.on || doorsOpen(sheet, p);
   const boss = dev.on || bossOpen(sheet, p);
   const bossDone = !!p.solved[bossId(sheet)];
+  const bossGold = !!p.gold[bossId(sheet)];
   const bossHere = current.kind === 'boss';
   return (
     <nav className="sheet-pages" aria-label="Páginas de la hoja">
@@ -130,12 +164,13 @@ export function SheetPages({ sheet, current }: { sheet: Sheet; current: SheetPag
         {sheet.core.map((c, i) => {
           const k = i + 1;
           const done = !!p.solved[coreId(sheet, k)];
+          const golden = !!p.gold[coreId(sheet, k)];
           const here = current.kind === 'core' && current.k === k;
           return (
-            <a key={k} className={`tramo-page is-${here ? 'here' : done ? 'done' : 'todo'}`} href={sheetHref(sheet.n, { kind: 'core', k })} aria-label={`Página ${k}${c.essential ? ', con cinta' : ''}${done ? ', hecha' : ''}`} data-core={k}>
+            <a key={k} className={`tramo-page is-${here ? 'here' : done ? 'done' : 'todo'}`} href={sheetHref(sheet.n, { kind: 'core', k })} aria-label={`Página ${k}${c.essential ? ', con cinta' : ''}${done ? ', hecha' : ''}${golden ? ', con sello dorado' : ''}`} data-core={k}>
               <PageIcon state={done ? 'done' : 'todo'} seed={k + sheet.n} />
               {c.essential && <Bookmark />}
-              {done && <Stamp seed={k + 3} className={here ? 'is-new' : ''} />}
+              {done && <Stamp key={golden ? 'gold' : 'red'} seed={k + 3} tone={golden ? 'gold' : 'red'} className={here ? 'is-new' : ''} />}
               {here && <PenRing seed={k + 7} />}
             </a>
           );
@@ -160,17 +195,17 @@ export function SheetPages({ sheet, current }: { sheet: Sheet; current: SheetPag
         })}
       </span>
       {sheet.boss && (boss
-        ? <a className={`bar-boss${bossHere ? ' is-here' : ''}`} href={sheetHref(sheet.n, { kind: 'boss' })} aria-label={`Desafío${bossDone ? ', hecho' : ''}`}><BossIcon done={bossDone} here={bossHere} /></a>
-        : <span className="bar-boss is-shut" aria-label="Desafío, todavía no"><BossIcon done={false} here={false} /></span>)}
+        ? <a className={`bar-boss${bossHere ? ' is-here' : ''}`} href={sheetHref(sheet.n, { kind: 'boss' })} aria-label={`Desafío${bossDone ? ', hecho' : ''}`}><BossIcon done={bossDone} gold={bossGold} here={bossHere} /></a>
+        : <span className="bar-boss is-shut" aria-label="Desafío, todavía no"><BossIcon done={false} gold={false} here={false} /></span>)}
     </nav>
   );
 }
 
-function BossIcon({ done, here }: { done: boolean; here: boolean }) {
+function BossIcon({ done, gold, here }: { done: boolean; gold: boolean; here: boolean }) {
   return (
     <>
       <svg className="boss-icon" viewBox="-52 -58 104 116" aria-hidden="true"><BossPageArt /></svg>
-      {done && <Stamp seed={11} className={here ? 'is-new' : ''} />}
+      {done && <Stamp key={gold ? 'gold' : 'red'} seed={11} tone={gold ? 'gold' : 'red'} className={here ? 'is-new' : ''} />}
       {here && <PenRing seed={13} />}
     </>
   );

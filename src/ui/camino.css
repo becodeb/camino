@@ -87,17 +87,23 @@
 .bar-face { width: 50px; height: 58px; flex: none; overflow: visible; margin: -10px 2px -2px 0; }
 .doodle { flex: none; overflow: visible; }
 .then-arrow { margin: 6px -2px 0; }
+/* the adult's small print: where the page is on the first line, its title on the second (the bar stays roomy at 1280) */
 .adult-title {
   flex: 1;
   min-width: 0;
   margin: 0 0 0 8px;
-  font: 400 16px/1.25 var(--body);
+  font: 400 15px/1.2 var(--body);
   color: var(--ink-2);
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
-.adult-title b { font-weight: 700; margin-right: 4px; }
+.adult-title b { display: block; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seeds-icon { position: relative; display: block; flex: none; height: 44px; }
+.seeds-icon > span { position: absolute; display: block; }
 
 /* the tramo's pages: pairs by grade, the one on screen circled in blue pen, stamps on the finished ones */
 .tramo { list-style: none; margin: 0 4px 0 0; padding: 0; display: flex; align-items: center; gap: 12px; flex: none; }
@@ -127,6 +133,11 @@
   grid-template-areas: "bar bar bar" "palette program stage";
   height: 100dvh;
   padding-bottom: 30px;
+}
+/* a page with nothing to bring (predict, a count to complete): no palette, the notebook moves left */
+.level.mode-program.no-palette {
+  grid-template-columns: var(--notebook-w, 220px) minmax(0, 1fr);
+  grid-template-areas: "bar bar" "program stage";
 }
 .zone { position: relative; isolation: isolate; min-width: 0; }
 .zone::before, .zone::after { content: ""; position: absolute; inset: 0; filter: url(#rough-lg); pointer-events: none; }

@@ -38,8 +38,9 @@ describe('formats', () => {
     const pins = pinsOf(page({ format: 'complete', given }));
     expect([...pins.cards].sort()).toEqual(['0', '1:0']);
     expect([...pins.counts]).toEqual([2]);
+    expect([...pins.tapes]).toEqual([1, 2]);
     const fix = pinsOf(page({ format: 'fix', given: cmdProgram(['up']) }));
-    expect(fix.cards.size + fix.counts.size).toBe(0);
+    expect(fix.cards.size + fix.counts.size + fix.tapes.size).toBe(0);
   });
 
   it('a fix page differs from its reference in one line or one count; an extra card becomes an empty line', () => {

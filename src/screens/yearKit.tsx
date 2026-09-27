@@ -1,11 +1,15 @@
 // Pieces the screens of 1ro's year share: the seed pouch (every solved level
-// earns a seed; T4 plants them in a garden) and the seed that flies into it.
+// earns a seed; T4 plants them in a garden) and the seed that flies into it;
+// the gold seal of a save-blocks challenge and the note with the child's own
+// long plan that the challenge shows.
 
 import { useEffect, useRef, useState } from 'react';
 import { useProgress } from '../curriculum/progress';
 import { REDUCED } from '../ui/runtime';
 import { PouchArt } from '../ui/forestArt';
-import { SeedIcon } from '../ui/art';
+import { SealArt, SeedIcon } from '../ui/art';
+import { Arrow, DIR_FILL } from '../blocks/blocks';
+import type { Dir, Program } from '../game/model';
 import { createRoot } from 'react-dom/client';
 
 /** How long a won seed takes to fly into the pouch; the count changes when it lands. */
@@ -30,6 +34,48 @@ export function SeedPouch({ className = '' }: { className?: string }) {
       </span>
       <b key={`n${pops}`} className={`pouch-count${pops ? ' is-popped' : ''}`}>{shown}</b>
     </span>
+  );
+}
+
+// ------------------------------------------------------------------ the gold seal (save blocks)
+
+/**
+ * In the controls, next to the next-page button: the gold seal of a page with
+ * a save-blocks challenge. On the page, once solved, it is a link to the
+ * challenge (pale while the gold is still to win, shiny once won); on the
+ * challenge itself it waits in dotted gold and is stamped when it is won.
+ */
+export function GoldSeal({ id, href, fresh, trying }: { id: string; href?: string; fresh?: boolean; trying?: boolean }) {
+  const earned = !!useProgress().gold[id];
+  const cls = `gold-seal${earned ? ' is-earned' : ''}${fresh ? ' is-fresh' : ''}${trying ? ' is-trying' : ''}`;
+  const art = <SealArt earned={earned} />;
+  if (!href) return <span className={cls} role="img" aria-label={earned ? 'Sello dorado ganado' : 'Sello dorado'} data-gold={id}>{art}</span>;
+  return <a className={cls} href={href} aria-label={earned ? 'Sello dorado ganado: probar otra vez con menos renglones' : 'Sello dorado: con menos renglones'} data-gold={id}>{art}</a>;
+}
+
+/** The winning plans of pages with a gold challenge, in this visit (the challenge shows the child's own plan). */
+const plans = new Map<string, Program>();
+export const rememberPlan = (id: string, program: Program) => { plans.set(id, structuredClone(program)); };
+export const recallPlan = (id: string): Program | null => plans.get(id) ?? null;
+
+/**
+ * The child's long plan on a sticky note taped at the bottom of the gold
+ * challenge's notebook: small arrow cards in rows of four, so the pattern
+ * shows (→ ↑ → ↑ …). No words.
+ */
+export function PlanNote({ plan }: { plan: Program }) {
+  const arrows = plan.flatMap((it) => (it.t === 'cmd' ? [it.cmd] : Array.from({ length: typeof it.count === 'number' ? it.count : 1 }, () => it.body).flat()))
+    .filter((c): c is Dir => c in DIR_FILL);
+  if (!arrows.length) return null;
+  return (
+    <div className="plan-note" role="img" aria-label="Tu camino largo">
+      <span className="plan-tape" aria-hidden="true" />
+      <span className="plan-cards">
+        {arrows.map((d, i) => (
+          <span key={i} className="plan-card" style={{ background: DIR_FILL[d] }}><Arrow dir={d} size={17} width={5.4} seed={i + 2} /></span>
+        ))}
+      </span>
+    </div>
   );
 }
 

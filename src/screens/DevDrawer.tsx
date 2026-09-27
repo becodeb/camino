@@ -9,9 +9,11 @@
 import { useEffect, useState } from 'react';
 import { DOORS, DOOR_LABEL, isBuilt, type Door } from '../curriculum/model';
 import { PRIMER, sheetByN } from '../curriculum/primer';
-import { grant, openSheet, progress, sheetState, solve, useProgress } from '../curriculum/progress';
+import { earnGold, grant, openSheet, progress, sheetState, solve, useProgress } from '../curriculum/progress';
 import { extraFor } from '../curriculum/generate';
-import { MAP_HREF, currentSheet, levelIdOf, nextExtra, nextHref, sheetHref, type Route } from '../curriculum/route';
+import { MAP_HREF, currentSheet, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type Route } from '../curriculum/route';
+import { formatOf } from '../game/formats';
+import { levelOf } from './SheetScreen';
 import { levelById } from '../game/levels';
 import { stamp } from '../game/progress';
 import { devMode, useDev } from '../ui/devMode';
@@ -41,8 +43,11 @@ function where(route: Route): string {
   const s = sheetByN(route.n)!;
   const pg = route.page;
   const part = pg.kind === 'core' ? `núcleo ${pg.k}` : pg.kind === 'extra' ? `puerta ${DOOR_LABEL[pg.door]} ${pg.i}` : pg.kind === 'boss' ? 'jefe' : pg.kind === 'doors' ? 'puertas' : 'entrada';
-  return `hoja ${s.n} · ${s.title} · ${isBuilt(s) ? part : 'próximamente'}`;
+  return `hoja ${s.n} · ${s.title} · ${isBuilt(s) ? part : 'próximamente'}${isGold(pg) ? ' · sello dorado' : ''}`;
 }
+
+/** The format of a page, for the adult (small print). */
+const FORMAT_LABEL = { solve: 'armar', complete: 'completar', fix: 'arreglar', predict: 'predecir' } as const;
 
 export function DevDrawer({ route }: { route: Route }) {
   const dev = useDev();
@@ -66,11 +71,14 @@ export function DevDrawer({ route }: { route: Route }) {
   const onSheet = route.screen === 'sheet' && isBuilt(sheet) ? route : null;
   const levelId = onSheet ? levelIdOf(sheet, onSheet.page) : route.screen === 'level' ? route.id : null;
   const extra = onSheet?.page.kind === 'extra' ? extraFor(sheet, onSheet.page.door, onSheet.page.i) : null;
+  const here = onSheet ? levelOf(sheet, plainPage(onSheet.page)) : null;
+  const onGold = !!onSheet && isGold(onSheet.page);
   const st = sheetState(sheet, p);
 
   const markSolved = () => {
     if (!levelId) return;
     if (route.screen === 'level') stamp(levelId);
+    else if (onGold) progress.update((x) => earnGold(x, levelId));
     else progress.update((x) => solve(x, levelId));
   };
   const skip = () => {
@@ -94,10 +102,14 @@ export function DevDrawer({ route }: { route: Route }) {
 
       <section className="dev-sec">
         <p className="dev-where">{where(route)}</p>
-        <p className="dev-id">nivel <code data-dev="level-id">{levelId ?? '—'}</code> · semilla <code data-dev="seed">{extra?.seed ?? '—'}</code></p>
+        <p className="dev-id">
+          nivel <code data-dev="level-id">{levelId ?? '—'}</code> · semilla <code data-dev="seed">{extra?.seed ?? '—'}</code>
+          {here && <> · <span data-dev="format">{FORMAT_LABEL[formatOf(here)]}{here.save ? ' + oro' : ''}</span></>}
+        </p>
         <div className="dev-row">
-          <button type="button" onClick={markSolved} disabled={!levelId || (route.screen === 'sheet' && !!p.solved[levelId])}>marcar resuelto</button>
+          <button type="button" onClick={markSolved} disabled={!levelId || (route.screen === 'sheet' && !!(onGold ? p.gold[levelId] : p.solved[levelId]))}>{onGold ? 'marcar oro' : 'marcar resuelto'}</button>
           <button type="button" onClick={skip} disabled={!onSheet && route.screen !== 'level'}>saltar ▸</button>
+          {onSheet && here?.save && !onGold && <a href={sheetHref(n, goldPage(onSheet.page))} data-dev-gold>sello dorado</a>}
         </div>
       </section>
 

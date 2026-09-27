@@ -141,7 +141,7 @@ export class BoardView {
   constructor(svg: SVGSVGElement) {
     this.svg = svg;
     svg.textContent = '';
-    for (const n of ['floor', 'deco', 'marks', 'obst', 'goal', 'trail', 'fog', 'shadow', 'actor', 'rain', 'fx']) {
+    for (const n of ['floor', 'deco', 'marks', 'obst', 'goal', 'trail', 'fog', 'shadow', 'actor', 'rain', 'fx', 'pick']) {
       this.L[n] = el('g', { class: `layer-${n}` }, svg);
     }
     for (const n of ['floor', 'deco', 'obst', 'trail', 'fog']) this.L[n].setAttribute('filter', 'url(#boil)');
@@ -244,6 +244,73 @@ export class BoardView {
     this.setGoalOpen(board.pickups.length === 0, false);
     if (opts.pop) pops.forEach((n, i) => popAnim(n, { dur: 320, delay: 80 + i * 70 }));
     if (this.fog) this.coverFog();
+    this.guess = null;
+    if (this.onPick) this.drawPick();
+  }
+
+  // ---------------------------------------------------------------- predict: the child taps where Brote will end
+  private onPick: ((cell: Cell) => void) | null = null;
+  private guess: SVGGElement | null = null;
+
+  /** The cells Brote could stand on take taps (a hit square each, `data-cell="c,r"`, over everything); null stops it. */
+  setPicking(fn: ((cell: Cell) => void) | null) {
+    this.onPick = fn;
+    this.drawPick();
+  }
+
+  private drawPick() {
+    const b = this.board;
+    this.L.pick.textContent = '';
+    if (!b || !this.onPick) return;
+    for (let r = 0; r < b.rows; r++) {
+      for (let c = 0; c < b.cols; c++) {
+        if (obstacleAt(b, c, r)) continue;
+        const cell = el('rect', { x: c * S + 2, y: r * S + 2, width: S - 4, height: S - 4, rx: 10, class: 'cell-pick', 'data-cell': `${c},${r}` }, this.L.pick);
+        cell.addEventListener('click', () => this.onPick?.({ c, r }));
+      }
+    }
+  }
+
+  /** The child's guess: a blue pen ring drawn round the cell, under Brote (null clears it). */
+  setGuess(cell: Cell | null) {
+    this.guess?.remove();
+    this.guess = null;
+    if (!cell || !this.board) return;
+    const outer = el('g', { class: 'guess', transform: `translate(${cell.c * S + S / 2} ${cell.r * S + S / 2})`, 'data-guide': 'target' }, this.L.marks);
+    const g = el('g', { filter: 'url(#boil)' }, outer);
+    el('path', { d: blob(0, 4, 36, 32, { wob: 0.05, n: 10, seed: this.board.seed + cell.c * 7 + cell.r }), fill: 'rgba(114, 152, 193, 0.14)' }, g);
+    const ring = el('path', { d: penLoop(0, 4, 42, 38, { seed: this.board.seed + cell.c + cell.r * 3 }), fill: 'none', stroke: '#3d6ea5', 'stroke-width': 4, 'stroke-linecap': 'round' }, g);
+    drawOn(ring, 380);
+    this.guess = outer;
+  }
+
+  /** ▶ before any guess: the cells ripple once, asking for a tap. */
+  askPick() {
+    if (REDUCED) return;
+    this.L.pick.querySelectorAll<SVGRectElement>('.cell-pick').forEach((r, i) => {
+      r.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], { duration: 700, delay: (i % 7) * 40, easing: 'ease-in-out' });
+    });
+  }
+
+  /** The run ended off the ring: Brote turns to it, it wiggles, "¿Mmm?". */
+  async missed(guess: Cell) {
+    const a = this.actor;
+    if (!a) return;
+    const dx = guess.c - this.pos.c, dy = guess.r - this.pos.r, d = Math.hypot(dx, dy) || 1;
+    const inner = this.guess?.firstElementChild as SVGGElement | null;
+    if (inner && !REDUCED) {
+      inner.style.transformBox = 'fill-box';
+      inner.style.transformOrigin = 'center';
+      inner.animate([{ rotate: '0deg' }, { rotate: '-6deg', scale: '1.08' }, { rotate: '5deg' }, { rotate: '0deg', scale: '1' }], { duration: 520, delay: 200, easing: 'ease-out' });
+    }
+    await a.act(async () => {
+      if (dx && Math.sign(a.rig.face) !== Math.sign(dx)) await a.T({ face: Math.sign(dx) }, REDUCED ? 1 : 150, E.inOut);
+      a.lookAt(dx / d, dy / d, 1600);
+      a.rig.mouth = 'wavy';
+      a.bubble('¿Mmm?');
+      await a.wait(1100);
+      a.rig.mouth = 'smile';
+    });
   }
 
   // ---------------------------------------------------------------- fog (2do)

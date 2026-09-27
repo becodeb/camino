@@ -6,6 +6,13 @@
 // The instruction is spoken on entry and by 🔊; ✋ plays the ghost hand.
 // Failure is diegetic: Brote bumps or looks around, the block that tripped
 // him shakes, the empty line calls. There is no "incorrect" anywhere.
+//
+// 1ro's practice formats (game/formats.ts) are program pages too: complete
+// and fix pages keep every line of the notebook in place (a tap on a block
+// takes it out and leaves its line empty, a tap on the palette fills the
+// empty line); a predict page shows the program read-only and the child taps
+// the cell where Brote will end; a gold challenge is a plain page with fewer
+// lines, offered by the gold seal once the page is solved.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { BoardView } from '../ui/board/BoardView';
@@ -15,12 +22,13 @@ import { PlayIcon } from '../ui/icons';
 import { PadArrow } from '../ui/art';
 import { paletteBlock, useBlockEditor, type Marks } from '../blocks/BlockEditor';
 import { refKey } from '../blocks/blocks';
-import { appendSlot, insertAt, refusal, removeAt, type Block, type BlockRef, type DropResult, type Slot } from '../game/editor';
-import { completeProgram, move, nextMove, simulateAll } from '../game/engine';
-import { COUNT_MIN, countTaps, nextCount, nextHint } from '../game/hint';
+import { appendSlot, emptyLine, holesOf, insertAt, refusal, removeAt, writeLine, type Block, type BlockRef, type DragSource, type DropResult, type Slot } from '../game/editor';
+import { completeProgram, move, nextMove, simulate, simulateAll } from '../game/engine';
+import { formatOf, hasFixedLines, pinsOf, startProgram } from '../game/formats';
+import { COUNT_MIN, countTaps, linesHint, nextCount, nextHint } from '../game/hint';
 import { Lockstep } from '../game/lockstep';
 import { type LevelDef } from '../game/levels';
-import { cardCount, initialState, type Dir, type Program, type RobotState, type TraceStep } from '../game/model';
+import { cardCount, initialState, sameCell, type Cell, type Dir, type Program, type RobotState, type TraceStep } from '../game/model';
 import { BROTE } from './LevelBar';
 import { NextPage, RestartButton, Sheet, Shell, frameFor, useBoard, useDebugHooks, useGhost, useInstruction, useLevelNav } from './levelKit';
 import { RealtimeLevel } from './RealtimeLevel';
@@ -32,6 +40,14 @@ const LINES = {
   full: 'No entran más.',
   introRepeat: 'Mirá: repetir hace la misma flecha muchas veces. Tocá el número para cambiar cuántas.',
   introGoal: 'Mirá: repetir hasta llegar hace caminar a Brote hasta la semilla.',
+  /** Fixed lines, no empty line left: one comes out first. */
+  fixedFull: 'Primero sacá un bloque: tocalo y se va.',
+  /** A complete page run with something still missing. */
+  missing: 'Todavía falta algo en el cuaderno.',
+  /** Predict: ▶ before a guess. */
+  guessFirst: 'Primero tocá en el tablero dónde va a terminar Brote.',
+  /** Predict: Brote ended somewhere else. */
+  missed: 'Mirá dónde terminó Brote. Tocá otro lugar y probá de nuevo.',
 };
 
 // ------------------------------------------------------------------ direct control (sala 4)
@@ -166,7 +182,11 @@ function ProgramLevel({ level }: { level: LevelDef }) {
   const say = useInstruction(level);
   const nav = useLevelNav();
   const ghost = useGhost(rootRef);
-  const [program, setProgram] = useState<Program>([]);
+  const format = formatOf(level);
+  /** Complete and fix pages: every line stays in place. */
+  const fixedLines = hasFixedLines(level);
+  const pins = useMemo(() => pinsOf(level), [level]);
+  const [program, setProgram] = useState<Program>(() => startProgram(level));
   const programRef = useRef(program);
   programRef.current = program;
   const [marks, setMarks] = useState<Marks>({});
@@ -203,15 +223,20 @@ function ProgramLevel({ level }: { level: LevelDef }) {
   /** An edit made by the ghost hand during a concept demo (always from the latest program). */
   const editWith = (fn: (p: Program) => Program) => edited(fn(structuredClone(programRef.current)));
 
+  /** Back to the page as it arrived: empty, or with its given program. */
   const restart = () => {
     if (runningRef.current) return;
-    setProgram([]);
-    programRef.current = [];
+    const start = startProgram(level);
+    setProgram(start);
+    programRef.current = start;
     setMarks({});
     setWon(false);
     away.current = false;
     views.current.forEach((v) => void v.reset());
   };
+
+  /** Something taped to the page was tapped: it wiggles and stays. */
+  const wiggle = (key: string) => setMarks((m) => ({ ...m, wiggle: { key, n: (m.wiggle?.n ?? 0) + 1 } }));
 
   /**
    * The concept demo (a new idea, no text): the ghost hand really builds the
@@ -257,7 +282,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
   const full = (block: Block | null, el: HTMLElement | null) => {
     setShake((s) => s + 1);
     if (block && el) setRefused((r) => ({ n: (r?.n ?? 0) + 1, block, from: el.getBoundingClientRect() }));
-    speak(LINES.full);
+    speak(fixedLines ? LINES.fixedFull : LINES.full);
     if (level.intro?.after === 'full' && !introShown.current) {
       introShown.current = true;
       setTimeout(playIntro, 1300);
@@ -266,28 +291,60 @@ function ProgramLevel({ level }: { level: LevelDef }) {
 
   const tapPalette = (block: Block, el: HTMLElement) => {
     if (busy() || won) return;
+    if (fixedLines) {
+      // the card lands on the empty line that takes taps (the one just emptied, or the first)
+      if (block.t !== 'cmd') return;
+      const holes = holesOf(program);
+      const to = holes.find((r) => refKey(r) === marks.activeHole) ?? holes[0];
+      if (!to) { full(block, el); return; }
+      edited(writeLine(program, to, block.cmd));
+      glance(el);
+      return;
+    }
     const slot = appendSlot(program, marks.activeTape, block);
     if (refusal(program, slot, block, { maxCards })) {
       full(block, el);
       return;
     }
-    edited(insertAt(program, slot, block));
+    // a repeat added by a tap takes the next taps inside it (as in habilidades)
+    edited(insertAt(program, slot, block), block.t === 'loop' ? { activeTape: slot.at } : {});
     glance(el);
   };
 
   const tapBlock = (ref: BlockRef) => {
     if (busy() || won) return;
+    if (fixedLines) {
+      // a tap takes a block out and leaves its line empty (it takes the next tap); what is taped on stays
+      const k = refKey(ref);
+      if (ref.inner == null && program[ref.item]?.t === 'loop') { if (pins.tapes.has(ref.item)) wiggle(k); return; }
+      if (pins.cards.has(k)) { wiggle(k); return; }
+      edited(emptyLine(program, ref), { activeHole: k });
+      return;
+    }
     edited(removeAt(program, ref).program);
   };
 
-  const onDrop = (res: DropResult) => {
+  const onDrop = (res: DropResult, src: DragSource) => {
     if (res.outcome === 'rejected' && res.reason === 'full') full(null, null);
-    if (res.program) edited(res.program);
+    if (!res.program) return;
+    edited(res.program, fixedLines && res.outcome === 'remove' && src.from === 'program' ? { activeHole: refKey(src.ref) } : {});
   };
+
+  /** The counted repeat whose number is the child's (not taped on), last one first. */
+  const kidCount = (p: Program) => p.findLastIndex((it, i) => it.t === 'loop' && it.count !== 'goal' && !pins.counts.has(i));
 
   const run = async () => {
     const vs = views.current;
     if (!vs.length || busy() || won) return;
+    if (format === 'complete') {
+      // something still missing: nothing runs, the empty line or the number calls
+      const counts = program.findIndex((it) => it.t === 'loop' && it.count === 0);
+      if (holesOf(program).length || counts >= 0) {
+        speak(LINES.missing);
+        setMarks(holesOf(program).length ? { hintHole: true } : { hintCount: counts });
+        return;
+      }
+    }
     if (!cardCount(program)) {
       speak(LINES.empty);
       setMarks((m) => ({ ...m, hintSlot: true }));
@@ -333,21 +390,27 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     if (results.every((r) => r === 'win')) {
       setMarks({});
       if (multi) await Promise.all(vs.map((v) => v.celebrate()));
-      nav.won(level);
+      const line = nav.won(level, program);
       setWon(true);
-      speak(LINES.won);
+      speak(line || LINES.won);
     } else if (results.includes('crash')) {
       const crashed = traces.map((t, w) => ({ t, w })).filter(({ t }) => t.outcome === 'crash');
       const keys = crashed.map(({ t }) => refKey(t.steps[t.crashAt!].ref));
+      // on a complete page the child's number is what to look at too
+      const counted = format === 'complete' ? kidCount(program) : -1;
       setMarks((m) => ({
         culprit: keys[0],
         culpritN: (m.culpritN ?? 0) + 1,
         iteration,
         pins: multi ? crashed.map(({ w }, i) => ({ key: keys[i], tone: WORLD_TONES[w] })) : undefined,
+        ...(counted >= 0 ? { hintCount: counted } : {}),
       }));
+    } else if (fixedLines && holesOf(program).length) {
+      // short, with a line left empty: it calls
+      setMarks({ iteration, hintHole: true });
     } else {
       // short: a counted repeat asks for more passes; otherwise the next free line calls
-      const counted = program.findLastIndex((it) => it.t === 'loop' && it.count !== 'goal');
+      const counted = kidCount(program);
       setMarks(counted >= 0 ? { iteration, hintCount: counted } : { iteration, hintSlot: maxCards == null || cardCount(program) < maxCards });
     }
     runningRef.current = false;
@@ -376,6 +439,15 @@ function ProgramLevel({ level }: { level: LevelDef }) {
    */
   const help = () => {
     if (busy() || won) return;
+    if (fixedLines) {
+      // the first line that differs from the page's reference: out with it, in with the right card, the count, or ▶
+      const h = linesHint(level.worlds, program, level.solution);
+      if (h.kind === 'run') ghost([{ do: 'tap', at: '.btn-play' }]);
+      else if (h.kind === 'empty') ghost([{ do: 'drag', from: `.zone-program [data-ref="${refKey(h.ref)}"]`, to: '.zone-palette' }]);
+      else if (h.kind === 'fill') ghost([{ do: 'drag', from: `.zone-palette [data-cmd="${h.cmd}"]`, to: `.zone-program [data-hole="${refKey(h.ref)}"]` }]);
+      else ghost(Array.from({ length: Math.min(h.taps, 9) }, () => ({ do: 'tap' as const, at: `.zone-program [data-ref="${h.item}"] .tape-count` })));
+      return;
+    }
     if (loops) {
       if (!hasLoop(program) && level.intro) { playIntro(); return; }
       const h = nextHint(level.worlds, program, level.solution, maxCards);
@@ -415,13 +487,16 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     marks,
     disabled: running || won,
     inert: demoing,
-    maxCards,
+    maxCards: fixedLines ? undefined : maxCards,
     shake,
     refused,
+    lines: fixedLines ? 'fixed' : 'free',
+    pinned: pins,
     onTapPalette: tapPalette,
     onTapBlock: tapBlock,
     onTapeCount: (i) => {
       if (busy()) return;
+      if (pins.counts.has(i)) { wiggle(`count:${i}`); return; }
       const next = structuredClone(program);
       const t = next[i];
       if (t.t !== 'loop' || t.count === 'goal') return;
@@ -429,13 +504,19 @@ function ProgramLevel({ level }: { level: LevelDef }) {
       edited(next);
     },
     onTapeActivate: (i) => setMarks((m) => ({ ...m, activeTape: i })),
+    onTapHole: (ref) => setMarks((m) => ({ ...m, activeHole: refKey(ref), hintHole: false })),
     onDrop,
   });
 
+  // a page with nothing to bring (only a count missing) has no palette
+  const palette = level.blocks.length > 0;
   return (
-    <Shell level={level} mode="program" rootRef={rootRef} onSpeak={say} onHelp={help} busy={running}>
-      <section className="zone zone-palette" data-zone="palette" aria-label="Bloques">{editor.palette}</section>
-      <section className="zone zone-program" data-zone="program" aria-label="Tu programa">{editor.program}</section>
+    <Shell level={level} mode="program" rootRef={rootRef} onSpeak={say} onHelp={help} busy={running} noPalette={!palette}>
+      {palette && <section className="zone zone-palette" data-zone="palette" aria-label="Bloques">{editor.palette}</section>}
+      <section className="zone zone-program" data-zone="program" aria-label="Tu programa">
+        {editor.program}
+        {nav.notebook}
+      </section>
       <section className="level-stage" aria-label="Tablero">
         <div className="controls">
           {won ? <NextPage level={level} /> : (
@@ -444,6 +525,137 @@ function ProgramLevel({ level }: { level: LevelDef }) {
             </button>
           )}
           <RestartButton onClick={restart} disabled={running} />
+          {nav.gold?.(level, won)}
+        </div>
+        <Sheets level={level} svgs={svgs} />
+      </section>
+    </Shell>
+  );
+}
+
+// ------------------------------------------------------------------ predict: where will Brote end?
+
+/**
+ * A predict page: the program is in the notebook, read-only; the child taps
+ * the cell where Brote will end (a blue pen ring goes there, and moves with
+ * the next tap), then ▶ plays the run. Brote ends on the ring: the page is
+ * won. He ends somewhere else: he turns to the ring, "¿Mmm?", and the child
+ * can tap again. No palette, no verdict in words.
+ */
+function PredictLevel({ level }: { level: LevelDef }) {
+  const rootRef = useRef<HTMLElement>(null);
+  const { svgs, views } = useBoards(level);
+  const say = useInstruction(level);
+  const nav = useLevelNav();
+  const ghost = useGhost(rootRef);
+  const board = level.worlds[0];
+  const program = level.given ?? level.solution;
+  /** Where the child thinks Brote will end (the ring on the board). */
+  const guessRef = useRef<Cell | null>(null);
+  const [marks, setMarks] = useState<Marks>({});
+  const [running, setRunning] = useState(false);
+  const runningRef = useRef(false);
+  const [won, setWon] = useState(false);
+  const wonRef = useRef(false);
+  /** Brote is not on the start cell (after a run): the next tap sends him home. */
+  const away = useRef(false);
+
+  const pick = (cell: Cell) => {
+    const v = views.current[0];
+    if (!v || runningRef.current || wonRef.current) return;
+    if (away.current) { away.current = false; void v.reset(); }
+    guessRef.current = cell;
+    setMarks({});
+    v.setGuess(cell);
+  };
+  const pickRef = useRef(pick);
+  pickRef.current = pick;
+  useEffect(() => {
+    const v = views.current[0];
+    v?.setPicking((cell) => pickRef.current(cell));
+    return () => v?.setPicking(null);
+  }, [level, views]);
+
+  const restart = () => {
+    if (runningRef.current) return;
+    guessRef.current = null;
+    setMarks({});
+    setWon(false);
+    wonRef.current = false;
+    away.current = false;
+    const v = views.current[0];
+    v?.setGuess(null);
+    void v?.reset();
+  };
+
+  const run = async () => {
+    const v = views.current[0];
+    if (!v || runningRef.current || wonRef.current) return;
+    const g = guessRef.current;
+    if (!g) { speak(LINES.guessFirst); v.askPick(); return; }
+    runningRef.current = true;
+    setRunning(true);
+    setMarks({});
+    const t = simulate(board, program);
+    const done = new Set<string>();
+    let last = -1;
+    let iteration: Marks['iteration'] = null;
+    const onStep = (s: TraceStep) => {
+      if (s.index <= last) return;
+      last = s.index;
+      const k = refKey(s.ref);
+      if (s.ref.inner != null) iteration = { item: s.ref.item, iter: s.ref.iter ?? 0 };
+      setMarks({ current: k, done: new Set(done), iteration });
+      done.add(k);
+    };
+    const res = await v.play(t, { onStep, quiet: true, celebrate: false });
+    away.current = true;
+    if (res === 'aborted') { runningRef.current = false; setRunning(false); return; }
+    setMarks({ iteration });
+    if (sameCell(t.final, g)) {
+      await v.celebrate();
+      const line = nav.won(level, program);
+      wonRef.current = true;
+      setWon(true);
+      speak(line || LINES.won);
+    } else {
+      await v.missed(g);
+      speak(LINES.missed);
+    }
+    runningRef.current = false;
+    setRunning(false);
+  };
+
+  /** ✋ follows the program with a finger: the first block, where Brote gets to; the next block, where he gets to. */
+  const help = () => {
+    if (runningRef.current || wonRef.current) return;
+    const steps: DemoStep[] = [];
+    for (const s of simulate(board, program).steps.slice(0, 2)) {
+      steps.push({ do: 'point', at: [`.zone-program [data-ref="${refKey(s.ref)}"]`] });
+      steps.push({ do: 'point', at: [`.board [data-cell="${s.to.c},${s.to.r}"]`] });
+    }
+    ghost(steps);
+  };
+
+  useDebugHooks({ level, program, guess: (c: number, r: number) => pick({ c, r }), run, help, restart, picked: () => guessRef.current });
+
+  const editor = useBlockEditor({
+    blocks: [], label: level.blockLabel, program, marks, disabled: running || won, lines: 'read',
+    onTapPalette: () => {}, onTapBlock: () => {}, onTapeCount: () => {}, onTapeActivate: () => {}, onDrop: () => {},
+  });
+
+  return (
+    <Shell level={level} mode="program" rootRef={rootRef} onSpeak={say} onHelp={help} busy={running} noPalette>
+      <section className="zone zone-program" data-zone="program" aria-label="El programa de Brote">{editor.program}</section>
+      <section className="level-stage" aria-label="Tablero">
+        <div className="controls">
+          {won ? <NextPage level={level} /> : (
+            <button type="button" className="btn btn-play cut" onClick={() => void run()} disabled={running} aria-label="Probar">
+              <PlayIcon /><span>Probar</span>
+            </button>
+          )}
+          <RestartButton onClick={restart} disabled={running} />
+          {nav.gold?.(level, won)}
         </div>
         <Sheets level={level} svgs={svgs} />
       </section>
@@ -452,6 +664,9 @@ function ProgramLevel({ level }: { level: LevelDef }) {
 }
 
 export function LevelScreen({ level }: { level: LevelDef }) {
-  const Mode = useMemo(() => (level.mode === 'direct' ? DirectLevel : level.mode === 'realtime' ? RealtimeLevel : ProgramLevel), [level.mode]);
+  const Mode = useMemo(
+    () => (level.mode === 'direct' ? DirectLevel : level.mode === 'realtime' ? RealtimeLevel : formatOf(level) === 'predict' ? PredictLevel : ProgramLevel),
+    [level],
+  );
   return <Mode level={level} />;
 }

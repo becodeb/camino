@@ -128,6 +128,37 @@ button.blk-count { cursor: pointer; }
 button.blk-count:disabled { cursor: default; }
 .blk-count.is-calling { animation: slot-call 1.2s ease-in-out infinite; border-color: var(--blue-ink); box-shadow: 0 0 0 3px rgba(61, 110, 165, 0.25); }
 
+/* ------------------------------------------------ fixed lines (complete and fix pages): what the teacher taped on, empty lines in place */
+.blk-tape {
+  position: absolute;
+  z-index: 4;
+  left: -13px;
+  top: -8px;
+  width: 42px;
+  height: 16px;
+  rotate: -27deg;
+  background: var(--tape);
+  pointer-events: none;
+  clip-path: polygon(0 8%, 8% 0, 16% 12%, 24% 2%, 76% 4%, 84% 12%, 92% 0, 100% 10%, 100% 90%, 92% 100%, 84% 88%, 76% 98%, 24% 96%, 16% 88%, 8% 100%, 0 92%);
+}
+.blk-tape.on-tape { left: auto; right: -14px; top: -7px; rotate: 24deg; }
+.block-program.is-fixed .blk.is-pinned { cursor: default; }
+.blk-count .count-tape {
+  position: absolute;
+  left: -12px;
+  top: 27px;
+  width: 34px;
+  height: 12px;
+  rotate: -32deg;
+  background: var(--tape);
+  pointer-events: none;
+  clip-path: polygon(0 8%, 8% 0, 16% 12%, 24% 2%, 76% 4%, 84% 12%, 92% 0, 100% 10%, 100% 90%, 92% 100%, 84% 88%, 76% 98%, 24% 96%, 16% 88%, 8% 100%, 0 92%);
+}
+button.blk-count.is-pinned { cursor: default; }
+/* a count still missing: an empty dashed disc (no number), calling for a tap */
+.blk-count.is-empty { border-style: dashed; border-color: var(--blue-ink); background: rgba(251, 247, 238, 0.55); }
+.block-program.read-only .blk, .block-program.read-only .blk-count { cursor: default; }
+
 /* ------------------------------------------------ the program */
 .block-program { user-select: none; -webkit-user-select: none; }
 .block-canvas { position: relative; }

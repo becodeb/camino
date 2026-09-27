@@ -12,6 +12,9 @@ import { drawPortrait } from './board/BoardView';
 const INK = '#2b2622';
 const PEN = '#3d6ea5';
 const STAMP = '#c9574a';
+/** The ink of a gold stamp: a darker gold, legible on paper; its disc is the palette's yellow. */
+export const GOLD_INK = '#b3822a';
+const GOLD = '#f0d27a';
 
 export function Portrait({ def, mood = 'smile', className }: { def: CharacterDef; mood?: 'smile' | 'grin'; className?: string }) {
   const ref = useRef<SVGSVGElement>(null);
@@ -21,24 +24,96 @@ export function Portrait({ def, mood = 'smile', className }: { def: CharacterDef
 
 /**
  * The rubber stamp of a finished page: a double ring and a sprouting seed, in
- * red ink. Inside another SVG (the map) it takes a place: `x`, `y` (its
- * centre) and `size`.
+ * red ink; in gold (`tone="gold"`) once the page's save-blocks challenge is
+ * solved, on a flat gold disc. Inside another SVG (the map) it takes a place:
+ * `x`, `y` (its centre) and `size`.
  */
-export const Stamp = memo(function Stamp({ seed = 1, className, x, y, size }: { seed?: number; className?: string; x?: number; y?: number; size?: number }) {
+export const Stamp = memo(function Stamp({ seed = 1, className, x, y, size, tone = 'red' }: { seed?: number; className?: string; x?: number; y?: number; size?: number; tone?: 'red' | 'gold' }) {
   const place = size != null ? { x: (x ?? 0) - size / 2, y: (y ?? 0) - size / 2, width: size, height: size } : {};
+  const ink = tone === 'gold' ? GOLD_INK : STAMP;
   return (
-    <svg className={`stamp ${className ?? ''}`} viewBox="0 0 100 100" aria-hidden="true" {...place}>
-      <g filter="url(#rough)" fill="none" stroke={STAMP} strokeLinecap="round" strokeLinejoin="round" opacity="0.88">
+    <svg className={`stamp is-${tone} ${className ?? ''}`} viewBox="0 0 100 100" aria-hidden="true" {...place}>
+      <g filter="url(#rough)" fill="none" stroke={ink} strokeLinecap="round" strokeLinejoin="round" opacity="0.9">
+        {tone === 'gold' && <path d={blob(50, 50, 44, 43, { wob: 0.02, n: 14, seed })} fill={GOLD} fillOpacity={0.7} stroke="none" />}
         <path d={blob(50, 50, 44, 43, { wob: 0.02, n: 14, seed })} strokeWidth={5.5} />
         <path d={blob(50, 50, 35, 34, { wob: 0.025, n: 12, seed: seed + 1 })} strokeWidth={2.2} strokeDasharray="3 5" />
         <path d="M50,70 C47,60 53,52 50,40" strokeWidth={4} />
-        <path d={leaf(50, 46, 33, 36, 8)} fill={STAMP} fillOpacity={0.25} strokeWidth={3.4} />
-        <path d={leaf(50, 42, 68, 30, 8)} fill={STAMP} fillOpacity={0.25} strokeWidth={3.4} />
-        <path d={blob(50, 73, 11, 8, { seed: seed + 2, n: 9 })} fill={STAMP} fillOpacity={0.35} strokeWidth={3.4} />
+        <path d={leaf(50, 46, 33, 36, 8)} fill={ink} fillOpacity={0.25} strokeWidth={3.4} />
+        <path d={leaf(50, 42, 68, 30, 8)} fill={ink} fillOpacity={0.25} strokeWidth={3.4} />
+        <path d={blob(50, 73, 11, 8, { seed: seed + 2, n: 9 })} fill={ink} fillOpacity={0.35} strokeWidth={3.4} />
       </g>
     </svg>
   );
 });
+
+/**
+ * The gold seal of a page's save-blocks challenge: a paper rosette with two
+ * ribbon tails and a sprouting seed in the middle. Waiting (not earned) it is
+ * gold with a dashed edge and a dotted seed, an invitation; earned, gold with
+ * a flat darker facet, the seed filled in and glints of pen around it.
+ */
+export const SealArt = memo(function SealArt({ earned, seed = 3 }: { earned: boolean; seed?: number }) {
+  const R = 30;
+  const pts: [number, number][] = Array.from({ length: 28 }, (_, i) => {
+    const a = (i / 28) * Math.PI * 2 - Math.PI / 2, r = i % 2 ? R - 4.5 : R;
+    return [Math.cos(a) * r, Math.sin(a) * r];
+  });
+  const edge = `M${pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' L')} Z`;
+  const ribbon = (s: number) => wobblyPoly([[s * 4, 18], [s * 16, 14], [s * 22, 50], [s * 14, 44], [s * 8, 52]], { wob: 0.6, bow: 0.8, seed: seed + (s > 0 ? 1 : 2) });
+  const face = earned ? GOLD : '#f5dc92';
+  return (
+    <svg className="seal-art" viewBox="-40 -40 80 96" aria-hidden="true">
+      <g filter="url(#rough)" stroke={INK} strokeLinejoin="round" strokeLinecap="round">
+        {[-1, 1].map((s) => <path key={s} d={ribbon(s)} fill={earned ? STAMP : '#e7a3a0'} strokeWidth={2.2} />)}
+        <path d={edge} transform="translate(3 4)" fill="rgba(84, 62, 38, 0.2)" stroke="none" />
+        <clipPath id={`seal-clip-${seed}`}><path d={edge} /></clipPath>
+        <g clipPath={`url(#seal-clip-${seed})`}>
+          <path d={edge} fill={earned ? '#d9b24e' : face} stroke="none" />
+          {earned && <path d={edge} fill={face} stroke="none" transform="translate(-4 -4)" />}
+        </g>
+        <path d={edge} fill="none" strokeWidth={2.4} strokeDasharray={earned ? undefined : '4 4'} />
+        <circle r={20} fill="none" stroke={earned ? GOLD_INK : INK} strokeWidth={1.8} strokeDasharray="2 4" opacity={earned ? 1 : 0.5} />
+        <g strokeWidth={2.2} opacity={earned ? 1 : 0.55} strokeDasharray={earned ? undefined : '2 3'}>
+          <path d="M0,9 C-2,2 2,-3 0,-10" fill="none" />
+          <path d={leaf(0, -7, -11, -14, 4.5)} fill={earned ? '#a4b86d' : 'none'} />
+          <path d={leaf(0, -9, 10, -16, 4.5)} fill={earned ? '#a4b86d' : 'none'} />
+          <path d={blob(0, 10, 7.5, 6, { seed, n: 9 })} fill={earned ? '#fbf7ee' : 'none'} />
+        </g>
+        {earned && (
+          <g stroke={PEN} strokeWidth={2.4}>
+            <path d="M-34,-30 L-28,-24 M-38,-18 L-31,-18" />
+            <path d="M33,-31 L27,-25 M37,-19 L30,-19" />
+          </g>
+        )}
+      </g>
+    </svg>
+  );
+});
+
+/** The drawn instruction of a predict page: a cell of the board with a blue pen ring ("tap where he ends"). */
+export function GuessIcon({ size = 42 }: { size?: number }) {
+  return (
+    <svg viewBox="-24 -24 48 48" width={size} height={size} aria-hidden="true" className="doodle">
+      <g filter="url(#rough)" strokeLinejoin="round" strokeLinecap="round">
+        <path d={wobblyPoly([[-19, -18], [19, -19], [18, 19], [-18, 18]], { wob: 0.6, bow: 0.8, seed: 6 })} fill="#f6efdf" stroke={INK} strokeWidth={2.2} />
+        <path d={blob(0, 2, 11, 10, { seed: 3, n: 9 })} fill="rgba(114, 152, 193, 0.18)" stroke="none" />
+        <path d={penLoop(0, 2, 13, 12, { seed: 4 })} fill="none" stroke={PEN} strokeWidth={3} />
+      </g>
+    </svg>
+  );
+}
+
+/** Several seeds to gather, drawn as a little heap (the bar's instruction stays short with three or more). */
+export function SeedsIcon({ n, size = 42 }: { n: number; size?: number }) {
+  const k = Math.min(n, 4);
+  return (
+    <span className="seeds-icon" style={{ width: size + (k - 1) * size * 0.42 }} aria-hidden="true">
+      {Array.from({ length: k }, (_, i) => (
+        <span key={i} style={{ left: i * size * 0.42, top: i % 2 ? 5 : 0 }}><SeedIcon size={size * 0.86} /></span>
+      ))}
+    </span>
+  );
+}
 
 /** A page of the tramo in the bar: blank, the one on screen, stamped, or not drawn yet (dashed). */
 export function PageIcon({ state, seed = 1 }: { state: 'todo' | 'here' | 'done' | 'future'; seed?: number }) {

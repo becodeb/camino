@@ -7,14 +7,20 @@
 // taps and resolved drops (game/editor.ts) and draws the marks it is given.
 // Ported from habilidades (app/src/areas/algorithmic/ui/BlockEditor.tsx @
 // 9b90d1d) without the event log and with the notebook's N lines.
+//
+// "Complete" and "fix" pages keep every line in place (`lines: 'fixed'`): a
+// block taken out leaves its line empty (dashed) and a block brought in lands
+// on an empty line; tapes never move; what the teacher wrote on a complete
+// page is taped to it (pinned). Predict pages only show the program (`read`).
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { REDUCED } from '../ui/runtime';
 import {
-  DIMS, blockHeight, layoutProgram, refusal, removeAt, resolveDrop, sameSlot, slotAt, slotKey,
+  DIMS, blockHeight, emptyLine, holeAt, layoutProgram, refusal, removeAt, resolveDrop, resolveLinesDrop, sameSlot, slotAt, slotKey,
   type Block, type BlockRef, type Dims, type DragSource, type DropResult, type DropZone, type Layout, type Placed, type Slot,
 } from '../game/editor';
+import type { Pins } from '../game/formats';
 import type { BlockLabel, PaletteBlock } from '../game/levels';
 import { cardCount, type Program } from '../game/model';
 import { BlockArt, Pips, Ring, SnapMarks, blockStyle, fillOf, isCond, refKey, type BlockLook } from './blocks';
@@ -38,7 +44,16 @@ export interface Marks {
   iteration?: { item: number; iter: number } | null;
   /** Several worlds: a strip of that sheet's tape stuck on the block that bumped there. */
   pins?: { key: string; tone: string }[];
+  /** Fixed lines: the empty line taking the next tap (its refKey); the first one by default. */
+  activeHole?: string | null;
+  /** Fixed lines: the run ended short and a line is still empty: it calls. */
+  hintHole?: boolean;
+  /** Something pinned was tapped (a card's refKey, or `count:<item>`): it wiggles, it does not move. */
+  wiggle?: { key: string; n: number };
 }
+
+/** How the notebook's lines behave: blocks slide (`free`), every line stays in place (`fixed`), or nothing moves (`read`). */
+export type LinesMode = 'free' | 'fixed' | 'read';
 
 export interface EditorProps {
   blocks: PaletteBlock[];
@@ -56,10 +71,16 @@ export interface EditorProps {
   refused?: { n: number; block: Block; from: DOMRect } | null;
   /** The ghost hand is working the notebook: nothing reacts, nothing dims. */
   inert?: boolean;
+  /** How the lines behave (see LinesMode); `free` by default. */
+  lines?: LinesMode;
+  /** Fixed lines: what is taped to the page (complete pages). */
+  pinned?: Pins;
   onTapPalette: (block: Block, el: HTMLElement) => void;
   onTapBlock: (ref: BlockRef) => void;
   onTapeCount: (item: number) => void;
   onTapeActivate: (item: number | null) => void;
+  /** Fixed lines: an empty line was tapped. */
+  onTapHole?: (ref: BlockRef) => void;
   onDragStart?: () => void;
   onDrop: (result: DropResult, src: DragSource) => void;
 }
@@ -112,6 +133,8 @@ interface Fly { key: number; look: BlockLook; x: number; y: number; to: { x: num
 /** The palette and the program of one level, as two nodes for the two zones of the level screen. */
 export function useBlockEditor(props: EditorProps): { palette: ReactNode; program: ReactNode } {
   const p = { ...props, label: props.label ?? 'picture' };
+  const mode: LinesMode = p.lines ?? 'free';
+  const fixed = mode === 'fixed', read = mode === 'read', still = mode !== 'free';
   const rows = p.program.reduce((n, it) => n + (it.t === 'cmd' ? 1 : it.body.length + 1), 0) + Math.max(0, (p.maxCards ?? 0) - cardCount(p.program));
   const size = sizeForRows(rows);
   const d: Dims = useMemo(() => dimsFor(p.label, size), [p.label, size]);
@@ -124,6 +147,9 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
   const [drag, setDrag] = useState<Drag | null>(null);
   const [gap, setGap] = useState<Slot | null>(null);
   const gapRef = useRef<Slot | null>(null);
+  /** Fixed lines: the empty line under the dragged block (its refKey). */
+  const [target, setTarget] = useState<string | null>(null);
+  const targetRef = useRef<string | null>(null);
   const [fly, setFly] = useState<Fly | null>(null);
   const [snap, setSnap] = useState<{ key: string; dx: number; dy: number; n: number } | null>(null);
   const propsRef = useRef(p);
@@ -139,17 +165,22 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
     return { kind: 'cmd', cmd: b.cmd, fill: fillOf(b.cmd), w: dd.w, h: dd.h };
   }, []);
 
-  // what the program shows: while a program block is dragged, the program without it
-  const base = useMemo(() => (drag?.src.from === 'program' ? removeAt(p.program, drag.src.ref).program : p.program), [drag, p.program]);
+  // what the program shows: while a program block is dragged, the program without it (fixed lines: its line empty)
+  const base = useMemo(() => {
+    if (drag?.src.from !== 'program') return p.program;
+    return fixed ? emptyLine(p.program, drag.src.ref) : removeAt(p.program, drag.src.ref).program;
+  }, [drag, p.program, fixed]);
   const free = p.maxCards != null ? Math.max(0, p.maxCards - cardCount(p.program)) : null;
   // while a notebook block is lifted, its line shows as free (it is not counted until dropped)
   const freeShown = free != null ? free + (drag?.src.from === 'program' ? cardCount([drag.src.block]) : 0) : null;
   const layout: Layout = useMemo(() => layoutProgram(base, {
-    dims: d, isCond, gap, gapBlock: drag?.src.block ?? null,
-    ...(freeShown != null ? { emptySlots: freeShown } : { endSlot: !drag }),
-    activeTape: drag ? null : p.marks.activeTape,
-  }), [base, d, gap, drag, freeShown, p.marks.activeTape]);
-  const hitLayout = useMemo(() => layoutProgram(base, { dims: d, isCond }), [base, d]);
+    dims: d, isCond,
+    ...(still
+      ? { emptySlots: 0, activeHole: p.marks.activeHole ?? undefined }
+      : { gap, gapBlock: drag?.src.block ?? null, ...(freeShown != null ? { emptySlots: freeShown } : { endSlot: !drag }) }),
+    activeTape: drag || still ? null : p.marks.activeTape,
+  }), [base, d, gap, drag, freeShown, p.marks.activeTape, p.marks.activeHole, still]);
+  const hitLayout = useMemo(() => layoutProgram(base, { dims: d, isCond, ...(still ? { emptySlots: 0 } : {}) }), [base, d, still]);
   const hitRef = useRef(hitLayout);
   hitRef.current = hitLayout;
 
@@ -171,6 +202,35 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
     const slot = slotAt(hitRef.current, probe, dr.src.block);
     const prog = dr.src.from === 'program' ? removeAt(propsRef.current.program, dr.src.ref).program : propsRef.current.program;
     return refusal(prog, slot, dr.src.block, { maxCards: dr.src.from === 'palette' ? propsRef.current.maxCards : undefined, moving: dr.src.from === 'program' }) ? null : slot;
+  };
+
+  /** Fixed lines: the empty line under the middle of the dragged block, or null. */
+  const holeFor = (dr: Drag, x: number, y: number): BlockRef | null => {
+    if (zoneAt(x, y) !== 'program') return null;
+    const cr = canvasRef.current?.getBoundingClientRect();
+    if (!cr) return null;
+    return holeAt(hitRef.current, x - dr.offX + dr.look.w / 2 - cr.left, y - dr.offY + dr.look.h / 2 - cr.top);
+  };
+
+  /** Fixed lines: a release lands on an empty line, goes back where it was, or (off the notebook) empties its line. */
+  const finishLines = (dr: Drag, x: number, y: number, cancelled: boolean) => {
+    const cur = propsRef.current;
+    const t = cancelled ? null : holeFor(dr, x, y);
+    const res: DropResult = cancelled ? { program: null, outcome: 'cancel' } : resolveLinesDrop(cur.program, dr.src, t, { overProgram: zoneAt(x, y) === 'program' });
+    const gx = x - dr.offX, gy = y - dr.offY;
+    if ((res.outcome === 'add' || res.outcome === 'move') && t) {
+      const after = layoutProgram(res.program!, { dims: d, isCond, emptySlots: 0 });
+      const at = after.items.find((it) => it.ref && !it.hole && it.kind === 'cmd' && refKey(it.ref) === refKey(t));
+      const cr = canvasRef.current?.getBoundingClientRect();
+      if (at && cr) setSnap((o) => ({ key: at.key, dx: gx - (cr.left + at.x), dy: gy - (cr.top + at.y), n: (o?.n ?? 0) + 1 }));
+    } else if (!REDUCED && res.outcome !== 'noop') {
+      const home = dr.src.from === 'palette' ? dr.el.getBoundingClientRect() : null;
+      setFly({ key: performance.now(), look: dr.look, x: gx, y: gy, to: res.outcome === 'remove' ? null : home ? { x: home.left, y: home.top } : { x: gx, y: gy } });
+    }
+    targetRef.current = null;
+    setTarget(null);
+    setDrag(null);
+    cur.onDrop(res, dr.src);
   };
 
   const placeGhost = (x: number, y: number) => {
@@ -197,6 +257,7 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
     if (!dr) return;
     suppressClick.current = true;
     setTimeout(() => { suppressClick.current = false; }, 0);
+    if (propsRef.current.lines === 'fixed') { finishLines(dr, x, y, cancelled); return; }
     const slot = cancelled ? null : slotFor(dr, x, y);
     const cur = propsRef.current;
     let res: DropResult = cancelled ? { program: null, outcome: 'cancel' } : resolveDrop(cur.program, dr.src, slot, { maxCards: cur.maxCards });
@@ -233,6 +294,11 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
       }
       e.preventDefault();
       placeGhost(e.clientX, e.clientY);
+      if (propsRef.current.lines === 'fixed') {
+        const t = refKey(holeFor(dragRef.current!, e.clientX, e.clientY)) || null;
+        if (t !== targetRef.current) { targetRef.current = t; setTarget(t); }
+        return;
+      }
       const s = slotFor(dragRef.current!, e.clientX, e.clientY);
       if (!sameSlot(s, gapRef.current)) { gapRef.current = s; setGap(s); }
     };
@@ -261,7 +327,9 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
   }, [d, lookOf]);
 
   const down = (src: DragSource) => (e: ReactPointerEvent<HTMLElement>) => {
-    if (p.disabled || p.inert) return;
+    if (p.disabled || p.inert || read) return;
+    // fixed lines: tapes stay where they are, and what is taped to the page does not lift
+    if (fixed && src.from === 'program' && (src.block.t === 'loop' || p.pinned?.cards.has(refKey(src.ref)))) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (pending.current) return;
     pending.current = { src, el: e.currentTarget, x0: e.clientX, y0: e.clientY, id: e.pointerId };
@@ -318,6 +386,15 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
     ], { duration: 720, easing: 'ease-out' });
   }, [p.marks.culprit, p.marks.culpritN]);
 
+  // something taped to the page was tapped: it wiggles a little and stays
+  useLayoutEffect(() => {
+    const w = p.marks.wiggle;
+    if (!w || REDUCED) return;
+    const el = canvasRef.current?.querySelector<HTMLElement>(`[data-pin="${CSS.escape(w.key)}"]`);
+    el?.animate([{ rotate: '0deg' }, { rotate: '-4deg', offset: 0.25 }, { rotate: '3deg', offset: 0.55 }, { rotate: '-1.5deg', offset: 0.8 }, { rotate: '0deg' }], { duration: 420, easing: 'ease-out' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.marks.wiggle?.n]);
+
   const click = (fn: () => void) => () => {
     if (suppressClick.current || propsRef.current.inert) return;
     fn();
@@ -359,6 +436,29 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
         </div>
       );
     }
+    if (it.hole) {
+      // an empty line in place: the next tap on the palette lands on the active one; a drag lands on the one under it
+      const hk = refKey(it.ref);
+      const here = !!it.active && !drag;
+      const cls = `blk blk-slot is-hole${here ? ' is-active' : ''}${target === hk ? ' is-gap' : ''}${here && m.hintHole ? ' is-hinted' : ''}`;
+      return (
+        <div
+          key={it.key}
+          data-key={it.key}
+          data-hole={hk}
+          className={cls}
+          style={style}
+          role={read ? undefined : 'button'}
+          aria-label="Renglón vacío"
+          onClick={read || p.disabled ? undefined : click(() => p.onTapHole?.(it.ref!))}
+        >
+          <svg className="blk-shape" width={it.w} height={it.h} viewBox={`0 0 ${it.w} ${it.h}`} aria-hidden="true">
+            <rect x={3} y={3} width={it.w - 6} height={it.h - 6} rx={9} className="blk-hole" />
+          </svg>
+          {here && m.hintHole && <Ring seed={5} tone="hint" dur={480} />}
+        </div>
+      );
+    }
     if (it.kind === 'slot' || it.kind === 'gap') {
       const first = it.kind === 'slot' && it.slot!.tape == null && !!it.active;
       const hinted = first && !!m.hintSlot;
@@ -389,31 +489,40 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
       <span key={x.tone} className="blk-pin" style={{ background: x.tone, right: -20, top: `calc(50% - 8px + ${j * 16}px)` } as CSSProperties} aria-hidden="true" />
     ));
     const src: DragSource = { from: 'program', ref, block: blockNode };
+    // taped to the page (complete pages): a strip of paper tape holds it, it does not come off
+    const pinned = it.kind === 'loop' ? !!p.pinned?.tapes.has(ref.item) : !!p.pinned?.cards.has(k);
     const cls = ['blk', `blk-${look.kind}`];
     if (m.current === k || (it.kind === 'loop' && m.current?.startsWith(`${ref.item}:`))) cls.push('is-current');
     if (m.done?.has(k)) cls.push('is-done');
     if (m.culprit === k) cls.push('is-culprit');
     if (it.kind === 'loop' && m.activeTape === ref.item) cls.push('is-active');
     if (snap?.key === it.key) cls.push('is-snapped');
+    if (pinned) cls.push('is-pinned');
     const marks = (
       <>
         {it.kind !== 'loop' && m.current === k && <Ring seed={i + 3} />}
         {snap?.key === it.key && !REDUCED && <SnapMarks key={snap.n} w={it.w} />}
+        {pinned && <span className={`blk-tape${it.kind === 'loop' ? ' on-tape' : ''}`} aria-hidden="true" />}
         {pins}
       </>
     );
     if (it.kind === 'loop') {
       const loop = blockNode as Extract<Block, { t: 'loop' }>;
+      const missing = loop.count === 0;
+      const countPinned = !!p.pinned?.counts.has(ref.item);
+      const calling = m.hintCount === ref.item || (missing && !p.disabled && !read);
       const count = loop.count === 'goal' ? null : (
         <button
           type="button"
-          className={`blk-count tape-count${m.hintCount === ref.item ? ' is-calling' : ''}`}
-          disabled={p.disabled}
-          aria-label={`Repetir ${loop.count} veces. Tocar para cambiar.`}
+          className={`blk-count tape-count${calling ? ' is-calling' : ''}${missing ? ' is-empty' : ''}${countPinned ? ' is-pinned' : ''}`}
+          disabled={p.disabled || read}
+          aria-label={missing ? 'Falta el número de veces. Tocar para ponerlo.' : `Repetir ${loop.count} veces.${countPinned ? '' : ' Tocar para cambiar.'}`}
+          data-pin={countPinned ? `count:${ref.item}` : undefined}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); if (!suppressClick.current && !propsRef.current.inert) p.onTapeCount(ref.item); }}
         >
-          <b key={loop.count} className="count-digit">{loop.count}</b>
+          {missing ? null : <b key={loop.count} className="count-digit">{loop.count}</b>}
+          {countPinned && <span className="count-tape" aria-hidden="true" />}
         </button>
       );
       return (
@@ -421,13 +530,14 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
           key={it.key}
           data-key={it.key}
           data-ref={k}
+          data-pin={pinned ? k : undefined}
           className={cls.join(' ')}
           style={style}
-          role="button"
-          tabIndex={p.disabled ? -1 : 0}
+          role={read ? undefined : 'button'}
+          tabIndex={p.disabled || read ? -1 : 0}
           aria-label="Bloque que repite. Tocar para poner bloques adentro."
           onPointerDown={down(src)}
-          onClick={p.disabled ? undefined : click(() => p.onTapeActivate(m.activeTape === ref.item ? null : ref.item))}
+          onClick={p.disabled || read ? undefined : click(() => (fixed ? p.onTapBlock(ref) : p.onTapeActivate(m.activeTape === ref.item ? null : ref.item)))}
         >
           <BlockArt look={look} d={d} seed={ref.item + 2} count={count} label={p.label} pips={false} />
           {marks}
@@ -439,10 +549,11 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
         key={it.key}
         data-key={it.key}
         data-ref={k}
+        data-pin={pinned ? k : undefined}
         type="button"
         className={cls.join(' ')}
         style={style}
-        disabled={p.disabled}
+        disabled={p.disabled || read}
         aria-label={`Bloque ${it.cmd}`}
         onPointerDown={down(src)}
         onClick={click(() => p.onTapBlock(ref))}
@@ -454,7 +565,7 @@ export function useBlockEditor(props: EditorProps): { palette: ReactNode; progra
   };
 
   const program = (
-    <div className={`block-program${drag ? ' is-dragging' : ''}`}>
+    <div className={`block-program${drag ? ' is-dragging' : ''}${read ? ' read-only' : ''}${fixed ? ' is-fixed' : ''}`}>
       <div ref={canvasRef} className="block-canvas" style={{ width: layout.width + 24, height: layout.height + 16 }}>
         {layout.items.filter((it) => it.kind === 'loop').map((it, i) => itemNode(it, i))}
         {layout.items.filter((it) => it.kind !== 'loop').map((it, i) => itemNode(it, i))}

@@ -26,23 +26,33 @@ export const hasFixedLines = (l: Pick<LevelDef, 'format'>) => formatOf(l) === 'c
 /** What the notebook holds when the page opens, and again after ↺. */
 export const startProgram = (l: LevelDef): Program => (formatOf(l) === 'solve' ? [] : structuredClone(l.given ?? []));
 
+export interface Pins {
+  /** Cards (refKeys). */
+  cards: Set<string>;
+  /** Counts of tapes (their item). */
+  counts: Set<number>;
+  /** Tapes (their item): the C-block itself. */
+  tapes: Set<number>;
+}
+
 /**
- * A complete page: every card and every count already written is pinned to
+ * A complete page: every card, tape and count already written is pinned to
  * the page (it does not move); the empty lines and the missing counts (0) are
  * the child's. Other formats pin nothing.
  */
-export function pinsOf(l: LevelDef): { cards: Set<string>; counts: Set<number> } {
-  const cards = new Set<string>(), counts = new Set<number>();
-  if (formatOf(l) !== 'complete') return { cards, counts };
+export function pinsOf(l: LevelDef): Pins {
+  const pins: Pins = { cards: new Set(), counts: new Set(), tapes: new Set() };
+  if (formatOf(l) !== 'complete') return pins;
   (l.given ?? []).forEach((it, item) => {
     if (it.t === 'cmd') {
-      if (!isHole(it.cmd)) cards.add(refKey({ item }));
+      if (!isHole(it.cmd)) pins.cards.add(refKey({ item }));
       return;
     }
-    it.body.forEach((c, inner) => { if (!isHole(c)) cards.add(refKey({ item, inner })); });
-    if (it.count !== 0) counts.add(item);
+    pins.tapes.add(item);
+    it.body.forEach((c, inner) => { if (!isHole(c)) pins.cards.add(refKey({ item, inner })); });
+    if (it.count !== 0) pins.counts.add(item);
   });
-  return { cards, counts };
+  return pins;
 }
 
 /** A predict board has no goal: Brote never "arrives", the child's ring is the only target. */

@@ -15,8 +15,8 @@ import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { RestartIcon } from '../ui/icons';
 import { NextPageArt } from '../ui/art';
 import { notebookWidth } from '../blocks/BlockEditor';
-import { GRADES, nextLevel, type LevelDef } from '../game/levels';
-import { cmdProgram } from '../game/model';
+import { GRADES, nextLevel, type LevelDef, type PaletteBlock } from '../game/levels';
+import { cmdProgram, type Program } from '../game/model';
 import { stamp, useStamps } from '../game/progress';
 import { BROTE, LevelBar, TramoPages } from './LevelBar';
 
@@ -50,8 +50,18 @@ export interface LevelNav {
   pages(level: LevelDef): ReactNode;
   /** The adult's small print in the bar. */
   title(level: LevelDef): ReactNode;
-  /** The page was won (its stamp, its seed). */
-  won(level: LevelDef): void;
+  /**
+   * The page was won with this program (its stamp, its seed, its gold). May
+   * return the line to say instead of "¡Lo lograste!" (the gold seal's invitation).
+   */
+  won(level: LevelDef, program?: Program): string | void;
+  /**
+   * In the controls, next to the next-page button: the gold seal of a page
+   * with a save-blocks challenge, once the page is solved (`won`: just now).
+   */
+  gold?(level: LevelDef, won: boolean): ReactNode;
+  /** In the notebook, under the program (the gold challenge's note of the child's long plan). */
+  notebook?: ReactNode;
   /** Where "next page" goes. */
   next(level: LevelDef): void;
   /** Where "salir" goes. */
@@ -113,6 +123,16 @@ export function goNext(level: LevelDef) {
   location.hash = n ? `#/nivel/${n.id}` : '#/';
 }
 
+/**
+ * The notebook's width comes from the blocks the page can make; a page that
+ * brings no blocks (a complete page missing only a count) still holds its
+ * given program's tapes.
+ */
+export function notebookBlocks(level: LevelDef): PaletteBlock[] {
+  const tapes = (level.given ?? []).some((it) => it.t === 'loop') && !level.blocks.includes('repeat') ? ['repeat'] : [];
+  return [...level.blocks, ...tapes];
+}
+
 export function Sheet({ svgRef, level }: { svgRef: React.RefObject<SVGSVGElement | null>; level: LevelDef }) {
   const b = level.worlds[0];
   const nav = useLevelNav();
@@ -152,6 +172,8 @@ export interface ShellProps {
   mode: 'direct' | 'program' | 'realtime';
   /** The notebook's width, when the page's notebook is not a program's (3ro rule cards). */
   notebookW?: number;
+  /** No palette zone (predict pages, pages with nothing to bring): the notebook moves left. */
+  noPalette?: boolean;
   rootRef: React.RefObject<HTMLElement | null>;
   onSpeak: () => void;
   onHelp: () => void;
@@ -159,18 +181,19 @@ export interface ShellProps {
   children: ReactNode;
 }
 
-export function Shell({ level, mode, rootRef, onSpeak, onHelp, busy, children, notebookW }: ShellProps) {
+export function Shell({ level, mode, rootRef, onSpeak, onHelp, busy, children, notebookW, noPalette }: ShellProps) {
   const nav = useLevelNav();
   return (
     <main
       ref={rootRef}
-      className={`level mode-${mode}${nav.className ? ` ${nav.className}` : ''}`}
+      className={`level mode-${mode}${noPalette ? ' no-palette' : ''}${nav.className ? ` ${nav.className}` : ''}`}
       data-level={level.id}
+      data-format={level.format ?? undefined}
       data-busy={busy ? 'true' : undefined}
       style={{
         '--aspect': aspectOf(level.worlds[0], frameFor(level)).toFixed(3),
         '--n': level.worlds.length,
-        '--notebook-w': `${notebookW ?? notebookWidth(level.blocks, level.blockLabel)}px`,
+        '--notebook-w': `${notebookW ?? notebookWidth(notebookBlocks(level), level.blockLabel)}px`,
       } as CSSProperties}
     >
       <LevelBar level={level} title={nav.title(level)} pages={nav.pages(level)} aside={nav.aside} onSpeak={onSpeak} onHelp={onHelp} />

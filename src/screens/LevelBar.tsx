@@ -7,7 +7,7 @@ import { Fragment, type ReactNode } from 'react';
 import { CHARACTERS } from '../ink/characters.js';
 import { GRADES, levelsOf, type LevelDef } from '../game/levels';
 import { HelpIcon, SpeakerIcon } from '../ui/icons';
-import { JarIcon, PageIcon, PenRing, Portrait, PotIcon, SeedIcon, Stamp, ThenArrow } from '../ui/art';
+import { GuessIcon, JarIcon, PageIcon, PenRing, Portrait, PotIcon, SeedIcon, SeedsIcon, Stamp, ThenArrow } from '../ui/art';
 
 export const BROTE = CHARACTERS[0];
 
@@ -37,17 +37,25 @@ export function TramoPages({ current, stamps }: { current: string; stamps: Reado
   );
 }
 
-/** The instruction, drawn: Brote, then what he goes to fetch, then where he takes it (3ro page 2: seeds into the jar). */
+/**
+ * The instruction, drawn: Brote, then what he goes to fetch, then where he
+ * takes it (3ro page 2: seeds into the jar). Three seeds or more make one
+ * little heap, so the bar stays short. A predict page: Brote, then a cell
+ * circled in pen (tap where he will end).
+ */
 export function DrawnInstruction({ level }: { level: LevelDef }) {
   const b = level.worlds[0];
-  const chain = b.goalKind === 'none' ? ['seed' as const, 'jar' as const] : [...b.pickups.map(() => 'seed' as const), b.goalKind];
+  type Step = 'seed' | 'seeds' | 'pot' | 'jar' | 'guess';
+  const chain: Step[] = level.format === 'predict' ? ['guess']
+    : b.goalKind === 'none' ? ['seed', 'jar']
+      : [...(b.pickups.length >= 3 ? ['seeds' as const] : b.pickups.map(() => 'seed' as const)), b.goalKind];
   return (
     <span className="drawn-task" aria-hidden="true">
       <Portrait def={BROTE} className="bar-face" />
       {chain.map((k, i) => (
         <Fragment key={i}>
           <ThenArrow />
-          {k === 'pot' ? <PotIcon size={42} /> : k === 'jar' ? <JarIcon size={42} /> : <SeedIcon size={42} />}
+          {k === 'pot' ? <PotIcon size={42} /> : k === 'jar' ? <JarIcon size={42} /> : k === 'guess' ? <GuessIcon size={42} /> : k === 'seeds' ? <SeedsIcon n={b.pickups.length} size={40} /> : <SeedIcon size={42} />}
         </Fragment>
       ))}
     </span>
