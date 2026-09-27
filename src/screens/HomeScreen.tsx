@@ -6,20 +6,34 @@
 import { memo, useEffect, type CSSProperties } from 'react';
 import { blob, leaf, rng, wobblyLine, wobblyPoly } from '../ink/ink.js';
 import { GRADES, LEVELS, levelsOf, type LevelDef } from '../game/levels';
-import type { Board } from '../game/model';
+import { visibleFrom, type Board } from '../game/model';
 import { stamp, useStamps } from '../game/progress';
 import { Portrait, Stamp } from '../ui/art';
 import { BROTE } from './LevelBar';
 
 const INK = '#2b2622';
 
-/** A small drawing of a level's board: grid, start mark, rocks, seeds, the goal. */
-const BoardThumb = memo(function BoardThumb({ b }: { b: Board }) {
+/** A small drawing of a level: its board, or its worlds stacked (2do page 2). */
+function LevelThumb({ level }: { level: LevelDef }) {
+  if (level.worlds.length === 1) return <BoardThumb b={level.worlds[0]} fog={level.fog} />;
+  return (
+    <span className="thumb-stack">
+      {level.worlds.map((b, i) => <BoardThumb key={i} b={b} />)}
+    </span>
+  );
+}
+
+/** A small drawing of a board: grid, start mark, rocks, seeds, the goal; in the fog only what Brote sees. */
+const BoardThumb = memo(function BoardThumb({ b, fog }: { b: Board; fog?: boolean }) {
   const S = 40, w = b.cols * S, h = b.rows * S;
   const R = rng(b.seed);
   const cx = (c: number) => c * S + S / 2, cy = (r: number) => r * S + S / 2;
+  const seen = fog ? visibleFrom(b, b.start) : [];
+  const fogged: [number, number][] = [];
+  if (fog) for (let r = 0; r < b.rows; r++) for (let c = 0; c < b.cols; c++) if (!seen.some((x) => x.c === c && x.r === r)) fogged.push([c, r]);
   return (
     <svg className="thumb" viewBox={`-6 -6 ${w + 12} ${h + 12}`} aria-hidden="true">
+      <defs><clipPath id={`thumb-clip-${b.seed}`}><rect x={0} y={0} width={w} height={h} /></clipPath></defs>
       <g filter="url(#rough)">
         <rect x={0} y={0} width={w} height={h} fill="#f6efdf" />
         {Array.from({ length: b.cols - 1 }, (_, i) => (
@@ -41,6 +55,14 @@ const BoardThumb = memo(function BoardThumb({ b }: { b: Board }) {
             <rect x={cx(b.goal.c) - 12} y={cy(b.goal.r) - 7} width={24} height={6} rx={2} fill="#de8a56" stroke={INK} strokeWidth={2} />
           </g>
         ) : <ThumbSeed x={cx(b.goal.c)} y={cy(b.goal.r)} big />}
+        {fog && (
+          <g clipPath={`url(#thumb-clip-${b.seed})`}>
+            {fogged.map(([c, r]) => {
+              const d = blob(cx(c), cy(r), S * 0.7, S * 0.68, { wob: 0.1, n: 9, seed: b.seed + c * 7 + r * 13 });
+              return <g key={`${c},${r}`}><path d={d} fill="#e3dac6" /><path d={d} fill="url(#fog-hatch)" /></g>;
+            })}
+          </g>
+        )}
       </g>
     </svg>
   );
@@ -75,7 +97,7 @@ function PageCard({ level, stamped, next }: { level: LevelDef; stamped: boolean;
   return (
     <a className={`page-card cut${next ? ' is-next' : ''}${stamped ? ' is-done' : ''}`} href={`#/nivel/${level.id}`} aria-label={`${level.title}${stamped ? ' (hecha)' : ''}`}>
       <span className="page-no" aria-hidden="true"><b>{level.page}</b></span>
-      <BoardThumb b={level.worlds[0]} />
+      <LevelThumb level={level} />
       {stamped && <Stamp seed={level.page + 2} className="page-stamp" />}
       {next && <Portrait def={BROTE} className="page-brote" />}
     </a>
