@@ -55,6 +55,36 @@
   stroke-linecap: round;
 }
 
+/* a block's word (1ro on): Andika, the first readers' face; under the picture in 1ro, before it in 2do */
+.blk-word { flex: none; font: 700 15px/1.02 var(--body); color: var(--ink); text-align: center; white-space: pre-line; }
+.blk-labeled { display: flex; align-items: center; gap: 5px; }
+.blk-labeled.is-picture-word { flex-direction: column; gap: 0; }
+.blk-labeled.is-picture-word .blk-word { font-size: 14px; margin-top: -3px; }
+.blk-labeled.is-word-picture .blk-word { text-align: left; max-width: 96px; }
+.blk-labeled > svg { flex: none; overflow: visible; }
+.blk-arm.is-goal .blk-labeled.is-word-picture .blk-word { font-size: 14px; max-width: none; }
+.blk-mouth-sign .blk-labeled.is-word-picture .blk-word { font-size: 15px; }
+
+/* the passes of a counted repeat: dots on its foot, filled in blue pen as they run */
+.blk-foot { position: absolute; left: 0; right: 0; pointer-events: none; }
+.blk-foot-over { position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; transition: transform 0.18s ease-out; }
+.blk-pips { position: absolute; left: 0; top: 0; overflow: visible; }
+.pip-now { transform-box: fill-box; transform-origin: center; animation: pip-in 260ms ease-out both; }
+@keyframes pip-in { 0% { scale: 0.3; } 65% { scale: 1.4; } 100% { scale: 1; } }
+
+/* several worlds: a strip of the sheet's tape stuck on the block that bumped there */
+.blk-pin {
+  position: absolute;
+  z-index: 4;
+  width: 40px;
+  height: 16px;
+  rotate: 24deg;
+  pointer-events: none;
+  clip-path: polygon(0 8%, 8% 0, 16% 12%, 24% 2%, 76% 4%, 84% 12%, 92% 0, 100% 10%, 100% 90%, 92% 100%, 84% 88%, 76% 98%, 24% 96%, 16% 88%, 8% 100%, 0 92%);
+  animation: pin-in 300ms cubic-bezier(.3,.6,.35,1) both;
+}
+@keyframes pin-in { 0% { scale: 1.8; opacity: 0; } 100% { scale: 1; opacity: 1; } }
+
 /* the count of a tape: a paper disc with the number (tap to change it) */
 .blk-count {
   position: relative;
@@ -71,8 +101,10 @@
   filter: url(#rough);
 }
 .blk-count b { font: 700 20px/1 var(--body); }
+.count-digit { display: inline-block; animation: pop-in 240ms ease-out both; }
 button.blk-count { cursor: pointer; }
 button.blk-count:disabled { cursor: default; }
+.blk-count.is-calling { animation: slot-call 1.2s ease-in-out infinite; border-color: var(--blue-ink); box-shadow: 0 0 0 3px rgba(61, 110, 165, 0.25); }
 
 /* ------------------------------------------------ the program */
 .block-program { user-select: none; -webkit-user-select: none; }

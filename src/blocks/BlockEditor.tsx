@@ -12,12 +12,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { createPortal } from 'react-dom';
 import { REDUCED } from '../ui/runtime';
 import {
-  DIMS, blockHeight, layoutProgram, refusal, removeAt, resolveDrop, sameSlot, slotAt,
+  DIMS, blockHeight, layoutProgram, refusal, removeAt, resolveDrop, sameSlot, slotAt, slotKey,
   type Block, type BlockRef, type Dims, type DragSource, type DropResult, type DropZone, type Layout, type Placed, type Slot,
 } from '../game/editor';
-import type { PaletteBlock } from '../game/levels';
+import type { BlockLabel, PaletteBlock } from '../game/levels';
 import { cardCount, type Program } from '../game/model';
-import { BlockArt, Ring, SnapMarks, blockStyle, fillOf, refKey, type BlockLook } from './blocks';
+import { BlockArt, Pips, Ring, SnapMarks, blockStyle, fillOf, isCond, refKey, type BlockLook } from './blocks';
 import './blocks.css';
 
 export interface Marks {
@@ -30,14 +30,20 @@ export interface Marks {
   culpritN?: number;
   /** The program ran out before the goal: the first free line calls. */
   hintSlot?: boolean;
+  /** …or, with a counted repeat, its number calls ("more times"). */
+  hintCount?: number | null;
   /** Tape receiving new cards. */
   activeTape?: number | null;
-  /** Tape pass shown during a run. */
+  /** Tape pass shown during a run (and left on it afterwards: "it went round this many times"). */
   iteration?: { item: number; iter: number } | null;
+  /** Several worlds: a strip of that sheet's tape stuck on the block that bumped there. */
+  pins?: { key: string; tone: string }[];
 }
 
 export interface EditorProps {
   blocks: PaletteBlock[];
+  /** How blocks carry their word (design rule 5); sala 5 blocks are pictures only. */
+  label?: BlockLabel;
   program: Program;
   marks: Marks;
   /** Running or over: nothing reacts. */
@@ -46,6 +52,10 @@ export interface EditorProps {
   maxCards?: number;
   /** Bumps to shake the notebook (it is full). */
   shake?: number;
+  /** A tapped block that did not fit: it drops onto the full page and falls off (bump `n` to replay). */
+  refused?: { n: number; block: Block; from: DOMRect } | null;
+  /** The ghost hand is working the notebook: nothing reacts, nothing dims. */
+  inert?: boolean;
   onTapPalette: (block: Block, el: HTMLElement) => void;
   onTapBlock: (ref: BlockRef) => void;
   onTapeCount: (item: number) => void;
@@ -55,11 +65,31 @@ export interface EditorProps {
 }
 
 /** Big blocks for small hands: every target well over 48 px. */
-export const DIMS_KIDS: Dims = { w: 104, h: 72, start: 72, arm: 62, spine: 24, foot: 24, cw: 160, condMouth: 44 };
+export const DIMS_KIDS: Dims = { w: 104, h: 72, start: 72, arm: 62, spine: 24, foot: 30, cw: 160, condMouth: 44 };
+
+/** The blocks' sizes for a grade: C-blocks with words ahead of their picture (2do) need a wider arm. */
+export function dimsFor(label: BlockLabel, compact = false): Dims {
+  const d = compact ? DIMS : DIMS_KIDS;
+  return label === 'word-picture' ? { ...d, cw: compact ? 150 : 180 } : d;
+}
+
+/**
+ * The notebook's width for a level, fixed for the whole page so the board
+ * never moves while the program grows: the widest block the palette can
+ * make (a tape holding a "si" block, a tape, or a card), plus the margin, the
+ * room a running block slides right, and its pen ring.
+ */
+export function notebookWidth(blocks: readonly PaletteBlock[], label: BlockLabel): number {
+  const d = dimsFor(label);
+  const cond = blocks.some((b) => isCond(b));
+  const tape = blocks.some((b) => b === 'repeat' || b === 'repeat-goal');
+  const inner = cond ? d.cw : d.w;
+  const widest = tape ? Math.max(d.cw, d.spine + inner + 16) : cond ? d.cw : d.w;
+  return 50 + widest + 16 + 30;
+}
 
 const THRESHOLD = 8;
 const CUTS = ['13px 9px 15px 10px / 9px 14px 10px 15px', '10px 15px 9px 13px / 14px 9px 15px 10px'];
-const noCond = () => false;
 
 export const paletteBlock = (id: PaletteBlock): Block =>
   (id === 'repeat' ? { t: 'loop', count: 2, body: [] } : id === 'repeat-goal' ? { t: 'loop', count: 'goal', body: [] } : { t: 'cmd', cmd: id });
@@ -69,9 +99,10 @@ interface Drag extends Pending { offX: number; offY: number; look: BlockLook; x:
 interface Fly { key: number; look: BlockLook; x: number; y: number; to: { x: number; y: number } | null }
 
 /** The palette and the program of one level, as two nodes for the two zones of the level screen. */
-export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: ReactNode } {
+export function useBlockEditor(props: EditorProps): { palette: ReactNode; program: ReactNode } {
+  const p = { ...props, label: props.label ?? 'picture' };
   const rows = p.program.reduce((n, it) => n + (it.t === 'cmd' ? 1 : it.body.length + 1), 0) + Math.max(0, (p.maxCards ?? 0) - cardCount(p.program));
-  const d: Dims = rows > 7 ? DIMS : DIMS_KIDS;
+  const d: Dims = useMemo(() => dimsFor(p.label, rows > 7), [p.label, rows > 7]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
@@ -89,9 +120,10 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
   // ---------------------------------------------------------------- looks
   const lookOf = useCallback((b: Block, dd: Dims): BlockLook => {
     if (b.t === 'loop') {
-      const h = blockHeight(b, dd, noCond);
+      const h = blockHeight(b, dd, isCond);
       return { kind: 'loop', w: dd.cw, h, mouth: h - dd.arm - dd.foot, count: b.count };
     }
+    if (isCond(b.cmd)) return { kind: 'cond', cmd: b.cmd, fill: fillOf(b.cmd), w: dd.cw, h: blockHeight(b, dd, isCond), mouth: dd.condMouth };
     return { kind: 'cmd', cmd: b.cmd, fill: fillOf(b.cmd), w: dd.w, h: dd.h };
   }, []);
 
@@ -101,11 +133,11 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
   // while a notebook block is lifted, its line shows as free (it is not counted until dropped)
   const freeShown = free != null ? free + (drag?.src.from === 'program' ? cardCount([drag.src.block]) : 0) : null;
   const layout: Layout = useMemo(() => layoutProgram(base, {
-    dims: d, isCond: noCond, gap, gapBlock: drag?.src.block ?? null,
+    dims: d, isCond, gap, gapBlock: drag?.src.block ?? null,
     ...(freeShown != null ? { emptySlots: freeShown } : { endSlot: !drag }),
     activeTape: drag ? null : p.marks.activeTape,
   }), [base, d, gap, drag, freeShown, p.marks.activeTape]);
-  const hitLayout = useMemo(() => layoutProgram(base, { dims: d, isCond: noCond }), [base, d]);
+  const hitLayout = useMemo(() => layoutProgram(base, { dims: d, isCond }), [base, d]);
   const hitRef = useRef(hitLayout);
   hitRef.current = hitLayout;
 
@@ -164,7 +196,7 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
     if (res.outcome === 'add' || res.outcome === 'move') {
       // the new block snaps from where the ghost was
       const s = slot!;
-      const after = layoutProgram(res.program!, { dims: d, isCond: noCond });
+      const after = layoutProgram(res.program!, { dims: d, isCond });
       const at = after.items.find((it) => it.ref && refKey(it.ref) === refKey(s.tape != null ? { item: s.tape, inner: s.at } : { item: s.at }));
       const cr = canvasRef.current?.getBoundingClientRect();
       if (at && cr) setSnap((o) => ({ key: at.key, dx: gx - (cr.left + at.x), dy: gy - (cr.top + at.y), n: (o?.n ?? 0) + 1 }));
@@ -217,7 +249,7 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
   }, [d, lookOf]);
 
   const down = (src: DragSource) => (e: ReactPointerEvent<HTMLElement>) => {
-    if (p.disabled) return;
+    if (p.disabled || p.inert) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (pending.current) return;
     pending.current = { src, el: e.currentTarget, x0: e.clientX, y0: e.clientY, id: e.pointerId };
@@ -247,6 +279,21 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
     canvasRef.current?.animate([{ translate: '0 0' }, { translate: '6px 0' }, { translate: '-6px 0' }, { translate: '0 0' }], { duration: 240 });
   }, [p.shake]);
 
+  // a tapped block that does not fit: it lands on the last line of the full page and tips off
+  const [bounce, setBounce] = useState<{ key: number; look: BlockLook; from: DOMRect; to: { x: number; y: number } } | null>(null);
+  useLayoutEffect(() => {
+    const r = p.refused;
+    const cr = canvasRef.current?.getBoundingClientRect();
+    if (!r || !cr || REDUCED) return;
+    setBounce({ key: r.n, look: lookOf(r.block, d), from: r.from, to: { x: cr.left + 24, y: cr.top + layout.height - 18 } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.refused?.n]);
+  useEffect(() => {
+    if (!bounce) return;
+    const t = setTimeout(() => setBounce(null), 1000);
+    return () => clearTimeout(t);
+  }, [bounce]);
+
   // the block Brote bumped on shakes, like it was the one that tripped him
   useLayoutEffect(() => {
     const k = p.marks.culprit;
@@ -260,7 +307,7 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
   }, [p.marks.culprit, p.marks.culpritN]);
 
   const click = (fn: () => void) => () => {
-    if (suppressClick.current) return;
+    if (suppressClick.current || propsRef.current.inert) return;
     fn();
   };
 
@@ -282,7 +329,7 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
             onPointerDown={down({ from: 'palette', block })}
             onClick={(e) => { const el = e.currentTarget; click(() => p.onTapPalette(block, el))(); }}
           >
-            <BlockArt look={look} d={d} seed={i + 1} count={<span className="blk-count"><b>{block.t === 'loop' ? (block.count === 'goal' ? '' : block.count) : ''}</b></span>} />
+            <BlockArt look={look} d={d} seed={i + 1} label={p.label} count={block.t === 'loop' && block.count !== 'goal' ? <span className="blk-count"><b>{block.count}</b></span> : null} />
           </button>
         );
       })}
@@ -313,6 +360,7 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
           style={style}
           aria-hidden={it.kind === 'gap' ? 'true' : undefined}
           onClick={it.kind === 'slot' && it.slot!.tape != null && !p.disabled ? click(() => p.onTapeActivate(it.slot!.tape ?? null)) : undefined}
+          data-slot={slotKey(it.slot)}
         >
           <svg className="blk-shape" width={it.w} height={it.h} viewBox={`0 0 ${it.w} ${it.h}`} aria-hidden="true">
             <rect x={3} y={3} width={it.w - 6} height={it.h - 6} rx={9} className="blk-hole" />
@@ -325,6 +373,9 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
     const k = refKey(ref);
     const blockNode = it.kind === 'loop' ? base[ref.item] : { t: 'cmd' as const, cmd: it.cmd! };
     const look = { ...lookOf(blockNode, d), w: it.w, h: it.h, ...(it.mouth != null ? { mouth: it.mouth } : {}) };
+    const pins = (m.pins ?? []).filter((x) => x.key === k).map((x, j) => (
+      <span key={x.tone} className="blk-pin" style={{ background: x.tone, right: -14 + j * -10, top: -8 + j * 14 } as CSSProperties} aria-hidden="true" />
+    ));
     const src: DragSource = { from: 'program', ref, block: blockNode };
     const cls = ['blk', `blk-${look.kind}`];
     if (m.current === k || (it.kind === 'loop' && m.current?.startsWith(`${ref.item}:`))) cls.push('is-current');
@@ -336,21 +387,21 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
       <>
         {it.kind !== 'loop' && m.current === k && <Ring seed={i + 3} />}
         {snap?.key === it.key && !REDUCED && <SnapMarks key={snap.n} w={it.w} />}
+        {pins}
       </>
     );
     if (it.kind === 'loop') {
       const loop = blockNode as Extract<Block, { t: 'loop' }>;
-      const iter = m.iteration?.item === ref.item ? m.iteration.iter : null;
-      const count = (
+      const count = loop.count === 'goal' ? null : (
         <button
           type="button"
-          className="blk-count tape-count"
-          disabled={p.disabled || loop.count === 'goal'}
+          className={`blk-count tape-count${m.hintCount === ref.item ? ' is-calling' : ''}`}
+          disabled={p.disabled}
           aria-label={`Repetir ${loop.count} veces. Tocar para cambiar.`}
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); if (!suppressClick.current) p.onTapeCount(ref.item); }}
+          onClick={(e) => { e.stopPropagation(); if (!suppressClick.current && !propsRef.current.inert) p.onTapeCount(ref.item); }}
         >
-          <b>{loop.count === 'goal' ? '' : iter != null ? `${iter + 1}/${loop.count}` : loop.count}</b>
+          <b key={loop.count} className="count-digit">{loop.count}</b>
         </button>
       );
       return (
@@ -366,7 +417,7 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
           onPointerDown={down(src)}
           onClick={p.disabled ? undefined : click(() => p.onTapeActivate(m.activeTape === ref.item ? null : ref.item))}
         >
-          <BlockArt look={look} d={d} seed={ref.item + 2} count={count} />
+          <BlockArt look={look} d={d} seed={ref.item + 2} count={count} label={p.label} pips={false} />
           {marks}
         </div>
       );
@@ -384,7 +435,7 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
         onPointerDown={down(src)}
         onClick={click(() => p.onTapBlock(ref))}
       >
-        <BlockArt look={look} d={d} seed={ref.item * 3 + (ref.inner ?? 0) + 3} />
+        <BlockArt look={look} d={d} seed={ref.item * 3 + (ref.inner ?? 0) + 3} label={p.label} />
         {marks}
       </button>
     );
@@ -395,22 +446,56 @@ export function useBlockEditor(p: EditorProps): { palette: ReactNode; program: R
       <div ref={canvasRef} className="block-canvas" style={{ width: layout.width + 24, height: layout.height + 16 }}>
         {layout.items.filter((it) => it.kind === 'loop').map((it, i) => itemNode(it, i))}
         {layout.items.filter((it) => it.kind !== 'loop').map((it, i) => itemNode(it, i))}
+        {/* the pass dots of each counted repeat, above its cards so the running one never hides them */}
+        {layout.items.filter((it) => it.kind === 'loop' && typeof it.count === 'number').map((it) => {
+          const iter = m.iteration?.item === it.ref!.item ? m.iteration.iter : null;
+          return (
+            <span key={`${it.key}/pips`} className="blk-foot-over" style={blockStyle(it.x, it.y + it.h - d.foot, it.w, d.foot)} data-pips={it.ref!.item}>
+              <Pips count={it.count as number} passes={iter != null ? iter + 1 : 0} w={it.w} foot={d.foot} />
+            </span>
+          );
+        })}
       </div>
       {drag && createPortal(
         <div ref={ghostRef} className="blk-ghost" style={{ width: drag.look.w, height: drag.look.h }} aria-hidden="true">
-          <div className="blk-ghost-in"><BlockArt look={drag.look} d={d} count={<span className="blk-count"><b>{drag.look.count === 'goal' ? '' : drag.look.count}</b></span>} /></div>
+          <div className="blk-ghost-in"><BlockArt look={drag.look} d={d} label={p.label} count={countDisc(drag.look)} /></div>
         </div>,
         document.body,
       )}
-      {fly && createPortal(<Flying key={fly.key} fly={fly} d={d} />, document.body)}
+      {fly && createPortal(<Flying key={fly.key} fly={fly} d={d} label={p.label} />, document.body)}
+      {bounce && createPortal(<Bouncing key={bounce.key} b={bounce} d={d} label={p.label} />, document.body)}
     </div>
   );
 
   return { palette, program };
 }
 
+const countDisc = (look: BlockLook) => (typeof look.count === 'number' ? <span className="blk-count"><b>{look.count}</b></span> : null);
+
+/** A block that did not fit: from the palette onto the full page's last line, a bump, and it tips off the page. */
+function Bouncing({ b, d, label }: { b: { look: BlockLook; from: DOMRect; to: { x: number; y: number } }; d: Dims; label: BlockLabel }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const { from, to } = b;
+    el.animate([
+      { translate: `${from.left}px ${from.top}px`, rotate: '0deg', opacity: 1 },
+      { translate: `${to.x}px ${to.y - 30}px`, rotate: '-4deg', opacity: 1, offset: 0.4 },
+      { translate: `${to.x}px ${to.y}px`, rotate: '0deg', scale: '1.08 0.9', opacity: 1, offset: 0.52 },
+      { translate: `${to.x + 18}px ${to.y - 26}px`, rotate: '18deg', opacity: 1, offset: 0.68 },
+      { translate: `${to.x + 60}px ${to.y + 90}px`, rotate: '70deg', opacity: 0 },
+    ], { duration: 950, easing: 'cubic-bezier(.35,.1,.4,1)', fill: 'forwards' });
+  }, [b]);
+  return (
+    <div ref={ref} className="blk-ghost is-flying is-refused" style={{ width: b.look.w, height: b.look.h }} aria-hidden="true">
+      <BlockArt look={b.look} d={d} label={label} count={countDisc(b.look)} />
+    </div>
+  );
+}
+
 /** A block leaving: deleted (falls, turns, fades) or not placed (back to the palette). */
-function Flying({ fly, d }: { fly: Fly; d: Dims }) {
+function Flying({ fly, d, label }: { fly: Fly; d: Dims; label: BlockLabel }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -420,7 +505,7 @@ function Flying({ fly, d }: { fly: Fly; d: Dims }) {
   }, [fly]);
   return (
     <div ref={ref} className="blk-ghost is-flying" style={{ width: fly.look.w, height: fly.look.h, translate: `${fly.x}px ${fly.y}px` }} aria-hidden="true">
-      <BlockArt look={fly.look} d={d} count={<span className="blk-count"><b>{fly.look.count === 'goal' ? '' : fly.look.count}</b></span>} />
+      <BlockArt look={fly.look} d={d} label={label} count={countDisc(fly.look)} />
     </div>
   );
 }
