@@ -69,7 +69,9 @@ All new art is designed by Opus with the style references: `docs/style-guide.md`
 
 - [x] T1 — Curriculum model (sheet/core/extras/boss), local progress store, dev mode, 1ro forest map with 17 sheets, sheet screen with three doors, extras generator (solve + repeat families), sheets 1, 2, 4, 6, 8 fully built (existing 1ro-1/1ro-2 folded in). Route: delegated direct.
 - [x] T2 — Formats complete / fix / predict / save (gold stamp), extras for those families; sheets 3, 5, 10, 11, 12, 13; river zone. Route: delegated direct.
-- [ ] T3 — New mechanics: guardas painting (14), music (9), level editor + classmates' gallery (7, 15), comodín (16). Route: delegated direct.
+- [ ] T3a — New mechanics: music (9, recess) and guardas painting (14), with their extras families. Route: delegated direct.
+- [ ] T3b — Workshops: level editor + classmates' gallery (7, 15) and the comodín hub (16). Route: delegated direct.
+  - Split from T3 by the parent on 2026-09-27: four new mechanics were too much for one writer's context after T2 needed ~700k tokens.
 - [ ] T4 — Motivation: garden, critters, wardrobe, end-of-sheet preview, showcase sheet (17). Route: delegated direct.
 - [ ] T5 — Parent pass: full screenshot tour, presentation script for the school, LAN instructions.
 
