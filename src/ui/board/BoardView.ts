@@ -198,7 +198,9 @@ export class BoardView {
     this.fogTiles.clear();
     this.confetti = [];
     const R = rng(board.seed + 5);
-    el('rect', { x: 0, y: 0, width: w, height: h, fill: '#f6efdf' }, this.L.floor);
+    const river = board.look === 'river';
+    el('rect', { x: 0, y: 0, width: w, height: h, fill: river ? SAND : '#f6efdf' }, this.L.floor);
+    if (river) drawSand(this.L.floor, board);
     for (let c = 1; c < board.cols; c++) {
       el('path', { d: wobblyLine(c * S + (R() - 0.5) * 2, 2, c * S + (R() - 0.5) * 2, h - 2, { bow: 1.6, seed: c * 11 + board.seed, segs: 3, jit: 1 }), stroke: INK, 'stroke-width': 1.8, opacity: 0.42, fill: 'none', 'stroke-linecap': 'round' }, this.L.floor);
     }
@@ -206,12 +208,14 @@ export class BoardView {
       el('path', { d: wobblyLine(2, r * S + (R() - 0.5) * 2, w - 2, r * S + (R() - 0.5) * 2, { bow: 1.6, seed: r * 13 + board.seed, segs: 4, jit: 1 }), stroke: INK, 'stroke-width': 1.8, opacity: 0.42, fill: 'none', 'stroke-linecap': 'round' }, this.L.floor);
     }
     if (board.obstacles.some((o) => o.kind === 'earth')) drawStone(this.L.floor, board);
+    if (board.obstacles.some((o) => o.kind === 'water') || board.ford?.length) drawWater(this.L.floor, board);
     el('path', { d: wobblyPoly([[0, 0], [w, 0], [w, h], [0, h]], { wob: 1.5, bow: 2.5, seed: board.seed }), fill: 'none', stroke: INK, 'stroke-width': 3, 'stroke-linejoin': 'round' }, this.L.floor);
     if (f.top >= 150) drawSky(this.L.deco, board, f.top);
 
     for (const d of board.deco) {
       const x = d.c * S + S / 2 + d.dx, y = d.r * S + d.dy + 50;
       const RR = rng(d.seed);
+      if (river) { drawReeds(this.L.deco, x, y + 4, d.seed); continue; }
       const a = -0.5 - RR() * 0.3, b = 0.4 + RR() * 0.3;
       el('path', {
         d: `M${x - 3},${y} l${(a * 10).toFixed(1)},-9 M${x},${y} l${(RR() - 0.5) * 3},-12 M${x + 3},${y} l${(b * 10).toFixed(1)},-8`,
@@ -224,7 +228,7 @@ export class BoardView {
 
     const pops: SVGElement[] = [];
     for (const o of board.obstacles) {
-      if (o.kind === 'earth') continue;
+      if (o.kind === 'earth' || o.kind === 'water') continue;
       const g = el('g', { transform: `translate(${o.c * S + S / 2} ${o.r * S + S / 2})` }, this.L.obst);
       pops.push(drawObstacle(g, o));
     }
@@ -1385,6 +1389,94 @@ function drawStone(parent: SVGGElement, b: Board) {
     if (o.c > 0 && !isStone(o.c - 1, o.r)) edge(x, y, x, y + S, 3);
     if (o.c < b.cols - 1 && !isStone(o.c + 1, o.r)) edge(x + S, y, x + S, y + S, 4);
   }
+}
+
+// ------------------------------------------------------------------ the river (1ro's sheets 10–17)
+const SAND = '#f3e8cf';
+const WATER = '#9dbbd8';
+let waterN = 0;
+
+/** The river's bank: sand instead of the forest floor, with a few pebbles. */
+function drawSand(parent: SVGGElement, b: Board) {
+  const g = el('g', { class: 'sand' }, parent);
+  for (let r = 0; r < b.rows; r++) {
+    for (let c = 0; c < b.cols; c++) {
+      if (obstacleAt(b, c, r)?.kind === 'water' || b.ford?.some((x) => x.c === c && x.r === r)) continue;
+      const R = rng(b.seed * 5 + c * 11 + r * 23);
+      for (let i = 0; i < 2; i++) {
+        el('ellipse', { cx: (c * S + 14 + R() * 72).toFixed(1), cy: (r * S + 12 + R() * 76).toFixed(1), rx: (2.4 + R() * 2).toFixed(1), ry: (1.8 + R() * 1.2).toFixed(1), fill: '#d8c9a6', stroke: INK, 'stroke-width': 1, opacity: 0.55 }, g);
+      }
+    }
+  }
+}
+
+/**
+ * The river: water cells are one stream (Brote bumps at its edge, like at a
+ * rock), with cream ripples and a lily pad now and then, and an ink edge with
+ * a thin line of foam where it meets the bank. Stepping stones (`ford`) are
+ * flat stones in the water, with a ring of ripples round them: Brote stands
+ * on them.
+ */
+function drawWater(parent: SVGGElement, b: Board) {
+  const ford = new Set((b.ford ?? []).map((x) => `${x.c},${x.r}`));
+  const wet = (c: number, r: number) => c >= 0 && r >= 0 && c < b.cols && r < b.rows && (obstacleAt(b, c, r)?.kind === 'water' || ford.has(`${c},${r}`));
+  const g = el('g', { class: 'water' }, parent);
+  const cells: Cell[] = [];
+  for (let r = 0; r < b.rows; r++) for (let c = 0; c < b.cols; c++) if (wet(c, r)) cells.push({ c, r });
+  for (const x of cells) el('rect', { x: x.c * S - 1, y: x.r * S - 1, width: S + 2, height: S + 2, fill: WATER }, g);
+  for (const x of cells) {
+    if (ford.has(`${x.c},${x.r}`)) continue;
+    const R = rng(b.seed * 13 + x.c * 7 + x.r * 31);
+    for (let i = 0; i < 2; i++) {
+      const rx = x.c * S + 14 + R() * 40, ry = x.r * S + 28 + i * 38 + R() * 8;
+      el('path', { d: `M${rx.toFixed(1)},${ry.toFixed(1)} q8,-5 16,0 t16,0`, fill: 'none', stroke: '#fbf7ee', 'stroke-width': 2.6, 'stroke-linecap': 'round', opacity: 0.9 }, g);
+    }
+    if (R() < 0.16) {
+      const lx = x.c * S + 26 + R() * 48, ly = x.r * S + 30 + R() * 40;
+      el('path', { d: blob(lx, ly, 13, 7.5, { seed: x.c * 3 + x.r, n: 9 }), fill: '#a4b86d', stroke: INK, 'stroke-width': 2 }, g);
+      el('path', { d: `M${lx.toFixed(1)},${ly.toFixed(1)} l11,-2`, stroke: WATER, 'stroke-width': 3, 'stroke-linecap': 'round' }, g);
+    }
+  }
+  // the bank's edge
+  for (const x of cells) {
+    const X = x.c * S, Y = x.r * S;
+    const edge = (x1: number, y1: number, x2: number, y2: number, fx: number, fy: number, k: number) => {
+      const seed = b.seed * 3 + x.c * 17 + x.r * 5 + k;
+      el('path', { d: wobblyLine(x1 + fx, y1 + fy, x2 + fx, y2 + fy, { bow: 1.2, seed: seed + 1 }), stroke: '#fbf7ee', 'stroke-width': 2.2, fill: 'none', 'stroke-linecap': 'round', opacity: 0.85 }, g);
+      el('path', { d: wobblyLine(x1, y1, x2, y2, { bow: 1.4, seed }), stroke: INK, 'stroke-width': 2.8, fill: 'none', 'stroke-linecap': 'round' }, g);
+    };
+    if (x.r > 0 && !wet(x.c, x.r - 1)) edge(X, Y, X + S, Y, 0, 7, 1);
+    if (x.r < b.rows - 1 && !wet(x.c, x.r + 1)) edge(X, Y + S, X + S, Y + S, 0, -7, 2);
+    if (x.c > 0 && !wet(x.c - 1, x.r)) edge(X, Y, X, Y + S, 7, 0, 3);
+    if (x.c < b.cols - 1 && !wet(x.c + 1, x.r)) edge(X + S, Y, X + S, Y + S, -7, 0, 4);
+  }
+  // the stepping stones
+  const n = ++waterN;
+  for (const s of b.ford ?? []) {
+    const cx = s.c * S + S / 2, cy = s.r * S + S / 2 + 14;
+    const seed = b.seed + s.c * 17 + s.r * 29;
+    el('path', { d: blob(cx, cy + 3, 45, 31, { wob: 0.05, n: 10, seed: seed + 1 }), fill: 'none', stroke: '#fbf7ee', 'stroke-width': 2.4, opacity: 0.85 }, g);
+    const d = blob(cx, cy, 38, 26, { wob: 0.07, n: 10, seed });
+    const id = `ford${n}-${s.c}-${s.r}`;
+    el('path', { d, transform: 'translate(3 4)', fill: 'rgba(84, 62, 38, 0.2)' }, g);
+    const clip = el('clipPath', { id }, g);
+    el('path', { d }, clip);
+    const f = el('g', { 'clip-path': `url(#${id})` }, g);
+    el('path', { d, fill: '#b8ab95' }, f);
+    el('path', { d, fill: '#ddd4c3', transform: 'translate(-4 -5)' }, f);
+    el('path', { d, fill: 'none', stroke: INK, 'stroke-width': 2.8, 'stroke-linejoin': 'round' }, g);
+  }
+}
+
+/** Reeds on the bank (the river's grass): thin stems, two with brown tops. */
+function drawReeds(parent: SVGGElement, x: number, y: number, seed: number) {
+  const R = rng(seed);
+  const g = el('g', { opacity: 0.9 }, parent);
+  [-7, -1, 5].forEach((dx, i) => {
+    const h = 22 + R() * 12, lean = (R() - 0.5) * 7;
+    el('path', { d: `M${x + dx},${y} Q${x + dx + lean / 2},${y - h / 2} ${x + dx + lean},${y - h}`, fill: 'none', stroke: INK, 'stroke-width': 1.8, 'stroke-linecap': 'round' }, g);
+    if (i !== 1) el('path', { d: blob(x + dx + lean, y - h + 5, 2.6, 6, { seed: seed + i, n: 7 }), fill: '#9c6b43', stroke: INK, 'stroke-width': 1.4 }, g);
+  });
 }
 
 /** The sky over a lone one-row path: far hills, two clouds, all in pencil so the path stays the subject. */

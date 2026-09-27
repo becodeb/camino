@@ -26,6 +26,8 @@ export function LevelThumb({ level }: { level: LevelDef }) {
 export const BoardThumb = memo(function BoardThumb({ b, fog, rain, keys, place }: { b: Board; fog?: boolean; rain?: boolean; keys?: boolean; place?: { x: number; y: number; width: number; height: number } }) {
   const S = 40, w = b.cols * S, h = b.rows * S;
   const stone = b.obstacles.filter((o) => o.kind === 'earth');
+  // the river: water cells and stepping stones on a sandy bank
+  const water = [...b.obstacles.filter((o) => o.kind === 'water'), ...(b.ford ?? [])];
   const R = rng(b.seed);
   const cx = (c: number) => c * S + S / 2, cy = (r: number) => r * S + S / 2;
   const seen = fog ? visibleFrom(b, b.start) : [];
@@ -35,8 +37,10 @@ export const BoardThumb = memo(function BoardThumb({ b, fog, rain, keys, place }
     <svg className="thumb" viewBox={`-6 -6 ${w + 12} ${h + 12}`} aria-hidden="true" {...place}>
       <defs><clipPath id={`thumb-clip-${b.seed}`}><rect x={0} y={0} width={w} height={h} /></clipPath></defs>
       <g filter="url(#rough)">
-        <rect x={0} y={0} width={w} height={h} fill="#f6efdf" />
+        <rect x={0} y={0} width={w} height={h} fill={b.look === 'river' ? '#f3e8cf' : '#f6efdf'} />
         {stone.map((o, i) => <rect key={`s${i}`} x={o.c * S - 0.5} y={o.r * S - 0.5} width={S + 1} height={S + 1} fill="#d6c9b0" />)}
+        {water.map((o, i) => <rect key={`w${i}`} x={o.c * S - 0.5} y={o.r * S - 0.5} width={S + 1} height={S + 1} fill="#9dbbd8" />)}
+        {(b.ford ?? []).map((o, i) => <path key={`f${i}`} d={blob(cx(o.c), cy(o.r) + 5, 15, 10, { wob: 0.07, n: 9, seed: b.seed + i })} fill="#ddd4c3" stroke={INK} strokeWidth={1.8} />)}
         {Array.from({ length: b.cols - 1 }, (_, i) => (
           <path key={`c${i}`} d={wobblyLine((i + 1) * S, 2, (i + 1) * S + (R() - 0.5) * 2, h - 2, { bow: 1, seed: i + b.seed })} stroke={INK} strokeOpacity={0.35} strokeWidth={1.4} fill="none" />
         ))}
@@ -52,7 +56,7 @@ export const BoardThumb = memo(function BoardThumb({ b, fog, rain, keys, place }
         {stone.map((o, i) => (o.c > 0 && !stone.some((x) => x.c === o.c - 1 && x.r === o.r)
           ? <path key={`v${i}`} d={wobblyLine(o.c * S, o.r * S, o.c * S, o.r * S + S, { bow: 0.6, seed: o.seed + 1 })} stroke={INK} strokeWidth={2.2} fill="none" />
           : null))}
-        {b.obstacles.filter((o) => o.kind !== 'earth').map((o, i) => (
+        {b.obstacles.filter((o) => o.kind !== 'earth' && o.kind !== 'water').map((o, i) => (
           <path key={i} d={blob(cx(o.c), cy(o.r) + 4, 13, 9, { wob: 0.09, n: 8, seed: o.seed })} fill="#bdb09c" stroke={INK} strokeWidth={2} />
         ))}
         {rain && [[1, 0.2], [3, 1.3], [4, 0.6]].map(([c, r], i) => (
