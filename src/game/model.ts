@@ -7,8 +7,12 @@ export const DIRS: readonly Dir[] = ['up', 'right', 'down', 'left'];
 export const DELTA: Record<Dir, readonly [number, number]> = { up: [0, -1], right: [1, 0], down: [0, 1], left: [-1, 0] };
 
 export interface Cell { c: number; r: number }
-/** `earth`: a stone step or a stone wall (1ro's staircase), drawn as one mass with its neighbours. */
-export type ObstacleKind = 'rock' | 'puddle' | 'blot' | 'earth';
+/**
+ * `earth`: a stone step or a stone wall (1ro's staircase), drawn as one mass
+ * with its neighbours. `water`: the river (1ro's second zone), drawn as one
+ * stream; Brote cannot step in, he bumps at the edge.
+ */
+export type ObstacleKind = 'rock' | 'puddle' | 'blot' | 'earth' | 'water';
 export interface Obstacle extends Cell { kind: ObstacleKind; seed: number }
 /** A tuft of grass drawn on the floor (decoration only). */
 export interface Deco extends Cell { dx: number; dy: number; seed: number }
@@ -33,6 +37,10 @@ export interface Board {
   deco: Deco[];
   /** Seed for every hand-drawn wobble of this board. */
   seed: number;
+  /** The river zone (1ro's sheets 10–17): a sandy bank instead of the forest floor, reeds instead of grass. */
+  look?: 'river';
+  /** Stepping stones: cells in the water Brote can stand on (the river's way across). */
+  ford?: Cell[];
 }
 
 /**

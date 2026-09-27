@@ -23,17 +23,50 @@ export const DOORS: readonly Door[] = ['easy', 'medium', 'hard'];
 /** For the adult (dev drawer, titles). */
 export const DOOR_LABEL: Record<Door, string> = { easy: 'fácil', medium: 'media', hard: 'difícil' };
 
+/** A flat plan of arrows, collecting seeds on the way before the pot; the notebook has exactly as many lines as the shortest plan. */
+export interface SequenceParams { family: 'sequence'; cols: number; rows: number; steps: [number, number]; pickups: number; rocks: number }
+
 /**
- * What the extras generator builds behind a door (curriculum/generate.ts):
- * - `sequence`: a flat plan of arrows, collecting seeds on the way before the
- *   pot; the notebook has exactly as many lines as the shortest plan.
- * - `repeat`: a path made of one pattern (`body` arrows) walked `count` times,
- *   with a notebook of `body` lines, so no plan without "repetir" fits.
+ * A path made of one pattern (`body` arrows) walked `count` times, carved so
+ * the pattern is the only way, with a notebook of `body` lines: no plan
+ * without "repetir" fits. `pre` / `post`: arrows before and after the repeat
+ * (sheet 13), in the notebook too; no lone repeat wins. `save`: the notebook
+ * holds the whole flat plan (arrows only) and the gold challenge asks for the
+ * repeat (sheet 11).
  */
-export type ExtraParams =
-  | { family: 'sequence'; cols: number; rows: number; steps: [number, number]; pickups: number; rocks: number }
-  | { family: 'repeat'; body: 1 | 2 | 3; count: [number, number]; pickups: 0 | 1 };
+export interface RepeatParams {
+  family: 'repeat'; body: 1 | 2 | 3; count: [number, number]; pickups: 0 | 1;
+  pre?: [number, number]; post?: [number, number]; save?: boolean;
+}
+
+/** Where Brote ends: a read-only program (flat, or one repeat) on an open board with no goal. */
+export interface PredictParams { family: 'predict'; cols: number; rows: number; steps: [number, number]; rocks: number; loop?: { body: 1 | 2; count: [number, number] } }
+
+/**
+ * A mistake to find and fix, made on a level of the `base` family: a wrong
+ * arrow (it bumps right where it is), a repeat that runs too few passes, or
+ * an extra card inside a repeat (or a flat plan) that bumps in the first pass.
+ */
+export type FixBug = 'arrow' | 'count' | 'extra';
+export interface FixParams { family: 'fix'; base: SequenceParams | RepeatParams; bugs: FixBug[] }
+
+/**
+ * A program to finish, made on a repeat level: its count is missing (only one
+ * count wins: the path goes on after the repeat), or one of its cards.
+ */
+export type CompleteHole = 'count' | 'card';
+export interface CompleteParams { family: 'complete'; base: RepeatParams; holes: CompleteHole[] }
+
+/** What the extras generator builds behind a door (curriculum/generate.ts). */
+export type ExtraParams = SequenceParams | RepeatParams | PredictParams | FixParams | CompleteParams;
 export type ExtraFamily = ExtraParams['family'];
+/** A door's extras: one family, or several taking turns (the i-th extra uses the i-th, round and round). */
+export type DoorExtras = ExtraParams | readonly ExtraParams[];
+export const doorParams = (d: DoorExtras): readonly ExtraParams[] => (Array.isArray(d) ? d : [d as ExtraParams]);
+export const paramsAt = (d: DoorExtras, i: number): ExtraParams => {
+  const list = doorParams(d);
+  return list[(Math.max(1, i) - 1) % list.length];
+};
 
 export interface CoreLevel {
   level: LevelDef;
@@ -63,7 +96,7 @@ export interface Sheet {
   /** Optional challenge after the core, with a special frame. */
   boss?: LevelDef;
   /** What each door generates. */
-  extras?: Record<Door, ExtraParams>;
+  extras?: Record<Door, DoorExtras>;
   /** The line the end of the sheet leaves hanging, towards the next one (T4 draws the preview card). */
   preview?: string;
   /** The task that builds (or built) this sheet. */
