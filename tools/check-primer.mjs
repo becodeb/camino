@@ -7,6 +7,10 @@
 // The new mechanics (T3a): a song copied on the xylophone after listening to its strip, a wrong
 // note that stops the song and names its card, a guarda drawn on squared paper, a wrong arrow that
 // smudges it; a music page played with Web Audio missing or broken.
+// The workshops (T3b): a level built with the editor's tools (taps and drags), refused while Brote
+// cannot finish it, solved by its author and pinned on the corkboard; a classmate's card played
+// twice (its play count rises); the limited workshop refuses a level without a repeat, then pins
+// one that needs it; the comodín's bridge plays a pending essential page; a reload keeps it all.
 // Exits non-zero on the first failure.
 // PW=/tmp/pw node tools/check-primer.mjs [base]
 import { createRequire } from 'node:module';
@@ -124,10 +128,10 @@ try {
   if ((await page.textContent('[data-dev="level-id"]')) !== '1ro-h6-jefe') fail('the drawer shows the boss id');
   await tap('.dev-drawer a[data-dev-door="hard"]');
   await expectHash('#/1ro/hoja/6/puerta/dificil/1', 'a dev jump to the hard door');
-  await tap('.dev-sheets a[data-dev-sheet="15"]');
-  await expectHash('#/1ro/hoja/15', 'a dev jump to a sheet not built yet');
-  if (!(await count('.soon'))) fail('sheet 15 should show its "próximamente" page');
-  ok('dev jumps: sheet 6, its boss (framed), its hard door, and sheet 15 (próximamente)');
+  await tap('.dev-sheets a[data-dev-sheet="17"]');
+  await expectHash('#/1ro/hoja/17', 'a dev jump to a sheet not built yet');
+  if (!(await count('.soon'))) fail('sheet 17 should show its "próximamente" page');
+  ok('dev jumps: sheet 6, its boss (framed), its hard door, and sheet 17 (próximamente)');
   await tap('.dev-drawer button:has-text("apagar")');
 
   // ---------------------------------------------------------------- a reload keeps the progress
@@ -325,6 +329,163 @@ try {
     await mute.close();
   }
   ok('music with Web Audio missing, and with an AudioContext that throws: the strip, a bar, four notes and ▶ play silently and win');
+
+  // ---------------------------------------------------------------- the workshops (T3b): make a level, prove it, pin it, play a classmate's
+  const board = () => page.evaluate(() => JSON.parse(localStorage.getItem('camino.progress.v1') || '{}').drafts?.['7']?.board ?? null);
+  const cell = (c, r) => `.editor-board [data-cell="${c},${r}"]`;
+  const plays = (card) => page.evaluate((c) => Number(document.querySelector(`.cork [data-card="${c}"]`)?.getAttribute('data-plays')), card);
+  await page.goto(`${base}?debug#/1ro`);
+  await page.evaluate(() => {
+    localStorage.clear();
+    // everything before sheet 7 done: Brote waits on the first workshop
+    const solved = {};
+    const core = { 1: 3, 2: 4, 3: 4, 4: 3, 5: 4, 6: 4 };
+    for (const [n, k] of Object.entries(core)) for (let i = 1; i <= k; i++) solved[`1ro-h${n}-${i}`] = true;
+    localStorage.setItem('camino.progress.v1', JSON.stringify({ v: 1, seeds: 22, opened: 16, solved, gold: {} }));
+    sessionStorage.clear();
+  });
+  await page.reload();
+  await page.waitForTimeout(900);
+  if (!(await count('.stop.is-here[data-sheet="7"]'))) fail('Brote should wait on the first workshop (sheet 7)');
+  await tap('a.stop[data-sheet="7"]');
+  await expectHash('#/1ro/hoja/7/taller', 'sheet 7 opens on its editor');
+  // the guided start: the ghost hand places the seed on the board and points at ▶
+  await page.waitForTimeout(6000);
+  const guidedSeed = await board();
+  if (!guidedSeed || JSON.stringify(guidedSeed.seed) !== '[2,1]') fail(`the guided start should put the seed on (2,1), the draft holds ${JSON.stringify(guidedSeed)}`);
+  // tools through the real UI: taps on a tool and a cell, a drag of a tool, the eraser, a piece dragged on the board
+  await tap('.zone-tools [data-tool="rock"]');
+  for (const [c, r] of [[1, 1], [1, 2], [3, 2], [3, 1]]) await tap(cell(c, r));
+  await drag('.zone-tools [data-tool="goal"]', cell(5, 0));
+  await drag(cell(0, 2), cell(0, 3));
+  await tap('.zone-tools [data-tool="eraser"]');
+  await tap(cell(3, 1));
+  await tap(cell(0, 3)); // the eraser never takes Brote away
+  const made7 = await board();
+  const want7 = { start: [0, 3], seed: [2, 1], goal: [5, 0], rocks: [[1, 1], [1, 2], [3, 2]] };
+  if (JSON.stringify(made7) !== JSON.stringify(want7)) fail(`the editor should hold ${JSON.stringify(want7)}, holds ${JSON.stringify(made7)}`);
+  ok('workshop 7: the guided start places the seed; taps and drags put rocks, the pot and Brote; the eraser takes a rock, never Brote');
+  // a level Brote cannot finish is refused: walls round the pot
+  await tap('.zone-tools [data-tool="rock"]');
+  await tap(cell(4, 0));
+  await tap(cell(5, 1));
+  await press('.btn-play');
+  if ((await hash()) !== '#/1ro/hoja/7/taller') fail('a level Brote cannot finish should be refused (no test page)');
+  await page.waitForTimeout(1600);
+  await tap('.zone-tools [data-tool="eraser"]');
+  await tap(cell(4, 0));
+  await tap(cell(5, 1));
+  const verdict = await page.evaluate(() => window.__camino.verdict());
+  if (!verdict.ok) fail(`the level should be good again, the solver says ${JSON.stringify(verdict)}`);
+  ok(`a level with the pot walled in is refused on ▶ (Brote puzzled); two rocks erased, the solver accepts it (${verdict.lines} lines)`);
+  // ▶ opens the test page; the author solves it with the normal notebook
+  await press('.btn-play');
+  await expectHash('#/1ro/hoja/7/taller/probar', '▶ opens the test page');
+  await page.waitForTimeout(900);
+  const lines7 = await page.evaluate(() => window.__camino.level.slots);
+  if (lines7 !== verdict.lines) fail(`the test page's notebook should have ${verdict.lines} lines, has ${lines7}`);
+  await solveByHand({ dragFirst: false });
+  if (!(await count('.next-page .pin-card-art'))) fail('winning the test page offers the push-pin');
+  const n7 = await seeds();
+  await press('.next-page');
+  await expectHash('#/1ro/hoja/7/cartelera', 'the push-pin pins the level on the corkboard');
+  await page.waitForTimeout(2600);
+  if (!(await count('.cork [data-card="yo-1"]'))) fail('the level made here should be on the corkboard');
+  if ((await seeds()) !== n7 + 1) fail(`pinning the level should earn its seed (${n7} → ${await seeds()})`);
+  const cards = await count('.cork .cork-card');
+  if (cards < 7 || cards > 9) fail(`the corkboard should show the level made here and the classmates' examples, shows ${cards}`);
+  ok(`solved by its author with the notebook, pinned with the push-pin: the card is on the corkboard (${cards} cards), a seed`);
+  // play an example card, twice: the play count rises on this device
+  if ((await plays('ej-4')) !== 0) fail('a card never played shows no plays');
+  for (let round = 1; round <= 2; round++) {
+    await press('.cork [data-card="ej-4"]');
+    await expectHash('#/1ro/hoja/7/cartelera/ej-4', 'a card opens as a page');
+    await page.waitForTimeout(900);
+    await solveByHand({ dragFirst: round === 1 });
+    await press('.next-page');
+    await expectHash('#/1ro/hoja/7/cartelera', 'a played card leads back to the corkboard');
+    await page.waitForTimeout(700);
+    if ((await plays('ej-4')) !== round) fail(`after ${round} win(s) the card should say ${round}, says ${await plays('ej-4')}`);
+  }
+  if (!(await count('.cork [data-card="ej-4"] .tally'))) fail('the plays are drawn as tally marks');
+  await page.goto(`${base}?debug#/1ro`);
+  await page.waitForTimeout(900);
+  if (!(await count('.stop.is-done[data-sheet="7"] .map-stamp'))) fail('sheet 7 should be stamped on the map: a level pinned and a classmate\'s played');
+  ok('a classmate\'s card played twice: the tally on the card reads 1, then 2; sheet 7 is stamped on the map');
+
+  // ---------------------------------------------------------------- the limited workshop (15): the refusal, then a level that needs a repeat
+  await page.goto(`${base}?debug#/1ro/hoja/15/taller`);
+  await page.waitForTimeout(7500); // its guided start points at the lines and ▶
+  const lines = () => page.evaluate(() => Number(document.querySelector('.lines-note')?.getAttribute('data-lines')));
+  if ((await lines()) !== 2) fail(`the limited workshop starts with two lines, has ${await lines()}`);
+  for (let i = 0; i < 3; i++) await press('[data-lines-btn="more"]');
+  if ((await lines()) !== 5) fail(`three taps on the pencil should make 5 lines, made ${await lines()}`);
+  await press('.btn-play');
+  await page.waitForTimeout(400);
+  if ((await hash()) !== '#/1ro/hoja/15/taller') fail('five lines fit a plan without repeat: ▶ should be refused');
+  if (!(await count('.board .thought'))) fail('Brote should think of the repeat block');
+  if (!(await count('[data-lines-btn="less"].is-calling'))) fail('the eraser (one line less) should call');
+  await page.waitForTimeout(3000);
+  for (let i = 0; i < 3; i++) await press('[data-lines-btn="less"]');
+  if ((await lines()) !== 2) fail(`three taps on the eraser should leave 2 lines, left ${await lines()}`);
+  await press('.btn-play');
+  await expectHash('#/1ro/hoja/15/taller/probar', 'two lines: the level needs a repeat and opens its test page');
+  await page.waitForTimeout(900);
+  if (!(await page.evaluate(() => window.__camino.level.blocks.includes('repeat')))) fail('a limited level\'s notebook brings repetir');
+  await tap('.zone-palette [data-cmd="repeat"]');
+  await tap('.zone-palette [data-cmd="right"]');
+  for (let i = 0; i < 3; i++) await press('.zone-program .tape-count');
+  const p15 = await program();
+  if (JSON.stringify(p15) !== JSON.stringify([{ t: 'loop', count: 5, body: ['right'] }])) fail(`taps should build repetir 5 [→], built ${JSON.stringify(p15)}`);
+  await press('.btn-play');
+  await won();
+  await press('.next-page');
+  await expectHash('#/1ro/hoja/15/cartelera', 'the limited level is pinned');
+  await page.waitForTimeout(1800);
+  const stored15 = await page.evaluate(() => JSON.parse(localStorage.getItem('camino.progress.v1')).made.find((m) => m.sheet === 15));
+  if (!stored15 || stored15.lines !== 2 || JSON.stringify(stored15.solution) !== JSON.stringify(p15)) fail(`the limited level should be stored with 2 lines and its repeat, stored ${JSON.stringify(stored15)}`);
+  if (!(await count(`.cork [data-card="${stored15.id}"] .limit-badge`))) fail('a limited card carries the repeat\'s tape and its lines');
+  ok('workshop 15: five lines fit a plan without repeat, so ▶ is refused (Brote thinks of the repeat, the eraser calls); two lines and repetir 5 [→] pin the level, stored with its lines and repeat');
+
+  // ---------------------------------------------------------------- the comodín (16): "Recuperar" with a pending essential page
+  n0 = await seeds();
+  await page.goto(`${base}?debug#/1ro/hoja/16`);
+  await page.waitForTimeout(1000);
+  await expectHash('#/1ro/hoja/16/comodin', 'the comodín opens on its three choices');
+  if ((await count('[data-choice]')) !== 3) fail('the comodín shows three choices');
+  await press('[data-choice="recuperar"]');
+  await expectHash('#/1ro/hoja/16/recuperar', 'the bridge');
+  await page.waitForTimeout(700);
+  // this progress left sheets 8–14 unplayed: their essential pages wait on the bridge, the first is sheet 8's page 1
+  const firstPending = await page.getAttribute('.bridge-card', 'data-pending');
+  if (firstPending !== '8-1') fail(`the bridge should start with sheet 8's page 1, starts with ${firstPending}`);
+  await press('.bridge-card');
+  await expectHash('#/1ro/hoja/16/recuperar/8/1', 'a pending page opens from the bridge');
+  await page.waitForTimeout(900);
+  // the ramp: repetir 3 [→ → ↑], built with taps
+  await tap('.zone-palette [data-cmd="repeat"]');
+  for (const c of ['right', 'right', 'up']) await tap(`.zone-palette [data-cmd="${c}"]`);
+  await press('.zone-program .tape-count');
+  const ramp = await program();
+  if (JSON.stringify(ramp) !== JSON.stringify([{ t: 'loop', count: 3, body: ['right', 'right', 'up'] }])) fail(`taps should build repetir 3 [→ → ↑], built ${JSON.stringify(ramp)}`);
+  await press('.btn-play');
+  await won();
+  if ((await seeds()) !== n0 + 1) fail('a pending page solved from the comodín earns its seed');
+  await press('.next-page');
+  await expectHash('#/1ro/hoja/16/recuperar', 'back to the bridge');
+  await page.waitForTimeout(700);
+  if ((await page.getAttribute('.bridge-card', 'data-pending')) === '8-1') fail('the solved page should leave the bridge');
+  const st16 = await page.evaluate(() => JSON.parse(localStorage.getItem('camino.progress.v1')));
+  if (!st16.solved['1ro-h8-1'] || !st16.goals['1ro-h16-recuperar']) fail('the page counts for sheet 8 and "recuperar" for the comodín');
+  ok('comodín: "recuperar" shows the pending essential pages on a bridge; sheet 8\'s page 1 solved from it counts for sheet 8 (a seed) and leaves the bridge');
+
+  // ---------------------------------------------------------------- a reload keeps the made levels and their plays
+  await page.goto(`${base}?debug#/1ro/hoja/7/cartelera`);
+  await page.reload();
+  await page.waitForTimeout(1200);
+  if (!(await count('.cork [data-card="yo-1"]')) || !(await count(`.cork [data-card="${stored15.id}"]`))) fail('after a reload the levels made here are still on the corkboard');
+  if ((await plays('ej-4')) !== 2) fail(`after a reload the card still says it was played twice, says ${await plays('ej-4')}`);
+  ok('a reload keeps both levels made here and the plays on the corkboard');
 
   // ---------------------------------------------------------------- blocked storage: the app plays in memory
   const blocked = await browser.newPage({ viewport: { width: 1366, height: 768 } });

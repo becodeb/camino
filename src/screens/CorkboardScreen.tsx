@@ -91,9 +91,9 @@ export function CorkboardPage({ sheet, pages = workshopPages }: { sheet: Sheet; 
   const limited = !!sheet.workshop?.limited;
   // the level just pinned from its test page: it drops onto the cork, then its seed flies to the pouch
   const [fresh] = useState(() => { const id = justPinned.id; justPinned.id = null; return id; });
-  const mine = cards.filter((c) => !isExample(c));
-  const played = mine.find((c) => (p.plays[c.id] ?? 0) > 0);
-  const line = [fresh ? LINES.pinned : null, limited ? LINES.corkLimited : LINES.cork, !fresh && played ? LINES.plays(p.plays[played.id]) : null].filter(Boolean).join(' ');
+  // the child's own level most recently made that was played on this device: how many times is said
+  const playedMine = cards.find((c) => !isExample(c) && (p.plays[c.id] ?? 0) > 0);
+  const line = [fresh ? LINES.pinned : null, limited ? LINES.corkLimited : LINES.cork, !fresh && playedMine ? LINES.plays(p.plays[playedMine.id]) : null].filter(Boolean).join(' ');
 
   useEffect(() => {
     let off = () => {};

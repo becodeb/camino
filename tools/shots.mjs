@@ -230,7 +230,7 @@ const P1 = [
   { name: 'extra-hard-seq', size: [1280, 800], go: yr('/1ro/hoja/2/puerta/dificil/2'), progress: MIDYEAR },
   { name: 'dev-open', size: [1366, 768], go: yr('/1ro/hoja/6/puerta/media/1', '&dev'), progress: MIDYEAR },
   { name: 'dev-map', size: [1280, 800], go: yr('/1ro', '&dev'), progress: MIDYEAR },
-  { name: 'soon', size: [1366, 768], go: yr('/1ro/hoja/16', '&dev'), progress: MIDYEAR },
+  { name: 'soon', size: [1366, 768], go: yr('/1ro/hoja/17', '&dev'), progress: MIDYEAR },
 ].map((s) => ({ ...s, name: `p1-${s.name}` }));
 
 // ---------------------------------------------------------------- 1ro's year, T2: the formats, sheets 3, 5, 10–13, the river
