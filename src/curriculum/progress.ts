@@ -1,6 +1,8 @@
 // The child's progress through the year: which levels are solved, the seeds
-// earned, the sheet the teacher has opened and the chosen character. One
-// player, in the browser only (accounts and server sync come next iteration).
+// earned, the sheet the teacher has opened, the levels made in the workshops,
+// and the motivation layer (the character and what it wears, the garden, the
+// showcase's pages). One player, in the browser only (accounts and server
+// sync come next iteration).
 //
 // Two layers, so the next iteration can swap the storage without touching
 // the screens:
@@ -12,10 +14,16 @@
 import { useSyncExternalStore } from 'react';
 import { EXAMPLES } from './classmates';
 import { DOORS, bossId, coreId, extraPrefix, hasCore, type Door, type Sheet } from './model';
+import { SLOTS, isCharacterId, isCritterId, isItemId, itemById, type CharacterId, type CritterId, type ItemId, type Outfit, type Slot } from './motivation';
 import { isDraft, isMadeLevel, type Draft, type MadeLevel } from './workshop';
 
 export const STORAGE_KEY = 'camino.progress.v1';
 export const LAST_SHEET = 17;
+/** The showcase (sheet 17) shows a family two or three pages. */
+export const MAX_FAVORITES = 3;
+
+/** A spot in the garden, in its drawing's units (curriculum/garden.ts). */
+export type Spot = readonly [number, number];
 
 export interface Progress {
   v: 1;
@@ -23,28 +31,49 @@ export interface Progress {
   solved: Readonly<Record<string, true>>;
   /**
    * Pages stamped in gold: their save-blocks challenge was solved (the ids of
-   * the pages themselves). No seed: T4 grows rare flowers from them.
+   * the pages themselves). No seed: they grow rare gold flowers in the garden.
    */
   gold: Readonly<Record<string, true>>;
-  /** One per first solve of a level, plus what the dev drawer grants. */
+  /** One per first solve of a level, plus what the dev drawer grants. Never spent: the garden grows from them. */
   seeds: number;
   /** The sheet the teacher opened for the class: later sheets wait (faded on the map). */
   opened: number;
-  /** The child's character (T4 builds the choice and the wardrobe). */
-  character: string;
+  /** The child's character (curriculum/motivation.ts: brote, mina, pliegue, ovillo). */
+  character: CharacterId;
   /** Levels made in the workshops on this device, in the order they were pinned (curriculum/workshop.ts). T3b. */
   made: readonly MadeLevel[];
   /** How many times each corkboard level was played to a win on this device, by card id. */
   plays: Readonly<Record<string, number>>;
   /** The level being made in each workshop (by sheet number), kept between the editor and its test page. */
   drafts: Readonly<Record<string, Draft>>;
-  /** Things done on a sheet that are not levels: the comodín's choices played (`1ro-h16-recuperar`, …). */
+  /** Things done on a sheet that are not levels: the comodín's choices played (`1ro-h16-recuperar`, …), the showcase's. */
   goals: Readonly<Record<string, true>>;
+  // ---------------------------------------------------------------- T4: the motivation layer
+  /** The child picked their character (sheet 1 asks once; the wardrobe changes it). Until then it is Brote. */
+  picked: boolean;
+  /** What the character wears, one item per slot (curriculum/rewards.ts only shows the unlocked ones). */
+  outfit: Outfit;
+  /** Wardrobe items the dev drawer gave (the year's milestones unlock the rest: curriculum/rewards.ts). */
+  items: Readonly<Partial<Record<ItemId, true>>>;
+  /** Critters the dev drawer sent to the garden (the rest come from the bosses). */
+  critters: Readonly<Partial<Record<CritterId, true>>>;
+  /** Rewards already shown arriving (`item:capa`, `critter:coati`, `plant:girasol`): a new one is greeted once. */
+  seen: Readonly<Record<string, true>>;
+  /** Where the child dragged the garden's big plants (plant id → spot); the rest stand where the garden puts them. */
+  garden: Readonly<Record<string, Spot>>;
+  /** The pages picked for the showcase (level ids: core pages, bosses, levels made here), at most three. */
+  favorites: readonly string[];
+  /** Sheets whose end-of-sheet preview card was shown (by number). */
+  previewed: Readonly<Record<string, true>>;
+  /** The teacher opened the wardrobe (at the end of a class). Dev mode always may. */
+  wardrobe: boolean;
 }
 
 export const EMPTY: Progress = Object.freeze({
   v: 1, solved: Object.freeze({}), gold: Object.freeze({}), seeds: 0, opened: 1, character: 'brote',
   made: Object.freeze([]) as readonly MadeLevel[], plays: Object.freeze({}), drafts: Object.freeze({}), goals: Object.freeze({}),
+  picked: false, outfit: Object.freeze({}), items: Object.freeze({}), critters: Object.freeze({}), seen: Object.freeze({}),
+  garden: Object.freeze({}), favorites: Object.freeze([]) as readonly string[], previewed: Object.freeze({}), wardrobe: false,
 });
 
 // ------------------------------------------------------------------ pure transitions
@@ -64,8 +93,53 @@ export function earnGold(p: Progress, id: string): Progress {
 
 export const grant = (p: Progress, n: number): Progress => ({ ...p, seeds: Math.max(0, p.seeds + Math.round(n)) });
 export const openSheet = (p: Progress, n: number): Progress => ({ ...p, opened: clampSheet(n) });
-export const chooseCharacter = (p: Progress, id: string): Progress => ({ ...p, character: id });
 const clampSheet = (n: number) => Math.min(LAST_SHEET, Math.max(1, Math.round(n) || 1));
+
+// ------------------------------------------------------------------ the motivation layer (T4)
+
+/** The child picks a character (sheet 1, the wardrobe). An unknown id changes nothing. */
+export const chooseCharacter = (p: Progress, id: string): Progress =>
+  (isCharacterId(id) && (id !== p.character || !p.picked) ? { ...p, character: id, picked: true } : p);
+
+/** Puts an item on its slot (null takes that slot's item off). Whether it is unlocked is curriculum/rewards.ts's `wear`. */
+export function setOutfit(p: Progress, slot: Slot, item: ItemId | null): Progress {
+  const outfit: Partial<Record<Slot, ItemId>> = { ...p.outfit };
+  if (item && itemById(item)?.slot === slot) outfit[slot] = item;
+  else delete outfit[slot];
+  return { ...p, outfit };
+}
+
+/** The dev drawer gives an item before its milestone. */
+export const grantItem = (p: Progress, id: ItemId): Progress => (p.items[id] ? p : { ...p, items: { ...p.items, [id]: true } });
+/** The dev drawer sends a critter to the garden before its boss. */
+export const grantCritter = (p: Progress, id: CritterId): Progress => (p.critters[id] ? p : { ...p, critters: { ...p.critters, [id]: true } });
+
+/** Rewards shown arriving (a critter walked into the garden, a new item was greeted). */
+export function markSeen(p: Progress, keys: readonly string[]): Progress {
+  const fresh = keys.filter((k) => !p.seen[k]);
+  if (!fresh.length) return p;
+  return { ...p, seen: { ...p.seen, ...Object.fromEntries(fresh.map((k) => [k, true as const])) } };
+}
+
+/** The child dragged one of the garden's big plants to a new spot (null puts it back where the garden places it). */
+export function placeInGarden(p: Progress, id: string, spot: Spot | null): Progress {
+  const garden = { ...p.garden };
+  if (spot) garden[id] = [Math.round(spot[0]), Math.round(spot[1])];
+  else delete garden[id];
+  return { ...p, garden };
+}
+
+/** A page picked for the showcase, or put back; a fourth one waits (the child puts one back first). */
+export function toggleFavorite(p: Progress, id: string): Progress {
+  if (p.favorites.includes(id)) return { ...p, favorites: p.favorites.filter((f) => f !== id) };
+  if (p.favorites.length >= MAX_FAVORITES) return p;
+  return { ...p, favorites: [...p.favorites, id] };
+}
+
+/** The end-of-sheet preview card of sheet `n` was shown. */
+export const markPreviewed = (p: Progress, n: number): Progress => (p.previewed[String(n)] ? p : { ...p, previewed: { ...p.previewed, [String(n)]: true } });
+/** The teacher opens (or closes) the wardrobe. */
+export const setWardrobe = (p: Progress, open: boolean): Progress => (p.wardrobe === open ? p : { ...p, wardrobe: open });
 
 /** The level being made in workshop `n` (null forgets it). */
 export function saveDraft(p: Progress, n: number, draft: Draft | null): Progress {
@@ -113,6 +187,16 @@ export function parse(raw: string | null | undefined): Progress {
     const count = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0;
     const solved = ids(o.solved);
     const made = Array.isArray(o.made) ? o.made.filter(isMadeLevel) : [];
+    const only = <K extends string>(x: unknown, keep: (k: string) => k is K) => Object.fromEntries(Object.keys(ids(x)).filter(keep).map((k) => [k, true as const])) as Partial<Record<K, true>>;
+    const outfit: Partial<Record<Slot, ItemId>> = {};
+    if (o.outfit && typeof o.outfit === 'object') {
+      for (const slot of SLOTS) {
+        const it = (o.outfit as Record<string, unknown>)[slot];
+        if (isItemId(it) && itemById(it)!.slot === slot) outfit[slot] = it;
+      }
+    }
+    const spot = (v: unknown): v is Spot => Array.isArray(v) && v.length === 2 && v.every((n) => Number.isFinite(n));
+    const favorites = Array.isArray(o.favorites) ? o.favorites.filter((f, i, a): f is string => typeof f === 'string' && a.indexOf(f) === i).slice(0, MAX_FAVORITES) : [];
     return {
       v: 1,
       solved,
@@ -120,12 +204,22 @@ export function parse(raw: string | null | undefined): Progress {
       gold: ids(o.gold),
       seeds: Number.isFinite(o.seeds) ? Math.max(0, Math.round(o.seeds!)) : Object.keys(solved).length,
       opened: clampSheet(Number(o.opened)),
-      character: typeof o.character === 'string' ? o.character : 'brote',
+      character: isCharacterId(o.character) ? o.character : 'brote',
       // stored before the workshops existed: nothing made, played or reached yet; a broken entry is left out
       made: made.filter((m, i) => made.findIndex((x) => x.id === m.id) === i),
       plays: record(o.plays, count),
       drafts: record(o.drafts, isDraft),
       goals: ids(o.goals),
+      // stored before the motivation layer (T4): nothing picked, worn, given, seen, moved or chosen yet; unknown ids are left out
+      picked: o.picked === true,
+      outfit,
+      items: only(o.items, isItemId),
+      critters: only(o.critters, isCritterId),
+      seen: ids(o.seen),
+      garden: record(o.garden, spot),
+      favorites,
+      previewed: ids(o.previewed),
+      wardrobe: o.wardrobe === true,
     };
   } catch {
     return EMPTY;
@@ -150,7 +244,7 @@ export interface SheetState {
   published: number;
   /** A workshop: a classmate's level was played (a limited one, on the limited workshop). */
   playedOthers: boolean;
-  /** The comodín: its choices played (goal names: `recuperar`, `musica`, `companeros`). */
+  /** The comodín: its choices played (goal names: `recuperar`, `musica`, `companeros`); the showcase: its steps (`familia`, `jardin`, `afiche`). */
   goals: string[];
 }
 
@@ -165,13 +259,14 @@ export function sheetState(s: Sheet, p: Progress): SheetState {
   const own = `${s.grade}-h${s.n}-`;
   const published = s.workshop ? p.made.filter((m) => m.sheet === s.n).length : 0;
   const playedOthers = !!s.workshop && EXAMPLES.some((e) => (p.plays[e.id] ?? 0) > 0 && (!s.workshop!.limited || e.sheet === s.n));
-  const goals = s.hub ? Object.keys(p.goals).filter((k) => k.startsWith(own)).map((k) => k.slice(own.length)) : [];
+  const goals = s.hub || s.showcase ? Object.keys(p.goals).filter((k) => k.startsWith(own)).map((k) => k.slice(own.length)) : [];
   return {
     coreSolved,
     coreTotal: core.length,
     essentialSolved: core.filter((c) => c.essential && c.done).length,
     essentialTotal: core.filter((c) => c.essential).length,
-    complete: hasCore(s) ? coreSolved === core.length : s.workshop ? published > 0 && playedOthers : goals.length > 0,
+    // the showcase is done once the family played one of the child's pages
+    complete: hasCore(s) ? coreSolved === core.length : s.workshop ? published > 0 && playedOthers : s.showcase ? goals.includes('familia') : goals.length > 0,
     bossSolved: !!p.solved[bossId(s)],
     extras,
     gold: Object.keys(p.gold).filter((k) => k.startsWith(own)).length,

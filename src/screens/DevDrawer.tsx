@@ -56,6 +56,12 @@ function partOf(pg: SheetPage): string {
     case 'pendiente': return `recuperar · hoja ${pg.n}, página ${pg.k}`;
     case 'repaso': return `repaso · hoja ${pg.n}, puerta fácil ${pg.i}`;
     case 'musica': return 'música libre (hoja 9, página 4)';
+    case 'personaje': return 'elegir personaje';
+    case 'muestra': return 'los pasos de la muestra';
+    case 'elegir': return 'elegir las páginas para mostrar';
+    case 'familia': return `la familia juega (página ${pg.i})`;
+    case 'recorrido': return 'recorrido por el jardín';
+    case 'afiche': return 'el afiche del año';
   }
 }
 
@@ -63,6 +69,8 @@ function where(route: Route): string {
   if (route.screen === 'home') return 'inicio (el tramo de la demo)';
   if (route.screen === 'map') return 'el mapa de 1ro';
   if (route.screen === 'level') return `demo: ${levelById(route.id)?.title ?? route.id}`;
+  if (route.screen === 'garden') return route.seeds != null ? `el jardín (vista de prueba con ${route.seeds} semillas)` : 'el jardín';
+  if (route.screen === 'wardrobe') return 'el vestidor';
   const s = sheetByN(route.n)!;
   const pg = route.page;
   return `hoja ${s.n} · ${s.title} · ${isBuilt(s) ? partOf(pg) : 'próximamente'}${isGold(pg) ? ' · sello dorado' : ''}`;

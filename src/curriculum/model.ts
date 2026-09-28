@@ -128,11 +128,17 @@ export interface Sheet {
    * levels). Done when one of them was played from it.
    */
   hub?: true;
+  /**
+   * The showcase (17): the child shows the year to the family. They pick two
+   * or three of their pages, the family plays them while the child guides, a
+   * tour of the garden, a poster of the year. Done once the family played one.
+   */
+  showcase?: true;
   /** Optional challenge after the core, with a special frame. */
   boss?: LevelDef;
   /** What each door generates. */
   extras?: Record<Door, DoorExtras>;
-  /** The line the end of the sheet leaves hanging, towards the next one (T4 draws the preview card). */
+  /** The line the end of the sheet leaves hanging, towards the next one: the preview card says it over a drawing of the next sheet. */
   preview?: string;
   /** The task that builds (or built) this sheet. */
   builtIn: 'T1' | 'T2' | 'T3' | 'T4';
@@ -140,8 +146,8 @@ export interface Sheet {
 
 /** A sheet of pages: core levels, doors of extras and a boss. */
 export const hasCore = (s: Sheet) => s.core.length > 0;
-/** Built: a sheet of pages, a workshop or the comodín; otherwise "próximamente". */
-export const isBuilt = (s: Sheet) => hasCore(s) || !!s.workshop || !!s.hub;
+/** Built: a sheet of pages, a workshop, the comodín or the showcase; otherwise "próximamente". */
+export const isBuilt = (s: Sheet) => hasCore(s) || !!s.workshop || !!s.hub || !!s.showcase;
 
 // ------------------------------------------------------------------ level ids
 // Stable ids, used as progress keys and shown in the dev drawer.
@@ -154,5 +160,7 @@ export const extraPrefix = (s: Pick<Sheet, 'grade' | 'n'>, door: Door) => `${s.g
 
 /** The comodín's three choices, each a goal once played from it. */
 export type HubGoal = 'recuperar' | 'musica' | 'companeros';
-/** Something done on a sheet that is not a level (a progress key: `1ro-h16-recuperar`). */
-export const goalId = (s: Pick<Sheet, 'grade' | 'n'>, name: HubGoal) => `${s.grade}-h${s.n}-${name}`;
+/** The showcase's steps, each a goal once done: the family played a page, the garden tour, the poster seen. */
+export type ShowcaseGoal = 'familia' | 'jardin' | 'afiche';
+/** Something done on a sheet that is not a level (a progress key: `1ro-h16-recuperar`, `1ro-h17-familia`). */
+export const goalId = (s: Pick<Sheet, 'grade' | 'n'>, name: HubGoal | ShowcaseGoal) => `${s.grade}-h${s.n}-${name}`;

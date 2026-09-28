@@ -22,6 +22,17 @@
 //   #/1ro/hoja/16/recuperar/<m>/<k>        sheet m's page k, played from the bridge
 //   #/1ro/hoja/16/repaso/<m>/<i>           nothing pending: a review page, sheet m's easy door extra i
 //   #/1ro/hoja/16/musica                   sheet 9's free song
+// Sheet 1 asks the child to pick a character the first time:
+//   #/1ro/hoja/1/personaje
+// The showcase (sheet 17):
+//   #/1ro/hoja/17/muestra                  its four steps on the riverbank
+//   #/1ro/hoja/17/elegir                   the child picks two or three pages
+//   #/1ro/hoja/17/familia/<i>              the family plays the i-th of them
+//   #/1ro/hoja/17/jardin                   the garden tour
+//   #/1ro/hoja/17/afiche                   the poster of the year
+// The motivation layer, outside the sheets:
+//   #/1ro/jardin                           the child's garden (…/jardin/<n>: dev preview with n seeds)
+//   #/1ro/vestidor                         the wardrobe
 
 import { DOORS, bossId, coreId, extraId, hasCore, isBuilt, type Door, type Sheet } from './model';
 import { PRIMER, sheetByN } from './primer';
@@ -52,7 +63,19 @@ export type SheetPage =
   /** The comodín: with nothing pending, a review page (the easy door's extra `i` of sheet `n`). */
   | { kind: 'repaso'; n: number; i: number }
   /** The comodín: the free song of the music recess. */
-  | { kind: 'musica' };
+  | { kind: 'musica' }
+  /** Sheet 1: the child picks a character (the first time the sheet opens). */
+  | { kind: 'personaje' }
+  /** The showcase: its four steps. */
+  | { kind: 'muestra' }
+  /** The showcase: the child picks the pages to show. */
+  | { kind: 'elegir' }
+  /** The showcase: the family plays the child's `i`-th page (from 1). */
+  | { kind: 'familia'; i: number }
+  /** The showcase: the garden tour. */
+  | { kind: 'recorrido' }
+  /** The showcase: the poster of the year. */
+  | { kind: 'afiche' };
 
 /** The free song the comodín offers: sheet 9's page 4. */
 export const FREE_SONG = { n: 9, k: 4 } as const;
@@ -75,13 +98,20 @@ export type Route =
   | { screen: 'home' }
   | { screen: 'level'; id: string }
   | { screen: 'map' }
-  | { screen: 'sheet'; n: number; page: SheetPage };
+  | { screen: 'sheet'; n: number; page: SheetPage }
+  /** The child's garden; `seeds`: the dev drawer's preview of a garden with that many. */
+  | { screen: 'garden'; seeds?: number }
+  | { screen: 'wardrobe' };
 
 /** The doors in the URL (Spanish, like `nivel` and `hoja`). */
 const DOOR_SLUG: Record<Door, string> = { easy: 'facil', medium: 'media', hard: 'dificil' };
 const doorOfSlug = (s: string): Door | null => DOORS.find((d) => DOOR_SLUG[d] === s) ?? null;
 
 export const MAP_HREF = '#/1ro';
+export const GARDEN_HREF = '#/1ro/jardin';
+export const WARDROBE_HREF = '#/1ro/vestidor';
+/** The showcase's sheet. */
+export const SHOWCASE = 17;
 
 export function sheetHref(n: number, page: SheetPage = { kind: 'entry' }): string {
   const base = `#/1ro/hoja/${n}`;
@@ -101,6 +131,12 @@ export function sheetHref(n: number, page: SheetPage = { kind: 'entry' }): strin
     case 'pendiente': return `${base}/recuperar/${page.n}/${page.k}`;
     case 'repaso': return `${base}/repaso/${page.n}/${page.i}`;
     case 'musica': return `${base}/musica`;
+    case 'personaje': return `${base}/personaje`;
+    case 'muestra': return `${base}/muestra`;
+    case 'elegir': return `${base}/elegir`;
+    case 'familia': return `${base}/familia/${page.i}`;
+    case 'recorrido': return `${base}/jardin`;
+    case 'afiche': return `${base}/afiche`;
   }
 }
 
@@ -108,6 +144,7 @@ export function sheetHref(n: number, page: SheetPage = { kind: 'entry' }): strin
 const PLAIN: Record<string, SheetPage> = {
   puertas: { kind: 'doors' }, jefe: { kind: 'boss' }, taller: { kind: 'taller' }, 'taller/probar': { kind: 'probar' },
   cartelera: { kind: 'cartelera' }, comodin: { kind: 'comodin' }, recuperar: { kind: 'recuperar' }, musica: { kind: 'musica' },
+  personaje: { kind: 'personaje' }, muestra: { kind: 'muestra' }, elegir: { kind: 'elegir' }, jardin: { kind: 'recorrido' }, afiche: { kind: 'afiche' },
 };
 
 export function parseRoute(hash: string): Route {
@@ -115,6 +152,9 @@ export function parseRoute(hash: string): Route {
   let m = h.match(/^\/nivel\/([\w-]+)$/);
   if (m) return { screen: 'level', id: m[1] };
   if (h === '/1ro') return { screen: 'map' };
+  if (h === '/1ro/vestidor') return { screen: 'wardrobe' };
+  m = h.match(/^\/1ro\/jardin(?:\/(\d+))?$/);
+  if (m) return m[1] ? { screen: 'garden', seeds: Number(m[1]) } : { screen: 'garden' };
   m = h.match(/^\/1ro\/hoja\/(\d+)(?:\/(.*))?$/);
   if (!m) return { screen: 'home' };
   const n = Number(m[1]);
@@ -131,6 +171,8 @@ export function parseRoute(hash: string): Route {
   if (x && door) return sheet({ kind: 'extra', door, i: Math.max(1, Number(x[2] ?? 1)) });
   const card = rest.match(/^cartelera\/([\w-]+)$/);
   if (card) return sheet({ kind: 'tarjeta', card: card[1] });
+  const fam = rest.match(/^familia\/(\d+)$/);
+  if (fam) return sheet({ kind: 'familia', i: Math.max(1, Number(fam[1])) });
   const two = rest.match(/^(recuperar|repaso)\/(\d+)\/(\d+)$/);
   if (two) {
     const [m, k] = [Number(two[2]), Math.max(1, Number(two[3]))];
@@ -162,14 +204,20 @@ export function nextExtra(s: Sheet, door: Door, p: Progress): number {
   return i;
 }
 
+/** The sheet that asks the child to pick a character (the first time it opens). */
+export const CHOICE_SHEET = 1;
+
 /**
  * The page a sheet opens on: its first unsolved core level, or the doors once
  * the core is done; a workshop's editor, or its corkboard once a level of it
- * is pinned; the comodín's three choices.
+ * is pinned; the comodín's three choices; the showcase's steps. Sheet 1 first
+ * asks for a character, until one is picked.
  */
 export function entryPage(s: Sheet, p: Progress): SheetPage {
   if (s.hub) return { kind: 'comodin' };
+  if (s.showcase) return { kind: 'muestra' };
   if (s.workshop) return sheetState(s, p).published ? { kind: 'cartelera' } : { kind: 'taller' };
+  if (s.n === CHOICE_SHEET && !p.picked) return { kind: 'personaje' };
   const k = s.core.findIndex((_, i) => !p.solved[coreId(s, i + 1)]);
   return k >= 0 ? { kind: 'core', k: k + 1 } : { kind: 'doors' };
 }
@@ -180,18 +228,25 @@ export function entryPage(s: Sheet, p: Progress): SheetPage {
  * where its page does. A workshop: its test page, once the level is pinned,
  * and a card played lead to the corkboard, and the corkboard to the map. The
  * comodín: its pages lead back to its choices (a page of the bridge, to the
- * bridge), the choices to the map.
+ * bridge), the choices to the map. The character choice leads to the first
+ * page. The showcase: the pages picked lead to the family's first one, each
+ * family page to the next (the showcase's steps after the last), the garden
+ * tour back to the steps, the poster to the map.
  */
-export function nextHref(s: Sheet, from: SheetPage): string {
+export function nextHref(s: Sheet, from: SheetPage, favorites = 3): string {
   const page = plainPage(from);
   switch (page.kind) {
     case 'core': return page.k < s.core.length ? sheetHref(s.n, { kind: 'core', k: page.k + 1 }) : sheetHref(s.n, { kind: 'doors' });
     case 'extra': return sheetHref(s.n, { ...page, i: page.i + 1 });
-    case 'boss': case 'comodin': return MAP_HREF;
+    case 'boss': case 'comodin': case 'muestra': case 'afiche': return MAP_HREF;
     case 'taller': case 'probar': case 'tarjeta': return sheetHref(s.n, { kind: 'cartelera' });
     case 'cartelera': return s.hub ? sheetHref(s.n, { kind: 'comodin' }) : MAP_HREF;
     case 'recuperar': case 'musica': return sheetHref(s.n, { kind: 'comodin' });
     case 'pendiente': case 'repaso': return sheetHref(s.n, { kind: 'recuperar' });
+    case 'personaje': return sheetHref(s.n, { kind: 'core', k: 1 });
+    case 'elegir': return sheetHref(s.n, { kind: 'familia', i: 1 });
+    case 'familia': return page.i < favorites ? sheetHref(s.n, { kind: 'familia', i: page.i + 1 }) : sheetHref(s.n, { kind: 'muestra' });
+    case 'recorrido': return sheetHref(s.n, { kind: 'muestra' });
     default: return sheetHref(s.n, { kind: 'doors' });
   }
 }

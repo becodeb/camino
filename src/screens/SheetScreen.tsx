@@ -58,8 +58,9 @@ const pageLabel = (page: SheetPage) => {
 
 export function SheetScreen({ n, page }: { n: number; page: SheetPage }) {
   const sheet = sheetByN(n)!;
-  if (!isBuilt(sheet)) return <SoonPage sheet={sheet} />;
+  if (!isBuilt(sheet) || sheet.showcase) return <SoonPage sheet={sheet} />;
   if (page.kind === 'entry') return <Redirect to={sheetHref(n, entryPage(sheet, progress.get()))} />;
+  if (page.kind === 'personaje') return <Redirect to={sheetHref(n, { kind: 'core', k: 1 })} />;
   if (sheet.hub) {
     switch (page.kind) {
       case 'comodin': return <HubPage sheet={sheet} />;

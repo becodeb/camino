@@ -48,12 +48,13 @@ function* programsWith(arrows: readonly string[], loops: boolean, slots: number)
 const programsOf = (l: LevelDef) => programsWith(cmdsOf(l), l.blocks.includes('repeat'), l.slots!);
 
 describe('the built sheets of 1ro', () => {
-  it('are 1 to 6, 8 to 14 with pages; 7 and 15 are workshops (15 limited), 16 the comodín; 17 is still to come', () => {
+  it('are 1 to 6, 8 to 14 with pages; 7 and 15 are workshops (15 limited), 16 the comodín, 17 the showcase: every stop is built', () => {
     expect(BUILT.map((s) => s.n)).toEqual([1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14]);
-    expect(PRIMER.filter(isBuilt).map((s) => s.n)).toEqual([...Array.from({ length: 16 }, (_, i) => i + 1)]);
+    expect(PRIMER.filter(isBuilt).map((s) => s.n)).toEqual([...Array.from({ length: 17 }, (_, i) => i + 1)]);
     expect(PRIMER.filter((s) => s.workshop).map((s) => [s.n, s.kind, s.workshop!.limited])).toEqual([[7, 'taller', false], [15, 'taller', true]]);
     expect(PRIMER.filter((s) => s.hub).map((s) => [s.n, s.kind])).toEqual([[16, 'comodin']]);
-    for (const s of PRIMER.filter((x) => x.workshop || x.hub)) {
+    expect(PRIMER.filter((s) => s.showcase).map((s) => [s.n, s.kind])).toEqual([[17, 'muestra']]);
+    for (const s of PRIMER.filter((x) => x.workshop || x.hub || x.showcase)) {
       expect(s.core, `sheet ${s.n}`).toEqual([]);
       expect(s.boss).toBeUndefined();
       expect(s.extras).toBeUndefined();

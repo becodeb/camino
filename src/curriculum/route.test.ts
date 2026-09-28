@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { LevelDef } from '../game/levels';
 import { DOORS, bossId, coreId, extraId, goalId, hasCore, type Sheet } from './model';
 import { PRIMER, sheetByN } from './primer';
-import { EMPTY, openSheet, played, publish, reachGoal, solve } from './progress';
+import { EMPTY, chooseCharacter, openSheet, played, publish, reachGoal, solve } from './progress';
 import {
-  FREE_SONG, MAP_HREF, bossOpen, currentSheet, doorsOpen, entryPage, goldPage, isGold, levelIdOf, nextExtra, nextHref, parseRoute, pendingEssentials,
-  plainPage, reviewPage, sheetHref, sheetOpen,
+  FREE_SONG, GARDEN_HREF, MAP_HREF, WARDROBE_HREF, bossOpen, currentSheet, doorsOpen, entryPage, goldPage, isGold, levelIdOf, nextExtra, nextHref,
+  parseRoute, pendingEssentials, plainPage, reviewPage, sheetHref, sheetOpen,
   type SheetPage,
 } from './route';
 import { EXAMPLES } from './classmates';
@@ -205,5 +205,46 @@ describe('the comodín', () => {
     expect(goalId(H, 'companeros')).toBe('1ro-h16-companeros');
     expect(currentSheet(reachGoal(openSheet(EMPTY, 16), goalId(H, 'recuperar'))).n).toBe(1);
     expect(EXAMPLES.length).toBeGreaterThanOrEqual(6);
+  });
+});
+
+describe('the motivation layer\'s routes (T4)', () => {
+  const S17 = sheetByN(17)!, S1 = sheetByN(1)!;
+
+  it('the garden, its dev preview and the wardrobe have their own URLs', () => {
+    expect(parseRoute(GARDEN_HREF)).toEqual({ screen: 'garden' });
+    expect(parseRoute(`${GARDEN_HREF}/150`)).toEqual({ screen: 'garden', seeds: 150 });
+    expect(parseRoute(WARDROBE_HREF)).toEqual({ screen: 'wardrobe' });
+  });
+
+  it('the character choice and the showcase\'s pages parse back to themselves', () => {
+    const pages: SheetPage[] = [{ kind: 'muestra' }, { kind: 'elegir' }, { kind: 'familia', i: 2 }, { kind: 'recorrido' }, { kind: 'afiche' }];
+    for (const page of pages) expect(parseRoute(sheetHref(17, page))).toEqual({ screen: 'sheet', n: 17, page });
+    expect(parseRoute(sheetHref(1, { kind: 'personaje' }))).toEqual({ screen: 'sheet', n: 1, page: { kind: 'personaje' } });
+    expect(sheetHref(17, { kind: 'recorrido' })).toBe('#/1ro/hoja/17/jardin');
+    expect(levelIdOf(S17, { kind: 'familia', i: 1 })).toBeNull();
+  });
+
+  it('sheet 1 opens on the character choice until one is picked; the showcase on its steps', () => {
+    expect(entryPage(S1, EMPTY)).toEqual({ kind: 'personaje' });
+    expect(entryPage(S1, chooseCharacter(EMPTY, 'mina'))).toEqual({ kind: 'core', k: 1 });
+    expect(nextHref(S1, { kind: 'personaje' })).toBe(sheetHref(1, { kind: 'core', k: 1 }));
+    expect(entryPage(S17, EMPTY)).toEqual({ kind: 'muestra' });
+  });
+
+  it('the showcase: the pages picked, then the family plays each of them, then the steps again; the poster leads to the map', () => {
+    expect(nextHref(S17, { kind: 'elegir' })).toBe(sheetHref(17, { kind: 'familia', i: 1 }));
+    expect(nextHref(S17, { kind: 'familia', i: 1 }, 2)).toBe(sheetHref(17, { kind: 'familia', i: 2 }));
+    expect(nextHref(S17, { kind: 'familia', i: 2 }, 2)).toBe(sheetHref(17, { kind: 'muestra' }));
+    expect(nextHref(S17, { kind: 'recorrido' })).toBe(sheetHref(17, { kind: 'muestra' }));
+    expect(nextHref(S17, { kind: 'afiche' })).toBe(MAP_HREF);
+  });
+
+  it('the showcase is a built stop: Brote waits on it at the end of the year', () => {
+    let p = openSheet(EMPTY, 17);
+    for (const s of PRIMER.filter(hasCore)) s.core.forEach((_, i) => { p = solve(p, coreId(s, i + 1)); });
+    expect(sheetOpen(S17, p)).toBe(true);
+    // the workshops and the comodín are not done yet
+    expect(currentSheet(p).n).toBe(7);
   });
 });

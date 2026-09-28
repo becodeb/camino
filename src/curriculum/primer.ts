@@ -1,11 +1,11 @@
 // 1er grado · Repetir: the whole year as 17 sheets (the approved activities
 // plan, section "1er grado"). Sheets 1–9 walk the forest, 10–17 follow the
 // river. The workshops (7, 15) have an editor and the class corkboard instead
-// of pages (curriculum/workshop.ts), the comodín (16) three choices; a sheet
-// with none of them is not built yet: the map shows it as "próximamente"
-// (reachable in dev mode); T4 fills in the rest. The levels of the built
-// sheets live in primerLevels.ts; a door may take several families of
-// extras in turns (a fix, then a predict…).
+// of pages (curriculum/workshop.ts), the comodín (16) three choices, the
+// showcase (17) the family's visit. The levels of the sheets of pages live in
+// primerLevels.ts; a door may take several families of extras in turns (a
+// fix, then a predict…). What each boss sends to the garden is in
+// motivation.ts.
 
 import type { CompleteHole, Door, DoorExtras, ExtraParams, FixBug, GuardaParams, MelodyParams, RepeatParams, SequenceParams } from './model';
 import type { Sheet } from './model';
@@ -36,7 +36,7 @@ export const PRIMER: Sheet[] = [
     n: 1, grade: '1ro', kind: 'camino', zone: 'bosque', builtIn: 'T1',
     title: 'Llegada al bosque',
     say: 'Llegamos al bosque. Brote quiere recorrerlo con vos.',
-    plan: 'Review sala 5 plans (arrows in the notebook, then ▶); choose a character (placeholder: Brote, T4 builds the choice).',
+    plan: 'Review sala 5 plans (arrows in the notebook, then ▶); choose a character (Brote, Mina, Pliegue or Ovillo: the sheet opens on the choice the first time).',
     ...SHEET_1,
     extras: doors(seq(4, 3, [3, 4], 0, 1), seq(5, 3, [5, 6], 1, 2), seq(5, 4, [7, 8], 1, 3)),
     preview: 'Mañana los caminos son más largos.',
@@ -199,8 +199,11 @@ export const PRIMER: Sheet[] = [
     n: 17, grade: '1ro', kind: 'muestra', zone: 'rio', builtIn: 'T4',
     title: 'Muestra',
     say: 'Hoy le enseñás un nivel a tu familia y le mostrás tu jardín.',
-    plan: 'Teach their family a level; tour their garden.',
+    plan: 'The family showcase: pick two or three favourite pages (solved ones, own workshop levels too), the family plays them while the child guides (the child\'s character cheers), a garden tour, a poster of the year.',
     core: [],
+    showcase: true,
+    // the end of the year: 2nd grade walks into the fog
+    preview: 'El año que viene, el bosque se llena de niebla…',
   },
 ];
 
