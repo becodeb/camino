@@ -16,7 +16,7 @@ import { chooseCharacter, clearMade, earnGold, grant, grantItem, openSheet, play
 import { CHARACTER_IDS, CHARACTER_NAME, ITEMS } from '../curriculum/motivation';
 import { isUnlocked, unlockSay } from '../curriculum/rewards';
 import { extraFor } from '../curriculum/generate';
-import { MAP_HREF, WARDROBE_HREF, currentSheet, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type Route, type SheetPage } from '../curriculum/route';
+import { GARDEN_HREF, MAP_HREF, WARDROBE_HREF, currentSheet, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type Route, type SheetPage } from '../curriculum/route';
 import { cardLevelId, draftFor, nextMadeId, verdictOf } from '../curriculum/workshop';
 import { formatOf } from '../game/formats';
 import { levelOf } from './SheetScreen';
@@ -259,6 +259,11 @@ export function DevDrawer({ route }: { route: Route }) {
           </button>
           <a href={WARDROBE_HREF}>ir</a>
           <a href="#/probador" title="Cada prenda en cada personaje">probador</a>
+        </div>
+        <div className="dev-row">
+          <span className="dev-label">jardín</span>
+          <a href={GARDEN_HREF} data-dev-garden="mine">el mío</a>
+          {[0, 10, 50, 150].map((n) => <a key={n} href={`${GARDEN_HREF}/${n}`} data-dev-garden={n} title={`Vista de prueba con ${n} semillas (no cambia el progreso)`}>con {n}</a>)}
         </div>
         <div className="dev-row">
           <span className="dev-label">dar ropa</span>

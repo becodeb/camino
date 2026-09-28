@@ -12,6 +12,7 @@ import { DevDrawer } from './screens/DevDrawer';
 import { YearPlayer } from './screens/player';
 import { FittingRoom } from './screens/FittingRoom';
 import { WardrobePage } from './screens/WardrobeScreen';
+import { GardenPage } from './screens/GardenScreen';
 import { levelById } from './game/levels';
 import { parseRoute, type Route } from './curriculum/route';
 import './ui/runtime';
@@ -31,6 +32,7 @@ function Screen({ route, hash }: { route: Route; hash: string }) {
   if (route.screen === 'sheet') return <YearPlayer><SheetScreen key={hash} n={route.n} page={route.page} /></YearPlayer>;
   if (route.screen === 'fitting') return <FittingRoom />;
   if (route.screen === 'wardrobe') return <YearPlayer><WardrobePage /></YearPlayer>;
+  if (route.screen === 'garden') return <YearPlayer><GardenPage key={route.seeds ?? 'mine'} preview={route.seeds} /></YearPlayer>;
   if (route.screen === 'level') {
     const level = levelById(route.id);
     if (level) return <LevelScreen key={level.id} level={level} />;

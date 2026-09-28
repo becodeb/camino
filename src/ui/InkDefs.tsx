@@ -17,10 +17,10 @@ export function InkDefs() {
         </filter>
         {/* what is still to come (a wardrobe piece locked, a critter on its way): one flat pale shape with a soft ink rim */}
         <filter id="silhouette" x="-10%" y="-10%" width="120%" height="120%">
-          <feFlood floodColor="#e6dccb" result="pale" />
+          <feFlood floodColor="#ddd1ba" result="pale" />
           <feComposite in="pale" in2="SourceAlpha" operator="in" result="shape" />
           <feMorphology in="SourceAlpha" operator="dilate" radius="1.3" result="fat" />
-          <feFlood floodColor="#2b2622" floodOpacity="0.42" result="rimInk" />
+          <feFlood floodColor="#2b2622" floodOpacity="0.5" result="rimInk" />
           <feComposite in="rimInk" in2="fat" operator="in" result="rim" />
           <feMerge><feMergeNode in="rim" /><feMergeNode in="shape" /></feMerge>
         </filter>
