@@ -91,6 +91,16 @@ export interface CoreLevel {
   essential?: boolean;
 }
 
+/**
+ * A workshop sheet (7, 15): the child makes a level on a small board, proves
+ * it by solving it with the normal notebook, and pins it on the class
+ * corkboard, where the classmates' levels are played (curriculum/workshop.ts).
+ * `limited` (15): the notebook's lines are a setting and the level must need
+ * a repeat. Done when one level is pinned and one classmate's is played (a
+ * limited one, on a limited workshop).
+ */
+export interface Workshop { limited: boolean }
+
 export interface Sheet {
   /** 1 to 17 in 1ro: its place on the map and in the URL (`#/1ro/hoja/<n>`). */
   n: number;
@@ -108,8 +118,16 @@ export interface Sheet {
    * first time (it becomes the `intro` of the first core level).
    */
   concept?: { program: Program; after: 'full' | 'fail' };
-  /** The core levels, 3–4 short ones. Empty: the sheet is not built yet ("próximamente"). */
+  /** The core levels, 3–4 short ones. Empty on a workshop, on the comodín, and on a sheet not built yet ("próximamente"). */
   core: CoreLevel[];
+  /** A workshop sheet: the level editor and the class corkboard instead of core pages. */
+  workshop?: Workshop;
+  /**
+   * The comodín (16): a hub of three choices instead of core pages (catch up
+   * on the essential pages still pending, the free song, the classmates'
+   * levels). Done when one of them was played from it.
+   */
+  hub?: true;
   /** Optional challenge after the core, with a special frame. */
   boss?: LevelDef;
   /** What each door generates. */
@@ -120,7 +138,10 @@ export interface Sheet {
   builtIn: 'T1' | 'T2' | 'T3' | 'T4';
 }
 
-export const isBuilt = (s: Sheet) => s.core.length > 0;
+/** A sheet of pages: core levels, doors of extras and a boss. */
+export const hasCore = (s: Sheet) => s.core.length > 0;
+/** Built: a sheet of pages, a workshop or the comodín; otherwise "próximamente". */
+export const isBuilt = (s: Sheet) => hasCore(s) || !!s.workshop || !!s.hub;
 
 // ------------------------------------------------------------------ level ids
 // Stable ids, used as progress keys and shown in the dev drawer.
@@ -130,3 +151,8 @@ export const bossId = (s: Pick<Sheet, 'grade' | 'n'>) => `${s.grade}-h${s.n}-jef
 export const extraId = (s: Pick<Sheet, 'grade' | 'n'>, door: Door, i: number) => `${s.grade}-h${s.n}-${door}-${i}`;
 /** Every extra of a door shares this prefix (to count them in the progress). */
 export const extraPrefix = (s: Pick<Sheet, 'grade' | 'n'>, door: Door) => `${s.grade}-h${s.n}-${door}-`;
+
+/** The comodín's three choices, each a goal once played from it. */
+export type HubGoal = 'recuperar' | 'musica' | 'companeros';
+/** Something done on a sheet that is not a level (a progress key: `1ro-h16-recuperar`). */
+export const goalId = (s: Pick<Sheet, 'grade' | 'n'>, name: HubGoal) => `${s.grade}-h${s.n}-${name}`;

@@ -64,7 +64,8 @@ function Redirect({ to }: { to: string }) {
 
 export function SheetScreen({ n, page }: { n: number; page: SheetPage }) {
   const sheet = sheetByN(n)!;
-  if (!isBuilt(sheet)) return <SoonPage sheet={sheet} />;
+  // the workshops' and the comodín's screens come in their own commits
+  if (!isBuilt(sheet) || sheet.workshop || sheet.hub) return <SoonPage sheet={sheet} />;
   if (page.kind === 'entry') return <Redirect to={sheetHref(n, entryPage(sheet, progress.get()))} />;
   if (page.kind === 'doors') return <DoorsPage sheet={sheet} />;
   const level = levelOf(sheet, page);

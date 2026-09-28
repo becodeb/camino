@@ -9,10 +9,11 @@ import { HOLE, cardCount, cmdProgram, inside, isHole, obstacleAt, sameCell, type
 import { phrasesOf, toneOf, tonesOf, xylophone } from '../game/music';
 import { guardaBoard, guardaTrace, guidePath, guideSegments } from '../game/guarda';
 import { unroll } from '../game/engine';
-import { DOORS, bossId, coreId, isBuilt } from './model';
+import { DOORS, bossId, coreId, hasCore, isBuilt } from './model';
 import { PRIMER, sheetByN } from './primer';
 
-const BUILT = PRIMER.filter(isBuilt);
+/** The sheets of pages (the workshops and the comodín have none). */
+const BUILT = PRIMER.filter(hasCore);
 const cmdsOf = (l: Pick<LevelDef, 'blocks'>) => l.blocks.filter((b) => b !== 'repeat' && b !== 'repeat-goal');
 const hasLoop = (p: Program) => p.some((it) => it.t === 'loop');
 const levelsOf = (n: number) => { const s = sheetByN(n)!; return [...s.core.map((c) => c.level), s.boss!]; };
@@ -47,8 +48,17 @@ function* programsWith(arrows: readonly string[], loops: boolean, slots: number)
 const programsOf = (l: LevelDef) => programsWith(cmdsOf(l), l.blocks.includes('repeat'), l.slots!);
 
 describe('the built sheets of 1ro', () => {
-  it('are 1 to 6, 8 to 14', () => {
+  it('are 1 to 6, 8 to 14 with pages; 7 and 15 are workshops (15 limited), 16 the comodín; 17 is still to come', () => {
     expect(BUILT.map((s) => s.n)).toEqual([1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14]);
+    expect(PRIMER.filter(isBuilt).map((s) => s.n)).toEqual([...Array.from({ length: 16 }, (_, i) => i + 1)]);
+    expect(PRIMER.filter((s) => s.workshop).map((s) => [s.n, s.kind, s.workshop!.limited])).toEqual([[7, 'taller', false], [15, 'taller', true]]);
+    expect(PRIMER.filter((s) => s.hub).map((s) => [s.n, s.kind])).toEqual([[16, 'comodin']]);
+    for (const s of PRIMER.filter((x) => x.workshop || x.hub)) {
+      expect(s.core, `sheet ${s.n}`).toEqual([]);
+      expect(s.boss).toBeUndefined();
+      expect(s.extras).toBeUndefined();
+      expect(s.preview?.length).toBeGreaterThan(0);
+    }
   });
 
   for (const s of BUILT) {

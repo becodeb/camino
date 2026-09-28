@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DOORS, bossId, coreId, extraId, isBuilt } from './model';
+import { EXAMPLES } from './classmates';
+import { DOORS, bossId, coreId, extraId, goalId, hasCore } from './model';
 import { PRIMER, sheetByN } from './primer';
-import { EMPTY, STORAGE_KEY, createProgressStore, earnGold, grant, openSheet, parse, sheetState, solve, type Backing } from './progress';
+import {
+  EMPTY, STORAGE_KEY, clearMade, createProgressStore, earnGold, grant, openSheet, parse, played, publish, reachGoal, saveDraft, sheetState, solve,
+  type Backing, type Progress,
+} from './progress';
+import { cardLevelId, defaultDraft, nextMadeId, type MadeLevel } from './workshop';
 
 /** An in-memory Web Storage; `broken` throws on every call, like blocked site data. */
 function fakeStorage(broken = false): Backing & { data: Map<string, string> } {
@@ -27,8 +32,8 @@ describe('the year of 1ro', () => {
     }
   });
 
-  it('every built sheet has extras for the three doors', () => {
-    for (const s of PRIMER.filter(isBuilt)) for (const d of DOORS) expect(s.extras?.[d]).toBeDefined();
+  it('every sheet of pages has extras for the three doors', () => {
+    for (const s of PRIMER.filter(hasCore)) for (const d of DOORS) expect(s.extras?.[d]).toBeDefined();
   });
 });
 
@@ -117,8 +122,105 @@ describe('the progress store', () => {
       expect(s.get()).toBe(EMPTY);
       s.update((p) => solve(p, 'l1'));
       expect(s.get().seeds).toBe(1);
+      s.update((p) => publish(p, made('yo-1', 7)));
+      expect(s.get().made).toHaveLength(1);
       s.reset();
       expect(s.get()).toBe(EMPTY);
     }
+  });
+});
+
+/** A level made on this device in workshop `sheet`, from its default board. */
+const made = (id: string, sheet: number): MadeLevel => ({
+  id, sheet, board: defaultDraft(sheet === 15).board, lines: sheet === 15 ? 2 : 5,
+  solution: sheet === 15 ? [{ t: 'loop', count: 5, body: ['right'] }] : Array.from({ length: 5 }, () => ({ t: 'cmd' as const, cmd: 'right' })),
+});
+const W7 = sheetByN(7)!, W15 = sheetByN(15)!, HUB = sheetByN(16)!;
+const example = (limited: boolean) => EXAMPLES.find((e) => (e.sheet === 15) === limited)!;
+
+describe('the workshops in the progress', () => {
+  it('a draft is kept per workshop, and pinning its level starts a new one', () => {
+    let p = saveDraft(EMPTY, 7, { ...defaultDraft(false), proof: [] });
+    p = saveDraft(p, 15, defaultDraft(true));
+    expect(Object.keys(p.drafts).sort()).toEqual(['15', '7']);
+    p = publish(p, made('yo-1', 7));
+    expect(p.made.map((m) => m.id)).toEqual(['yo-1']);
+    expect(p.drafts['7']).toBeUndefined();
+    expect(p.drafts['15']).toEqual(defaultDraft(true));
+    expect(publish(p, made('yo-1', 7))).toBe(p); // the same card twice: nothing
+    expect(saveDraft(p, 15, null).drafts).toEqual({});
+  });
+
+  it('counts the plays of a card, each win', () => {
+    const p = played(played(played(EMPTY, 'ej-1'), 'ej-1'), 'yo-2');
+    expect(p.plays).toEqual({ 'ej-1': 2, 'yo-2': 1 });
+  });
+
+  it('a workshop is done when one of its levels is pinned and a classmate\'s level was played', () => {
+    let p = publish(EMPTY, made('yo-1', 7));
+    expect(sheetState(W7, p)).toMatchObject({ published: 1, playedOthers: false, complete: false });
+    p = played(p, 'yo-1'); // playing one's own level does not count
+    expect(sheetState(W7, p).complete).toBe(false);
+    p = played(p, example(false).id);
+    expect(sheetState(W7, p)).toMatchObject({ published: 1, playedOthers: true, complete: true });
+    expect(sheetState(W15, p).complete).toBe(false); // nothing pinned from 15
+  });
+
+  it('the limited workshop needs a limited level pinned from it and a limited classmate\'s level played', () => {
+    let p = played(publish(EMPTY, made('yo-1', 15)), example(false).id);
+    expect(sheetState(W15, p)).toMatchObject({ published: 1, playedOthers: false, complete: false });
+    p = played(p, example(true).id);
+    expect(sheetState(W15, p).complete).toBe(true);
+    expect(sheetState(W7, p)).toMatchObject({ published: 0, complete: false });
+  });
+
+  it('the comodín is done once one of its choices was played from it', () => {
+    expect(sheetState(HUB, EMPTY).complete).toBe(false);
+    const p = reachGoal(EMPTY, goalId(HUB, 'musica'));
+    expect(sheetState(HUB, p)).toMatchObject({ goals: ['musica'], complete: true });
+    expect(reachGoal(p, goalId(HUB, 'musica'))).toBe(p);
+    expect(sheetState(W7, p).complete).toBe(false);
+  });
+
+  it('clearing the made levels forgets them, their plays and the drafts, not the seeds nor the classmates\' plays', () => {
+    let p = solve(publish(EMPTY, made('yo-1', 7)), cardLevelId('yo-1'));
+    p = played(played(saveDraft(p, 15, defaultDraft(true)), 'yo-1'), 'ej-2');
+    const c = clearMade(p);
+    expect(c.made).toEqual([]);
+    expect(c.plays).toEqual({ 'ej-2': 1 });
+    expect(c.drafts).toEqual({});
+    expect(c.seeds).toBe(1);
+    // a new level never takes the id of a cleared one
+    expect(nextMadeId(c)).toBe('yo-2');
+  });
+
+  it('the store keeps made levels, plays, drafts and goals across a reload', () => {
+    const disk = fakeStorage();
+    const a = createProgressStore(disk);
+    a.update((p) => reachGoal(played(saveDraft(publish(p, made('yo-1', 15)), 7, defaultDraft(false)), 'ej-5'), goalId(HUB, 'recuperar')));
+    const b = createProgressStore(disk).get();
+    expect(b.made).toEqual([made('yo-1', 15)]);
+    expect(b.plays).toEqual({ 'ej-5': 1 });
+    expect(b.drafts['7']).toEqual(defaultDraft(false));
+    expect(b.goals).toEqual({ [goalId(HUB, 'recuperar')]: true });
+  });
+
+  it('stored values from before the workshops read as nothing made; broken entries are left out', () => {
+    const old = parse(JSON.stringify({ v: 1, solved: { a: true }, seeds: 1, opened: 3 }));
+    expect([old.made, old.plays, old.drafts, old.goals]).toEqual([[], {}, {}, {}]);
+    const good = made('yo-1', 7);
+    const raw: Partial<Record<keyof Progress, unknown>> = {
+      v: 1, seeds: 2, opened: 7,
+      made: [good, { ...good, id: 'yo-2', board: { ...good.board, rocks: [good.board.start] } }, { ...good, id: 'ej-9' }, 'nope', { ...good, id: 'yo-3', solution: [{ t: 'cmd', cmd: 'jump:right' }] }, good],
+      plays: { 'ej-1': 3, 'ej-2': -1, 'ej-3': 'x', 'ej-4': 1.5 },
+      drafts: { 7: defaultDraft(false), 15: { board: { start: [9, 9] }, lines: 2 }, 16: { ...defaultDraft(true), lines: 99 } },
+      goals: { [goalId(HUB, 'musica')]: true },
+    };
+    const p = parse(JSON.stringify(raw));
+    expect(p.made).toEqual([good]);
+    expect(p.plays).toEqual({ 'ej-1': 3 });
+    expect(p.drafts).toEqual({ 7: defaultDraft(false) });
+    expect(p.goals).toEqual({ [goalId(HUB, 'musica')]: true });
+    expect(parse(JSON.stringify(p))).toEqual(p);
   });
 });

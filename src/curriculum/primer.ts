@@ -1,9 +1,11 @@
 // 1er grado · Repetir: the whole year as 17 sheets (the approved activities
 // plan, section "1er grado"). Sheets 1–9 walk the forest, 10–17 follow the
-// river. A sheet with no core levels is not built yet: the map shows it as
-// "próximamente" (reachable in dev mode); T3–T4 fill in the rest. The levels
-// of the built sheets live in primerLevels.ts; a door may take several
-// families of extras in turns (a fix, then a predict…).
+// river. The workshops (7, 15) have an editor and the class corkboard instead
+// of pages (curriculum/workshop.ts), the comodín (16) three choices; a sheet
+// with none of them is not built yet: the map shows it as "próximamente"
+// (reachable in dev mode); T4 fills in the rest. The levels of the built
+// sheets live in primerLevels.ts; a door may take several families of
+// extras in turns (a fix, then a predict…).
 
 import type { CompleteHole, Door, DoorExtras, ExtraParams, FixBug, GuardaParams, MelodyParams, RepeatParams, SequenceParams } from './model';
 import type { Sheet } from './model';
@@ -99,8 +101,10 @@ export const PRIMER: Sheet[] = [
     n: 7, grade: '1ro', kind: 'taller', zone: 'bosque', builtIn: 'T3',
     title: 'Taller: mi primer nivel',
     say: 'Hoy armás un nivel para un compañero.',
-    plan: 'Create a level classmates play (level editor + classmates\' gallery).',
+    plan: 'Create a level classmates play: the level editor (Brote, the seed, the pot, rocks), solved by its author with the notebook, pinned on the class corkboard; play a classmate\'s level.',
     core: [],
+    workshop: { limited: false },
+    preview: 'Mañana los caminos hacen zigzag.',
   },
   {
     n: 8, grade: '1ro', kind: 'camino', zone: 'bosque', builtIn: 'T1',
@@ -177,15 +181,19 @@ export const PRIMER: Sheet[] = [
     n: 15, grade: '1ro', kind: 'taller', zone: 'rio', builtIn: 'T3',
     title: 'Taller: un nivel con límite',
     say: 'Armá un nivel con pocos renglones para un compañero.',
-    plan: 'A block-limited level for a classmate.',
+    plan: 'A block-limited level for a classmate: the editor with the notebook\'s lines as a setting; the level must need a repeat (no plan without one fits the lines, the author\'s own program uses one).',
     core: [],
+    workshop: { limited: true },
+    preview: 'La próxima, elegís vos: jugar o terminar lo que quedó.',
   },
   {
     n: 16, grade: '1ro', kind: 'comodin', zone: 'rio', builtIn: 'T3',
     title: 'Comodín',
     say: 'Hoy elegís: jugar o terminar lo que quedó.',
-    plan: 'Recess or catch-up.',
+    plan: 'Recess or catch-up: three choices. The essential pages still pending, on a bridge (or a review page when none is); sheet 9\'s free song; the classmates\' levels on the corkboard.',
     core: [],
+    hub: true,
+    preview: 'La próxima, le mostrás a tu familia todo lo que aprendiste.',
   },
   {
     n: 17, grade: '1ro', kind: 'muestra', zone: 'rio', builtIn: 'T4',

@@ -10,14 +10,16 @@
 //   storage blocked or broken the app keeps working in memory.
 
 import { useSyncExternalStore } from 'react';
-import { DOORS, bossId, coreId, extraPrefix, type Door, type Sheet } from './model';
+import { EXAMPLES } from './classmates';
+import { DOORS, bossId, coreId, extraPrefix, hasCore, type Door, type Sheet } from './model';
+import { isDraft, isMadeLevel, type Draft, type MadeLevel } from './workshop';
 
 export const STORAGE_KEY = 'camino.progress.v1';
 export const LAST_SHEET = 17;
 
 export interface Progress {
   v: 1;
-  /** Solved level ids (see curriculum/model: coreId, extraId, bossId). */
+  /** Solved level ids (see curriculum/model: coreId, extraId, bossId; workshop: cardLevelId). */
   solved: Readonly<Record<string, true>>;
   /**
    * Pages stamped in gold: their save-blocks challenge was solved (the ids of
@@ -30,9 +32,20 @@ export interface Progress {
   opened: number;
   /** The child's character (T4 builds the choice and the wardrobe). */
   character: string;
+  /** Levels made in the workshops on this device, in the order they were pinned (curriculum/workshop.ts). T3b. */
+  made: readonly MadeLevel[];
+  /** How many times each corkboard level was played to a win on this device, by card id. */
+  plays: Readonly<Record<string, number>>;
+  /** The level being made in each workshop (by sheet number), kept between the editor and its test page. */
+  drafts: Readonly<Record<string, Draft>>;
+  /** Things done on a sheet that are not levels: the comodín's choices played (`1ro-h16-recuperar`, …). */
+  goals: Readonly<Record<string, true>>;
 }
 
-export const EMPTY: Progress = Object.freeze({ v: 1, solved: Object.freeze({}), gold: Object.freeze({}), seeds: 0, opened: 1, character: 'brote' });
+export const EMPTY: Progress = Object.freeze({
+  v: 1, solved: Object.freeze({}), gold: Object.freeze({}), seeds: 0, opened: 1, character: 'brote',
+  made: Object.freeze([]) as readonly MadeLevel[], plays: Object.freeze({}), drafts: Object.freeze({}), goals: Object.freeze({}),
+});
 
 // ------------------------------------------------------------------ pure transitions
 
@@ -54,6 +67,33 @@ export const openSheet = (p: Progress, n: number): Progress => ({ ...p, opened: 
 export const chooseCharacter = (p: Progress, id: string): Progress => ({ ...p, character: id });
 const clampSheet = (n: number) => Math.min(LAST_SHEET, Math.max(1, Math.round(n) || 1));
 
+/** The level being made in workshop `n` (null forgets it). */
+export function saveDraft(p: Progress, n: number, draft: Draft | null): Progress {
+  const drafts = { ...p.drafts };
+  if (draft) drafts[String(n)] = structuredClone(draft);
+  else delete drafts[String(n)];
+  return { ...p, drafts };
+}
+
+/** A level pinned on the corkboard; its workshop starts a new one. Its seed comes when it is solved (cardLevelId). */
+export function publish(p: Progress, level: MadeLevel): Progress {
+  if (p.made.some((m) => m.id === level.id)) return p;
+  return saveDraft({ ...p, made: [...p.made, structuredClone(level)] }, level.sheet, null);
+}
+
+/** A corkboard level was played to a win on this device. */
+export const played = (p: Progress, card: string): Progress => ({ ...p, plays: { ...p.plays, [card]: (p.plays[card] ?? 0) + 1 } });
+
+/** Forgets the levels made on this device, their plays and the drafts; the seeds they earned stay. */
+export function clearMade(p: Progress): Progress {
+  const mine = new Set(p.made.map((m) => m.id));
+  const plays = Object.fromEntries(Object.entries(p.plays).filter(([k]) => !mine.has(k)));
+  return { ...p, made: [], plays, drafts: {} };
+}
+
+/** Something done on a sheet that is not a level (the comodín's choices). */
+export const reachGoal = (p: Progress, id: string): Progress => (p.goals[id] ? p : { ...p, goals: { ...p.goals, [id]: true } });
+
 /** Reads a stored value. Anything unknown, old or broken becomes a fresh start (never a crash). */
 export function parse(raw: string | null | undefined): Progress {
   if (!raw) return EMPTY;
@@ -65,7 +105,14 @@ export function parse(raw: string | null | undefined): Progress {
       if (x && typeof x === 'object') for (const k of Object.keys(x)) out[k] = true;
       return out;
     };
+    const record = <T>(x: unknown, keep: (v: unknown) => v is T) => {
+      const out: Record<string, T> = {};
+      if (x && typeof x === 'object' && !Array.isArray(x)) for (const [k, v] of Object.entries(x)) if (keep(v)) out[k] = v;
+      return out;
+    };
+    const count = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0;
     const solved = ids(o.solved);
+    const made = Array.isArray(o.made) ? o.made.filter(isMadeLevel) : [];
     return {
       v: 1,
       solved,
@@ -74,6 +121,11 @@ export function parse(raw: string | null | undefined): Progress {
       seeds: Number.isFinite(o.seeds) ? Math.max(0, Math.round(o.seeds!)) : Object.keys(solved).length,
       opened: clampSheet(Number(o.opened)),
       character: typeof o.character === 'string' ? o.character : 'brote',
+      // stored before the workshops existed: nothing made, played or reached yet; a broken entry is left out
+      made: made.filter((m, i) => made.findIndex((x) => x.id === m.id) === i),
+      plays: record(o.plays, count),
+      drafts: record(o.drafts, isDraft),
+      goals: ids(o.goals),
     };
   } catch {
     return EMPTY;
@@ -94,6 +146,12 @@ export interface SheetState {
   extras: Record<Door, number>;
   /** Pages of the sheet (core, boss, extras) stamped in gold. */
   gold: number;
+  /** A workshop: the levels pinned from it on this device. */
+  published: number;
+  /** A workshop: a classmate's level was played (a limited one, on the limited workshop). */
+  playedOthers: boolean;
+  /** The comodín: its choices played (goal names: `recuperar`, `musica`, `companeros`). */
+  goals: string[];
 }
 
 export function sheetState(s: Sheet, p: Progress): SheetState {
@@ -104,15 +162,22 @@ export function sheetState(s: Sheet, p: Progress): SheetState {
     extras[d] = Object.keys(p.solved).filter((k) => k.startsWith(pre)).length;
   }
   const coreSolved = core.filter((c) => c.done).length;
+  const own = `${s.grade}-h${s.n}-`;
+  const published = s.workshop ? p.made.filter((m) => m.sheet === s.n).length : 0;
+  const playedOthers = !!s.workshop && EXAMPLES.some((e) => (p.plays[e.id] ?? 0) > 0 && (!s.workshop!.limited || e.sheet === s.n));
+  const goals = s.hub ? Object.keys(p.goals).filter((k) => k.startsWith(own)).map((k) => k.slice(own.length)) : [];
   return {
     coreSolved,
     coreTotal: core.length,
     essentialSolved: core.filter((c) => c.essential && c.done).length,
     essentialTotal: core.filter((c) => c.essential).length,
-    complete: core.length > 0 && coreSolved === core.length,
+    complete: hasCore(s) ? coreSolved === core.length : s.workshop ? published > 0 && playedOthers : goals.length > 0,
     bossSolved: !!p.solved[bossId(s)],
     extras,
-    gold: Object.keys(p.gold).filter((k) => k.startsWith(`${s.grade}-h${s.n}-`)).length,
+    gold: Object.keys(p.gold).filter((k) => k.startsWith(own)).length,
+    published,
+    playedOthers,
+    goals,
   };
 }
 
