@@ -84,7 +84,7 @@ const RARE_SLOTS: Record<RareId, [number, number, number]> = {
 
 /** The critters' homes: the coatí on the meadow, the owl on its post, the fox by the bushes, the woodpecker on its trunk, the capybara by the water, the frog in the pond. */
 const CRITTER_HOMES: Record<CritterId, [number, number, number]> = {
-  coati: [446, 590, 1], lechuza: [250, 262, 0.95], zorro: [990, 486, 1], carpintero: [520, 204, 0.9],
+  coati: [446, 590, 1], lechuza: [250, 262, 0.95], zorro: [990, 486, 1], carpintero: [566, 208, 0.9],
   carpincho: [1000, 150, 0.95], rana: [1088, 560, 0.9],
 };
 

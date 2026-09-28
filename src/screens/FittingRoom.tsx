@@ -6,6 +6,9 @@
 import { CHARACTERS } from '../ink/characters.js';
 import { ITEMS, type Outfit } from '../curriculum/motivation';
 import { Portrait } from '../ui/art';
+import { CRITTER_IDS, RARE_IDS } from '../curriculum/motivation';
+import { CritterArt } from '../ui/critterArt';
+import { RarePlantArt } from '../ui/gardenArt';
 
 const FULL: Outfit[] = [
   { head: 'hongo', neck: 'bufanda', back: 'mochila', feet: 'botas' },
@@ -30,6 +33,25 @@ export function FittingRoom() {
           ))}
         </tbody>
       </table>
+      <h2 className="fitting-title">Bichos y plantas <small>(en color y en silueta, como esperan en la fila)</small></h2>
+      <div className="fitting-row">
+        {CRITTER_IDS.map((id) => (
+          <figure key={id} className="fitting-cell">
+            <svg viewBox="-70 -130 140 140" className="fitting-critter"><CritterArt id={id} /></svg>
+            <svg viewBox="-70 -130 140 140" className="fitting-critter"><g filter="url(#silhouette)"><CritterArt id={id} bare /></g></svg>
+            <figcaption>{id}</figcaption>
+          </figure>
+        ))}
+      </div>
+      <div className="fitting-row">
+        {RARE_IDS.map((id) => (
+          <figure key={id} className="fitting-cell">
+            <svg viewBox="-70 -150 140 160" className="fitting-critter"><RarePlantArt id={id} /></svg>
+            <svg viewBox="-70 -150 140 160" className="fitting-critter"><g filter="url(#silhouette)"><RarePlantArt id={id} /></g></svg>
+            <figcaption>{id}</figcaption>
+          </figure>
+        ))}
+      </div>
     </main>
   );
 }

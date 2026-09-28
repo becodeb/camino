@@ -126,8 +126,62 @@
 .coming-card { --fill: #f6efdf; width: 76px; height: 70px; padding: 0; display: grid; place-items: center; position: relative; }
 .coming-card:nth-child(odd) { --r-cut: 13px 9px 15px 10px / 9px 14px 10px 15px; rotate: -1.5deg; }
 .coming-card:nth-child(even) { rotate: 1.2deg; }
-.coming-art { width: 62px; height: 62px; overflow: visible; }
+.coming-art { width: 58px; height: 56px; overflow: visible; }
 .coming-sheet { position: absolute; right: -8px; bottom: -8px; width: 26px; height: 31px; overflow: visible; }
 @media (prefers-reduced-motion: reduce) {
   .is-newest, .is-arriving, .rare-girasol .sway, .float-seed, .dragonfly .hover, .gold-glint { animation: none; }
 }
+
+/* ------------------------------------------------ the critters: they blink, look around, and each has its own small motion */
+.critter { --blink: 4.6s; --look: 8s; }
+.critter-coati { --blink: 4.1s; --look: 6.8s; }
+.critter-lechuza { --blink: 5.6s; --look: 9.4s; }
+.critter-zorro { --blink: 3.9s; --look: 7.6s; }
+.critter-carpintero { --blink: 4.4s; --look: 6.2s; }
+.critter-carpincho { --blink: 6.4s; --look: 11s; }
+.critter-rana { --blink: 5.1s; --look: 8.8s; }
+.critter .critter-open { animation: c-blink-open var(--blink) infinite; }
+.critter .critter-shut { opacity: 0; animation: c-blink-shut var(--blink) infinite; }
+@keyframes c-blink-open { 0%, 93% { opacity: 1; } 94%, 97% { opacity: 0; } 98%, 100% { opacity: 1; } }
+@keyframes c-blink-shut { 0%, 93% { opacity: 0; } 94%, 97% { opacity: 1; } 98%, 100% { opacity: 0; } }
+.critter .critter-look { animation: c-look var(--look) ease-in-out infinite; }
+@keyframes c-look { 0%, 18% { translate: 0 0; } 24%, 40% { translate: 1.6px 0.4px; } 46%, 62% { translate: -1.8px 0.2px; } 68%, 100% { translate: 0 0; } }
+.critter .critter-tail, .critter .critter-head, .critter .critter-ear, .critter .critter-body, .critter .critter-throat, .critter .critter-look { transform-box: fill-box; }
+.critter-coati .critter-tail { transform-origin: 80% 100%; animation: c-sway 3.2s ease-in-out infinite; }
+@keyframes c-sway { 0%, 100% { rotate: -4deg; } 50% { rotate: 5deg; } }
+.critter-lechuza .critter-head { transform-origin: 50% 100%; animation: c-tilt 7.4s ease-in-out infinite; }
+@keyframes c-tilt { 0%, 30%, 100% { rotate: 0deg; } 38%, 52% { rotate: -14deg; } 60%, 72% { rotate: 9deg; } 80% { rotate: 0deg; } }
+.critter-zorro .critter-tail { transform-origin: 0% 100%; animation: c-swish 4.4s ease-in-out infinite; }
+@keyframes c-swish { 0%, 60%, 100% { rotate: 0deg; } 70% { rotate: -9deg; } 80% { rotate: 4deg; } 90% { rotate: -3deg; } }
+.critter-zorro .critter-ear { transform-origin: 30% 100%; animation: c-ear 5.2s ease-in-out infinite; }
+@keyframes c-ear { 0%, 84%, 100% { rotate: 0deg; } 88% { rotate: 16deg; } 92% { rotate: -4deg; } }
+.critter-carpintero .critter-peck { animation: c-peck 5.6s ease-in-out infinite; }
+@keyframes c-peck { 0%, 70%, 100% { translate: 0 0; } 73%, 79%, 85% { translate: -4px 0; } 76%, 82%, 88% { translate: 0 0; } }
+.critter-carpintero .critter-chips { opacity: 0; animation: c-chips 5.6s steps(1) infinite; }
+@keyframes c-chips { 0%, 72% { opacity: 0; } 73%, 90% { opacity: 1; } 91%, 100% { opacity: 0; } }
+.critter-carpincho .critter-body { transform-origin: 50% 100%; animation: c-breathe 4.8s ease-in-out infinite; }
+@keyframes c-breathe { 0%, 100% { scale: 1 1; } 50% { scale: 1.015 1.03; } }
+.critter-carpincho .critter-ear { transform-origin: 50% 100%; animation: c-ear 6.6s ease-in-out infinite; }
+.critter-rana .critter-throat { transform-origin: 50% 50%; animation: c-throat 1.6s ease-in-out infinite; }
+@keyframes c-throat { 0%, 100% { scale: 1; } 50% { scale: 1.25 1.35; } }
+/* a tap on a critter: a little hop */
+.critter-spot { cursor: pointer; }
+.critter-spot .critter-hop { transform-box: fill-box; transform-origin: 50% 100%; }
+.critter-spot.is-hopping .critter-hop { animation: c-hop 520ms cubic-bezier(.3,.6,.35,1); }
+@keyframes c-hop { 0% { translate: 0 0; scale: 1 1; } 20% { scale: 1.08 0.9; } 50% { translate: 0 -16px; scale: 0.94 1.08; } 80% { translate: 0 0; scale: 1.06 0.94; } 100% { scale: 1 1; } }
+/* a critter just sent by its boss walks in from outside the garden, then its home appears round it */
+.critter-spot.is-arriving .critter-in { animation: c-arrive 1600ms cubic-bezier(.3,.6,.35,1) 600ms both; }
+@keyframes c-arrive { 0% { translate: 260px 0; opacity: 0; } 12% { opacity: 1; } 25% { translate: 190px -18px; } 40% { translate: 130px 0; } 55% { translate: 80px -16px; } 70% { translate: 30px 0; } 82% { translate: 8px -8px; } 100% { translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .critter .critter-open, .critter .critter-shut, .critter .critter-look, .critter .critter-tail, .critter .critter-head, .critter .critter-ear, .critter .critter-body, .critter .critter-throat, .critter .critter-peck, .critter .critter-chips, .critter-spot .critter-in, .critter-spot .critter-hop { animation: none !important; }
+}
+
+/* ------------------------------------------------ a boss's reward card, in its page's controls */
+.reward-card { --fill: #f6efdf; position: relative; flex: none; width: 96px; height: 92px; padding: 4px; display: grid; place-items: center; rotate: 4deg; margin-left: 4px; }
+.reward-card .reward-art { width: 78px; height: 76px; overflow: visible; }
+.reward-tape { position: absolute; z-index: 2; left: 22px; top: -9px; width: 44px; height: 16px; rotate: -6deg; background: rgba(201, 87, 74, 0.55); clip-path: polygon(0 8%, 8% 0, 16% 12%, 84% 4%, 92% 12%, 100% 6%, 100% 92%, 92% 100%, 84% 88%, 16% 96%, 8% 88%, 0 96%); }
+.reward-card.is-won { --fill: var(--sheet); }
+.reward-card.is-fresh { animation: reward-turn 900ms cubic-bezier(.3,.6,.35,1) 900ms both; }
+@keyframes reward-turn { 0% { scale: 1 1; } 35% { scale: 0.05 1.05; } 70% { scale: 1.12 1.12; } 100% { scale: 1 1; } }
+.reward-card .pen-ring { position: absolute; inset: -9px; width: calc(100% + 18px); height: calc(100% + 18px); overflow: visible; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .reward-card.is-fresh { animation: none; } }

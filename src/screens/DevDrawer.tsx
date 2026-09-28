@@ -12,9 +12,9 @@
 import { useEffect, useState } from 'react';
 import { DOORS, DOOR_LABEL, goalId, hasCore, isBuilt, type Door, type HubGoal, type Sheet } from '../curriculum/model';
 import { PRIMER, sheetByN } from '../curriculum/primer';
-import { chooseCharacter, clearMade, earnGold, grant, grantItem, openSheet, played, progress, publish, reachGoal, setWardrobe, sheetState, solve, useProgress } from '../curriculum/progress';
-import { CHARACTER_IDS, CHARACTER_NAME, ITEMS } from '../curriculum/motivation';
-import { isUnlocked, unlockSay } from '../curriculum/rewards';
+import { chooseCharacter, clearMade, earnGold, grant, grantCritter, grantItem, openSheet, played, progress, publish, reachGoal, setWardrobe, sheetState, solve, useProgress } from '../curriculum/progress';
+import { CHARACTER_IDS, CHARACTER_NAME, CRITTER_IDS, ITEMS, critterReward } from '../curriculum/motivation';
+import { arrivedCritters, isUnlocked, unlockSay } from '../curriculum/rewards';
 import { extraFor } from '../curriculum/generate';
 import { GARDEN_HREF, MAP_HREF, WARDROBE_HREF, currentSheet, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type Route, type SheetPage } from '../curriculum/route';
 import { cardLevelId, draftFor, nextMadeId, verdictOf } from '../curriculum/workshop';
@@ -121,6 +121,7 @@ export function DevDrawer({ route }: { route: Route }) {
   const here = onSheet ? levelOf(sheet, plainPage(onSheet.page)) : null;
   const onGold = !!onSheet && isGold(onSheet.page);
   const st = sheetState(sheet, p);
+  const arrived = arrivedCritters(p);
 
   const markSolved = () => {
     if (!levelId) return;
@@ -269,6 +270,12 @@ export function DevDrawer({ route }: { route: Route }) {
           <span className="dev-label">dar ropa</span>
           {ITEMS.map((i) => (
             <button key={i.id} type="button" disabled={isUnlocked(i, p)} onClick={() => progress.update((x) => grantItem(x, i.id))} data-dev-item={i.id} title={`${i.name}: ${unlockSay(i.unlock)}`}>{i.id}</button>
+          ))}
+        </div>
+        <div className="dev-row">
+          <span className="dev-label">mandar bicho</span>
+          {CRITTER_IDS.map((id) => (
+            <button key={id} type="button" disabled={arrived.includes(id)} onClick={() => progress.update((x) => grantCritter(x, id))} data-dev-critter={id} title={`${critterReward(id).name} (lo manda el desafío de la hoja ${critterReward(id).sheet})`}>{id}</button>
           ))}
         </div>
       </section>

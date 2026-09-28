@@ -255,3 +255,8 @@ a.door-btn:focus-visible .door-in, a.boss-btn:focus-visible .boss-in { outline: 
 .fitting-grid td { padding: 2px; border: 1.5px dashed rgba(43, 38, 34, 0.18); background: var(--sheet); }
 .fitting-face { display: block; width: 128px; height: 128px; overflow: visible; }
 .dev-drawer button.is-sel { outline: 2.5px solid var(--blue-ink); outline-offset: 1px; }
+.fitting-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.fitting-cell { margin: 0; display: flex; flex-direction: column; align-items: center; background: var(--sheet); border: 1.5px dashed rgba(43, 38, 34, 0.18); padding: 4px; }
+.fitting-cell > div, .fitting-cell { flex-direction: row; flex-wrap: wrap; justify-content: center; width: 270px; }
+.fitting-critter { width: 128px; height: 128px; overflow: visible; }
+.fitting-cell figcaption { width: 100%; text-align: center; font: 700 13px var(--body); color: var(--ink-2); }

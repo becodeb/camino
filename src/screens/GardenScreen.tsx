@@ -14,15 +14,16 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { GARDEN_H, GARDEN_W, gardenOf, inMeadow, type Garden } from '../curriculum/garden';
-import { rewardKey, type BossReward } from '../curriculum/motivation';
+import { rewardKey, rewardOf, type BossReward } from '../curriculum/motivation';
 import { markSeen, placeInGarden, progress, useProgress } from '../curriculum/progress';
 import { arrivalSay, comingSay, newArrivals, stillComing } from '../curriculum/rewards';
 import { MAP_HREF } from '../curriculum/route';
 import { REDUCED } from '../ui/runtime';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
-import { NextPageArt, ThenArrow } from '../ui/art';
+import { NextPageArt, PenRing, ThenArrow } from '../ui/art';
 import { StopArt } from '../ui/forestArt';
 import { BedSoil, GardenScenery, GoldPot, RarePlantArt, SeedPlant, SheetPlant } from '../ui/gardenArt';
+import { CritterArt } from '../ui/critterArt';
 import { Bar } from './LevelBar';
 import { Quit, useGhost } from './levelKit';
 import { PlayerFace, usePlayer, useStage } from './player';
@@ -71,7 +72,7 @@ function Coming({ list }: { list: BossReward[] }) {
             speak(comingSay(r));
             if (!REDUCED) e.currentTarget.animate([{ rotate: '0deg' }, { rotate: '-5deg' }, { rotate: '4deg' }, { rotate: '0deg' }], { duration: 420 });
           }}>
-            <svg className="coming-art" viewBox="-70 -150 140 160" aria-hidden="true"><g filter="url(#silhouette)"><RewardArt r={r} /></g></svg>
+            <RewardSvg r={r} silhouette className="coming-art" />
             <svg className="coming-sheet" viewBox="-40 -48 80 96" aria-hidden="true">
               <StopArt n={r.sheet} look={r.sheet >= 10 ? 'stone' : 'page'} soon={false} mark="none" seed={r.sheet * 11} />
             </svg>
@@ -82,9 +83,34 @@ function Coming({ list }: { list: BossReward[] }) {
   );
 }
 
-/** A boss's special plant, drawn standing on (0, 0). */
+/** A boss's reward, drawn standing on (0, 0): a special plant, or a critter without its home (a silhouette, a card). */
 export function RewardArt({ r }: { r: BossReward }) {
-  return r.kind === 'plant' ? <RarePlantArt id={r.id} /> : null;
+  return r.kind === 'plant' ? <RarePlantArt id={r.id} /> : <CritterArt id={r.id} bare />;
+}
+
+/** The box round each reward drawn alone, so every one fills its card the same way. */
+const REWARD_BOX: Record<BossReward['id'], string> = {
+  coati: '-56 -106 112 110', lechuza: '-34 -62 68 66', zorro: '-30 -88 80 92', carpintero: '-30 -104 60 108', carpincho: '-66 -62 112 66', rana: '-34 -46 68 50',
+  girasol: '-44 -162 88 166', hongos: '-62 -46 124 56', diente: '-38 -96 76 100', helecho: '-74 -86 148 90', juncos: '-42 -132 84 136', nenufar: '-38 -30 76 38', ceibo: '-42 -104 84 108',
+};
+
+/** A reward alone in a box of its own (x, y, width, height inside another drawing; a class in HTML), in colour or as a silhouette. */
+export function RewardSvg({ r, silhouette, className, place }: { r: BossReward; silhouette?: boolean; className?: string; place?: { x: number; y: number; width: number; height: number } }) {
+  return (
+    <svg viewBox={REWARD_BOX[r.id]} preserveAspectRatio="xMidYMax meet" className={className} aria-hidden="true" overflow="visible" {...place}>
+      {silhouette ? <g filter="url(#silhouette)"><RewardArt r={r} /></g> : <RewardArt r={r} />}
+    </svg>
+  );
+}
+
+/** A tap on a critter: it hops (wordless). */
+function hop(el: Element) {
+  const g = el.querySelector('.critter-hop');
+  if (!g || REDUCED) return;
+  g.animate([
+    { translate: '0 0', scale: '1 1' }, { scale: '1.08 0.9', offset: 0.2 }, { translate: '0 -16px', scale: '0.94 1.08', offset: 0.5 },
+    { translate: '0 0', scale: '1.06 0.94', offset: 0.8 }, { scale: '1 1' },
+  ], { duration: 520, easing: 'cubic-bezier(.3,.6,.35,1)' });
 }
 
 export function GardenPage({ preview }: { preview?: number }) {
@@ -178,10 +204,20 @@ export function GardenPage({ preview }: { preview?: number }) {
     });
   }
   g.pots.forEach((pt, i) => drawn.push({ y: pt.y, key: `pot${i}`, node: <GoldPot key={`pot${i}`} x={pt.x} y={pt.y} i={i} /> }));
+  for (const c of g.critters) {
+    drawn.push({
+      y: c.y, key: c.id,
+      node: (
+        <g key={c.id} className={`critter-spot${c.fresh ? ' is-arriving' : ''}`} transform={`translate(${c.x} ${c.y})`} data-critter={c.id} data-fresh={c.fresh || undefined} onClick={(e) => hop(e.currentTarget)}>
+          <g className="critter-in"><g className="critter-hop"><g transform={`scale(${c.s})`}><CritterArt id={c.id} /></g></g></g>
+        </g>
+      ),
+    });
+  }
   drawn.push({ y: g.me.y, key: 'me', node: <GardenMe key="me" x={g.me.x} y={g.me.y} /> });
   drawn.sort((a, b) => a.y - b.y);
 
-  const coming = stillComing(p).filter((r) => r.kind === 'plant');
+  const coming = stillComing(p);
   const help = () => { ghost([{ do: 'point', at: coming.length ? ['.coming-card'] : ['.garden-movable', '.garden-me'] }]); };
 
   return (
@@ -214,4 +250,29 @@ export function GardenPage({ preview }: { preview?: number }) {
       <Quit href={MAP_HREF} />
     </main>
   );
+}
+
+// ------------------------------------------------------------------ what a boss sends, on its page
+
+/**
+ * On a boss's page, next to its controls: a taped card with what the boss
+ * sends to the garden, known in advance. A silhouette while the boss waits;
+ * won, the card turns and the critter or the plant shows in colour. A tap
+ * says it.
+ */
+export function RewardCard({ sheet, won, fresh }: { sheet: number; won: boolean; fresh?: boolean }) {
+  const r = rewardOf(sheet);
+  if (!r) return null;
+  const say = won ? arrivalSay(r) : comingSay(r);
+  return (
+    <button type="button" className={`reward-card cut${won ? ' is-won' : ''}${fresh ? ' is-fresh' : ''}`} data-reward={r.id} data-won={won || undefined} aria-label={say} onClick={() => speak(say)}>
+      <span className="reward-tape" aria-hidden="true" />
+      <RewardSvg r={r} silhouette={!won} className="reward-art" />
+      {won && fresh && <PenRingSvg />}
+    </button>
+  );
+}
+
+function PenRingSvg() {
+  return <PenRing seed={21} />;
 }

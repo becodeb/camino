@@ -562,6 +562,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
           )}
           <RestartButton onClick={restart} disabled={running} />
           {nav.gold?.(level, won)}
+          {nav.reward?.(level, won)}
         </div>
         <Sheets level={level} svgs={svgs} />
       </section>
@@ -692,6 +693,7 @@ function PredictLevel({ level }: { level: LevelDef }) {
           )}
           <RestartButton onClick={restart} disabled={running} />
           {nav.gold?.(level, won)}
+          {nav.reward?.(level, won)}
         </div>
         <Sheets level={level} svgs={svgs} />
       </section>

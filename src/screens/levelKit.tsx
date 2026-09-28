@@ -79,6 +79,8 @@ export interface LevelNav {
    * with a save-blocks challenge, once the page is solved (`won`: just now).
    */
   gold?(level: LevelDef, won: boolean): ReactNode;
+  /** In the controls, after the gold seal: what the page sends to the garden (a boss's reward card; `won`: just now). */
+  reward?(level: LevelDef, won: boolean): ReactNode;
   /** In the notebook, under the program (the gold challenge's note of the child's long plan). */
   notebook?: ReactNode;
   /** Where "next page" goes. */

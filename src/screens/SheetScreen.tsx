@@ -24,6 +24,9 @@ import { BossPageArt, DoorArt, Tree, Pine, Bush, Tuft, StopArt, PencilSky, River
 import { Bar } from './LevelBar';
 import { PlayerFace } from './player';
 import { ChoicePage } from './WardrobeScreen';
+import { RewardCard, RewardSvg } from './GardenScreen';
+import { rewardOf } from '../curriculum/motivation';
+import { arrivalSay } from '../curriculum/rewards';
 import { LevelScreen } from './LevelScreen';
 import { LevelNavContext, Quit, useGhost, type LevelNav } from './levelKit';
 import { PageThumb } from '../ui/thumbs';
@@ -39,6 +42,8 @@ const LINES = {
   goldReady: '¡Lo lograste! ¿Te animás con menos renglones? Tocá el sello dorado.',
   /** The gold challenge, won. */
   goldWon: '¡Sello dorado! Ahorraste bloques.',
+  /** A boss won for the first time (its reward's arrival follows). */
+  bossWon: '¡Ganaste el desafío!',
 };
 
 /** The level of a page of a built sheet (its gold challenge on a gold page), or null. */
@@ -122,9 +127,15 @@ function sheetNav(sheet: Sheet, page: SheetPage): LevelNav {
       if (level.save && program) rememberPlan(level.id, program);
       const before = progress.get().seeds;
       progress.update((p) => solve(p, level.id));
-      if (progress.get().seeds > before) flySeed(document.querySelector('.level .sheet [data-guide="target"]'));
-      return level.save && !progress.get().gold[level.id] ? LINES.goldReady : undefined;
+      const first = progress.get().seeds > before;
+      if (first) flySeed(document.querySelector('.level .sheet [data-guide="target"]'));
+      // a boss won for the first time sends its reward to the garden: said, and its card turns
+      const reward = page.kind === 'boss' && first ? rewardOf(sheet.n) : null;
+      const goldLine = level.save && !progress.get().gold[level.id] ? LINES.goldReady : undefined;
+      if (!reward) return goldLine;
+      return [LINES.bossWon, arrivalSay(reward), goldLine?.replace(/^¡Lo lograste! /, '')].filter(Boolean).join(' ');
     },
+    reward: (level, won) => (page.kind === 'boss' && !gold ? <RewardCard sheet={sheet.n} won={won || !!progress.get().solved[level.id]} fresh={won} /> : null),
     gold: (level, won) => {
       if (gold) return <GoldSeal id={id} trying fresh={won} />;
       if (!level.save || !(won || progress.get().solved[level.id])) return null;
@@ -373,6 +384,7 @@ function DoorsPage({ sheet }: { sheet: Sheet }) {
 
 /** The boss page on the doors page: the framed page with a drawing of its board, and its stamp once won. */
 function BossPage({ sheet, done }: { sheet: Sheet; done: boolean }) {
+  const r = rewardOf(sheet.n);
   return (
     <g className="boss-in">
       <g transform="rotate(4) scale(2.3)">
@@ -381,6 +393,15 @@ function BossPage({ sheet, done }: { sheet: Sheet; done: boolean }) {
         </BossPageArt>
       </g>
       {done && <Stamp seed={sheet.n + 5} x={62} y={82} size={96} />}
+      {/* what it sends to the garden, on a tag tied to the page: a silhouette until it is won */}
+      {r && (
+        <g className="boss-reward" transform="translate(-92 -58) rotate(-6)" data-reward={r.id} data-won={done || undefined}>
+          <path d="M40,6 Q60,-6 78,10" fill="none" stroke={INK} strokeWidth={2} strokeDasharray="1 5" strokeLinecap="round" />
+          <path d="M-36,-40 L36,-42 L38,34 L-34,36 Z" transform="translate(3 4)" fill="rgba(84, 62, 38, 0.2)" />
+          <path d="M-36,-40 L36,-42 L38,34 L-34,36 Z" fill={done ? '#fbf7ee' : '#f6efdf'} stroke={INK} strokeWidth={2.4} strokeLinejoin="round" />
+          <RewardSvg r={r} silhouette={!done} place={{ x: -30, y: -34, width: 62, height: 62 }} />
+        </g>
+      )}
     </g>
   );
 }
