@@ -114,7 +114,7 @@ function Card({ n, onClose }: { n: number; onClose: () => void }) {
           <Stop sheet={sheet} x={70} y={210} s={0.9} stamped />
           {next
             ? <g><Stop sheet={next} x={236} y={92} s={1.05} /><path d={penLoop(236, 94, 66, 66, { seed: n + 3 })} fill="none" stroke={PEN} strokeWidth={3.4} strokeLinecap="round" /></g>
-            : <text x={236} y={112} textAnchor="middle" className="preview-next">2°</text>}
+            : <text x={258} y={132} textAnchor="middle" className="preview-next">2°</text>}
         </svg>
         <div className="preview-peek">
           <div className="peek-page">

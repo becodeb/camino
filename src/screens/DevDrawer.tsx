@@ -7,7 +7,11 @@
 // level's id and its generator seed. On a workshop it opens the editor, the
 // test page and the corkboard, pins the level being made without playing it,
 // and clears the levels made on this device; on the comodín it opens its
-// three choices.
+// three choices; on the showcase its four steps (and picks three pages). The
+// motivation layer: the character, the wardrobe's switch (the teacher opens
+// it at the end of a class; dev mode always may), pieces and critters given
+// before their milestones, the garden previewed with 0, 10, 50 or 150 seeds,
+// a sheet's preview card shown again, the fitting room.
 
 import { useEffect, useState } from 'react';
 import { DOORS, DOOR_LABEL, goalId, hasCore, isBuilt, type Door, type HubGoal, type Sheet } from '../curriculum/model';
@@ -16,7 +20,7 @@ import { chooseCharacter, clearMade, earnGold, grant, grantCritter, grantItem, o
 import { CHARACTER_IDS, CHARACTER_NAME, CRITTER_IDS, ITEMS, critterReward } from '../curriculum/motivation';
 import { arrivedCritters, isUnlocked, unlockSay } from '../curriculum/rewards';
 import { extraFor } from '../curriculum/generate';
-import { GARDEN_HREF, MAP_HREF, WARDROBE_HREF, currentSheet, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type Route, type SheetPage } from '../curriculum/route';
+import { GARDEN_HREF, MAP_HREF, SHOWCASE, WARDROBE_HREF, currentSheet, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type Route, type SheetPage } from '../curriculum/route';
 import { cardLevelId, draftFor, nextMadeId, verdictOf } from '../curriculum/workshop';
 import { showPages } from '../curriculum/showcase';
 import { formatOf } from '../game/formats';
@@ -282,6 +286,7 @@ export function DevDrawer({ route }: { route: Route }) {
           </button>
           <a href={WARDROBE_HREF}>ir</a>
           <a href="#/probador" title="Cada prenda en cada personaje">probador</a>
+          <a href={sheetHref(SHOWCASE)} data-dev-showcase title="La muestra (hoja 17)">muestra</a>
         </div>
         <div className="dev-row">
           <span className="dev-label">jardín</span>
