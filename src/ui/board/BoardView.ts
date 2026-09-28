@@ -9,6 +9,8 @@ import { el, rng, blob, wobblyPoly, wobblyLine, penLoop, spiral, smoothClosed, s
 import { tween, proc, wait, E, ABORT, engine } from '../../ink/anim.js';
 import { INK, type CharacterDef } from '../../ink/characters.js';
 import { onFrame, REDUCED } from '../runtime';
+import { dress, outfitWords } from '../outfit';
+import type { Outfit } from '../../curriculum/motivation';
 import { DELTA, obstacleAt, visibleFrom, type Board, type Cell, type Dir, type Obstacle, type RobotState, type Trace, type TraceStep } from '../../game/model';
 
 export const S = 100;
@@ -48,7 +50,8 @@ type Rig = Record<string, any>;
 // ------------------------------------------------------------------ figure
 let uidN = 0;
 
-export function buildFigure(def: CharacterDef, parent: SVGElement) {
+/** A character drawn in `parent`, its eyes and mouth ready to pose, dressed in `outfit` (ui/outfit.ts). */
+export function buildFigure(def: CharacterDef, parent: SVGElement, outfit?: Outfit) {
   const uid = `f${++uidN}`;
   const body = el('g', {}, parent);
   const parts = def.build(body, uid);
@@ -64,6 +67,7 @@ export function buildFigure(def: CharacterDef, parent: SVGElement) {
     return { e, open, pupil, closed, happy, dizzy, mode: '' };
   });
   const mouth = def.mouth ? el('path', { stroke: INK, 'stroke-width': 2.6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, body) : null;
+  dress(def, body, parts, outfit, uid);
   return { def, body, parts, eyes, mouth, mouthType: '' };
 }
 type Figure = ReturnType<typeof buildFigure>;
@@ -107,10 +111,12 @@ export function poseFigure(fig: Figure, rig: Rig, look: { x: number; y: number }
   }
 }
 
-/** A still portrait (tabs, start screen): a complete rig so no NaN reaches a transform. */
-export function drawPortrait(def: CharacterDef, svg: SVGSVGElement, look = { x: 0.15, y: 0.25 }, mood: 'smile' | 'grin' = 'smile') {
+/** A still portrait (tabs, start screen, the map, the bar), dressed: a complete rig so no NaN reaches a transform. */
+export function drawPortrait(def: CharacterDef, svg: SVGSVGElement, look = { x: 0.15, y: 0.25 }, mood: 'smile' | 'grin' = 'smile', outfit?: Outfit) {
   svg.textContent = '';
-  const fig = buildFigure(def, svg);
+  svg.setAttribute('data-character', def.id);
+  svg.setAttribute('data-outfit', outfitWords(outfit));
+  const fig = buildFigure(def, svg, outfit);
   const rig = { hop: 0, sx: 1, sy: 1, lean: 0, spin: 0, face: 1, eyes: mood === 'grin' ? 'happy' : 'open', mouth: mood, ...JSON.parse(JSON.stringify(def.defaults)) };
   poseFigure(fig, rig, look, 0);
   def.render(rig, fig.parts, { t: 0, dt: 0.016, vx: 0, vy: 0, ay: 0 });
@@ -408,13 +414,18 @@ export class BoardView {
     }
   }
 
-  setCharacter(def: CharacterDef) {
+  /**
+   * Who plays on this board, dressed (a new one pops in with a puff where the
+   * last one stood). `at`: a spot of its own (a stage without a board).
+   */
+  setCharacter(def: CharacterDef, outfit?: Outfit, at?: { x: number; y: number }) {
     const face = this.actor ? Math.sign(this.actor.rig.face) || 1 : 1;
+    const where = at ?? (this.actor ? { x: this.actor.rig.x, y: this.actor.rig.y } : feet(this.pos.c, this.pos.r));
     if (this.actor) {
       this.puff(this.actor.rig.x, this.actor.rig.y + this.actor.def.pivot * SCALE);
       this.actor.destroy();
     }
-    this.actor = new Actor(this, def, feet(this.pos.c, this.pos.r));
+    this.actor = new Actor(this, def, where, outfit);
     this.actor.rig.face = face;
     const a = this.actor;
     a.act(() => a.popIn());
@@ -1113,7 +1124,7 @@ class Actor {
   nextZ = 0;
   onMark: null | (() => void) = null;
 
-  constructor(readonly view: BoardView, readonly def: CharacterDef, at: { x: number; y: number }) {
+  constructor(readonly view: BoardView, readonly def: CharacterDef, at: { x: number; y: number }, readonly outfit?: Outfit) {
     this.rig = {
       x: at.x, y: at.y, hop: 0, lift: 0, sx: 1, sy: 1, lean: 0, spin: 0, face: 1,
       eyes: 'open', mouth: 'smile', dizzy: 0, threaded: false,
@@ -1122,9 +1133,9 @@ class Actor {
     if (def.id === 'brote') this.rig.leaves = progress.leaves;
     const L = view.L;
     this.shadow = el('ellipse', { rx: 25, ry: 5.5, fill: 'url(#hatch)' }, L.shadow);
-    this.pos = el('g', {}, L.actor);
+    this.pos = el('g', { 'data-character': def.id, 'data-outfit': outfitWords(outfit) }, L.actor);
     this.ink = el('g', { filter: 'url(#boil)' }, this.pos);
-    this.fig = buildFigure(def, this.ink);
+    this.fig = buildFigure(def, this.ink, outfit);
     const hit = el('ellipse', { class: 'hit', cx: 0, cy: def.pivot - 4, rx: 42, ry: 52, fill: 'transparent' }, this.fig.body);
     hit.addEventListener('pointerdown', (e) => { e.stopPropagation(); view.tapCharacter(); });
     this.swirl = el('g', { opacity: 0, filter: 'url(#boil)' }, this.pos);

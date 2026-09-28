@@ -17,14 +17,14 @@ import { FREE_SONG, MAP_HREF, nextHref, pendingEssentials, reviewPage, sheetHref
 import type { LevelDef } from '../game/levels';
 import { useDev } from '../ui/devMode';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
-import { NextPageArt, PenRing, Portrait, Stamp, ThenArrow } from '../ui/art';
+import { NextPageArt, PenRing, Stamp, ThenArrow } from '../ui/art';
 import { PencilSky, River, Reeds, RiverScenery, LilyPad, Sprout, INK } from '../ui/forestArt';
 import { BridgeChoice, BridgeIcon, CorkChoice, KiteIcon, PendingPage, XyloChoice, XyloIcon } from '../ui/hubArt';
 import { CorkIcon } from '../ui/workshopArt';
-import { drawPortrait } from '../ui/board/BoardView';
 import { PageThumb } from '../ui/thumbs';
 import { blob, wobblyPoly } from '../ink/ink.js';
-import { BROTE, Bar } from './LevelBar';
+import { Bar } from './LevelBar';
+import { PlayerFace, ScenePlayer } from './player';
 import { LevelScreen } from './LevelScreen';
 import { LevelNavContext, Quit, useGhost, type LevelNav } from './levelKit';
 import type { PagesOf } from './CorkboardScreen';
@@ -69,7 +69,7 @@ export const hubPages: PagesOf = (sheet, current) => <HubPages sheet={sheet} cur
 function HubTask() {
   return (
     <span className="drawn-task" aria-hidden="true">
-      <Portrait def={BROTE} className="bar-face" />
+      <PlayerFace className="bar-face" />
       <ThenArrow />
       <KiteIcon size={40} />
     </span>
@@ -144,18 +144,6 @@ export function HubPage({ sheet }: { sheet: Sheet }) {
 }
 
 // ------------------------------------------------------------------ the bridge of "recuperar"
-
-/** Brote, drawn into the scene (a nested svg). */
-function SceneBrote({ x, y, w = 110 }: { x: number; y: number; w?: number }) {
-  const ref = useRef<SVGSVGElement>(null);
-  useEffect(() => { if (ref.current) drawPortrait(BROTE, ref.current, { x: 0.4, y: 0.1 }); }, []);
-  return (
-    <g className="map-brote" transform={`translate(${x} ${y})`}>
-      <ellipse cx={0} cy={0} rx={34} ry={7} fill="url(#hatch)" />
-      <g className="bob"><svg ref={ref} x={-w / 2} y={-w * (100 / 104)} width={w} height={w} viewBox="-52 -100 104 104" overflow="visible" aria-hidden="true" /></g>
-    </g>
-  );
-}
 
 /** Where the deck of the long bridge is at x (a gentle arch from bank to bank). */
 const deckY = (x: number) => 486 - 50 * Math.sin(Math.PI * Math.min(1, Math.max(0, (x - 150) / 900)));
@@ -252,7 +240,7 @@ export function BridgePage({ sheet }: { sheet: Sheet }) {
   return (
     <main ref={rootRef} className="level mode-doors mode-bridge" data-sheet={sheet.n} data-pending={pending.length}>
       <Bar
-        instruction={<span className="drawn-task" aria-hidden="true"><Portrait def={BROTE} className="bar-face" /><ThenArrow /><BridgeIcon size={46} /></span>}
+        instruction={<span className="drawn-task" aria-hidden="true"><PlayerFace className="bar-face" /><ThenArrow /><BridgeIcon size={46} /></span>}
         title={<><b>Hoja {sheet.n} · recuperar</b> {pending.length ? `Páginas esenciales pendientes: ${pending.length}` : 'Nada pendiente: una página de repaso'}{dev.on ? ' (dev: de todas las hojas)' : ''}</>}
         pages={<HubPages sheet={sheet} current={{ kind: 'recuperar' }} />}
         aside={<SeedPouch />}
@@ -265,7 +253,7 @@ export function BridgePage({ sheet }: { sheet: Sheet }) {
           <span className="tape tape-r" aria-hidden="true" />
           <svg className="doors-svg" viewBox="0 0 1200 600" role="group" aria-label="El puente de las páginas pendientes">
             <BridgeScene />
-            <SceneBrote x={82} y={492} />
+            <ScenePlayer x={82} y={492} w={110} look={{ x: 0.4, y: 0.1 }} />
             {shown.map((x, i) => {
               const cx = at(i, shown.length), level = sheetByN(x.n)!.core[x.k - 1].level;
               return (

@@ -7,16 +7,16 @@
 // wait; sheets not built yet are dashed. Nothing is blocked in dev mode.
 // Wordless for the child: the only text is the adult's small print.
 
-import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 import { smoothOpen } from '../ink/ink.js';
 import { isBuilt, type Sheet } from '../curriculum/model';
 import { PRIMER } from '../curriculum/primer';
 import { sheetState, useProgress, type Progress } from '../curriculum/progress';
-import { currentSheet, sheetHref, sheetOpen } from '../curriculum/route';
+import { GARDEN_HREF, WARDROBE_HREF, currentSheet, sheetHref, sheetOpen } from '../curriculum/route';
 import { useDev } from '../ui/devMode';
-import { drawPortrait } from '../ui/board/BoardView';
 import { Stamp } from '../ui/art';
-import { BROTE } from './LevelBar';
+import { ScenePlayer } from './player';
+import { WardrobeIcon } from '../ui/wardrobeArt';
 import { SeedPouch } from './yearKit';
 import {
   Bush, LilyPad, Mushroom, Pine, Reeds, River, Signpost, StopArt, StopRing, Tree, Tuft,
@@ -107,21 +107,6 @@ function Trail({ walked }: { walked: number }) {
   );
 }
 
-/** Brote, standing by a stop; the portrait is drawn into a nested <svg>. */
-function MapBrote({ x, y }: { x: number; y: number }) {
-  const ref = useRef<SVGSVGElement>(null);
-  useEffect(() => { if (ref.current) drawPortrait(BROTE, ref.current, { x: -0.25, y: 0.2 }); }, []);
-  const w = 92;
-  return (
-    <g className="map-brote" transform={`translate(${x} ${y})`}>
-      <ellipse cx={0} cy={0} rx={30} ry={6} fill="url(#hatch)" />
-      <g className="bob">
-        <svg ref={ref} x={-w / 2} y={-w * (100 / 104)} width={w} height={w} viewBox="-52 -100 104 104" overflow="visible" aria-hidden="true" />
-      </g>
-    </g>
-  );
-}
-
 function Stop({ sheet, p, here, unlocked }: { sheet: Sheet; p: Progress; here: boolean; unlocked: boolean }) {
   const [x, y] = STOPS[sheet.n];
   const built = isBuilt(sheet);
@@ -158,7 +143,12 @@ export function ForestMap() {
       <header className="map-head">
         <h1 className="map-title">Camino</h1>
         <p className="map-note">1er grado · Repetir · el bosque y el río</p>
-        <SeedPouch className="map-pouch" />
+        <a className={`wardrobe-link${p.wardrobe || dev.on ? '' : ' is-shut'}`} href={WARDROBE_HREF} aria-label={p.wardrobe || dev.on ? 'El vestidor' : 'El vestidor, cerrado'} data-wardrobe={p.wardrobe || dev.on ? 'open' : 'shut'}>
+          <WardrobeIcon open={p.wardrobe || dev.on} size={48} />
+        </a>
+        <a className="garden-link" href={GARDEN_HREF} aria-label="Mi jardín">
+          <SeedPouch className="map-pouch" />
+        </a>
       </header>
       <div className="map-stage">
         <div className="sheet map-sheet">
@@ -168,7 +158,7 @@ export function ForestMap() {
             <Scenery />
             <Trail walked={here.n} />
             {PRIMER.map((s) => <Stop key={s.n} sheet={s} p={p} here={s.n === here.n} unlocked={dev.on} />)}
-            <MapBrote x={bx + (here.zone === 'rio' ? -64 : 62)} y={by + 34} />
+            <ScenePlayer x={bx + (here.zone === 'rio' ? -64 : 62)} y={by + 34} />
           </svg>
         </div>
       </div>

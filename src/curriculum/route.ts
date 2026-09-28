@@ -101,7 +101,9 @@ export type Route =
   | { screen: 'sheet'; n: number; page: SheetPage }
   /** The child's garden; `seeds`: the dev drawer's preview of a garden with that many. */
   | { screen: 'garden'; seeds?: number }
-  | { screen: 'wardrobe' };
+  | { screen: 'wardrobe' }
+  /** Dev: every wardrobe piece on every character. */
+  | { screen: 'fitting' };
 
 /** The doors in the URL (Spanish, like `nivel` and `hoja`). */
 const DOOR_SLUG: Record<Door, string> = { easy: 'facil', medium: 'media', hard: 'dificil' };
@@ -153,6 +155,7 @@ export function parseRoute(hash: string): Route {
   if (m) return { screen: 'level', id: m[1] };
   if (h === '/1ro') return { screen: 'map' };
   if (h === '/1ro/vestidor') return { screen: 'wardrobe' };
+  if (h === '/probador') return { screen: 'fitting' };
   m = h.match(/^\/1ro\/jardin(?:\/(\d+))?$/);
   if (m) return m[1] ? { screen: 'garden', seeds: Number(m[1]) } : { screen: 'garden' };
   m = h.match(/^\/1ro\/hoja\/(\d+)(?:\/(.*))?$/);

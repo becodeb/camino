@@ -6,6 +6,7 @@
 import { memo, useEffect, useRef } from 'react';
 import { blob, leaf, penLoop, wobblyLine, wobblyPoly } from '../ink/ink.js';
 import type { CharacterDef } from '../ink/characters.js';
+import type { Outfit } from '../curriculum/motivation';
 import type { Dir } from '../game/model';
 import { drawPortrait } from './board/BoardView';
 import { BAR_FILL, barPath } from './noteArt';
@@ -17,9 +18,12 @@ const STAMP = '#c9574a';
 export const GOLD_INK = '#b3822a';
 const GOLD = '#f0d27a';
 
-export function Portrait({ def, mood = 'smile', className }: { def: CharacterDef; mood?: 'smile' | 'grin'; className?: string }) {
+/** A character's still portrait, dressed in its outfit (ui/outfit.ts). */
+export function Portrait({ def, mood = 'smile', className, outfit }: { def: CharacterDef; mood?: 'smile' | 'grin'; className?: string; outfit?: Outfit }) {
   const ref = useRef<SVGSVGElement>(null);
-  useEffect(() => { if (ref.current) drawPortrait(def, ref.current, { x: 0.15, y: 0.25 }, mood); }, [def, mood]);
+  const key = JSON.stringify(outfit ?? {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (ref.current) drawPortrait(def, ref.current, { x: 0.15, y: 0.25 }, mood, outfit); }, [def, mood, key]);
   return <svg ref={ref} className={className} viewBox="-52 -100 104 104" aria-hidden="true" />;
 }
 

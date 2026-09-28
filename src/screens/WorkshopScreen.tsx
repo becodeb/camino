@@ -37,12 +37,13 @@ import { aspectOf, frameOf } from '../ui/board/BoardView';
 import { EditorView } from '../ui/board/EditorView';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { PlayIcon } from '../ui/icons';
-import { PenRing, PotIcon, Portrait, SeedIcon, Stamp, ThenArrow } from '../ui/art';
+import { PenRing, PotIcon, SeedIcon, Stamp, ThenArrow } from '../ui/art';
 import { CorkIcon, EraserIcon, LessLineIcon, MakeIcon, MoreLineIcon, PinCardArt, RockIcon } from '../ui/workshopArt';
 import type { Cell } from '../game/model';
-import { BROTE, Bar } from './LevelBar';
+import { Bar } from './LevelBar';
+import { PlayerFace, usePlayer } from './player';
 import { LevelScreen } from './LevelScreen';
-import { LevelNavContext, Quit, RestartButton, useDebugHooks, useGhost, type LevelNav } from './levelKit';
+import { LevelNavContext, Quit, RestartButton, useDebugHooks, useGhost, useRedress, type LevelNav } from './levelKit';
 import { Redirect, SeedPouch, withSheetLine } from './yearKit';
 
 /** Spoken lines (es-AR). The board says the rest. */
@@ -93,7 +94,7 @@ export function WorkshopPages({ sheet, current }: { sheet: Sheet; current: Sheet
 function MakeTask() {
   return (
     <span className="drawn-task" aria-hidden="true">
-      <Portrait def={BROTE} className="bar-face" />
+      <PlayerFace className="bar-face" />
       <ThenArrow />
       <MakeIcon size={46} />
       <ThenArrow />
@@ -104,7 +105,7 @@ function MakeTask() {
 
 /** A tool (or a piece being dragged), drawn. */
 export function ToolArt({ tool }: { tool: Tool }) {
-  if (tool === 'start') return <Portrait def={BROTE} className="tool-face" />;
+  if (tool === 'start') return <PlayerFace className="tool-face" />;
   if (tool === 'seed') return <SeedIcon size={50} />;
   if (tool === 'goal') return <PotIcon size={50} />;
   if (tool === 'rock') return <RockIcon size={60} />;
@@ -176,6 +177,11 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
   const [added, setAdded] = useState(false);
   const frame = useMemo(() => frameOf(board), [board]);
   const line = limited ? WORKSHOP_LINES.editorLimited : WORKSHOP_LINES.editor;
+  // the child's character stands on the start (it plays every level of the year)
+  const player = usePlayer();
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  useRedress([viewRef], player);
 
   // the board view: made once, redrawn on every edit (the piece just placed pops in)
   useEffect(() => {
@@ -184,7 +190,7 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
       v = new EditorView(svgRef.current!);
       viewRef.current = v;
       v.show(board, { frame, first: true });
-      v.setCharacter(BROTE);
+      v.setCharacter(playerRef.current.def, playerRef.current.outfit);
       return;
     }
     v.show(board, { frame, placed: placed.current });

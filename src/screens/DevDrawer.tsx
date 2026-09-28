@@ -12,9 +12,11 @@
 import { useEffect, useState } from 'react';
 import { DOORS, DOOR_LABEL, goalId, hasCore, isBuilt, type Door, type HubGoal, type Sheet } from '../curriculum/model';
 import { PRIMER, sheetByN } from '../curriculum/primer';
-import { clearMade, earnGold, grant, openSheet, played, progress, publish, reachGoal, sheetState, solve, useProgress } from '../curriculum/progress';
+import { chooseCharacter, clearMade, earnGold, grant, grantItem, openSheet, played, progress, publish, reachGoal, setWardrobe, sheetState, solve, useProgress } from '../curriculum/progress';
+import { CHARACTER_IDS, CHARACTER_NAME, ITEMS } from '../curriculum/motivation';
+import { isUnlocked, unlockSay } from '../curriculum/rewards';
 import { extraFor } from '../curriculum/generate';
-import { MAP_HREF, currentSheet, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type Route, type SheetPage } from '../curriculum/route';
+import { MAP_HREF, WARDROBE_HREF, currentSheet, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type Route, type SheetPage } from '../curriculum/route';
 import { cardLevelId, draftFor, nextMadeId, verdictOf } from '../curriculum/workshop';
 import { formatOf } from '../game/formats';
 import { levelOf } from './SheetScreen';
@@ -71,6 +73,7 @@ function where(route: Route): string {
   if (route.screen === 'level') return `demo: ${levelById(route.id)?.title ?? route.id}`;
   if (route.screen === 'garden') return route.seeds != null ? `el jardín (vista de prueba con ${route.seeds} semillas)` : 'el jardín';
   if (route.screen === 'wardrobe') return 'el vestidor';
+  if (route.screen === 'fitting') return 'el probador (cada prenda en cada personaje)';
   const s = sheetByN(route.n)!;
   const pg = route.page;
   return `hoja ${s.n} · ${s.title} · ${isBuilt(s) ? partOf(pg) : 'próximamente'}${isGold(pg) ? ' · sello dorado' : ''}`;
@@ -238,6 +241,30 @@ export function DevDrawer({ route }: { route: Route }) {
           <span className="dev-label">niveles hechos en esta compu</span>
           <b className="dev-n" data-dev="made">{p.made.length}</b>
           <button type="button" className={`dev-danger${confirmMade ? ' is-armed' : ''}`} onClick={clearLevels} data-dev-clear-made>{confirmMade ? '¿seguro? tocá otra vez' : 'borrarlos'}</button>
+        </div>
+      </section>
+
+      <section className="dev-sec" data-dev-motivation>
+        <h2>motivación</h2>
+        <div className="dev-row">
+          <span className="dev-label">personaje</span>
+          {CHARACTER_IDS.map((id) => (
+            <button key={id} type="button" className={p.character === id ? 'is-sel' : ''} onClick={() => progress.update((x) => chooseCharacter(x, id))} data-dev-character={id}>{CHARACTER_NAME[id]}</button>
+          ))}
+        </div>
+        <div className="dev-row">
+          <span className="dev-label">vestidor</span>
+          <button type="button" onClick={() => progress.update((x) => setWardrobe(x, !x.wardrobe))} data-dev-wardrobe={p.wardrobe ? 'open' : 'shut'} title="La maestra lo abre al final de la clase; en modo dev siempre se puede entrar">
+            {p.wardrobe ? 'abierto por la maestra · cerrar' : 'cerrado · que la maestra lo abra'}
+          </button>
+          <a href={WARDROBE_HREF}>ir</a>
+          <a href="#/probador" title="Cada prenda en cada personaje">probador</a>
+        </div>
+        <div className="dev-row">
+          <span className="dev-label">dar ropa</span>
+          {ITEMS.map((i) => (
+            <button key={i.id} type="button" disabled={isUnlocked(i, p)} onClick={() => progress.update((x) => grantItem(x, i.id))} data-dev-item={i.id} title={`${i.name}: ${unlockSay(i.unlock)}`}>{i.id}</button>
+          ))}
         </div>
       </section>
 

@@ -9,6 +9,9 @@ import { LevelScreen } from './screens/LevelScreen';
 import { ForestMap } from './screens/ForestMap';
 import { SheetScreen } from './screens/SheetScreen';
 import { DevDrawer } from './screens/DevDrawer';
+import { YearPlayer } from './screens/player';
+import { FittingRoom } from './screens/FittingRoom';
+import { WardrobePage } from './screens/WardrobeScreen';
 import { levelById } from './game/levels';
 import { parseRoute, type Route } from './curriculum/route';
 import './ui/runtime';
@@ -24,8 +27,10 @@ function useHash() {
 }
 
 function Screen({ route, hash }: { route: Route; hash: string }) {
-  if (route.screen === 'map') return <ForestMap />;
-  if (route.screen === 'sheet') return <SheetScreen key={hash} n={route.n} page={route.page} />;
+  if (route.screen === 'map') return <YearPlayer><ForestMap /></YearPlayer>;
+  if (route.screen === 'sheet') return <YearPlayer><SheetScreen key={hash} n={route.n} page={route.page} /></YearPlayer>;
+  if (route.screen === 'fitting') return <FittingRoom />;
+  if (route.screen === 'wardrobe') return <YearPlayer><WardrobePage /></YearPlayer>;
   if (route.screen === 'level') {
     const level = levelById(route.id);
     if (level) return <LevelScreen key={level.id} level={level} />;

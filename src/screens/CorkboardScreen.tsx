@@ -18,11 +18,12 @@ import { played, progress, reachGoal, sheetState, solve, useProgress } from '../
 import { MAP_HREF, nextHref, sheetHref, type SheetPage } from '../curriculum/route';
 import { cardById, cardLevel, cardLevelId, cardsOf, isExample, type MadeLevel } from '../curriculum/workshop';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
-import { NextPageArt, Portrait, Stamp, ThenArrow } from '../ui/art';
+import { NextPageArt, Stamp, ThenArrow } from '../ui/art';
 import { PageThumb } from '../ui/thumbs';
 import { REDUCED } from '../ui/runtime';
 import { AvatarFace, CorkIcon, LimitBadge, PIN_COLORS, PushPin, StarSticker, Tally } from '../ui/workshopArt';
-import { BROTE, Bar } from './LevelBar';
+import { Bar } from './LevelBar';
+import { PlayerFace } from './player';
 import { LevelScreen } from './LevelScreen';
 import { LevelNavContext, Quit, useGhost, type LevelNav } from './levelKit';
 import { WorkshopPages, justPinned } from './WorkshopScreen';
@@ -46,7 +47,7 @@ const workshopPages: PagesOf = (sheet, current) => <WorkshopPages sheet={sheet} 
 function CorkTask() {
   return (
     <span className="drawn-task" aria-hidden="true">
-      <Portrait def={BROTE} className="bar-face" />
+      <PlayerFace className="bar-face" />
       <ThenArrow />
       <CorkIcon size={44} />
     </span>

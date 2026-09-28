@@ -20,7 +20,8 @@ import { notebookWidth } from '../blocks/BlockEditor';
 import { GRADES, nextLevel, type LevelDef, type PaletteBlock } from '../game/levels';
 import { cmdProgram, type Program } from '../game/model';
 import { stamp, useStamps } from '../game/progress';
-import { BROTE, LevelBar, TramoPages } from './LevelBar';
+import { LevelBar, TramoPages } from './LevelBar';
+import { playerKey, usePlayer } from './player';
 
 export const DEBUG = typeof location !== 'undefined' && location.search.includes('debug');
 
@@ -31,18 +32,34 @@ export const frameFor = (level: LevelDef): Frame => (level.music ? MUSIC_FRAME :
   jar: level.realtime?.win.kind === 'score',
 }));
 
-/** The board: one BoardView on one <svg>, rebuilt per level. */
+/** The board: one BoardView on one <svg>, rebuilt per level; the player (dressed) walks it. */
 export function useBoard(level: LevelDef) {
   const svgRef = useRef<SVGSVGElement>(null);
   const viewRef = useRef<BoardView | null>(null);
+  const player = usePlayer();
+  const playerRef = useRef(player);
+  playerRef.current = player;
   useEffect(() => {
     const v = new BoardView(svgRef.current!);
     viewRef.current = v;
     v.setBoard(level.worlds[0], { pop: true, frame: frameFor(level) });
-    v.setCharacter(BROTE);
+    v.setCharacter(playerRef.current.def, playerRef.current.outfit);
     return () => { v.destroy(); viewRef.current = null; };
   }, [level]);
+  useRedress([viewRef], player);
   return { svgRef, viewRef };
+}
+
+/** The player changed while the page is open (the dev drawer, the wardrobe): the boards' character pops in again, dressed. */
+export function useRedress(views: React.RefObject<BoardView | BoardView[] | null>[], player: ReturnType<typeof usePlayer>) {
+  const shown = useRef(playerKey(player));
+  useEffect(() => {
+    const key = playerKey(player);
+    if (key === shown.current) return;
+    shown.current = key;
+    for (const r of views) for (const v of [r.current ?? []].flat()) v.setCharacter(player.def, player.outfit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerKey(player)]);
 }
 
 // ------------------------------------------------------------------ where the page belongs

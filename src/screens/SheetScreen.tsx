@@ -14,14 +14,16 @@ import { DOORS, DOOR_LABEL, bossId, coreId, isBuilt, type Door, type Sheet } fro
 import { sheetByN } from '../curriculum/primer';
 import { earnGold, progress, sheetState, solve, useProgress } from '../curriculum/progress';
 import { extraFor } from '../curriculum/generate';
-import { MAP_HREF, bossOpen, doorsOpen, entryPage, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type SheetPage } from '../curriculum/route';
+import { CHOICE_SHEET, MAP_HREF, bossOpen, doorsOpen, entryPage, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type SheetPage } from '../curriculum/route';
 import { goldLevel } from '../game/formats';
 import type { LevelDef } from '../game/levels';
 import { useDev } from '../ui/devMode';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
-import { NextPageArt, PageIcon, PenRing, Portrait, Stamp, ThenArrow } from '../ui/art';
+import { NextPageArt, PageIcon, PenRing, Stamp, ThenArrow } from '../ui/art';
 import { BossPageArt, DoorArt, Tree, Pine, Bush, Tuft, StopArt, PencilSky, RiverScenery, INK } from '../ui/forestArt';
-import { BROTE, Bar } from './LevelBar';
+import { Bar } from './LevelBar';
+import { PlayerFace } from './player';
+import { ChoicePage } from './WardrobeScreen';
 import { LevelScreen } from './LevelScreen';
 import { LevelNavContext, Quit, useGhost, type LevelNav } from './levelKit';
 import { PageThumb } from '../ui/thumbs';
@@ -60,7 +62,9 @@ export function SheetScreen({ n, page }: { n: number; page: SheetPage }) {
   const sheet = sheetByN(n)!;
   if (!isBuilt(sheet) || sheet.showcase) return <SoonPage sheet={sheet} />;
   if (page.kind === 'entry') return <Redirect to={sheetHref(n, entryPage(sheet, progress.get()))} />;
-  if (page.kind === 'personaje') return <Redirect to={sheetHref(n, { kind: 'core', k: 1 })} />;
+  if (page.kind === 'personaje') {
+    return n === CHOICE_SHEET ? <ChoicePage sheet={sheet} pages={<SheetPages sheet={sheet} current={page} />} /> : <Redirect to={sheetHref(n)} />;
+  }
   if (sheet.hub) {
     switch (page.kind) {
       case 'comodin': return <HubPage sheet={sheet} />;
@@ -172,8 +176,16 @@ function PagesOfSheet({ sheet, current }: { sheet: Sheet; current: SheetPage }) 
   const bossDone = !!p.solved[bossId(sheet)];
   const bossGold = !!p.gold[bossId(sheet)];
   const bossHere = current.kind === 'boss';
+  const choosing = current.kind === 'personaje';
   return (
     <nav className="sheet-pages" aria-label="Páginas de la hoja">
+      {sheet.n === CHOICE_SHEET && (
+        <a className={`bar-work bar-choice${choosing ? ' is-here' : ''}`} href={sheetHref(sheet.n, { kind: 'personaje' })} aria-label={`Elegir personaje${p.picked ? ', hecho' : ''}`} data-work="personaje">
+          <PlayerFace className="choice-face" />
+          {p.picked && <Stamp seed={5} />}
+          {choosing && <PenRing seed={6} />}
+        </a>
+      )}
       <span className="sp-group">
         {sheet.core.map((c, i) => {
           const k = i + 1;
@@ -255,7 +267,7 @@ const GROUND = 468;
 function DoorsTask() {
   return (
     <span className="drawn-task" aria-hidden="true">
-      <Portrait def={BROTE} className="bar-face" />
+      <PlayerFace className="bar-face" />
       <ThenArrow />
       <span className="task-door"><DoorIcon size="easy" /></span>
     </span>

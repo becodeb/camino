@@ -7,7 +7,8 @@ import { Fragment, type ReactNode } from 'react';
 import { CHARACTERS } from '../ink/characters.js';
 import { GRADES, levelsOf, type LevelDef } from '../game/levels';
 import { HelpIcon, SpeakerIcon } from '../ui/icons';
-import { GuardaIcon, GuessIcon, JarIcon, PageIcon, PenRing, Portrait, PotIcon, SeedIcon, SeedsIcon, SongIcon, Stamp, ThenArrow } from '../ui/art';
+import { GuardaIcon, GuessIcon, JarIcon, PageIcon, PenRing, PotIcon, SeedIcon, SeedsIcon, SongIcon, Stamp, ThenArrow } from '../ui/art';
+import { PlayerFace } from './player';
 
 export const BROTE = CHARACTERS[0];
 
@@ -52,7 +53,7 @@ export function DrawnInstruction({ level }: { level: LevelDef }) {
       : [...(b.pickups.length >= 3 ? ['seeds' as const] : b.pickups.map(() => 'seed' as const)), b.goalKind];
   return (
     <span className="drawn-task" aria-hidden="true">
-      <Portrait def={BROTE} className="bar-face" />
+      <PlayerFace className="bar-face" />
       {chain.map((k, i) => (
         <Fragment key={i}>
           <ThenArrow />

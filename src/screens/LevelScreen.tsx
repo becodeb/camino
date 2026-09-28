@@ -33,8 +33,8 @@ import { tonesOf } from '../game/music';
 import { Lockstep } from '../game/lockstep';
 import { type LevelDef } from '../game/levels';
 import { cardCount, initialState, sameCell, type Cell, type Dir, type Program, type RobotState, type TraceStep } from '../game/model';
-import { BROTE } from './LevelBar';
-import { NextPage, RestartButton, Sheet, Shell, frameFor, useBoard, useDebugHooks, useGhost, useInstruction, useLevelNav } from './levelKit';
+import { usePlayer } from './player';
+import { NextPage, RestartButton, Sheet, Shell, frameFor, useBoard, useDebugHooks, useGhost, useInstruction, useLevelNav, useRedress } from './levelKit';
 import { RealtimeLevel } from './RealtimeLevel';
 
 /** Short spoken lines (es-AR). The board says the rest. */
@@ -150,6 +150,10 @@ const WORLD_TONES = ['rgba(114, 152, 193, 0.8)', 'rgba(240, 210, 122, 0.9)', 'rg
 function useBoards(level: LevelDef) {
   const svgs = useRef<(SVGSVGElement | null)[]>([]);
   const views = useRef<BoardView[]>([]);
+  const player = usePlayer();
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  useRedress([views], player);
   useEffect(() => {
     views.current = level.worlds.map((b, i) => {
       const svg = svgs.current[i]!;
@@ -157,7 +161,7 @@ function useBoards(level: LevelDef) {
       v.setBoard(b, { pop: true, frame: frameFor(level) });
       if (level.fog) v.setFog(true);
       v.keepBumps = level.worlds.length > 1;
-      v.setCharacter(BROTE);
+      v.setCharacter(playerRef.current.def, playerRef.current.outfit);
       return v;
     });
     return () => { views.current.forEach((v) => v.destroy()); views.current = []; };
