@@ -62,7 +62,70 @@ a.bar-work:hover { transform: translateY(-2px); }
 /* the test page's next button: pin the level on the corkboard */
 .pin-card-art { width: 60px; height: 70px; overflow: visible; }
 
+/* ------------------------------------------------ the class corkboard: cork in a wooden frame, paper cards pinned on it */
+.level.mode-cork {
+  height: 100dvh;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "bar" "stage";
+  padding-bottom: 22px;
+}
+.cork-stage { grid-area: stage; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: stretch; }
+.cork-frame { position: relative; isolation: isolate; min-height: 0; padding: 16px; }
+.cork-frame::before, .cork-frame::after { content: ""; position: absolute; inset: 0; border-radius: 8px 12px 9px 14px / 12px 8px 14px 9px; filter: url(#rough-lg); pointer-events: none; }
+/* the wood: a flat darker facet along the bottom and the right, a lighter one along the top and the left */
+.cork-frame::before { z-index: -1; background: #c9955f; border: 2.6px solid var(--ink); box-shadow: inset -7px -7px 0 #a57c55, inset 5px 5px 0 #d9ab7a; }
+.cork-frame::after { z-index: -2; background: var(--shadow); transform: translate(7px, 9px); }
+.cork-surface {
+  position: absolute; inset: 16px; z-index: -1; pointer-events: none;
+  border: 2.4px solid var(--ink); border-radius: 4px 6px 5px 7px; filter: url(#rough);
+  background-color: #dcbd8e;
+  /* cork: darker and lighter specks, flat (no gradient) */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='84' height='84'%3E%3Cg fill='%23b58c58' opacity='.6'%3E%3Cellipse cx='9' cy='12' rx='1.8' ry='1.2'/%3E%3Cellipse cx='31' cy='5' rx='1.3' ry='1'/%3E%3Cellipse cx='52' cy='17' rx='2' ry='1.3'/%3E%3Cellipse cx='75' cy='9' rx='1.4' ry='1.1'/%3E%3Cellipse cx='20' cy='37' rx='1.2' ry='.9'/%3E%3Cellipse cx='44' cy='44' rx='1.7' ry='1.2'/%3E%3Cellipse cx='68' cy='36' rx='1.3' ry='1'/%3E%3Cellipse cx='12' cy='63' rx='1.6' ry='1.1'/%3E%3Cellipse cx='36' cy='70' rx='1.2' ry='.9'/%3E%3Cellipse cx='61' cy='61' rx='1.9' ry='1.3'/%3E%3Cellipse cx='79' cy='77' rx='1.2' ry='.9'/%3E%3C/g%3E%3Cg fill='%23ecd4a8' opacity='.8'%3E%3Cellipse cx='23' cy='20' rx='1.4' ry='1'/%3E%3Cellipse cx='63' cy='26' rx='1.2' ry='.9'/%3E%3Cellipse cx='5' cy='47' rx='1.2' ry='.9'/%3E%3Cellipse cx='56' cy='51' rx='1.1' ry='.8'/%3E%3Cellipse cx='27' cy='56' rx='1.3' ry='1'/%3E%3Cellipse cx='73' cy='57' rx='1.2' ry='.9'/%3E%3Cellipse cx='46' cy='79' rx='1.3' ry='.9'/%3E%3C/g%3E%3C/svg%3E");
+}
+.cork {
+  list-style: none; margin: 0; height: 100%; overflow-y: auto; overflow-x: hidden;
+  padding: 24px 26px 26px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 24px 22px; align-content: start;
+}
+.cork-card { position: relative; rotate: var(--tilt, 0deg); }
+.card-in { position: relative; isolation: isolate; display: flex; flex-direction: column; gap: 5px; padding: 18px 12px 8px; color: var(--ink); text-decoration: none; transition: transform 0.15s ease-out; }
+.card-in::before, .card-in::after { content: ""; position: absolute; inset: 0; border-radius: 5px 8px 6px 9px / 8px 5px 9px 6px; filter: url(#rough); pointer-events: none; }
+.card-in::before { z-index: -1; background: var(--sheet); border: 2.4px solid var(--ink); }
+.card-in::after { z-index: -2; background: var(--shadow); transform: translate(4px, 6px); }
+a.card-in:hover { transform: translateY(-4px) rotate(-1deg); }
+a.card-in:active { transform: translate(2px, 3px); }
+a.card-in:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset: 6px; }
+.card-pin { position: absolute; z-index: 3; left: 50%; top: -14px; translate: -50% 0; }
+.push-pin { display: block; overflow: visible; }
+.card-thumb { display: block; }
+.card-thumb .thumb { width: 100%; }
+.card-foot { display: flex; align-items: center; gap: 8px; min-height: 48px; }
+.card-badge { --r-cut: 50% 46% 52% 48% / 48% 52% 46% 50%; flex: none; width: 46px; height: 46px; display: grid; place-items: end center; }
+.card-badge .badge-face { width: 46px; height: 46px; overflow: visible; margin-bottom: 1px; }
+.card-plays { margin-left: auto; display: flex; align-items: center; gap: 3px; }
+.card-plays .tally { overflow: visible; }
+.card-plays b { font: 700 15px/1 var(--body); color: var(--ink-2); }
+.limit-badge { display: flex; align-items: center; gap: 3px; }
+.limit-badge svg { overflow: visible; flex: none; }
+.card-who { font: 400 12px/1.1 var(--body); color: var(--ink-2); text-align: right; opacity: 0.85; }
+.card-stamp { position: absolute; right: -12px; top: 12px; width: 62px; height: 62px; rotate: -14deg; pointer-events: none; }
+.card-stamp.is-new { animation: stamp-in 520ms cubic-bezier(.3,.6,.35,1) both; }
+.card-star { position: absolute; left: -12px; top: -8px; z-index: 2; rotate: -12deg; }
+.card-star svg { display: block; overflow: visible; }
+/* the level just pinned: it drops onto the cork and its pin goes in */
+.cork-card.is-fresh { animation: card-pin 700ms cubic-bezier(.3,.6,.35,1) both; }
+.cork-card.is-fresh .card-pin { animation: pin-press 420ms 520ms ease-out both; }
+@keyframes card-pin { 0% { translate: 0 -120px; scale: 1.25; opacity: 0; } 55% { translate: 0 8px; scale: 1; opacity: 1; } 75% { translate: 0 -4px; } 100% { translate: 0 0; } }
+@keyframes pin-press { 0% { scale: 1.9; opacity: 0; } 60% { scale: 0.85; opacity: 1; } 100% { scale: 1; } }
+.cork-next { align-self: end; margin-bottom: 18px; }
+/* before the sheet is done the page to turn waits quietly */
+.cork-next.is-quiet { animation: pop-in 320ms ease-out both; }
+
 @media (max-height: 700px) {
   .tool { height: 70px; }
   .zone-tools { gap: 8px; padding: 12px 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cork-card.is-fresh, .cork-card.is-fresh .card-pin, .card-stamp.is-new { animation: none; }
 }

@@ -28,6 +28,7 @@ import { LevelNavContext, Quit, useGhost, type LevelNav } from './levelKit';
 import { PageThumb } from '../ui/thumbs';
 import { GoldSeal, PlanNote, Redirect, SeedPouch, flySeed, recallPlan, rememberPlan, withSheetLine } from './yearKit';
 import { EditorPage, TestPage, WorkshopPages } from './WorkshopScreen';
+import { CardPage, CorkboardPage } from './CorkboardScreen';
 
 const LINES = {
   doors: '¡Terminaste la hoja! Elegí una puerta para seguir jugando. La planta más grande es la más difícil.',
@@ -63,7 +64,8 @@ export function SheetScreen({ n, page }: { n: number; page: SheetPage }) {
   if (sheet.workshop) {
     if (page.kind === 'taller') return <EditorPage sheet={sheet} />;
     if (page.kind === 'probar') return <TestPage sheet={sheet} />;
-    if (page.kind === 'cartelera' || page.kind === 'tarjeta') return <SoonPage sheet={sheet} />;
+    if (page.kind === 'cartelera') return <CorkboardPage sheet={sheet} />;
+    if (page.kind === 'tarjeta') return <CardPage sheet={sheet} card={page.card} />;
     return <Redirect to={sheetHref(n, entryPage(sheet, progress.get()))} />;
   }
   if (page.kind === 'doors') return <DoorsPage sheet={sheet} />;
