@@ -66,6 +66,9 @@ export interface LevelNav {
   notebook?: ReactNode;
   /** Where "next page" goes. */
   next(level: LevelDef): void;
+  /** What the next-page button shows instead of the page to turn, and says to a screen reader (a workshop's test page: pin the level). */
+  nextArt?: ReactNode;
+  nextLabel?: string;
   /** Where "salir" goes. */
   quit: string;
   /** What is spoken when the page opens (a sheet adds its own line the first time). Called once, when it is said. */
@@ -151,8 +154,8 @@ export function Sheet({ svgRef, level }: { svgRef: React.RefObject<SVGSVGElement
 export function NextPage({ level }: { level: LevelDef }) {
   const nav = useLevelNav();
   return (
-    <button type="button" className="next-page cut pop-in" aria-label="Hoja siguiente" onClick={() => nav.next(level)}>
-      <NextPageArt />
+    <button type="button" className="next-page cut pop-in" aria-label={nav.nextLabel ?? 'Hoja siguiente'} onClick={() => nav.next(level)}>
+      {nav.nextArt ?? <NextPageArt />}
     </button>
   );
 }

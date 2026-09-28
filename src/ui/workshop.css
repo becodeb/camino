@@ -1,0 +1,68 @@
+/* 1ro's workshops (sheets 7 and 15), the class corkboard and the comodín (16).
+   On top of notebook.css, camino.css and primer.css: same tokens, the same
+   cut-paper primitive, the same ink. */
+
+/* ------------------------------------------------ the editor: tools | (the notebook's lines) | the board */
+.level.mode-taller {
+  /* as a program page: 10 top + 74 bar + 14 gap + 84 controls + 12 gap + 30 bottom, and the sheet's padding;
+     the tools and the board side by side, centred (no notebook in between on the first workshop) */
+  --board-h: calc(100dvh - 246px);
+  --sheet-w: min(calc(100vw - 260px), calc(var(--board-h) * var(--aspect) + 28px));
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "bar bar bar bar" ". palette stage .";
+  height: 100dvh;
+  padding-bottom: 30px;
+}
+.level.mode-taller.has-lines {
+  --sheet-w: min(calc(100vw - 480px), calc(var(--board-h) * var(--aspect) + 28px));
+  grid-template-columns: minmax(0, 1fr) auto var(--notebook-w, 196px) auto minmax(0, 1fr);
+  grid-template-areas: "bar bar bar bar bar" ". palette program stage .";
+}
+.zone-tools { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 16px; }
+.tool {
+  --fill: var(--sheet);
+  flex: none;
+  width: 104px;
+  height: 82px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  touch-action: none;
+  transition: transform 0.15s ease-out;
+}
+.tool:nth-child(odd) { --r-cut: 13px 9px 15px 10px / 9px 14px 10px 15px; }
+.tool:nth-child(even) { --r-cut: 10px 15px 9px 13px / 14px 9px 15px 10px; }
+.tool svg { overflow: visible; }
+.tool .tool-face { width: 54px; height: 62px; margin-top: -4px; }
+.tool:hover:not(.is-active) { transform: translateY(-2px); }
+.tool.is-active { --fill: #dce6f0; transform: translateX(8px) rotate(-2deg); }
+.tool .pen-ring { position: absolute; inset: -9px -10px; width: calc(100% + 20px); height: calc(100% + 18px); overflow: visible; pointer-events: none; }
+.level[data-busy="true"] .tool, .level[data-busy="true"] .editor-board { pointer-events: none; }
+
+.editor-board { touch-action: none; }
+.cell-edit { fill: rgba(114, 152, 193, 0.13); opacity: 0; cursor: pointer; transition: opacity 0.12s ease-out; }
+.cell-edit:hover { opacity: 1; }
+.cell-edit.is-target { opacity: 1; fill: rgba(114, 152, 193, 0.2); stroke: var(--blue-ink); stroke-width: 3.4; stroke-dasharray: 7 7; stroke-linecap: round; }
+/* a tool or a piece in the hand */
+.tool-drag { position: fixed; left: 0; top: 0; z-index: 60; width: 80px; height: 72px; display: grid; place-items: center; pointer-events: none; }
+.tool-drag > svg { rotate: -8deg; scale: 1.12; overflow: visible; filter: drop-shadow(3px 5px 0 rgba(84, 62, 38, 0.22)); }
+.tool-drag .tool-face { width: 60px; height: 70px; }
+body:has(.tool-drag) { cursor: grabbing; }
+
+/* the workshop's pages in the bar: making a level, the corkboard */
+.work-pages { gap: 10px; }
+.bar-work { position: relative; display: block; flex: none; width: 50px; height: 44px; transition: transform 0.15s ease-out; }
+.bar-work > svg { width: 100%; height: 100%; overflow: visible; display: block; }
+a.bar-work:hover { transform: translateY(-2px); }
+.bar-work.is-here { transform: translateY(-3px) rotate(-3deg); }
+.bar-work .stamp { position: absolute; right: -10px; bottom: -8px; width: 34px; height: 34px; rotate: -14deg; }
+.bar-work .pen-ring { position: absolute; inset: -8px -9px; width: calc(100% + 18px); height: calc(100% + 16px); overflow: visible; pointer-events: none; }
+
+/* the test page's next button: pin the level on the corkboard */
+.pin-card-art { width: 60px; height: 70px; overflow: visible; }
+
+@media (max-height: 700px) {
+  .tool { height: 70px; }
+  .zone-tools { gap: 8px; padding: 12px 14px; }
+}

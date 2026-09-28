@@ -4,6 +4,7 @@
 // long plan that the challenge shows.
 
 import { useEffect, useRef, useState } from 'react';
+import type { Sheet } from '../curriculum/model';
 import { useProgress } from '../curriculum/progress';
 import { REDUCED } from '../ui/runtime';
 import { PouchArt } from '../ui/forestArt';
@@ -14,6 +15,21 @@ import { createRoot } from 'react-dom/client';
 
 /** How long a won seed takes to fly into the pouch; the count changes when it lands. */
 export const LAND_MS = 900;
+
+/** Sheets whose own line was already said in this visit (it is said once, before its first page's). */
+const introduced = new Set<number>();
+/** A page's spoken line, after its sheet's own line the first time one of the sheet's pages opens in this visit. */
+export function withSheetLine(sheet: Pick<Sheet, 'n' | 'say'>, line: string): string {
+  if (introduced.has(sheet.n)) return line;
+  introduced.add(sheet.n);
+  return `${sheet.say} ${line}`;
+}
+
+/** Goes to another page without a history entry (a page that is not there). */
+export function Redirect({ to }: { to: string }) {
+  useEffect(() => { location.replace(to); }, [to]);
+  return null;
+}
 
 /** The pouch and how many seeds it holds. A new seed is counted when it lands (it pops). */
 export function SeedPouch({ className = '' }: { className?: string }) {

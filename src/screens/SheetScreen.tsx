@@ -26,7 +26,8 @@ import { BROTE, Bar } from './LevelBar';
 import { LevelScreen } from './LevelScreen';
 import { LevelNavContext, Quit, useGhost, type LevelNav } from './levelKit';
 import { PageThumb } from '../ui/thumbs';
-import { GoldSeal, PlanNote, SeedPouch, flySeed, recallPlan, rememberPlan } from './yearKit';
+import { GoldSeal, PlanNote, Redirect, SeedPouch, flySeed, recallPlan, rememberPlan, withSheetLine } from './yearKit';
+import { EditorPage, TestPage, WorkshopPages } from './WorkshopScreen';
 
 const LINES = {
   doors: '¡Terminaste la hoja! Elegí una puerta para seguir jugando. La planta más grande es la más difícil.',
@@ -36,9 +37,6 @@ const LINES = {
   /** The gold challenge, won. */
   goldWon: '¡Sello dorado! Ahorraste bloques.',
 };
-
-/** Sheets whose own line was already said in this visit (it is said once, before the first page's). */
-const introduced = new Set<number>();
 
 /** The level of a page of a built sheet (its gold challenge on a gold page), or null. */
 export function levelOf(sheet: Sheet, page: SheetPage): LevelDef | null {
@@ -57,16 +55,17 @@ const pageLabel = (page: SheetPage) => {
   return isGold(page) ? `${label} · oro` : label;
 };
 
-function Redirect({ to }: { to: string }) {
-  useEffect(() => { location.replace(to); }, [to]);
-  return null;
-}
-
 export function SheetScreen({ n, page }: { n: number; page: SheetPage }) {
   const sheet = sheetByN(n)!;
-  // the workshops' and the comodín's screens come in their own commits
-  if (!isBuilt(sheet) || sheet.workshop || sheet.hub) return <SoonPage sheet={sheet} />;
+  // the comodín's screens come in their own commit
+  if (!isBuilt(sheet) || sheet.hub) return <SoonPage sheet={sheet} />;
   if (page.kind === 'entry') return <Redirect to={sheetHref(n, entryPage(sheet, progress.get()))} />;
+  if (sheet.workshop) {
+    if (page.kind === 'taller') return <EditorPage sheet={sheet} />;
+    if (page.kind === 'probar') return <TestPage sheet={sheet} />;
+    if (page.kind === 'cartelera' || page.kind === 'tarjeta') return <SoonPage sheet={sheet} />;
+    return <Redirect to={sheetHref(n, entryPage(sheet, progress.get()))} />;
+  }
   if (page.kind === 'doors') return <DoorsPage sheet={sheet} />;
   const level = levelOf(sheet, page);
   // a gold challenge a page does not have: the page itself
@@ -119,11 +118,7 @@ function sheetNav(sheet: Sheet, page: SheetPage): LevelNav {
     notebook: gold && base ? <PlanNote plan={recallPlan(id) ?? base.save?.solution ?? base.solution} /> : undefined,
     next: () => { location.hash = nextHref(sheet, page); },
     quit: MAP_HREF,
-    say: (level) => {
-      if (introduced.has(sheet.n)) return level.say;
-      introduced.add(sheet.n);
-      return `${sheet.say} ${level.say}`;
-    },
+    say: (level) => withSheetLine(sheet, level.say),
     decor: page.kind === 'boss' ? <BossFrame /> : undefined,
     className: [page.kind === 'boss' ? 'is-boss' : '', gold ? 'is-gold' : ''].filter(Boolean).join(' ') || undefined,
     aside: <SeedPouch />,
@@ -150,8 +145,13 @@ export function DoorIcon({ size, shut }: { size: Door; shut?: boolean }) {
   );
 }
 
-/** The sheet's pages in the bar: the core pages, the three doors, the boss page. Links for the child and the teacher. */
+/** The sheet's pages in the bar: the core pages, the three doors, the boss page (a workshop's: its editor and corkboard). Links for the child and the teacher. */
 export function SheetPages({ sheet, current }: { sheet: Sheet; current: SheetPage }) {
+  if (sheet.workshop) return <WorkshopPages sheet={sheet} current={current} />;
+  return <PagesOfSheet sheet={sheet} current={current} />;
+}
+
+function PagesOfSheet({ sheet, current }: { sheet: Sheet; current: SheetPage }) {
   const p = useProgress();
   const dev = useDev();
   const st = sheetState(sheet, p);

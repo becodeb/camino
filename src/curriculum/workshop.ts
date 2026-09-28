@@ -220,6 +220,33 @@ export function verdictOf(d: Pick<Draft, 'board' | 'lines'>, limited: boolean): 
 /** A limited level's own program must use a repeat (no plan without one fits its lines). */
 export const usesRepeat = (p: Program) => p.some((it) => it.t === 'loop');
 
+/**
+ * On a level Brote cannot finish, what he cannot get to: the seed, or the pot
+ * after it (the pot stays closed until the seed is picked up, so it is a wall
+ * on the way to the seed).
+ */
+export function blockedPiece(b: MadeBoard): 'seed' | 'goal' {
+  const key = (x: At) => `${x[0]},${x[1]}`;
+  const wall = new Set([...b.rocks, b.goal].map(key));
+  const seen = new Set([key(b.start)]);
+  const queue: At[] = [b.start];
+  while (queue.length) {
+    const [c, r] = queue.shift()!;
+    for (const n of [[c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]] as At[]) {
+      if (!insideMade(n) || wall.has(key(n)) || seen.has(key(n))) continue;
+      seen.add(key(n));
+      queue.push(n);
+    }
+  }
+  return seen.has(key(b.seed)) ? 'goal' : 'seed';
+}
+
+/** A draft nobody touched yet: the workshop's default board and lines. */
+export const untouched = (d: Draft, limited: boolean) => {
+  const def = defaultDraft(limited);
+  return JSON.stringify(d.board) === JSON.stringify(def.board) && d.lines === def.lines;
+};
+
 // ------------------------------------------------------------------ the pages a made level becomes
 
 /** Level ids of the corkboard's cards (progress keys: their seed, their stamp). */

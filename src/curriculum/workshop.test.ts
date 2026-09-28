@@ -6,8 +6,8 @@ import { CLASSMATES, EXAMPLES, classmateById } from './classmates';
 import { sheetByN } from './primer';
 import { EMPTY, publish, solve } from './progress';
 import {
-  MADE_COLS, MADE_ROWS, MAX_LINES, applyTool, boardOf, cardById, cardLevel, cardLevelId, cardsOf, clampLines, defaultDraft, draftLevel, fewestProgram,
-  flatPlan, isArrowProgram, isDraft, isMadeBoard, isMadeLevel, movePiece, nextMadeId, pieceAt, usesRepeat, verdictOf,
+  MADE_COLS, MADE_ROWS, MAX_LINES, applyTool, blockedPiece, boardOf, cardById, cardLevel, cardLevelId, cardsOf, clampLines, defaultDraft, draftLevel,
+  fewestProgram, flatPlan, isArrowProgram, isDraft, isMadeBoard, isMadeLevel, movePiece, nextMadeId, pieceAt, untouched, usesRepeat, verdictOf,
   type MadeBoard,
 } from './workshop';
 
@@ -111,12 +111,24 @@ describe('the verdict', () => {
     if (d15.ok) { expect(d15.lines).toBe(2); expect(usesRepeat(d15.solution)).toBe(true); }
   });
 
-  it('a level Brote cannot finish is refused', () => {
+  it('a level Brote cannot finish is refused, and the piece he cannot get to is known', () => {
     const walled: MadeBoard = { start: [0, 0], seed: [2, 0], goal: [5, 0], rocks: [[1, 0], [0, 1]] };
     expect(verdictOf({ board: walled, lines: 3 }, false)).toEqual({ ok: false, why: 'unreachable' });
+    expect(blockedPiece(walled)).toBe('seed');
     // the pot is closed until the seed is picked up: a seed behind the pot cannot be reached through it
     const behind: MadeBoard = { start: [0, 0], seed: [5, 0], goal: [4, 0], rocks: [[4, 1], [5, 1]] };
     expect(verdictOf({ board: behind, lines: 3 }, true)).toEqual({ ok: false, why: 'unreachable' });
+    expect(blockedPiece(behind)).toBe('seed');
+    // the seed is reachable, the pot is walled in
+    const potIn: MadeBoard = { start: [0, 0], seed: [2, 0], goal: [5, 3], rocks: [[4, 3], [5, 2]] };
+    expect(verdictOf({ board: potIn, lines: 3 }, false)).toEqual({ ok: false, why: 'unreachable' });
+    expect(blockedPiece(potIn)).toBe('goal');
+  });
+
+  it('knows a draft nobody touched', () => {
+    expect(untouched(defaultDraft(false), false)).toBe(true);
+    expect(untouched({ ...defaultDraft(true), lines: 3 }, true)).toBe(false);
+    expect(untouched({ ...defaultDraft(false), board: B }, false)).toBe(false);
   });
 
   it('a first workshop\'s level gets a notebook as long as its shortest plan, and no longer than twelve lines', () => {
