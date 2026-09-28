@@ -4,14 +4,18 @@
 // blocked; the drawer jumps to any sheet and any level (core, a door's extra,
 // the boss), marks the level solved, skips to the next page, sets the sheet
 // the teacher opened, grants seeds, resets the progress, and shows the
-// level's id and its generator seed.
+// level's id and its generator seed. On a workshop it opens the editor, the
+// test page and the corkboard, pins the level being made without playing it,
+// and clears the levels made on this device; on the comodín it opens its
+// three choices.
 
 import { useEffect, useState } from 'react';
-import { DOORS, DOOR_LABEL, isBuilt, type Door } from '../curriculum/model';
+import { DOORS, DOOR_LABEL, goalId, hasCore, isBuilt, type Door, type HubGoal, type Sheet } from '../curriculum/model';
 import { PRIMER, sheetByN } from '../curriculum/primer';
-import { earnGold, grant, openSheet, progress, sheetState, solve, useProgress } from '../curriculum/progress';
+import { clearMade, earnGold, grant, openSheet, played, progress, publish, reachGoal, sheetState, solve, useProgress } from '../curriculum/progress';
 import { extraFor } from '../curriculum/generate';
-import { MAP_HREF, currentSheet, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type Route } from '../curriculum/route';
+import { MAP_HREF, currentSheet, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type Route, type SheetPage } from '../curriculum/route';
+import { cardLevelId, draftFor, nextMadeId, verdictOf } from '../curriculum/workshop';
 import { formatOf } from '../game/formats';
 import { levelOf } from './SheetScreen';
 import { levelById } from '../game/levels';
@@ -36,14 +40,45 @@ function useDevKeys() {
   }, []);
 }
 
+function partOf(pg: SheetPage): string {
+  switch (pg.kind) {
+    case 'core': return `núcleo ${pg.k}`;
+    case 'extra': return `puerta ${DOOR_LABEL[pg.door]} ${pg.i}`;
+    case 'boss': return 'jefe';
+    case 'doors': return 'puertas';
+    case 'entry': return 'entrada';
+    case 'taller': return 'taller (el editor)';
+    case 'probar': return 'taller, a prueba';
+    case 'cartelera': return 'cartelera';
+    case 'tarjeta': return `cartelera · tarjeta ${pg.card}`;
+    case 'comodin': return 'las tres opciones';
+    case 'recuperar': return 'recuperar (el puente)';
+    case 'pendiente': return `recuperar · hoja ${pg.n}, página ${pg.k}`;
+    case 'repaso': return `repaso · hoja ${pg.n}, puerta fácil ${pg.i}`;
+    case 'musica': return 'música libre (hoja 9, página 4)';
+  }
+}
+
 function where(route: Route): string {
   if (route.screen === 'home') return 'inicio (el tramo de la demo)';
   if (route.screen === 'map') return 'el mapa de 1ro';
   if (route.screen === 'level') return `demo: ${levelById(route.id)?.title ?? route.id}`;
   const s = sheetByN(route.n)!;
   const pg = route.page;
-  const part = pg.kind === 'core' ? `núcleo ${pg.k}` : pg.kind === 'extra' ? `puerta ${DOOR_LABEL[pg.door]} ${pg.i}` : pg.kind === 'boss' ? 'jefe' : pg.kind === 'doors' ? 'puertas' : 'entrada';
-  return `hoja ${s.n} · ${s.title} · ${isBuilt(s) ? part : 'próximamente'}${isGold(pg) ? ' · sello dorado' : ''}`;
+  return `hoja ${s.n} · ${s.title} · ${isBuilt(s) ? partOf(pg) : 'próximamente'}${isGold(pg) ? ' · sello dorado' : ''}`;
+}
+
+/** The comodín's page a level of it counts for (its goal), if any. */
+const HUB_GOAL: Partial<Record<SheetPage['kind'], HubGoal>> = { pendiente: 'recuperar', repaso: 'recuperar', musica: 'musica', tarjeta: 'companeros' };
+
+/** Pins the level being made in a workshop without playing it (its reference program as the author's). */
+function publishDraft(sheet: Sheet) {
+  const p = progress.get();
+  const d = draftFor(p, sheet);
+  const v = verdictOf(d, !!sheet.workshop?.limited);
+  if (!v.ok) return;
+  const id = nextMadeId(p);
+  progress.update((x) => solve(publish(x, { id, sheet: sheet.n, board: d.board, lines: v.lines, solution: v.solution }), cardLevelId(id)));
 }
 
 /** The format of a page, for the adult (small print). */
@@ -53,6 +88,7 @@ export function DevDrawer({ route }: { route: Route }) {
   const dev = useDev();
   const p = useProgress();
   const [confirm, setConfirm] = useState(false);
+  const [confirmMade, setConfirmMade] = useState(false);
   const [index, setIndex] = useState<Record<Door, number>>({ easy: 1, medium: 1, hard: 1 });
   useDevKeys();
 
@@ -63,7 +99,7 @@ export function DevDrawer({ route }: { route: Route }) {
     const s = sheetByN(n)!;
     setIndex({ easy: nextExtra(s, 'easy', progress.get()), medium: nextExtra(s, 'medium', progress.get()), hard: nextExtra(s, 'hard', progress.get()) });
   }, [n]);
-  useEffect(() => { if (!dev.open) setConfirm(false); }, [dev.open]);
+  useEffect(() => { if (!dev.open) { setConfirm(false); setConfirmMade(false); } }, [dev.open]);
 
   if (!dev.on) return <button type="button" className="dev-tab" onClick={devMode.toggle} title="Modo dev (para adultos): tecla `">dev</button>;
   if (!dev.open) return <button type="button" className="dev-tab is-on" onClick={devMode.toggle} title="Abrir el cajón dev">dev ▴</button>;
@@ -77,10 +113,23 @@ export function DevDrawer({ route }: { route: Route }) {
 
   const markSolved = () => {
     if (!levelId) return;
-    if (route.screen === 'level') stamp(levelId);
-    else if (onGold) progress.update((x) => earnGold(x, levelId));
-    else progress.update((x) => solve(x, levelId));
+    if (route.screen === 'level') { stamp(levelId); return; }
+    if (onGold) { progress.update((x) => earnGold(x, levelId)); return; }
+    const pg = onSheet?.page;
+    const goal = sheet.hub && pg ? HUB_GOAL[pg.kind] : undefined;
+    progress.update((x) => {
+      let y = solve(x, levelId);
+      // a card of the corkboard counts as played (a workshop is done with one classmate's level played)
+      if (pg?.kind === 'tarjeta') y = played(y, pg.card);
+      return goal ? reachGoal(y, goalId(sheet, goal)) : y;
+    });
   };
+  const clearLevels = () => {
+    if (!confirmMade) { setConfirmMade(true); return; }
+    progress.update(clearMade);
+    setConfirmMade(false);
+  };
+  const draftOk = !!sheet.workshop && verdictOf(draftFor(p, sheet), !!sheet.workshop.limited).ok;
   const skip = () => {
     if (onSheet) location.hash = nextHref(sheet, onSheet.page);
     else if (route.screen === 'level') { const l = levelById(route.id); if (l) goNext(l); }
@@ -120,7 +169,28 @@ export function DevDrawer({ route }: { route: Route }) {
             <a key={s.n} href={sheetHref(s.n)} className={`${isBuilt(s) ? 'is-built' : ''}${s.n === n ? ' is-sel' : ''}${sheetState(s, p).complete ? ' is-done' : ''}`} title={s.title} data-dev-sheet={s.n}>{s.n}</a>
           ))}
         </div>
-        {isBuilt(sheet) ? (
+        {sheet.workshop ? (
+          <>
+            <div className="dev-row">
+              <span className="dev-label">hoja {n}:</span>
+              <a href={sheetHref(n, { kind: 'taller' })} data-dev-page="taller">taller</a>
+              <a href={sheetHref(n, { kind: 'probar' })} data-dev-page="probar">a prueba</a>
+              <a href={sheetHref(n, { kind: 'cartelera' })} data-dev-page="cartelera">cartelera</a>
+            </div>
+            <div className="dev-row">
+              <button type="button" onClick={() => publishDraft(sheet)} disabled={!draftOk} data-dev-publish>colgar el nivel sin jugarlo</button>
+              <span className="dev-small">{st.published} colgados · {st.playedOthers ? 'jugó uno de un compañero' : 'todavía no jugó uno de un compañero'}</span>
+            </div>
+          </>
+        ) : sheet.hub ? (
+          <div className="dev-row">
+            <span className="dev-label">hoja {n}:</span>
+            <a href={sheetHref(n, { kind: 'comodin' })} data-dev-page="comodin">opciones</a>
+            <a href={sheetHref(n, { kind: 'recuperar' })} data-dev-page="recuperar">recuperar</a>
+            <a href={sheetHref(n, { kind: 'musica' })} data-dev-page="musica">música</a>
+            <a href={sheetHref(n, { kind: 'cartelera' })} data-dev-page="cartelera">cartelera</a>
+          </div>
+        ) : hasCore(sheet) ? (
           <>
             <div className="dev-row">
               <span className="dev-label">hoja {n}:</span>
@@ -155,6 +225,11 @@ export function DevDrawer({ route }: { route: Route }) {
           <button type="button" onClick={() => progress.update((x) => grant(x, 1))}>+1</button>
           <button type="button" onClick={() => progress.update((x) => grant(x, 5))}>+5</button>
           <button type="button" onClick={() => progress.update((x) => grant(x, -5))}>−5</button>
+        </div>
+        <div className="dev-row">
+          <span className="dev-label">niveles hechos en esta compu</span>
+          <b className="dev-n" data-dev="made">{p.made.length}</b>
+          <button type="button" className={`dev-danger${confirmMade ? ' is-armed' : ''}`} onClick={clearLevels} data-dev-clear-made>{confirmMade ? '¿seguro? tocá otra vez' : 'borrarlos'}</button>
         </div>
       </section>
 

@@ -15,11 +15,11 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { publish, progress, saveDraft, sheetState, useProgress, type Progress } from '../curriculum/progress';
+import { publish, progress, saveDraft, sheetState, useProgress } from '../curriculum/progress';
 import { MAP_HREF, sheetHref, type SheetPage } from '../curriculum/route';
 import type { Sheet } from '../curriculum/model';
 import {
-  TOOLS, applyTool, blockedPiece, boardOf, defaultDraft, draftLevel, movePiece, nextMadeId, pieceAt, untouched, usesRepeat, verdictOf,
+  TOOLS, applyTool, blockedPiece, boardOf, defaultDraft, draftFor, draftLevel, movePiece, nextMadeId, pieceAt, untouched, usesRepeat, verdictOf,
   type Draft, type Edit, type Piece, type Tool, type Verdict,
 } from '../curriculum/workshop';
 import { aspectOf, frameOf } from '../ui/board/BoardView';
@@ -54,7 +54,6 @@ const guided = new Set<number>();
 export const justPinned: { id: string | null } = { id: null };
 
 const cellOf = (at: readonly [number, number]): Cell => ({ c: at[0], r: at[1] });
-const draftOf = (p: Progress, s: Sheet) => p.drafts[String(s.n)] ?? defaultDraft(!!s.workshop?.limited);
 
 // ------------------------------------------------------------------ the bar
 
@@ -111,7 +110,7 @@ type Hold =
 export function EditorPage({ sheet }: { sheet: Sheet }) {
   const limited = !!sheet.workshop?.limited;
   const river = sheet.zone === 'rio';
-  const draft = draftOf(useProgress(), sheet);
+  const draft = draftFor(useProgress(), sheet);
   const rootRef = useRef<HTMLElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -148,10 +147,10 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
     if (e.refused) { viewRef.current?.wiggleAt(cellOf(e.refused)); return; }
     if (!e.changed) return;
     placed.current = cell;
-    save({ ...draftOf(progress.get(), sheet), board: e.board });
+    save({ ...draftFor(progress.get(), sheet), board: e.board });
   };
-  const applyAt = (t: Tool, cell: Cell) => commit(applyTool(draftOf(progress.get(), sheet).board, t, [cell.c, cell.r]), cell);
-  const moveTo = (from: Cell, to: Cell) => commit(movePiece(draftOf(progress.get(), sheet).board, [from.c, from.r], [to.c, to.r]), to);
+  const applyAt = (t: Tool, cell: Cell) => commit(applyTool(draftFor(progress.get(), sheet).board, t, [cell.c, cell.r]), cell);
+  const moveTo = (from: Cell, to: Cell) => commit(movePiece(draftFor(progress.get(), sheet).board, [from.c, from.r], [to.c, to.r]), to);
 
   const startOver = () => {
     if (busyRef.current) return;
@@ -164,7 +163,7 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
     if (!view) return;
     hold(true);
     speak(WORKSHOP_LINES[v.why]);
-    const b = draftOf(progress.get(), sheet).board;
+    const b = draftFor(progress.get(), sheet).board;
     if (v.why === 'unreachable') view.wiggleAt(cellOf(blockedPiece(b) === 'seed' ? b.seed : b.goal));
     if (v.why === 'long') view.wiggleAt(cellOf(b.goal));
     await view.puzzled();
@@ -173,7 +172,7 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
 
   const tryIt = () => {
     if (busyRef.current) return;
-    const v = verdictOf(draftOf(progress.get(), sheet), limited);
+    const v = verdictOf(draftFor(progress.get(), sheet), limited);
     if (v.ok) location.hash = sheetHref(sheet.n, { kind: 'probar' });
     else void refuse(v);
   };
@@ -182,7 +181,7 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
   /** The guided start: the hand puts the seed on the board, then points at ▶. */
   const playIntro = () => {
     if (busyRef.current) return;
-    const d = draftOf(progress.get(), sheet);
+    const d = draftFor(progress.get(), sheet);
     const to: Cell = { c: d.board.seed[0], r: Math.max(0, d.board.seed[1] - 1) };
     if (pieceAt(d.board, [to.c, to.r])) return;
     hold(true, false);
@@ -196,7 +195,7 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
 
   const help = () => {
     if (busyRef.current) return;
-    const d = draftOf(progress.get(), sheet);
+    const d = draftFor(progress.get(), sheet);
     if (untouched(d, limited)) { playIntro(); return; }
     const v = verdictOf(d, limited);
     if (v.ok) { ghost([{ do: 'point', at: ['.btn-play'] }]); return; }
@@ -212,7 +211,7 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
     let off = () => {};
     const t = setTimeout(() => { off = speakWhenAllowed(withSheetLine(sheet, line)); }, 450);
     let intro = 0;
-    if (!limited && !guided.has(sheet.n) && untouched(draftOf(progress.get(), sheet), limited)) {
+    if (!limited && !guided.has(sheet.n) && untouched(draftFor(progress.get(), sheet), limited)) {
       guided.add(sheet.n);
       intro = window.setTimeout(playIntro, 1400);
     }
@@ -237,7 +236,7 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
     if (busyRef.current || pending.current || (e.pointerType === 'mouse' && e.button !== 0)) return;
     const cell = viewRef.current?.cellAt(e.clientX, e.clientY);
     if (!cell) return;
-    const piece = pieceAt(draftOf(progress.get(), sheet).board, [cell.c, cell.r]);
+    const piece = pieceAt(draftFor(progress.get(), sheet).board, [cell.c, cell.r]);
     pending.current = { h: piece ? { kind: 'piece', from: cell, piece } : { kind: 'cell', at: cell }, x0: e.clientX, y0: e.clientY, id: e.pointerId, drag: false };
   };
 
@@ -296,7 +295,7 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
 
   const pick = (t: Tool) => { if (!suppressClick.current && !busyRef.current) setTool(t); };
 
-  useDebugHooks({ draft, tool, pick, use: (t: Tool, c: number, r: number) => applyAt(t, { c, r }), tryIt, help, playIntro, verdict: () => verdictOf(draftOf(progress.get(), sheet), limited) });
+  useDebugHooks({ draft, tool, pick, use: (t: Tool, c: number, r: number) => applyAt(t, { c, r }), tryIt, help, playIntro, verdict: () => verdictOf(draftFor(progress.get(), sheet), limited) });
 
   return (
     <main
@@ -356,7 +355,7 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
 export function TestPage({ sheet }: { sheet: Sheet }) {
   const limited = !!sheet.workshop?.limited;
   const [made] = useState(() => {
-    const d = draftOf(progress.get(), sheet);
+    const d = draftFor(progress.get(), sheet);
     const v = verdictOf(d, limited);
     return v.ok ? { d, v, level: draftLevel(sheet, d, v) } : null;
   });

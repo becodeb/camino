@@ -120,6 +120,9 @@ export function defaultDraft(limited: boolean): Draft {
     : { board: { start: [0, 2], seed: [2, 2], goal: [5, 2], rocks: [] }, lines: 5 };
 }
 
+/** The level being made in a workshop: its draft, or the default board when nothing was touched yet. */
+export const draftFor = (p: Pick<Progress, 'drafts'>, s: Pick<Sheet, 'n' | 'workshop'>): Draft => p.drafts[String(s.n)] ?? defaultDraft(!!s.workshop?.limited);
+
 /** The lines setting, kept in its range. */
 export const clampLines = (n: number) => Math.min(MAX_SET_LINES, Math.max(MIN_SET_LINES, Math.round(n) || MIN_SET_LINES));
 
