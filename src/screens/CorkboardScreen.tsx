@@ -28,6 +28,7 @@ import { LevelScreen } from './LevelScreen';
 import { LevelNavContext, Quit, useGhost, type LevelNav } from './levelKit';
 import { WorkshopPages, justPinned } from './WorkshopScreen';
 import { Redirect, SeedPouch, flySeed, withSheetLine } from './yearKit';
+import { useEndOfSheet } from './PreviewCard';
 
 const LINES = {
   cork: 'Estos son los niveles de tus compañeros. Tocá uno para jugarlo.',
@@ -96,7 +97,10 @@ export function CorkboardPage({ sheet, pages = workshopPages }: { sheet: Sheet; 
   const playedMine = cards.find((c) => !isExample(c) && (p.plays[c.id] ?? 0) > 0);
   const line = [fresh ? LINES.pinned : null, limited ? LINES.corkLimited : LINES.cork, !fresh && playedMine ? LINES.plays(p.plays[playedMine.id]) : null].filter(Boolean).join(' ');
 
+  // the sheet just finished (a level pinned and a classmate's played): its preview card first, then this page's line
+  const preview = useEndOfSheet(sheet, line);
   useEffect(() => {
+    if (preview) return;
     let off = () => {};
     const t = setTimeout(() => { off = speakWhenAllowed(withSheetLine(sheet, line)); }, 450);
     return () => { clearTimeout(t); off(); stopSpeaking(); };

@@ -29,6 +29,7 @@ import { LevelScreen } from './LevelScreen';
 import { LevelNavContext, Quit, useGhost, type LevelNav } from './levelKit';
 import type { PagesOf } from './CorkboardScreen';
 import { Redirect, SeedPouch, flySeed, withSheetLine } from './yearKit';
+import { useEndOfSheet } from './PreviewCard';
 
 const LINES = {
   hub: 'Tocá el puente para terminar lo que te quedó, el xilofón para tocar tu canción, o la cartelera para jugar los niveles de tus compañeros.',
@@ -76,9 +77,11 @@ function HubTask() {
   );
 }
 
-/** Speaks a page's line when it opens (the sheet's own before it, the first time). */
+/** Speaks a page's line when it opens (the sheet's own before it, the first time); the sheet just finished shows its preview card first. */
 function useLine(sheet: Sheet, line: string) {
+  const preview = useEndOfSheet(sheet, line);
   useEffect(() => {
+    if (preview) return;
     let off = () => {};
     const t = setTimeout(() => { off = speakWhenAllowed(withSheetLine(sheet, line)); }, 450);
     return () => { clearTimeout(t); off(); stopSpeaking(); };

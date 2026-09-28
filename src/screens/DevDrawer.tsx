@@ -24,6 +24,7 @@ import { levelById } from '../game/levels';
 import { stamp } from '../game/progress';
 import { devMode, useDev } from '../ui/devMode';
 import { goNext } from './levelKit';
+import { previewCard } from './PreviewCard';
 
 /** The ` key toggles the drawer; so does typing "dev" (for keyboards where ` is a dead key). */
 function useDevKeys() {
@@ -171,6 +172,7 @@ export function DevDrawer({ route }: { route: Route }) {
           <button type="button" onClick={markSolved} disabled={!levelId || (route.screen === 'sheet' && !!(onGold ? p.gold[levelId] : p.solved[levelId]))}>{onGold ? 'marcar oro' : 'marcar resuelto'}</button>
           <button type="button" onClick={skip} disabled={!onSheet && route.screen !== 'level'}>saltar ▸</button>
           {onSheet && here?.save && !onGold && <a href={sheetHref(n, goldPage(onSheet.page))} data-dev-gold>sello dorado</a>}
+          {sheet.preview && <button type="button" onClick={() => previewCard.show(n)} data-dev-preview title={`El adelanto del final de la hoja ${n}`}>ver el adelanto</button>}
         </div>
       </section>
 

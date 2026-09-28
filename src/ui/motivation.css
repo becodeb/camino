@@ -185,3 +185,27 @@
 @keyframes reward-turn { 0% { scale: 1 1; } 35% { scale: 0.05 1.05; } 70% { scale: 1.12 1.12; } 100% { scale: 1 1; } }
 .reward-card .pen-ring { position: absolute; inset: -9px; width: calc(100% + 18px); height: calc(100% + 18px); overflow: visible; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .reward-card.is-fresh { animation: none; } }
+
+/* ------------------------------------------------ the end-of-sheet preview card: the next stop, the next page peeking under a flap */
+.preview-veil { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 20px; background: rgba(242, 233, 216, 0.72); cursor: pointer; animation: veil-in 300ms ease-out both; }
+@keyframes veil-in { from { opacity: 0; } }
+.preview-card {
+  position: relative; width: min(780px, 92vw); aspect-ratio: 1.9; display: grid; grid-template-columns: 1fr 1.25fr; gap: 12px; align-items: center;
+  padding: 26px 30px 30px; rotate: -1.5deg; animation: card-drop 620ms cubic-bezier(.3,.6,.35,1) both;
+}
+@keyframes card-drop { 0% { translate: 0 -120px; rotate: -12deg; opacity: 0; } 60% { translate: 0 10px; rotate: 1deg; opacity: 1; } 100% { translate: 0 0; rotate: -1.5deg; } }
+.preview-path { width: 100%; height: 100%; overflow: visible; }
+.preview-next { font: 400 64px var(--hand); fill: var(--blue-ink); }
+.preview-peek { position: relative; height: 88%; aspect-ratio: 1.3; justify-self: center; }
+.peek-page {
+  position: absolute; inset: 0; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 18px 16px 16px; rotate: 2deg;
+  background: var(--sheet); border: 2.6px solid var(--ink); border-radius: 6px 9px 7px 10px; filter: url(#rough);
+  box-shadow: 6px 8px 0 var(--shadow);
+}
+.peek-page .thumb, .peek-page .thumb-stack { width: 100%; height: 100%; max-height: 100%; }
+.peek-icons { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; }
+.peek-stop { width: 70%; height: auto; overflow: visible; }
+.peek-flap { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; rotate: 2deg; }
+.peek-q { position: absolute; right: 9%; top: 6%; font: 400 58px/1 var(--hand); color: var(--blue-ink); rotate: 8deg; }
+.preview-close { position: absolute; right: -22px; bottom: -26px; }
+@media (prefers-reduced-motion: reduce) { .preview-veil, .preview-card { animation: none; } }

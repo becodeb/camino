@@ -13,6 +13,7 @@ import { YearPlayer } from './screens/player';
 import { FittingRoom } from './screens/FittingRoom';
 import { WardrobePage } from './screens/WardrobeScreen';
 import { GardenPage } from './screens/GardenScreen';
+import { PreviewHost } from './screens/PreviewCard';
 import { levelById } from './game/levels';
 import { parseRoute, type Route } from './curriculum/route';
 import './ui/runtime';
@@ -48,6 +49,7 @@ export function App() {
     <>
       <InkDefs />
       <Screen route={route} hash={hash} />
+      <PreviewHost />
       <DevDrawer route={route} />
     </>
   );

@@ -25,6 +25,7 @@ import { Bar } from './LevelBar';
 import { PlayerFace } from './player';
 import { ChoicePage } from './WardrobeScreen';
 import { RewardCard, RewardSvg } from './GardenScreen';
+import { useEndOfSheet } from './PreviewCard';
 import { rewardOf } from '../curriculum/motivation';
 import { arrivalSay } from '../curriculum/rewards';
 import { LevelScreen } from './LevelScreen';
@@ -311,12 +312,15 @@ function DoorsPage({ sheet }: { sheet: Sheet }) {
   const st = sheetState(sheet, p);
   const line = open ? LINES.doors : LINES.doorsShut;
   const bossDone = !!p.solved[bossId(sheet)];
+  // the sheet just finished: its preview card first, then this page's line
+  const preview = useEndOfSheet(sheet, line);
 
   useEffect(() => {
+    if (preview) return;
     let off = () => {};
     const t = setTimeout(() => { off = speakWhenAllowed(line); }, 450);
     return () => { clearTimeout(t); off(); stopSpeaking(); };
-  }, [line]);
+  }, [line, preview]);
 
   const help = () => { ghost([{ do: 'point', at: [open ? '.door-btn' : '.bar-door'] }]); };
 
