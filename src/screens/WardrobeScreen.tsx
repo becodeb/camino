@@ -32,7 +32,7 @@ import { SeedPouch, withSheetLine } from './yearKit';
 
 const LINES = {
   open: 'Elegí tu personaje y qué ponerle. Lo que ganaste está colgado en el ropero.',
-  shut: 'El ropero se abre al final de la clase, cuando tu maestra lo abre.',
+  shut: 'El ropero se abre al final de la clase.',
   picked: (name: string) => `Elegiste a ${name}.`,
   worn: (item: Item) => `¡${item.name.charAt(0).toUpperCase()}${item.name.slice(1)}!`,
 };
@@ -132,7 +132,7 @@ export function WardrobePage() {
     <main ref={rootRef} className={`level mode-wardrobe${open ? '' : ' is-shut'}`} data-open={open || undefined}>
       <Bar
         instruction={<WardrobeTask open={open} />}
-        title={<><b>Vestidor{open ? '' : ' · cerrado'}</b> Personaje y ropa ganada; lo abre la maestra al final de la clase</>}
+        title={<><b>Vestidor{open ? '' : ' · cerrado'}</b> Personaje y ropa ganada; lo abre el docente al final de la clase</>}
         pages={null}
         aside={<SeedPouch />}
         onSpeak={() => speak(line)}

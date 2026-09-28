@@ -252,7 +252,7 @@ export function DevDrawer({ route }: { route: Route }) {
 
       <section className="dev-sec">
         <div className="dev-row">
-          <span className="dev-label">la maestra abrió hasta la hoja</span>
+          <span className="dev-label">el docente abrió hasta la hoja</span>
           <button type="button" onClick={() => progress.update((x) => openSheet(x, x.opened - 1))} aria-label="una menos">−</button>
           <b className="dev-n" data-dev="opened">{p.opened}</b>
           <button type="button" onClick={() => progress.update((x) => openSheet(x, x.opened + 1))} aria-label="una más">+</button>
@@ -281,8 +281,8 @@ export function DevDrawer({ route }: { route: Route }) {
         </div>
         <div className="dev-row">
           <span className="dev-label">vestidor</span>
-          <button type="button" onClick={() => progress.update((x) => setWardrobe(x, !x.wardrobe))} data-dev-wardrobe={p.wardrobe ? 'open' : 'shut'} title="La maestra lo abre al final de la clase; en modo dev siempre se puede entrar">
-            {p.wardrobe ? 'abierto por la maestra · cerrar' : 'cerrado · que la maestra lo abra'}
+          <button type="button" onClick={() => progress.update((x) => setWardrobe(x, !x.wardrobe))} data-dev-wardrobe={p.wardrobe ? 'open' : 'shut'} title="El docente lo abre al final de la clase; en modo dev siempre se puede entrar">
+            {p.wardrobe ? 'abierto por el docente · cerrar' : 'cerrado · que lo abra el docente'}
           </button>
           <a href={WARDROBE_HREF}>ir</a>
           <a href="#/probador" title="Cada prenda en cada personaje">probador</a>
