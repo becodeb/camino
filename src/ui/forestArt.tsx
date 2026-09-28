@@ -173,6 +173,60 @@ export function River({ w, top, bottom, seed = 1 }: { w: number; top: number; bo
   );
 }
 
+// ------------------------------------------------------------------ the scenes of a sheet's pages
+
+/** Two clouds and the sun in pencil over the doors, like the sky of a lone path on the board. */
+export function PencilSky() {
+  const clouds: [number, number, number][] = [[330, 118, 1], [640, 80, 4]];
+  return (
+    <g opacity={0.75} stroke={INK} strokeLinecap="round">
+      {clouds.map(([x, y, sd]) => [blob(x, y, 40, 18, { seed: sd, n: 9 }), blob(x + 34, y - 11, 30, 18, { seed: sd + 3, n: 8 }), blob(x - 30, y - 4, 22, 13, { seed: sd + 6, n: 8 })]
+        .map((d, i) => <path key={`${x}-${i}`} d={d} fill="#fbf7ee" strokeWidth={2} />))}
+      <circle cx={1090} cy={92} r={26} fill="#f0d27a" strokeWidth={2.2} />
+      {Array.from({ length: 8 }, (_, i) => {
+        const a = (i / 8) * Math.PI * 2;
+        return <path key={i} d={`M${(1090 + Math.cos(a) * 35).toFixed(1)},${(92 + Math.sin(a) * 35).toFixed(1)} L${(1090 + Math.cos(a) * 47).toFixed(1)},${(92 + Math.sin(a) * 47).toFixed(1)}`} strokeWidth={2} />;
+      })}
+    </g>
+  );
+}
+
+/**
+ * A river sheet's scene (its doors page, the comodín's choices): the sandy
+ * bank in front, the river running behind with its lily pads, the far bank
+ * with reeds, flat stones and reeds on the near bank instead of the forest's
+ * trees. Drawn in a 1200 × 600 page; things stand on the bank at `ground`.
+ */
+export function RiverScenery({ ground: GROUND = 468 }: { ground?: number }) {
+  const stones: [number, number, number][] = [[92, GROUND + 38, 1.2], [590, GROUND + 60, 1], [1150, GROUND + 44, 1.1]];
+  return (
+    <g className="doors-scenery is-river">
+      <clipPath id="doors-river-clip"><rect x={0} y={0} width={1200} height={600} /></clipPath>
+      <PencilSky />
+      <path d="M0,196 Q300,186 600,194 T1200,190 L1200,300 L0,300 Z" fill="#f3e8cf" />
+      <path d={`M0,392 L1200,392 L1200,600 L0,600 Z`} fill="#f3e8cf" />
+      {/* the river's banks run a little past the page: clipped to it */}
+      <g clipPath="url(#doors-river-clip)"><River w={1200} top={262} bottom={404} seed={6} /></g>
+      {[[150, 312, 17], [650, 352, 14], [1050, 300, 16]].map(([x, y, r], i) => <LilyPad key={i} x={x} y={y} r={r} seed={i + 3} />)}
+      {[[40, 262], [470, 258], [860, 264], [1180, 258]].map(([x, y], i) => <Reeds key={`far${i}`} x={x} y={y} seed={i + 11} />)}
+      {stones.map(([x, y, s], i) => (
+        <g key={i} transform={`translate(${x} ${y}) scale(${s})`} stroke={INK} strokeLinejoin="round">
+          <path d={blob(3, 5, 40, 17, { seed: i + 30, n: 10 })} fill="rgba(84, 62, 38, 0.2)" stroke="none" />
+          <path d={blob(0, 0, 40, 17, { seed: i + 30, n: 10 })} fill="#ddd4c3" strokeWidth={2.6} />
+          <path d={`M-18,-6 q10,-5 22,-3`} fill="none" stroke="#fbf7ee" strokeWidth={2.4} strokeLinecap="round" />
+        </g>
+      ))}
+      {[[345, GROUND + 6], [598, GROUND + 4], [860, GROUND + 6], [22, GROUND + 70], [1100, GROUND + 100]].map(([x, y], i) => <Reeds key={`near${i}`} x={x} y={y} seed={i + 21} />)}
+      {[[250, 540], [720, 548], [960, 530]].map(([x, y], i) => (
+        <g key={`p${i}`} stroke={INK} strokeWidth={1.4} fill="#d8c9a6" opacity={0.8}>
+          <ellipse cx={x} cy={y} rx={5} ry={3.5} />
+          <ellipse cx={x + 12} cy={y + 5} rx={3.5} ry={2.5} />
+        </g>
+      ))}
+    </g>
+  );
+}
+
 // ------------------------------------------------------------------ the stops of the path
 
 export type StopLook = 'page' | 'stone';

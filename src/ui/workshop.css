@@ -137,7 +137,14 @@ a.card-in:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset: 6
 @keyframes pin-press { 0% { scale: 1.9; opacity: 0; } 60% { scale: 0.85; opacity: 1; } 100% { scale: 1; } }
 .cork-next { align-self: end; margin-bottom: 18px; }
 /* before the sheet is done the page to turn waits quietly */
-.cork-next.is-quiet { animation: pop-in 320ms ease-out both; }
+.next-page.is-quiet { animation: pop-in 320ms ease-out both; }
+
+/* ------------------------------------------------ the comodín: three choices on the riverbank, the bridge of "recuperar" */
+.hub-pages .bar-work.is-kite { width: 38px; margin-right: 8px; }
+.hub-choice { cursor: pointer; }
+a.hub-choice:focus-visible .door-in { outline: 3px dashed var(--blue-ink); outline-offset: 8px; }
+.bridge-card { cursor: pointer; }
+.bridge-no { font: 700 22px var(--body); fill: var(--ink); }
 
 @media (max-height: 700px) {
   .tool { height: 70px; }
