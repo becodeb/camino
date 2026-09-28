@@ -11,6 +11,11 @@
 // cannot finish it, solved by its author and pinned on the corkboard; a classmate's card played
 // twice (its play count rises); the limited workshop refuses a level without a repeat, then pins
 // one that needs it; the comodín's bridge plays a pending essential page; a reload keeps it all.
+// The motivation layer (T4): sheet 1 asks for a character; a sheet finished shows its preview card;
+// a page solved grows the garden; a boss won sends its critter to the garden; the wardrobe opens
+// when the teacher opens it, a piece unlocked is worn, a locked one waits; the character switched
+// stands on the map and walks a board; the showcase: two pages picked, the family plays one while
+// the child's character cheers, sheet 17 stamped; a reload keeps it all; blocked storage still plays.
 // Exits non-zero on the first failure.
 // PW=/tmp/pw node tools/check-primer.mjs [base]
 import { createRequire } from 'node:module';
@@ -33,13 +38,15 @@ try {
   const hash = () => page.evaluate(() => location.hash);
   const seeds = () => page.evaluate(() => Number(document.querySelector('.seed-pouch')?.getAttribute('data-count')));
   const count = (sel) => page.locator(sel).count();
-  // the "next page" button bobs forever (it waits for the child): no stable box, so it is clicked without waiting for one
-  const tap = async (sel) => { await page.click(sel, { force: sel === '.next-page' }); await page.waitForTimeout(260); };
+  // the "next page" buttons bob forever (they wait for the child): no stable box, so they are clicked without waiting for one
+  const tap = async (sel) => { await page.click(sel, { force: sel === '.next-page' || /-next\b/.test(sel) }); await page.waitForTimeout(260); };
   const expectHash = async (want, what) => {
     for (let i = 0; i < 20 && (await hash()) !== want; i++) await page.waitForTimeout(100);
     const h = await hash();
     if (h !== want) fail(`${what}: expected ${want}, at ${h}`);
   };
+  /** The preview card goes away with a tap anywhere: on the card itself (its own button may sit under the dev drawer). */
+  const closePreview = async () => { await page.click('.preview-card', { force: true, position: { x: 120, y: 60 } }); await page.waitForTimeout(300); };
   const drag = async (from, to) => {
     const a = await page.locator(from).boundingBox(), b = await page.locator(to).boundingBox();
     await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
@@ -76,10 +83,21 @@ try {
   if ((await seeds()) !== 0) fail('a fresh pouch is empty');
   ok('the home\'s 1ro tab opens the map: Brote on sheet 1, sheet 2 waits, no stamps, 0 seeds');
 
-  // ---------------------------------------------------------------- solve the first pages through the real UI
+  // ---------------------------------------------------------------- sheet 1 asks for a character first (T4); Brote here, the old checks' character
   await tap('a.stop[data-sheet="1"]');
-  await expectHash('#/1ro/hoja/1/1', 'sheet 1 opens on its first page');
+  await expectHash('#/1ro/hoja/1/personaje', 'sheet 1 opens on the character choice the first time');
+  await page.waitForTimeout(700);
+  if ((await count('.choice-btn[data-choice-char]')) !== 4) fail('the choice shows the four characters');
+  if (await count('.mode-choice .next-page')) fail('the page to turn waits until one is picked');
+  await tap('.choice-btn[data-choice-char="brote"]');
+  const picked = await page.evaluate(() => JSON.parse(localStorage.getItem('camino.progress.v1')));
+  if (picked.character !== 'brote' || !picked.picked) fail(`Brote should be picked, stored ${picked.character} ${picked.picked}`);
+  await tap('.next-page');
+  await expectHash('#/1ro/hoja/1/1', 'the page to turn leads to sheet 1\'s first page');
   await page.waitForTimeout(900);
+  ok('sheet 1 opens on the character choice (four on their stumps); Brote picked, the page to turn leads to page 1');
+
+  // ---------------------------------------------------------------- solve the first pages through the real UI
   await solveByHand({ dragFirst: false });
   if ((await seeds()) !== 1) fail(`the pouch should hold 1 seed after the first page, holds ${await seeds()}`);
   if (!(await count('.sheet-pages a[data-core="1"] .stamp'))) fail('page 1 should be stamped in the bar');
@@ -106,6 +124,13 @@ try {
   await expectHash('#/1ro/hoja/1/puertas', 'skip after the last page');
   if ((await count('a.door-btn')) !== 3 || (await count('a.boss-btn')) !== 1) fail('the three doors and the boss should be open');
   ok('the dev drawer (` key) shows the id, marks page 3 solved (3 seeds) and skips to the open doors');
+  // the sheet just finished: its preview card comes up once (sheet 2's first page peeking), a tap puts it away
+  await page.waitForSelector('.preview-veil[data-preview="1"]', { timeout: 5000 });
+  if (!(await count('.preview-card .peek-page .thumb'))) fail('the preview card should show the next sheet\'s first page');
+  await closePreview();
+  if (await count('.preview-veil')) fail('a tap should put the preview card away');
+  if (!(await page.evaluate(() => JSON.parse(localStorage.getItem('camino.progress.v1')).previewed['1']))) fail('the preview card of sheet 1 is kept as shown');
+  ok('sheet 1 finished: its preview card comes up on the doors (sheet 2\'s first page peeking), a tap puts it away; kept as shown');
 
   // the doors page: a door opens its first extra
   await page.locator('a.door-btn[data-door="easy"]').click();
@@ -129,9 +154,9 @@ try {
   await tap('.dev-drawer a[data-dev-door="hard"]');
   await expectHash('#/1ro/hoja/6/puerta/dificil/1', 'a dev jump to the hard door');
   await tap('.dev-sheets a[data-dev-sheet="17"]');
-  await expectHash('#/1ro/hoja/17', 'a dev jump to a sheet not built yet');
-  if (!(await count('.soon'))) fail('sheet 17 should show its "próximamente" page');
-  ok('dev jumps: sheet 6, its boss (framed), its hard door, and sheet 17 (próximamente)');
+  await expectHash('#/1ro/hoja/17/muestra', 'a dev jump to the showcase (every sheet is built now)');
+  if (!(await count('[data-station]')) || await count('.soon')) fail('sheet 17 should show the showcase\'s steps, not a "próximamente" page');
+  ok('dev jumps: sheet 6, its boss (framed), its hard door, and sheet 17 (the showcase\'s four steps)');
   await tap('.dev-drawer button:has-text("apagar")');
 
   // ---------------------------------------------------------------- a reload keeps the progress
@@ -149,9 +174,11 @@ try {
   await page.waitForTimeout(900);
   if ((await seeds()) !== 0 || (await count('.map-stamp'))) fail('cleared storage should start the year again');
   await tap('a.stop[data-sheet="1"]');
-  await expectHash('#/1ro/hoja/1/1', 'sheet 1 after clearing');
+  await expectHash('#/1ro/hoja/1/personaje', 'sheet 1 after clearing asks for a character again');
+  await page.goto(`${base}?debug#/1ro/hoja/1/1`);
+  await page.waitForTimeout(900);
   if (!(await count('.btn-play'))) fail('the level page should load');
-  ok('cleared storage starts the year again and the pages still load');
+  ok('cleared storage starts the year again (the character choice again) and the pages still load');
 
   // ---------------------------------------------------------------- the practice formats (T2), through the real UI
   /** Waits until the page is not running (a run and Brote's reaction). */
@@ -349,8 +376,10 @@ try {
   if (!(await count('.stop.is-here[data-sheet="7"]'))) fail('Brote should wait on the first workshop (sheet 7)');
   await tap('a.stop[data-sheet="7"]');
   await expectHash('#/1ro/hoja/7/taller', 'sheet 7 opens on its editor');
-  // the guided start: the ghost hand places the seed on the board and points at ▶
-  await page.waitForTimeout(6000);
+  // the guided start: the ghost hand places the seed on the board and points at ▶ (waited for until the hand is gone)
+  await page.waitForTimeout(2500);
+  await page.waitForFunction(() => !document.querySelector('.ghost-hand'), null, { timeout: 20000 });
+  await page.waitForTimeout(300);
   const guidedSeed = await board();
   if (!guidedSeed || JSON.stringify(guidedSeed.seed) !== '[2,1]') fail(`the guided start should put the seed on (2,1), the draft holds ${JSON.stringify(guidedSeed)}`);
   // tools through the real UI: taps on a tool and a cell, a drag of a tool, the eraser, a piece dragged on the board
@@ -406,6 +435,11 @@ try {
     await expectHash('#/1ro/hoja/7/cartelera', 'a played card leads back to the corkboard');
     await page.waitForTimeout(700);
     if ((await plays('ej-4')) !== round) fail(`after ${round} win(s) the card should say ${round}, says ${await plays('ej-4')}`);
+    // the workshop is done with a classmate's level played: its preview card, once
+    if (round === 1) {
+      await page.waitForSelector('.preview-veil[data-preview="7"]', { timeout: 5000 });
+      await closePreview();
+    }
   }
   if (!(await count('.cork [data-card="ej-4"] .tally'))) fail('the plays are drawn as tally marks');
   await page.goto(`${base}?debug#/1ro`);
@@ -415,7 +449,10 @@ try {
 
   // ---------------------------------------------------------------- the limited workshop (15): the refusal, then a level that needs a repeat
   await page.goto(`${base}?debug#/1ro/hoja/15/taller`);
-  await page.waitForTimeout(7500); // its guided start points at the lines and ▶
+  // its guided start points at the lines and ▶ (waited for until the hand is gone)
+  await page.waitForTimeout(2500);
+  await page.waitForFunction(() => !document.querySelector('.ghost-hand'), null, { timeout: 20000 });
+  await page.waitForTimeout(300);
   const lines = () => page.evaluate(() => Number(document.querySelector('.lines-note')?.getAttribute('data-lines')));
   if ((await lines()) !== 2) fail(`the limited workshop starts with two lines, has ${await lines()}`);
   for (let i = 0; i < 3; i++) await press('[data-lines-btn="more"]');
@@ -487,6 +524,137 @@ try {
   if ((await plays('ej-4')) !== 2) fail(`after a reload the card still says it was played twice, says ${await plays('ej-4')}`);
   ok('a reload keeps both levels made here and the plays on the corkboard');
 
+  // ---------------------------------------------------------------- the motivation layer (T4): the garden, a critter, the wardrobe, the character, the showcase
+  const progressNow = () => page.evaluate(() => JSON.parse(localStorage.getItem('camino.progress.v1')));
+  const plants = () => count('.garden-svg .garden-plant');
+  await page.goto(`${base}?debug#/1ro`);
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    // sheet 1 done (its card seen), sheet 2's pages 2–4: six seeds; Brote picked; the teacher opened the whole year
+    const solved = { '1ro-h1-1': true, '1ro-h1-2': true, '1ro-h1-3': true, '1ro-h2-2': true, '1ro-h2-3': true, '1ro-h2-4': true };
+    localStorage.setItem('camino.progress.v1', JSON.stringify({ v: 1, seeds: 6, opened: 17, character: 'brote', picked: true, solved, gold: {}, previewed: { 1: true } }));
+  });
+  await page.reload();
+  await page.waitForTimeout(900);
+  // the pouch opens the garden: six seeds planted
+  await tap('.garden-link');
+  await expectHash('#/1ro/jardin', 'the pouch opens the garden');
+  await page.waitForTimeout(700);
+  if ((await plants()) !== 6) fail(`the garden should hold 6 plants, holds ${await plants()}`);
+  if (!(await count('[data-move="hoja-1"]'))) fail('sheet 1 finished grows its tree');
+  if ((await count('.coming-card')) !== 13) fail(`thirteen bosses' rewards are still coming, shows ${await count('.coming-card')}`);
+  // a page solved through the real UI: one more plant, the newest a sprout
+  await tap('.garden-next');
+  await expectHash('#/1ro', 'the garden leads back to the map');
+  await tap('a.stop[data-sheet="2"]');
+  await expectHash('#/1ro/hoja/2/1', 'sheet 2 opens on its page still to solve');
+  await page.waitForTimeout(900);
+  await solveByHand({ dragFirst: false });
+  await tap('.quit');
+  await tap('.garden-link');
+  await page.waitForTimeout(700);
+  if ((await plants()) !== 7) fail(`a page solved should plant one more (7), the garden holds ${await plants()}`);
+  if ((await page.getAttribute('.is-newest .garden-plant', 'data-stage')) !== 'sprout') fail('the newest seed is a sprout');
+  if (!(await count('[data-move="hoja-2"]'))) fail('sheet 2 finished grows its tree');
+  ok('the pouch opens the garden (6 plants, the tree of sheet 1, 13 rewards still coming); page 2 of sheet 2 solved by hand plants a 7th, a sprout, and sheet 2\'s tree grows');
+
+  // a boss won through the real UI sends its critter: the coatí of sheet 2
+  await tap('.garden-next');
+  await tap('a.stop[data-sheet="2"]');
+  await expectHash('#/1ro/hoja/2/puertas', 'sheet 2 finished opens on its doors');
+  await page.waitForSelector('.preview-veil[data-preview="2"]', { timeout: 5000 });
+  await closePreview();
+  if (!(await count('.boss-btn [data-reward="coati"]')) || await count('.boss-btn [data-reward="coati"][data-won]')) fail('the boss page carries the coatí as a silhouette');
+  await page.locator('a.boss-btn').click();
+  await expectHash('#/1ro/hoja/2/jefe', 'the boss');
+  await page.waitForTimeout(900);
+  if (!(await count('.reward-card[data-reward="coati"]:not([data-won])'))) fail('the boss\'s reward card waits as a silhouette');
+  await solveByHand({ dragFirst: false });
+  if (!(await count('.reward-card[data-reward="coati"][data-won]'))) fail('won, the reward card turns');
+  await tap('.quit');
+  await tap('.garden-link');
+  await page.waitForTimeout(800);
+  if (!(await count('[data-critter="coati"][data-fresh]'))) fail('the coatí should arrive in the garden');
+  if (await count('.coming-card[data-coming="coati"]')) fail('the coatí is no longer coming');
+  await page.waitForTimeout(3400);
+  if (!(await progressNow()).seen['critter:coati']) fail('the coatí\'s arrival is kept as seen');
+  ok('sheet 2\'s doors show its preview card; its boss page carries the coatí as a silhouette; won by hand, the card turns and the coatí walks into the garden (seen once)');
+
+  // the wardrobe: shut until the teacher opens it; a piece unlocked is worn, a locked one waits; another character
+  await tap('.garden-next');
+  if ((await page.getAttribute('.wardrobe-link', 'data-wardrobe')) !== 'shut') fail('the wardrobe is shut until the teacher opens it');
+  await tap('.wardrobe-link');
+  await expectHash('#/1ro/vestidor', 'the wardrobe');
+  await page.waitForTimeout(700);
+  if (!(await count('.ropero-doors')) || await count('[data-prenda]')) fail('shut, the wardrobe shows its barred doors');
+  await page.keyboard.press('Backquote');
+  await page.waitForTimeout(300);
+  await tap('[data-dev-wardrobe="shut"]');
+  await tap('.dev-drawer button:has-text("apagar")');
+  if (!(await count('[data-prenda]'))) fail('opened by the teacher, the pieces hang on their hooks');
+  if (await count('[data-prenda="mochila"][data-locked]') || !(await count('[data-prenda="hongo"][data-locked]'))) fail('sheet 2 finished unlocks the backpack; the mushroom hat waits for 10 seeds');
+  await press('[data-prenda="hongo"]');
+  await press('[data-prenda="mochila"]');
+  if (!(await count('.prenda.is-on[data-prenda="mochila"]')) || await count('.prenda.is-on[data-prenda="hongo"]')) fail('the backpack is worn, the locked hat is not');
+  if (!(await count('.mirror-stage g[data-character="brote"][data-outfit~="mochila"]'))) fail('Brote wears the backpack on the rug');
+  await press('.cast-btn[data-cast="ovillo"]');
+  await page.waitForTimeout(500);
+  const dressed = await progressNow();
+  if (dressed.character !== 'ovillo' || dressed.outfit.back !== 'mochila' || dressed.seeds !== 8) fail(`Ovillo in the backpack, 8 seeds (never spent): stored ${dressed.character} ${JSON.stringify(dressed.outfit)} ${dressed.seeds}`);
+  if (!(await count('.mirror-stage g[data-character="ovillo"][data-outfit~="mochila"]'))) fail('Ovillo stands on the rug in the backpack');
+  ok('the wardrobe: barred until the teacher opens it (the dev drawer\'s switch); the backpack (sheet 2) is worn, the hat (10 seeds) waits; Ovillo chosen keeps it; the seeds stay 8');
+
+  // the character switched stands on the map and walks a board
+  await tap('.wardrobe-next');
+  await expectHash('#/1ro', 'the wardrobe leads back to the map');
+  if (!(await count('.map-brote[data-player="ovillo"] svg[data-outfit~="mochila"]'))) fail('Ovillo in the backpack waits on the map');
+  await tap('a.stop[data-sheet="2"]');
+  await page.waitForTimeout(700);
+  await page.locator('a.door-btn[data-door="easy"]').click();
+  await expectHash('#/1ro/hoja/2/puerta/facil/1', 'the easy door');
+  await page.waitForTimeout(900);
+  if (!(await count('.board g[data-character="ovillo"][data-outfit~="mochila"]'))) fail('Ovillo in the backpack walks the board');
+  if (!(await count('.level-bar svg.bar-face[data-character="ovillo"]'))) fail('the bar\'s portrait is Ovillo');
+  ok('Ovillo in the backpack waits on the map, walks the easy door\'s board and is the bar\'s portrait');
+
+  // the showcase: two pages picked, the family plays one while the child's character cheers
+  await tap('.quit');
+  await tap('a.stop[data-sheet="17"]');
+  await expectHash('#/1ro/hoja/17/muestra', 'sheet 17 opens on the showcase\'s steps');
+  await page.waitForTimeout(700);
+  await press('[data-station="elegir"]');
+  await expectHash('#/1ro/hoja/17/elegir', 'the first step: pick the pages');
+  await page.waitForTimeout(700);
+  if (await count('.pick-next')) fail('the family waits until two pages are picked');
+  await press('[data-pick="1ro-h1-1"]');
+  await press('[data-pick="1ro-h2-jefe"]');
+  if ((await progressNow()).favorites.join() !== '1ro-h1-1,1ro-h2-jefe') fail(`two favourites expected, stored ${JSON.stringify((await progressNow()).favorites)}`);
+  await press('.pick-next');
+  await expectHash('#/1ro/hoja/17/familia/1', 'the family plays the first page');
+  await page.waitForTimeout(1000);
+  if (!(await count('.board g[data-character="brote"]'))) fail('the family plays with Brote');
+  if (!(await count('.cheer[data-cheer="ovillo"] g[data-character="ovillo"]'))) fail('Ovillo cheers the family from the controls');
+  await solveByHand({ dragFirst: true });
+  if (!(await progressNow()).goals['1ro-h17-familia']) fail('the family\'s win is kept');
+  await press('.next-page');
+  await expectHash('#/1ro/hoja/17/familia/2', 'the next page for the family');
+  await tap('.quit');
+  if (!(await count('.stop.is-done[data-sheet="17"] .map-stamp'))) fail('sheet 17 is stamped once the family played');
+  ok('the showcase: sheet 1\'s page 1 and sheet 2\'s boss picked; the family plays the first with Brote while Ovillo cheers, wins; sheet 17 stamped on the map');
+
+  // a reload keeps it all
+  await page.reload();
+  await page.waitForTimeout(1000);
+  const kept = await progressNow();
+  if (kept.character !== 'ovillo' || kept.outfit.back !== 'mochila' || kept.favorites.length !== 2 || !kept.wardrobe || !kept.goals['1ro-h17-familia']) fail(`a reload should keep the character, the outfit, the favourites, the wardrobe and the showcase: ${JSON.stringify(kept)}`);
+  if (!(await count('.map-brote[data-player="ovillo"]'))) fail('after a reload Ovillo still waits on the map');
+  await tap('.garden-link');
+  await page.waitForTimeout(700);
+  // eight: the family's page was the child's, already solved (it earns no seed)
+  if (!(await count('[data-critter="coati"]:not([data-fresh])')) || (await plants()) !== 8) fail(`after a reload the coatí lives in the garden (not new) and 8 plants grow (${await plants()})`);
+  ok('a reload keeps Ovillo in the backpack, the open wardrobe, the two favourites, the family\'s win, the coatí at home and 8 plants (the family\'s win earns no seed)');
+
   // ---------------------------------------------------------------- blocked storage: the app plays in memory
   const blocked = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   watch(blocked);
@@ -504,6 +672,17 @@ try {
   const n = await blocked.evaluate(() => Number(document.querySelector('.seed-pouch')?.getAttribute('data-count')));
   if (n !== 1) fail(`with storage blocked the seed is still counted in memory, got ${n}`);
   ok('with storage blocked the page plays and counts the seed in memory');
+  await blocked.evaluate(() => { location.hash = '#/1ro/jardin'; });
+  await blocked.waitForTimeout(900);
+  if ((await blocked.locator('.garden-svg .garden-plant').count()) !== 1) fail('with storage blocked the garden grows the seed in memory');
+  await blocked.evaluate(() => { location.hash = '#/1ro/hoja/1/personaje'; });
+  await blocked.waitForTimeout(900);
+  await blocked.click('.choice-btn[data-choice-char="pliegue"]');
+  await blocked.waitForTimeout(400);
+  await blocked.evaluate(() => { location.hash = '#/1ro/hoja/1/2'; });
+  await blocked.waitForTimeout(1100);
+  if (!(await blocked.locator('.board g[data-character="pliegue"]').count())) fail('with storage blocked the character picked walks the board');
+  ok('with storage blocked the garden grows that seed and Pliegue, picked on sheet 1, walks the next page');
 
   if (errors.length) fail(`console errors: ${errors.join(' | ')}`);
   ok('no console errors');

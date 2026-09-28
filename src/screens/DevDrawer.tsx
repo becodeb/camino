@@ -18,6 +18,7 @@ import { arrivedCritters, isUnlocked, unlockSay } from '../curriculum/rewards';
 import { extraFor } from '../curriculum/generate';
 import { GARDEN_HREF, MAP_HREF, WARDROBE_HREF, currentSheet, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type Route, type SheetPage } from '../curriculum/route';
 import { cardLevelId, draftFor, nextMadeId, verdictOf } from '../curriculum/workshop';
+import { showPages } from '../curriculum/showcase';
 import { formatOf } from '../game/formats';
 import { levelOf } from './SheetScreen';
 import { levelById } from '../game/levels';
@@ -137,6 +138,10 @@ export function DevDrawer({ route }: { route: Route }) {
       return goal ? reachGoal(y, goalId(sheet, goal)) : y;
     });
   };
+  /** The showcase: picks the first three pages that can be shown, or clears the picks. */
+  const pickThree = () => {
+    progress.update((x) => (x.favorites.length ? { ...x, favorites: [] } : { ...x, favorites: showPages(x).slice(0, 3).map((s) => s.id) }));
+  };
   const clearLevels = () => {
     if (!confirmMade) { setConfirmMade(true); return; }
     progress.update(clearMade);
@@ -194,6 +199,21 @@ export function DevDrawer({ route }: { route: Route }) {
             <div className="dev-row">
               <button type="button" onClick={() => publishDraft(sheet)} disabled={!draftOk} data-dev-publish>colgar el nivel sin jugarlo</button>
               <span className="dev-small">{st.published} {st.published === 1 ? 'colgado' : 'colgados'} · {st.playedOthers ? 'jugó uno de un compañero' : 'todavía no jugó uno de un compañero'}</span>
+            </div>
+          </>
+        ) : sheet.showcase ? (
+          <>
+            <div className="dev-row">
+              <span className="dev-label">hoja {n}:</span>
+              <a href={sheetHref(n, { kind: 'muestra' })} data-dev-page="muestra">pasos</a>
+              <a href={sheetHref(n, { kind: 'elegir' })} data-dev-page="elegir">elegir</a>
+              <a href={sheetHref(n, { kind: 'familia', i: 1 })} data-dev-page="familia">familia</a>
+              <a href={sheetHref(n, { kind: 'recorrido' })} data-dev-page="recorrido">jardín</a>
+              <a href={sheetHref(n, { kind: 'afiche' })} data-dev-page="afiche">afiche</a>
+            </div>
+            <div className="dev-row">
+              <button type="button" onClick={pickThree} disabled={!showPages(p).length} data-dev-pick title="Elige las tres primeras páginas resueltas (o las borra si ya hay)">{p.favorites.length ? 'borrar las elegidas' : 'elegir tres páginas'}</button>
+              <span className="dev-small">{p.favorites.length} elegidas · {showPages(p).length} para elegir</span>
             </div>
           </>
         ) : sheet.hub ? (

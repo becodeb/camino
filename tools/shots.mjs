@@ -2,8 +2,10 @@
 // PW=/tmp/pw node tools/shots.mjs <outDir> [base] [only]
 //   T1 scenarios are named t1-*, T2 scenarios t2-*, T3 scenarios t3-* (so `only=t2-` shoots the T2 tour);
 //   1ro's year (feature primer-grado) is p1-* (its T1), p2-* (its T2: the formats, sheets 3, 5, 10–13, the river)
-//   p3a-* (its T3a: the music recess, sheet 9, and the guardas, sheet 14) and p3b-* (its T3b: the workshops,
-//   sheets 7 and 15, the class corkboard, and the comodín, sheet 16).
+//   p3a-* (its T3a: the music recess, sheet 9, and the guardas, sheet 14), p3b-* (its T3b: the workshops,
+//   sheets 7 and 15, the class corkboard, and the comodín, sheet 16) and p4-* (its T4: the garden, the critters,
+//   the wardrobe and the characters dressed, the end-of-sheet preview, the showcase, sheet 17).
+//   The p1–p3b scenarios' progress gets every preview card shown and a character picked (as they were before T4).
 //   PW: a directory with playwright installed; base: the running app (default http://127.0.0.1:8797/)
 //   only: run the scenarios whose name contains this text.
 // Uses the ?debug hooks (window.__camino) to build programs and run them; waits in real time.
@@ -485,7 +487,92 @@ const P3B = [
   { name: 'dev-workshop', size: [1366, 768], go: yr('/1ro/hoja/15/taller', '&dev'), progress: CORK },
 ].map((s) => ({ ...s, name: `p3b-${s.name}` }));
 
-const S = [...T1, ...T2, ...T3, ...P1, ...P2, ...P3A, ...P3B];
+// ---------------------------------------------------------------- 1ro's year, T4: the motivation layer and the showcase
+const CORE_OF = { 1: 3, 2: 4, 3: 4, 4: 3, 5: 4, 6: 4, 8: 3, 9: 4, 10: 4, 11: 4, 12: 4, 13: 4, 14: 4 };
+const PAGES_OF = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14];
+/** Sheets of pages done (their core pages), bosses won, and whatever else the scenario needs. */
+const year = (sheets, bosses, more = {}) => {
+  const solved = {};
+  for (const n of sheets) for (let k = 1; k <= CORE_OF[n]; k++) solved[`1ro-h${n}-${k}`] = true;
+  for (const n of bosses) solved[`1ro-h${n}-jefe`] = true;
+  return { v: 1, seeds: Object.keys(solved).length, opened: 17, character: 'brote', picked: true, solved, gold: {}, ...more };
+};
+const allPreviewed = Object.fromEntries(Array.from({ length: 17 }, (_, i) => [String(i + 1), true]));
+const REWARDS = ['plant:girasol', 'critter:coati', 'plant:hongos', 'critter:lechuza', 'plant:diente', 'critter:zorro', 'plant:helecho', 'critter:carpintero', 'critter:carpincho', 'plant:juncos', 'plant:nenufar', 'critter:rana', 'plant:ceibo'];
+const seenAll = Object.fromEntries(REWARDS.map((k) => [k, true]));
+const GOLDS = solvedAll(['1ro-h11-1', '1ro-h11-2', '1ro-h11-jefe', '1ro-h14-1']);
+/** The whole year of pages, every boss, gold here and there, 150 seeds; a level made on sheet 7 and played; Mina dressed. */
+const FULLYEAR = {
+  ...year(PAGES_OF, PAGES_OF, { seeds: 150, gold: GOLDS, seen: seenAll, previewed: allPreviewed, character: 'mina', outfit: { head: 'hongo', neck: 'bufanda', feet: 'botas' } }),
+  made: [MINE[0]], plays: { 'yo-1': 2, 'ej-2': 1, 'ej-6': 1 },
+};
+FULLYEAR.solved = { ...FULLYEAR.solved, '1ro-c-yo-1': true, '1ro-c-ej-2': true, '1ro-c-ej-6': true, '1ro-h16-musica': true };
+FULLYEAR.goals = { '1ro-h16-musica': true };
+/** Ten seeds: sheets 1 and 2 done, sheet 1's boss won (a sunflower), sheet 2's too (the coatí, arriving). */
+const TEN = year([1, 2], [1, 2], { seeds: 10, previewed: allPreviewed, seen: { 'plant:girasol': true } });
+const SHOW = { ...FULLYEAR, favorites: ['1ro-h6-jefe', '1ro-h9-1', '1ro-c-yo-1'] };
+const SHOWN = { ...SHOW, goals: { ...SHOW.goals, '1ro-h17-familia': true, '1ro-h17-jardin': true } };
+const WARD = (character, outfit) => ({ ...year([1, 2, 3, 4, 5, 6, 8, 9], [1], { seeds: 30, wardrobe: true, previewed: allPreviewed, seen: Object.fromEntries(['bufanda', 'hongo', 'mochila', 'capa', 'botas'].map((i) => [`item:${i}`, true])) }), character, outfit });
+
+const P4 = [
+  // the garden: empty, ten seeds (the coatí walking in), a whole year of seeds, the critters; at 1280 too
+  { name: 'garden-0', size: [1366, 768], go: yr('/1ro/jardin'), progress: { ...year([], []), previewed: allPreviewed } },
+  // the coatí walks in (its boss was just won): shot while it walks, then at home
+  { name: 'garden-10', size: [1366, 768], go: yr('/1ro/jardin'), progress: TEN },
+  { name: 'garden-10-arrived', size: [1366, 768], go: yr('/1ro/jardin'), progress: TEN, run: async (p) => { await p.waitForTimeout(2600); } },
+  { name: 'garden-150', size: [1366, 768], go: yr('/1ro/jardin'), progress: FULLYEAR },
+  { name: 'garden-150-1280', size: [1280, 800], go: yr('/1ro/jardin'), progress: FULLYEAR },
+  { name: 'garden-10-1280', size: [1280, 800], go: yr('/1ro/jardin'), progress: { ...TEN, seen: { ...TEN.seen, 'critter:coati': true } } },
+  { name: 'garden-preview-50', size: [1366, 768], go: yr('/1ro/jardin/50', '&dev'), progress: TEN },
+  // the wardrobe: each character dressed, shut until the teacher opens it
+  { name: 'wardrobe-brote', size: [1366, 768], go: yr('/1ro/vestidor'), progress: WARD('brote', { head: 'hongo', back: 'mochila' }) },
+  { name: 'wardrobe-mina', size: [1366, 768], go: yr('/1ro/vestidor'), progress: WARD('mina', { neck: 'bufanda', feet: 'botas' }) },
+  { name: 'wardrobe-pliegue', size: [1366, 768], go: yr('/1ro/vestidor'), progress: WARD('pliegue', { back: 'capa', head: 'hongo' }) },
+  { name: 'wardrobe-ovillo', size: [1280, 800], go: yr('/1ro/vestidor'), progress: WARD('ovillo', { back: 'mochila', feet: 'botas', neck: 'bufanda' }) },
+  { name: 'wardrobe-new', size: [1280, 800], go: yr('/1ro/vestidor'), progress: { ...WARD('brote', {}), seen: {} } },
+  { name: 'wardrobe-shut', size: [1366, 768], go: yr('/1ro/vestidor'), progress: { ...WARD('mina', { neck: 'bufanda' }), wardrobe: false } },
+  // sheet 1's character choice, and a dressed character on the map and on the boards
+  { name: 's1-choice', size: [1366, 768], go: yr('/1ro/hoja/1'), progress: { v: 1, seeds: 0, opened: 1 } },
+  { name: 'map-dressed', size: [1366, 768], go: yr('/1ro'), progress: { ...WARD('ovillo', { back: 'mochila', head: 'hongo', feet: 'botas' }), opened: 10 } },
+  { name: 'board-dressed', size: [1366, 768], go: yr('/1ro/hoja/10/2'), progress: { ...WARD('pliegue', { back: 'capa', head: 'hongo', feet: 'botas' }) }, run: (p) => runSolution(p, Number(process.env.RUN_MS ?? 2600)) },
+  { name: 'board-dressed-won', size: [1366, 768], go: yr('/1ro/hoja/4/1'), progress: WARD('mina', { neck: 'bufanda', feet: 'botas', head: 'hongo' }), run: (p) => runSolution(p) },
+  { name: 'music-dressed', size: [1366, 768], go: yr('/1ro/hoja/9/1'), progress: WARD('ovillo', { back: 'mochila', neck: 'bufanda' }), run: (p) => runIt(p, notes('do', 're', 'mi', 'do'), Number(process.env.RUN_MS ?? 2000)) },
+  { name: 'guarda-dressed', size: [1366, 768], go: yr('/1ro/hoja/14/1'), progress: WARD('pliegue', { back: 'capa', feet: 'botas' }), run: (p) => runIt(p, cmds(...ALMENA, ...ALMENA), Number(process.env.RUN_MS ?? 3000)) },
+  // a boss page: its reward as a silhouette, and won (the card turns)
+  { name: 'boss-silhouette', size: [1366, 768], go: yr('/1ro/hoja/4/jefe'), progress: WARD('brote', {}) },
+  { name: 'boss-won-reward', size: [1366, 768], go: yr('/1ro/hoja/2/jefe'), progress: WARD('mina', { neck: 'bufanda' }), run: (p) => runSolution(p, null) },
+  { name: 'doors-reward', size: [1366, 768], go: yr('/1ro/hoja/6/puertas'), progress: WARD('brote', {}) },
+  // the end-of-sheet preview card (the doors of a sheet just finished, a workshop's corkboard, the comodín)
+  { name: 'preview-5', size: [1366, 768], go: yr('/1ro/hoja/5/puertas'), progress: { ...year([1, 2, 3, 4, 5], []), previewed: { 1: true, 2: true, 3: true, 4: true } }, run: async (p) => { await p.waitForSelector('.preview-veil', { timeout: 8000 }); await p.waitForTimeout(900); } },
+  { name: 'preview-6-1280', size: [1280, 800], go: yr('/1ro/hoja/6/puertas'), progress: { ...year([1, 2, 3, 4, 5, 6], []), previewed: { 1: true, 2: true, 3: true, 4: true, 5: true } }, run: async (p) => { await p.waitForSelector('.preview-veil', { timeout: 8000 }); await p.waitForTimeout(900); } },
+  { name: 'preview-14', size: [1366, 768], go: yr('/1ro/hoja/14/puertas'), progress: { ...year(PAGES_OF, []), previewed: Object.fromEntries(Array.from({ length: 13 }, (_, i) => [String(i + 1), true])) }, run: async (p) => { await p.waitForSelector('.preview-veil', { timeout: 8000 }); await p.waitForTimeout(900); } },
+  // the showcase: its stations, the pages picked, the family playing with the child's character cheering, the tour, the poster
+  { name: 's17-stations', size: [1366, 768], go: yr('/1ro/hoja/17'), progress: SHOW },
+  { name: 's17-stations-empty', size: [1280, 800], go: yr('/1ro/hoja/17'), progress: FULLYEAR },
+  { name: 's17-pick', size: [1366, 768], go: yr('/1ro/hoja/17/elegir'), progress: SHOW },
+  { name: 's17-pick-1280', size: [1280, 800], go: yr('/1ro/hoja/17/elegir'), progress: { ...FULLYEAR, favorites: ['1ro-h2-jefe'] } },
+  {
+    name: 's17-family-bump', size: [1366, 768], go: yr('/1ro/hoja/17/familia/1'), progress: SHOW,
+    run: async (p) => { await runIt(p, cmds('up', 'up'), 0); await p.waitForSelector('.blk.is-culprit', { timeout: 20000 }); await p.waitForTimeout(300); },
+  },
+  { name: 's17-family-won', size: [1366, 768], go: yr('/1ro/hoja/17/familia/1'), progress: SHOW, run: (p) => runSolution(p, null) },
+  { name: 's17-family-song', size: [1366, 768], go: yr('/1ro/hoja/17/familia/2'), progress: SHOW },
+  { name: 's17-tour-start', size: [1366, 768], go: yr('/1ro/hoja/17/jardin'), progress: SHOW, run: async (p) => { await p.waitForTimeout(Number(process.env.TOUR_MS ?? 4600)); } },
+  { name: 's17-tour-critter', size: [1366, 768], go: yr('/1ro/hoja/17/jardin'), progress: SHOW, run: async (p) => { await p.waitForFunction(() => Number(document.querySelector('.mode-garden')?.getAttribute('data-tour')) >= 3, null, { timeout: 60000 }); await p.waitForTimeout(900); } },
+  { name: 's17-poster', size: [1366, 768], go: yr('/1ro/hoja/17/afiche'), progress: { ...SHOWN, previewed: allPreviewed } },
+  { name: 's17-poster-1280', size: [1280, 800], go: yr('/1ro/hoja/17/afiche'), progress: { ...SHOWN, previewed: allPreviewed, character: 'ovillo', outfit: { back: 'capa', head: 'corona', feet: 'botas' } } },
+  { name: 's17-poster-preview', size: [1366, 768], go: yr('/1ro/hoja/17/afiche'), progress: { ...SHOWN, previewed: Object.fromEntries(Array.from({ length: 16 }, (_, i) => [String(i + 1), true])) }, run: async (p) => { await p.waitForSelector('.preview-veil', { timeout: 8000 }); await p.waitForTimeout(900); } },
+  // the map with all 17 stops built; the dev drawer's motivation section; the fitting room
+  { name: 'map-17-1366', size: [1366, 768], go: yr('/1ro'), progress: { ...SHOWN, previewed: allPreviewed } },
+  { name: 'map-17-1280', size: [1280, 800], go: yr('/1ro'), progress: { ...year(PAGES_OF, [1, 2]), previewed: allPreviewed } },
+  { name: 'dev-motivation', size: [1366, 768], go: yr('/1ro/hoja/17', '&dev'), progress: SHOW, run: async (p) => { await p.evaluate(() => document.querySelector('[data-dev-motivation]')?.scrollIntoView()); await p.waitForTimeout(300); } },
+  { name: 'fitting', size: [1366, 768], go: url('/probador'), progress: null, run: async (p) => { await p.evaluate(() => window.scrollTo(0, 0)); } },
+  { name: 'fitting-critters', size: [1366, 768], go: url('/probador'), progress: null, run: async (p) => { await p.evaluate(() => document.querySelectorAll('.fitting-title')[1]?.scrollIntoView()); await p.waitForTimeout(300); } },
+].map((s) => ({ ...s, name: `p4-${s.name}` }));
+
+/** The tours before T4 as they were: every sheet's preview card already shown, a character picked. */
+const asBefore = (list) => list.map((s) => (s.progress ? { ...s, progress: { previewed: allPreviewed, picked: true, ...s.progress } } : s));
+const S = [...T1, ...T2, ...T3, ...asBefore(P1), ...asBefore(P2), ...asBefore(P3A), ...asBefore(P3B), ...P4];
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox', '--disable-gpu'] });
 try {

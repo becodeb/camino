@@ -132,9 +132,14 @@ function Card({ n, onClose }: { n: number; onClose: () => void }) {
   );
 }
 
-/** Where the card comes up, over any page. */
+/** Where the card comes up, over any page (another page put it away: the adult's dev drawer can leave under it). */
 export function PreviewHost() {
   const s = useSyncExternalStore(previewCard.subscribe, previewCard.get, previewCard.get);
+  useEffect(() => {
+    const away = () => previewCard.hide();
+    window.addEventListener('hashchange', away);
+    return () => window.removeEventListener('hashchange', away);
+  }, []);
   if (!s) return null;
   const close = () => {
     stopSpeaking();

@@ -1119,7 +1119,8 @@ class Actor {
   pv: { x: number; y: number; vy: number };
   look = { x: 0, y: 0.2 };
   blinkAt = -1;
-  blinkNext = now() / 1000 + 1.5;
+  /** The first blink comes at a random moment: several characters on one page never blink in unison. */
+  blinkNext = now() / 1000 + 1 + Math.random() * 2.2;
   blinkTwice = false;
   nextZ = 0;
   onMark: null | (() => void) = null;
