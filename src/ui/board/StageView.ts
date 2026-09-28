@@ -15,8 +15,8 @@ export class StageView extends BoardView {
   constructor(svg: SVGSVGElement, box: { x: number; y: number; w: number; h: number } = { x: -80, y: -150, w: 160, h: 164 }, o: { shadow?: boolean } = {}) {
     super(svg);
     svg.setAttribute('viewBox', `${box.x} ${box.y} ${box.w} ${box.h}`);
-    // no board: speech bubbles stay over the head (never beside it, as in a board's top row)
-    this.frameT = { top: 10000, right: 0, bottom: 0 };
+    // no board: a speech bubble goes over the head when the stage has room above it, beside the head otherwise (as in a board's top row)
+    this.frameT = { top: -box.y, right: 0, bottom: 0 };
     if (o.shadow !== false) el('path', { d: blob(0, 2, 44, 9, { seed: 4, n: 10 }), fill: 'url(#hatch)', opacity: 0.6 }, this.L.floor);
   }
 
@@ -25,10 +25,19 @@ export class StageView extends BoardView {
     this.setCharacter(def, outfit, { x: 0, y: 0 });
   }
 
+  /** Somebody is here: it wakes up if it dozed off, and stays awake a while. */
+  poke() {
+    this.lastInput = performance.now();
+    const a = this.actor;
+    if (a?.sleeping) a.wake();
+  }
+
   /** Its own celebration, with confetti: a piece put on, the family's win. */
   async cheer(confetti = true) {
     const a = this.actor;
     if (!a) return;
+    this.lastInput = performance.now();
+    a.sleeping = false;
     if (confetti) this.burstConfetti(0, -70);
     await a.act(() => a.perform('celebrate'));
   }
@@ -44,6 +53,7 @@ export class StageView extends BoardView {
   async wince() {
     const a = this.actor;
     if (!a) return;
+    this.poke();
     await a.act(async () => {
       a.rig.mouth = 'o';
       a.bubble('¡Uy!');
@@ -60,6 +70,7 @@ export class StageView extends BoardView {
   async root() {
     const a = this.actor;
     if (!a) return;
+    this.poke();
     await a.act(async () => {
       a.rig.eyes = 'happy';
       a.bubble('¡Vamos!');

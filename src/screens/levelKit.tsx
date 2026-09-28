@@ -79,8 +79,12 @@ export interface LevelNav {
    * with a save-blocks challenge, once the page is solved (`won`: just now).
    */
   gold?(level: LevelDef, won: boolean): ReactNode;
-  /** In the controls, after the gold seal: what the page sends to the garden (a boss's reward card; `won`: just now). */
+  /** In the controls, after the gold seal: what the page sends to the garden (a boss's reward card; `won`: just now), or who cheers. */
   reward?(level: LevelDef, won: boolean): ReactNode;
+  /** ▶ started a run (the showcase's cheering character hops). */
+  onRun?(): void;
+  /** A run ended: won, bumped, or short (the showcase's cheering character reacts). */
+  onResult?(r: 'win' | 'crash' | 'short'): void;
   /** In the notebook, under the program (the gold challenge's note of the child's long plan). */
   notebook?: ReactNode;
   /** Where "next page" goes. */

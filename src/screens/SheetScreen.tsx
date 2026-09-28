@@ -10,9 +10,9 @@
 // where they belong through LevelNavContext.
 
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { DOORS, DOOR_LABEL, bossId, coreId, isBuilt, type Door, type Sheet } from '../curriculum/model';
+import { DOORS, DOOR_LABEL, bossId, coreId, goalId, isBuilt, type Door, type Sheet } from '../curriculum/model';
 import { sheetByN } from '../curriculum/primer';
-import { earnGold, progress, sheetState, solve, useProgress } from '../curriculum/progress';
+import { earnGold, progress, reachGoal, sheetState, solve, useProgress } from '../curriculum/progress';
 import { extraFor } from '../curriculum/generate';
 import { CHOICE_SHEET, MAP_HREF, bossOpen, doorsOpen, entryPage, goldPage, isGold, levelIdOf, nextExtra, nextHref, plainPage, sheetHref, type SheetPage } from '../curriculum/route';
 import { goldLevel } from '../game/formats';
@@ -24,7 +24,8 @@ import { BossPageArt, DoorArt, Tree, Pine, Bush, Tuft, StopArt, PencilSky, River
 import { Bar } from './LevelBar';
 import { PlayerFace } from './player';
 import { ChoicePage } from './WardrobeScreen';
-import { RewardCard, RewardSvg } from './GardenScreen';
+import { GardenPage, RewardCard, RewardSvg } from './GardenScreen';
+import { AfichePage, ElegirPage, FamiliaPage, MuestraPage, ShowcasePages } from './ShowcaseScreen';
 import { useEndOfSheet } from './PreviewCard';
 import { rewardOf } from '../curriculum/motivation';
 import { arrivalSay } from '../curriculum/rewards';
@@ -66,10 +67,20 @@ const pageLabel = (page: SheetPage) => {
 
 export function SheetScreen({ n, page }: { n: number; page: SheetPage }) {
   const sheet = sheetByN(n)!;
-  if (!isBuilt(sheet) || sheet.showcase) return <SoonPage sheet={sheet} />;
+  if (!isBuilt(sheet)) return <SoonPage sheet={sheet} />;
   if (page.kind === 'entry') return <Redirect to={sheetHref(n, entryPage(sheet, progress.get()))} />;
   if (page.kind === 'personaje') {
     return n === CHOICE_SHEET ? <ChoicePage sheet={sheet} pages={<SheetPages sheet={sheet} current={page} />} /> : <Redirect to={sheetHref(n)} />;
+  }
+  if (sheet.showcase) {
+    switch (page.kind) {
+      case 'muestra': return <MuestraPage sheet={sheet} />;
+      case 'elegir': return <ElegirPage sheet={sheet} />;
+      case 'familia': return <FamiliaPage sheet={sheet} i={page.i} />;
+      case 'recorrido': return <GardenPage tour={{ sheet, pages: <ShowcasePages sheet={sheet} current={page} />, next: sheetHref(n, { kind: 'muestra' }), done: () => progress.update((p) => reachGoal(p, goalId(sheet, 'jardin'))) }} />;
+      case 'afiche': return <AfichePage sheet={sheet} />;
+      default: return <Redirect to={sheetHref(n, { kind: 'muestra' })} />;
+    }
   }
   if (sheet.hub) {
     switch (page.kind) {

@@ -373,6 +373,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     runningRef.current = true;
     setRunning(true);
     setMarks({});
+    nav.onRun?.();
     const multi = vs.length > 1;
     const traces = tracesOf(level, program);
     const lock = new Lockstep(vs.length);
@@ -406,6 +407,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
       setRunning(false);
       return;
     }
+    nav.onResult?.(results.every((r) => r === 'win') ? 'win' : results.includes('crash') ? 'crash' : 'short');
     if (results.every((r) => r === 'win')) {
       setMarks({});
       if (multi) await Promise.all(vs.map((v) => v.celebrate()));
@@ -633,6 +635,7 @@ function PredictLevel({ level }: { level: LevelDef }) {
     runningRef.current = true;
     setRunning(true);
     setMarks({});
+    nav.onRun?.();
     const t = simulate(board, program);
     const done = new Set<string>();
     let last = -1;
@@ -649,6 +652,7 @@ function PredictLevel({ level }: { level: LevelDef }) {
     away.current = true;
     if (res === 'aborted') { runningRef.current = false; setRunning(false); return; }
     setMarks({ iteration });
+    nav.onResult?.(sameCell(t.final, g) ? 'win' : 'short');
     if (sameCell(t.final, g)) {
       await v.celebrate();
       const line = nav.won(level, program);
