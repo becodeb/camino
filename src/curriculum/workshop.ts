@@ -214,10 +214,11 @@ export function verdictOf(d: Pick<Draft, 'board' | 'lines'>, limited: boolean): 
   if (!flat) return { ok: false, why: 'unreachable' };
   if (!limited) return flat.length > MAX_LINES ? { ok: false, why: 'long' } : { ok: true, lines: flat.length, solution: cmdProgram(flat) };
   if (flat.length <= d.lines) return { ok: false, why: 'flat', lines: flat.length };
+  // the search within the lines is quick (few cards, short patterns); the wider one only tells a refusal apart
+  const fits = fewestProgram(board, d.lines);
+  if (fits) return { ok: true, lines: d.lines, solution: fits };
   const best = fewestProgram(board, flat.length - 1);
-  if (!best) return { ok: false, why: 'pattern' };
-  if (cardCount(best) > d.lines) return { ok: false, why: 'more', lines: cardCount(best) };
-  return { ok: true, lines: d.lines, solution: best };
+  return best ? { ok: false, why: 'more', lines: cardCount(best) } : { ok: false, why: 'pattern' };
 }
 
 /** A limited level's own program must use a repeat (no plan without one fits its lines). */

@@ -10,24 +10,35 @@
 // the notebook the classmates will get. Winning it offers the push-pin that
 // pins the level on the class corkboard.
 //
+// The limited workshop (sheet 15) adds the notebook the classmates will get,
+// between the tools and the board: the start block and its lines, a pencil
+// that draws one more, the eraser that rubs one out. Its level must need a
+// repeat: when a plan without one fits the lines, ▶ is refused with the
+// lines shaking, the eraser calling and Brote thinking of the repeat block;
+// when even a repeat does not fit, the pencil calls.
+//
 // The first visit to the first workshop starts with the ghost hand: it puts
-// the seed on the board and points at ▶.
+// the seed on the board and points at ▶; the limited one's shows the lines.
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { publish, progress, saveDraft, sheetState, useProgress } from '../curriculum/progress';
 import { MAP_HREF, sheetHref, type SheetPage } from '../curriculum/route';
 import type { Sheet } from '../curriculum/model';
 import {
-  TOOLS, applyTool, blockedPiece, boardOf, defaultDraft, draftFor, draftLevel, movePiece, nextMadeId, pieceAt, untouched, usesRepeat, verdictOf,
+  MAX_SET_LINES, MIN_SET_LINES, TOOLS, applyTool, blockedPiece, boardOf, clampLines, defaultDraft, draftFor, draftLevel, movePiece, nextMadeId, pieceAt,
+  untouched, usesRepeat, verdictOf,
   type Draft, type Edit, type Piece, type Tool, type Verdict,
 } from '../curriculum/workshop';
+import { DIMS } from '../game/editor';
+import { BlockArt } from '../blocks/blocks';
+import { REDUCED } from '../ui/runtime';
 import { aspectOf, frameOf } from '../ui/board/BoardView';
 import { EditorView } from '../ui/board/EditorView';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { PlayIcon } from '../ui/icons';
 import { PenRing, PotIcon, Portrait, SeedIcon, Stamp, ThenArrow } from '../ui/art';
-import { CorkIcon, EraserIcon, MakeIcon, PinCardArt, RockIcon } from '../ui/workshopArt';
+import { CorkIcon, EraserIcon, LessLineIcon, MakeIcon, MoreLineIcon, PinCardArt, RockIcon } from '../ui/workshopArt';
 import type { Cell } from '../game/model';
 import { BROTE, Bar } from './LevelBar';
 import { LevelScreen } from './LevelScreen';
@@ -100,6 +111,45 @@ export function ToolArt({ tool }: { tool: Tool }) {
   return <EraserIcon size={58} />;
 }
 
+// ------------------------------------------------------------------ the limited workshop's notebook
+
+/**
+ * The notebook the classmates will get (sheet 15): the start block and one
+ * dashed line per card they may write, with the eraser (one line less) and
+ * the pencil (one line more) under it. A refused ▶ shakes it and makes the
+ * button to use call.
+ */
+function LinesZone({ lines, call, shake, added, onLess, onMore }: {
+  lines: number; call: 'less' | 'more' | null; shake: number; added: boolean; onLess: () => void; onMore: () => void;
+}) {
+  const d = DIMS;
+  const note = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!shake || REDUCED) return;
+    note.current?.animate([{ translate: '0 0' }, { translate: '7px 0' }, { translate: '-7px 0' }, { translate: '5px 0' }, { translate: '0 0' }], { duration: 420 });
+  }, [shake]);
+  return (
+    <section className="zone zone-program zone-lines" data-zone="program" aria-label={`El cuaderno de tu compañero: ${lines} renglones`}>
+      <div ref={note} className="lines-note" data-lines={lines}>
+        <div className="lines-start" style={{ width: d.w, height: d.start }}><BlockArt look={{ kind: 'start', w: d.w, h: d.start }} d={d} /></div>
+        {Array.from({ length: lines }, (_, i) => (
+          <div key={i} className={`lines-slot${added && i === lines - 1 ? ' is-new' : ''}`} style={{ width: d.w, height: d.h }}>
+            <svg width={d.w} height={d.h} viewBox={`0 0 ${d.w} ${d.h}`} aria-hidden="true"><rect x={3} y={3} width={d.w - 6} height={d.h - 6} rx={9} className="blk-hole" /></svg>
+          </div>
+        ))}
+      </div>
+      <div className="lines-set">
+        <button type="button" className={`lines-btn cut${call === 'less' ? ' is-calling' : ''}`} data-lines-btn="less" disabled={lines <= MIN_SET_LINES} onClick={onLess} aria-label="Un renglón menos">
+          <LessLineIcon />
+        </button>
+        <button type="button" className={`lines-btn cut${call === 'more' ? ' is-calling' : ''}`} data-lines-btn="more" disabled={lines >= MAX_SET_LINES} onClick={onMore} aria-label="Un renglón más">
+          <MoreLineIcon />
+        </button>
+      </div>
+    </section>
+  );
+}
+
 // ------------------------------------------------------------------ the editor
 
 type Hold =
@@ -120,6 +170,10 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
   const busyRef = useRef(false);
   const placed = useRef<Cell | null>(null);
   const board = useMemo(() => boardOf(draft.board, { river, seed: 7000 + sheet.n }), [draft.board, river, sheet.n]);
+  /** A refused ▶ on the limited workshop: the lines button to use calls, the notebook shakes. */
+  const [call, setCall] = useState<'less' | 'more' | null>(null);
+  const [shake, setShake] = useState(0);
+  const [added, setAdded] = useState(false);
   const frame = useMemo(() => frameOf(board), [board]);
   const line = limited ? WORKSHOP_LINES.editorLimited : WORKSHOP_LINES.editor;
 
@@ -142,7 +196,19 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
   const hold = (on: boolean, grey = true) => { busyRef.current = on; setBusy(on && grey); };
 
   // ---------------------------------------------------------------- edits
-  const save = (d: Draft) => progress.update((x) => saveDraft(x, sheet.n, { board: d.board, lines: d.lines }));
+  const save = (d: Draft) => {
+    setCall(null);
+    progress.update((x) => saveDraft(x, sheet.n, { board: d.board, lines: d.lines }));
+  };
+  /** The limited workshop's notebook: one line more or less. */
+  const setLines = (n: number) => {
+    if (busyRef.current) return;
+    const d = draftFor(progress.get(), sheet);
+    const lines = clampLines(n);
+    if (lines === d.lines) return;
+    setAdded(lines > d.lines);
+    save({ ...d, lines });
+  };
   const commit = (e: Edit, cell: Cell) => {
     if (e.refused) { viewRef.current?.wiggleAt(cellOf(e.refused)); return; }
     if (!e.changed) return;
@@ -166,7 +232,10 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
     const b = draftFor(progress.get(), sheet).board;
     if (v.why === 'unreachable') view.wiggleAt(cellOf(blockedPiece(b) === 'seed' ? b.seed : b.goal));
     if (v.why === 'long') view.wiggleAt(cellOf(b.goal));
-    await view.puzzled();
+    if (v.why === 'flat' || v.why === 'more') { setCall(v.why === 'flat' ? 'less' : 'more'); setShake((n) => n + 1); }
+    // the level needs a repeat (fewer lines, or a path with a pattern): Brote thinks of one
+    if (v.why === 'flat' || v.why === 'pattern') await view.think();
+    else await view.puzzled();
     hold(false);
   };
 
@@ -178,9 +247,15 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
   };
 
   // ---------------------------------------------------------------- the ghost hand
-  /** The guided start: the hand puts the seed on the board, then points at ▶. */
+  /** The guided start: the hand puts the seed on the board, then points at ▶ (the limited workshop: at the lines, then ▶). */
   const playIntro = () => {
     if (busyRef.current) return;
+    if (limited) {
+      hold(true, false);
+      const run = ghost([{ do: 'point', at: ['.zone-lines .lines-note', '[data-lines-btn="less"]', '[data-lines-btn="more"]'] }, { do: 'point', at: ['.btn-play'] }]);
+      if (run) void run.then(() => hold(false)); else hold(false);
+      return;
+    }
     const d = draftFor(progress.get(), sheet);
     const to: Cell = { c: d.board.seed[0], r: Math.max(0, d.board.seed[1] - 1) };
     if (pieceAt(d.board, [to.c, to.r])) return;
@@ -203,7 +278,9 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
     const cell = (at: readonly [number, number]) => `.editor-board [data-cell="${at[0]},${at[1]}"]`;
     if (v.why === 'unreachable') ghost([{ do: 'point', at: [cell(blockedPiece(b) === 'seed' ? b.seed : b.goal), '.zone-tools [data-tool="eraser"]'] }]);
     else if (v.why === 'long') ghost([{ do: 'point', at: [cell(b.goal), '.zone-tools [data-tool="goal"]'] }]);
-    else ghost([{ do: 'point', at: ['.zone-tools [data-tool="rock"]', '.btn-play'] }]);
+    else if (v.why === 'flat') ghost([{ do: 'tap', at: '[data-lines-btn="less"]' }, { do: 'point', at: ['.btn-play'] }]);
+    else if (v.why === 'more') ghost([{ do: 'tap', at: '[data-lines-btn="more"]' }, { do: 'point', at: ['.btn-play'] }]);
+    else ghost([{ do: 'point', at: [cell(b.goal), '.zone-tools [data-tool="goal"]'] }]);
   };
 
   // the page's line (the sheet's own the first time); the first workshop's guided start once per visit
@@ -211,7 +288,7 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
     let off = () => {};
     const t = setTimeout(() => { off = speakWhenAllowed(withSheetLine(sheet, line)); }, 450);
     let intro = 0;
-    if (!limited && !guided.has(sheet.n) && untouched(draftFor(progress.get(), sheet), limited)) {
+    if (!guided.has(sheet.n) && untouched(draftFor(progress.get(), sheet), limited)) {
       guided.add(sheet.n);
       intro = window.setTimeout(playIntro, 1400);
     }
@@ -295,15 +372,15 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
 
   const pick = (t: Tool) => { if (!suppressClick.current && !busyRef.current) setTool(t); };
 
-  useDebugHooks({ draft, tool, pick, use: (t: Tool, c: number, r: number) => applyAt(t, { c, r }), tryIt, help, playIntro, verdict: () => verdictOf(draftFor(progress.get(), sheet), limited) });
+  useDebugHooks({ draft, tool, pick, use: (t: Tool, c: number, r: number) => applyAt(t, { c, r }), setLines, tryIt, help, playIntro, verdict: () => verdictOf(draftFor(progress.get(), sheet), limited) });
 
   return (
     <main
       ref={rootRef}
-      className="level mode-taller"
+      className={`level mode-taller${limited ? ' has-lines' : ''}`}
       data-sheet={sheet.n}
       data-busy={busy ? 'true' : undefined}
-      style={{ '--aspect': aspectOf(board, frame).toFixed(3) } as CSSProperties}
+      style={{ '--aspect': aspectOf(board, frame).toFixed(3), '--notebook-w': '196px' } as CSSProperties}
     >
       <Bar
         instruction={<MakeTask />}
@@ -330,6 +407,12 @@ export function EditorPage({ sheet }: { sheet: Sheet }) {
           </button>
         ))}
       </section>
+      {limited && (
+        <LinesZone
+          lines={draft.lines} call={call} shake={shake} added={added}
+          onLess={() => setLines(draftFor(progress.get(), sheet).lines - 1)} onMore={() => setLines(draftFor(progress.get(), sheet).lines + 1)}
+        />
+      )}
       <section className="level-stage" aria-label="Tablero">
         <div className="controls">
           <button type="button" className="btn btn-play cut" onClick={tryIt} disabled={busy} aria-label="Probar">

@@ -256,9 +256,9 @@ export function LimitBadge({ lines }: { lines: number }) {
   const shown = Math.min(lines, 4);
   return (
     <span className="limit-badge" aria-hidden="true">
-      <TapeGlyph size={30} />
-      <svg viewBox={`0 0 18 ${shown * 8 + 2}`} width={18} height={shown * 8 + 2}>
-        {Array.from({ length: shown }, (_, i) => <rect key={i} x={1} y={1 + i * 8} width={16} height={6} rx={2} fill="rgba(251,247,238,0.8)" stroke="rgba(43,38,34,0.55)" strokeWidth={1.2} strokeDasharray="2.5 2" />)}
+      <TapeGlyph size={34} />
+      <svg viewBox={`0 0 22 ${shown * 10 + 2}`} width={22} height={shown * 10 + 2}>
+        {Array.from({ length: shown }, (_, i) => <rect key={i} x={1} y={1 + i * 10} width={20} height={8} rx={2.5} fill="rgba(251,247,238,0.9)" stroke="rgba(43,38,34,0.6)" strokeWidth={1.4} strokeDasharray="3 2.2" />)}
       </svg>
     </span>
   );

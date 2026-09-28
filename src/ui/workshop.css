@@ -50,6 +50,23 @@
 .tool-drag .tool-face { width: 60px; height: 70px; }
 body:has(.tool-drag) { cursor: grabbing; }
 
+/* the limited workshop's notebook: the start block, one dashed line per card, the eraser and the pencil under it */
+.zone-lines { display: flex; flex-direction: column; justify-content: space-between; min-height: 0; padding: 22px 12px 16px 46px; }
+.lines-note { display: flex; flex-direction: column; align-items: flex-start; }
+.lines-start { position: relative; }
+.lines-slot svg { display: block; overflow: visible; }
+.lines-slot.is-new { animation: pop-in 320ms ease-out both; transform-origin: 20% 50%; }
+.lines-set { display: flex; gap: 10px; margin-left: -30px; }
+.lines-btn { --fill: var(--sheet); width: 70px; height: 62px; display: grid; place-items: center; padding: 0; }
+.lines-btn:first-child { --fill: #f3cfc9; --r-cut: 13px 9px 15px 10px / 9px 14px 10px 15px; }
+.lines-btn:last-child { --fill: #f2e3a6; --r-cut: 10px 15px 9px 13px / 14px 9px 15px 10px; }
+.lines-btn svg { overflow: visible; transition: transform 0.15s ease-out; }
+.lines-btn:hover:not(:disabled) svg { transform: scale(1.08) rotate(-3deg); }
+.lines-btn:disabled { opacity: 0.45; }
+.lines-btn.is-calling { animation: slot-call 1.2s ease-in-out infinite; }
+.lines-btn.is-calling::before { border-color: var(--blue-ink); border-style: dashed; border-width: 3px; }
+.level[data-busy="true"] .lines-btn { pointer-events: none; }
+
 /* the workshop's pages in the bar: making a level, the corkboard */
 .work-pages { gap: 10px; }
 .bar-work { position: relative; display: block; flex: none; width: 50px; height: 44px; transition: transform 0.15s ease-out; }

@@ -112,20 +112,21 @@ export class EditorView extends BoardView {
     const outer = el('g', { class: 'thought', transform: `translate(${cx.toFixed(1)} ${cy.toFixed(1)})` }, this.L.fx);
     const g = el('g', {}, outer);
     const ink = el('g', { filter: 'url(#boil)' }, g);
-    // the little bubbles from his head to the cloud
-    [[hx - cx, hy - cy, 5], [(hx - cx) * 0.62, (hy - cy) * 0.62 - 6, 8]].forEach(([x, y, r], i) => {
-      el('path', { d: blob(x, y, r, r * 0.9, { seed: 40 + i, n: 8 }), fill: '#fbf7ee', stroke: INK, 'stroke-width': 2.4 }, ink);
+    // the little bubbles from his head to the cloud, growing
+    [[(hx - cx) * 0.94, (hy - cy) * 0.94, 7], [(hx - cx) * 0.68, (hy - cy) * 0.68 - 4, 11]].forEach(([x, y, r], i) => {
+      el('path', { d: blob(x, y, r, r * 0.9, { seed: 40 + i, n: 8 }), fill: '#fbf7ee', stroke: INK, 'stroke-width': 2.6 }, ink);
     });
     const cloud = [blob(0, 0, 78, 50, { seed: 44, n: 11, wob: 0.06 }), blob(-46, -18, 34, 28, { seed: 45, n: 9 }), blob(42, -22, 36, 28, { seed: 46, n: 9 }), blob(8, 30, 42, 24, { seed: 47, n: 9 })];
     // one cloud of four puffs: every outline first (twice as thick: the fills cover its inner half), then the fills over them
     for (const d of cloud) el('path', { d, fill: '#fbf7ee', stroke: INK, 'stroke-width': 5.2 }, ink);
     for (const d of cloud) el('path', { d, fill: '#fbf7ee' }, ink);
-    // the repeat block: a tape C-block, its coil on the arm, an arrow card in its mouth
-    const d = DIMS_COMPACT, bw = 92, arm = 30, mouth = 30, foot = 14;
+    // the repeat block as the palette shows it: a tape C-block, its count disc and coil on the arm, an arrow card in its mouth
+    const d = DIMS_COMPACT, bw = 96, arm = 32, mouth = 30, foot = 14;
     const block = el('g', { transform: `translate(${-bw / 2} ${-(arm + mouth + foot) / 2})` }, g);
     el('path', { d: cPath(bw, arm, mouth, foot, d), transform: 'translate(2 3)', fill: 'rgba(84, 62, 38, 0.2)' }, block);
     el('path', { d: cPath(bw, arm, mouth, foot, d), fill: TAPE_FILL, stroke: INK, 'stroke-width': 2.2, 'stroke-linejoin': 'round' }, block);
-    el('path', { d: 'M14,19 C17,8 21,8 22,14 C23,20 18,20 20,12 C22,5 27,6 28,13 C29,19 24,19 26,11 C28,5 33,7 34,12', fill: 'none', stroke: INK, 'stroke-width': 2.4, 'stroke-linecap': 'round' }, block);
+    el('circle', { cx: 17, cy: 16, r: 10, fill: '#fbf7ee', stroke: INK, 'stroke-width': 2 }, block);
+    el('path', { d: 'M34,21 C37,10 41,10 42,16 C43,22 38,22 40,14 C42,7 47,8 48,15 C49,21 44,21 46,13 C48,7 53,9 54,14', fill: 'none', stroke: INK, 'stroke-width': 2.4, 'stroke-linecap': 'round' }, block);
     const card = el('g', { transform: `translate(${d.spine} ${arm})` }, block);
     el('path', { d: cardPath(40, mouth, { ...d, h: mouth }), fill: '#eeac7f', stroke: INK, 'stroke-width': 2, 'stroke-linejoin': 'round' }, card);
     el('path', { d: 'M9,15 L29,15 M22,9 L29,15 L22,21', fill: 'none', stroke: INK, 'stroke-width': 2.6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, card);
