@@ -242,12 +242,15 @@ export function StopArt({ n, look, soon, mark, seed }: { n: number; look: StopLo
   const numberFill = soon ? 'rgba(43,38,34,0.45)' : INK;
   if (look === 'stone') {
     const d = blob(0, 4, 46, 31, { wob: 0.07, n: 10, seed });
+    // the workshop's pencil lies on its stone; the kite and the bunting stand behind theirs
+    const onTop = mark === 'pencil';
     return (
       <g>
-        {mark !== 'none' && <Mark mark={mark} look={look} />}
+        {mark !== 'none' && !onTop && <Mark mark={mark} look={look} />}
         <path d={d} transform="translate(4 6)" fill={SHADOW} />
         {soon ? <path d={d} fill="rgba(236,230,217,0.92)" stroke={INK} strokeOpacity={0.5} strokeWidth={2.6} strokeDasharray={dash} /> : <Faceted id={`st-${seed}`} d={d} light="#ddd4c3" dark="#b8ab95" shift={[-4, -5]} />}
         <text x={0} y={15} className="stop-no" fill={numberFill} textAnchor="middle">{n}</text>
+        {onTop && <Mark mark={mark} look={look} />}
       </g>
     );
   }
@@ -269,7 +272,7 @@ export function StopArt({ n, look, soon, mark, seed }: { n: number; look: StopLo
 function Mark({ mark, look }: { mark: StopMark; look: StopLook }) {
   if (mark === 'pencil') {
     return (
-      <g transform={look === 'page' ? 'translate(-22 30) rotate(-32)' : 'translate(-40 22) rotate(-24)'} stroke={INK} strokeLinejoin="round" strokeLinecap="round">
+      <g transform={look === 'page' ? 'translate(-22 30) rotate(-32)' : 'translate(-24 38) rotate(-10)'} stroke={INK} strokeLinejoin="round" strokeLinecap="round">
         <path d="M0,-5 L34,-5 L34,5 L0,5 Z" fill="#f0d27a" strokeWidth={2} />
         <path d="M34,-5 L44,-5 L44,5 L34,5 Z" fill="#e7a3a0" strokeWidth={2} />
         <path d="M0,-5 L-12,0 L0,5 Z" fill="#ecd3ad" strokeWidth={2} />

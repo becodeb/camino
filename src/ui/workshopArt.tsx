@@ -212,7 +212,9 @@ export function PinCardArt() {
 export const Tally = memo(function Tally({ n }: { n: number }) {
   const shown = Math.min(n, 15);
   const groups = Math.ceil(shown / 5);
-  const w = 14 + groups * 30;
+  const last = shown - (groups - 1) * 5;
+  // as wide as the marks drawn: a full group takes its stroke across
+  const w = 18 + (groups - 1) * 30 + (last === 5 ? 22 : (last - 1) * 5.5 + 4);
   return (
     <svg viewBox={`0 0 ${w} 26`} width={w} height={26} aria-hidden="true" className="tally">
       <path d="M2,7 L11,13 L2,19 Z" fill="#fbf6ea" stroke={INK} strokeWidth={1.8} strokeLinejoin="round" />

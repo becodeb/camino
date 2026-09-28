@@ -179,7 +179,7 @@ export function DevDrawer({ route }: { route: Route }) {
             </div>
             <div className="dev-row">
               <button type="button" onClick={() => publishDraft(sheet)} disabled={!draftOk} data-dev-publish>colgar el nivel sin jugarlo</button>
-              <span className="dev-small">{st.published} colgados · {st.playedOthers ? 'jugó uno de un compañero' : 'todavía no jugó uno de un compañero'}</span>
+              <span className="dev-small">{st.published} {st.published === 1 ? 'colgado' : 'colgados'} · {st.playedOthers ? 'jugó uno de un compañero' : 'todavía no jugó uno de un compañero'}</span>
             </div>
           </>
         ) : sheet.hub ? (

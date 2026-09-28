@@ -99,10 +99,11 @@ export function HubPage({ sheet }: { sheet: Sheet }) {
   const pending = pendingEssentials(p, dev.on).length;
   const st = sheetState(sheet, p);
   useLine(sheet, LINES.hub);
-  const choices: { goal: HubGoal; kind: SheetPage['kind']; x: number; s: number; art: ReactNode; label: string }[] = [
-    { goal: 'recuperar', kind: 'recuperar', x: 250, s: 1.12, art: <BridgeChoice pending={pending} />, label: pending ? `Recuperar: ${pending} páginas pendientes` : 'Recuperar: una página de repaso' },
-    { goal: 'musica', kind: 'musica', x: 615, s: 1.08, art: <XyloChoice />, label: 'Música libre' },
-    { goal: 'companeros', kind: 'cartelera', x: 960, s: 1.12, art: <CorkChoice />, label: 'Niveles de compañeros' },
+  // each choice's stamp goes where it covers nothing (over the river, between the notes, on the sand by the easel)
+  const choices: { goal: HubGoal; kind: SheetPage['kind']; x: number; s: number; stamp: [number, number]; art: ReactNode; label: string }[] = [
+    { goal: 'recuperar', kind: 'recuperar', x: 250, s: 1.12, stamp: [120, -150], art: <BridgeChoice pending={pending} />, label: pending ? `Recuperar: ${pending} páginas pendientes` : 'Recuperar: una página de repaso' },
+    { goal: 'musica', kind: 'musica', x: 615, s: 1.08, stamp: [44, -150], art: <XyloChoice />, label: 'Música libre' },
+    { goal: 'companeros', kind: 'cartelera', x: 960, s: 1.12, stamp: [152, -40], art: <CorkChoice />, label: 'Niveles de compañeros' },
   ];
   const help = () => { ghost([{ do: 'point', at: pending ? ['[data-choice="recuperar"]'] : ['[data-choice="recuperar"]', '[data-choice="musica"]', '[data-choice="companeros"]'] }]); };
   return (
@@ -128,7 +129,7 @@ export function HubPage({ sheet }: { sheet: Sheet }) {
                     {/* the whole drawing takes the tap, its gaps too (between the bridge's posts, over the xylophone's bars) */}
                     <rect x={-170} y={-280} width={340} height={330} fill="transparent" />
                     <g transform={`scale(${c.s})`}>{c.art}</g>
-                    {st.goals.includes(c.goal) && <Stamp seed={c.x} x={128} y={-48} size={88} />}
+                    {st.goals.includes(c.goal) && <Stamp seed={c.x} x={c.stamp[0]} y={c.stamp[1]} size={88} />}
                   </g>
                 </a>
               </g>

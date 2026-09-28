@@ -77,7 +77,7 @@ a.bar-work:hover { transform: translateY(-2px); }
 .bar-work .pen-ring { position: absolute; inset: -8px -9px; width: calc(100% + 18px); height: calc(100% + 16px); overflow: visible; pointer-events: none; }
 
 /* the test page's next button: pin the level on the corkboard */
-.pin-card-art { width: 60px; height: 70px; overflow: visible; }
+.pin-card-art { width: 66px; height: 76px; overflow: visible; }
 
 /* ------------------------------------------------ the class corkboard: cork in a wooden frame, paper cards pinned on it */
 .level.mode-cork {
@@ -117,9 +117,9 @@ a.card-in:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset: 6
 .push-pin { display: block; overflow: visible; }
 .card-thumb { display: block; }
 .card-thumb .thumb { width: 100%; }
-.card-foot { display: flex; align-items: center; gap: 8px; min-height: 48px; }
-.card-badge { --r-cut: 50% 46% 52% 48% / 48% 52% 46% 50%; flex: none; width: 46px; height: 46px; display: grid; place-items: end center; }
-.card-badge .badge-face { width: 46px; height: 46px; overflow: visible; margin-bottom: 1px; }
+.card-foot { display: flex; align-items: center; gap: 6px; min-height: 48px; }
+.card-badge { --r-cut: 50% 46% 52% 48% / 48% 52% 46% 50%; flex: none; width: 44px; height: 44px; display: grid; place-items: end center; }
+.card-badge .badge-face { width: 44px; height: 44px; overflow: visible; margin-bottom: 1px; }
 .card-plays { margin-left: auto; display: flex; align-items: center; gap: 3px; }
 .card-plays .tally { overflow: visible; }
 .card-plays b { font: 700 15px/1 var(--body); color: var(--ink-2); }

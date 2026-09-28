@@ -2,7 +2,8 @@
 // PW=/tmp/pw node tools/shots.mjs <outDir> [base] [only]
 //   T1 scenarios are named t1-*, T2 scenarios t2-*, T3 scenarios t3-* (so `only=t2-` shoots the T2 tour);
 //   1ro's year (feature primer-grado) is p1-* (its T1), p2-* (its T2: the formats, sheets 3, 5, 10–13, the river)
-//   and p3a-* (its T3a: the music recess, sheet 9, and the guardas, sheet 14).
+//   p3a-* (its T3a: the music recess, sheet 9, and the guardas, sheet 14) and p3b-* (its T3b: the workshops,
+//   sheets 7 and 15, the class corkboard, and the comodín, sheet 16).
 //   PW: a directory with playwright installed; base: the running app (default http://127.0.0.1:8797/)
 //   only: run the scenarios whose name contains this text.
 // Uses the ?debug hooks (window.__camino) to build programs and run them; waits in real time.
@@ -410,7 +411,81 @@ const P3A = [
   { name: 'g14-doors', size: [1366, 768], go: yr('/1ro/hoja/14/puertas'), progress: { ...T3A, solved: { ...T3A.solved, ...solvedAll(core(14, [1, 2])) } } },
 ].map((s) => ({ ...s, name: `p3a-${s.name}` }));
 
-const S = [...T1, ...T2, ...T3, ...P1, ...P2, ...P3A];
+// ---------------------------------------------------------------- 1ro's year, T3b: the workshops (7, 15), the corkboard, the comodín (16)
+/** Every sheet of pages done up to 14 (the gold of none), the teacher at 17: the map shows 7, 15 and 16 built, Brote waits on 7. */
+const T3B = { ...T3A, seeds: 64, solved: { ...T3A.solved, ...solvedAll(core(14, [1, 2, 3, 4])) } };
+/** A level being made on the first workshop: rocks round a seed, the pot in a corner. */
+const EDIT7 = { board: { start: [0, 3], seed: [2, 1], goal: [5, 0], rocks: [[1, 2], [2, 2], [4, 1], [4, 0], [3, 3]] }, lines: 5 };
+/** A level of the limited workshop with too many lines: a plan without repeat fits them. */
+const FLAT15 = { board: { start: [0, 3], seed: [2, 3], goal: [5, 3], rocks: [[1, 1], [4, 1]] }, lines: 6 };
+/** A zigzag that needs three lines with a repeat, on two. */
+const MORE15 = { board: { start: [0, 0], seed: [2, 1], goal: [4, 2], rocks: [[3, 0], [1, 1], [5, 1]] }, lines: 2 };
+/** One level pinned from each workshop, played on this device, and a few classmates' levels played. */
+const MINE = [
+  { id: 'yo-1', sheet: 7, board: EDIT7.board, lines: 10, solution: cmds('up', 'up', 'right', 'right', 'right', 'down', 'right', 'right', 'up', 'up') },
+  { id: 'yo-2', sheet: 15, board: { start: [0, 0], seed: [5, 0], goal: [5, 3], rocks: [[2, 2]] }, lines: 2, solution: [{ t: 'loop', count: 5, body: ['right'] }, { t: 'loop', count: 3, body: ['down'] }] },
+];
+const CORK = { ...T3B, made: MINE, plays: { 'yo-1': 3, 'ej-2': 2, 'ej-6': 1 }, solved: { ...T3B.solved, '1ro-c-yo-1': true, '1ro-c-yo-2': true, '1ro-c-ej-2': true, '1ro-c-ej-6': true } };
+/** The comodín with essential pages pending on sheets 3, 5, 10 and 12. */
+const PENDING = { ...T3B, solved: Object.fromEntries(Object.entries(T3B.solved).filter(([k]) => !['1ro-h3-1', '1ro-h5-3', '1ro-h10-1', '1ro-h12-3'].includes(k))) };
+const tapLine = (p, which) => p.click(`[data-lines-btn="${which}"]`, { force: true });
+/** Sets the page's reference program through the ?debug hooks and presses ▶, waiting `ms` (or until the page is idle). */
+const runSolution = async (p, ms) => {
+  await cam(p, () => window.__camino.setProgram(window.__camino.level.solution));
+  await p.waitForTimeout(400);
+  await play(p);
+  if (ms == null) await idle(p, 700); else await p.waitForTimeout(ms);
+};
+
+const P3B = [
+  { name: 'map-1366', size: [1366, 768], go: yr('/1ro'), progress: T3B },
+  // 7 · the first workshop: the guided start, a new level, one being made, its test (mid-run and won), pinned
+  { name: 's7-intro', size: [1366, 768], go: yr('/1ro/hoja/7'), progress: T3B, run: async (p) => { await p.waitForTimeout(Number(process.env.INTRO_MS ?? 1500)); } },
+  { name: 's7-editor-new', size: [1366, 768], go: yr('/1ro/hoja/7/taller'), progress: { ...T3B, drafts: { 7: { board: { start: [0, 2], seed: [2, 1], goal: [5, 2], rocks: [] }, lines: 5 } } } },
+  { name: 's7-editor-level', size: [1366, 768], go: yr('/1ro/hoja/7/taller'), progress: { ...T3B, drafts: { 7: EDIT7 } } },
+  { name: 's7-editor-level-1280', size: [1280, 800], go: yr('/1ro/hoja/7/taller'), progress: { ...T3B, drafts: { 7: EDIT7 } } },
+  {
+    name: 's7-editor-refused', size: [1366, 768], go: yr('/1ro/hoja/7/taller'), progress: { ...T3B, drafts: { 7: { ...EDIT7, board: { ...EDIT7.board, rocks: [...EDIT7.board.rocks, [5, 1]] } } } },
+    run: async (p) => { await play(p); await p.waitForTimeout(Number(process.env.REFUSE_MS ?? 700)); },
+  },
+  {
+    name: 's7-testing', size: [1366, 768], go: yr('/1ro/hoja/7/taller/probar'), progress: { ...T3B, drafts: { 7: EDIT7 } },
+    run: (p) => runIt(p, MINE[0].solution, Number(process.env.RUN_MS ?? 4200)),
+  },
+  { name: 's7-proven', size: [1366, 768], go: yr('/1ro/hoja/7/taller/probar'), progress: { ...T3B, drafts: { 7: EDIT7 } }, run: (p) => runIt(p, MINE[0].solution) },
+  {
+    name: 's7-published', size: [1366, 768], go: yr('/1ro/hoja/7/taller/probar'), progress: { ...T3B, drafts: { 7: EDIT7 } },
+    run: async (p) => { await runIt(p, MINE[0].solution); await p.click('.next-page', { force: true }); await p.waitForTimeout(Number(process.env.PIN_MS ?? 1300)); },
+  },
+  // the corkboard, and a classmate's level being played
+  { name: 'cork-1366', size: [1366, 768], go: yr('/1ro/hoja/7/cartelera'), progress: CORK },
+  { name: 'cork-1280', size: [1280, 800], go: yr('/1ro/hoja/7/cartelera'), progress: CORK },
+  { name: 'card-playing', size: [1366, 768], go: yr('/1ro/hoja/7/cartelera/ej-2'), progress: CORK, run: (p) => runSolution(p, Number(process.env.RUN_MS ?? 3600)) },
+  { name: 'card-won', size: [1366, 768], go: yr('/1ro/hoja/15/cartelera/ej-8'), progress: CORK, run: (p) => runSolution(p) },
+  // 15 · the limited workshop: the notebook's lines, the refusals, the test page with repetir
+  { name: 's15-editor', size: [1366, 768], go: yr('/1ro/hoja/15/taller'), progress: { ...T3B, drafts: { 15: { board: { start: [0, 3], seed: [2, 3], goal: [5, 3], rocks: [] }, lines: 2 } } } },
+  { name: 's15-editor-1280', size: [1280, 800], go: yr('/1ro/hoja/15/taller'), progress: { ...T3B, drafts: { 15: FLAT15 } } },
+  { name: 's15-needs-repeat', size: [1366, 768], go: yr('/1ro/hoja/15/taller'), progress: { ...T3B, drafts: { 15: FLAT15 } }, run: async (p) => { await play(p); await p.waitForTimeout(Number(process.env.REFUSE_MS ?? 900)); } },
+  { name: 's15-needs-lines', size: [1366, 768], go: yr('/1ro/hoja/15/taller'), progress: { ...T3B, drafts: { 15: MORE15 } }, run: async (p) => { await play(p); await p.waitForTimeout(Number(process.env.REFUSE_MS ?? 600)); } },
+  {
+    name: 's15-fewer-lines', size: [1366, 768], go: yr('/1ro/hoja/15/taller'), progress: { ...T3B, drafts: { 15: FLAT15 } },
+    run: async (p) => { await play(p); await idle(p, 300); for (let i = 0; i < 4; i++) { await tapLine(p, 'less'); await p.waitForTimeout(250); } await p.waitForTimeout(400); },
+  },
+  {
+    name: 's15-testing', size: [1366, 768], go: yr('/1ro/hoja/15/taller/probar'), progress: { ...T3B, drafts: { 15: { ...FLAT15, lines: 2 } } },
+    run: (p) => runIt(p, [{ t: 'loop', count: 5, body: ['right'] }], Number(process.env.RUN_MS ?? 2600)),
+  },
+  // 16 · the comodín: its three choices, the bridge (pages pending, or a review page), the free song
+  { name: 's16-hub', size: [1366, 768], go: yr('/1ro/hoja/16'), progress: PENDING },
+  { name: 's16-hub-1280', size: [1280, 800], go: yr('/1ro/hoja/16'), progress: { ...CORK, goals: { '1ro-h16-musica': true } } },
+  { name: 's16-bridge', size: [1366, 768], go: yr('/1ro/hoja/16/recuperar'), progress: PENDING },
+  { name: 's16-bridge-review', size: [1366, 768], go: yr('/1ro/hoja/16/recuperar'), progress: T3B },
+  { name: 's16-pending-page', size: [1366, 768], go: yr('/1ro/hoja/16/recuperar/3/1'), progress: PENDING },
+  { name: 's16-music', size: [1366, 768], go: yr('/1ro/hoja/16/musica'), progress: PENDING },
+  { name: 'dev-workshop', size: [1366, 768], go: yr('/1ro/hoja/15/taller', '&dev'), progress: CORK },
+].map((s) => ({ ...s, name: `p3b-${s.name}` }));
+
+const S = [...T1, ...T2, ...T3, ...P1, ...P2, ...P3A, ...P3B];
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox', '--disable-gpu'] });
 try {
