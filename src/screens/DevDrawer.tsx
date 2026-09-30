@@ -28,22 +28,14 @@ import { formatOf } from '../game/formats';
 import { levelOf } from './SheetScreen';
 import { levelById } from '../game/levels';
 import { stamp } from '../game/progress';
-import { devMode, useDev } from '../ui/devMode';
+import { devKeyListener, devMode, useDev } from '../ui/devMode';
 import { goNext } from './levelKit';
 import { previewCard } from './PreviewCard';
 
-/** The ` key toggles the drawer; so does typing "dev" (for keyboards where ` is a dead key). */
+/** The ` key toggles the drawer; so does typing "dev" (ui/devMode.ts: never in a playtest build without ?debug). */
 function useDevKeys() {
   useEffect(() => {
-    let typed = '';
-    const on = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      if (e.code === 'Backquote' || e.key === '`') { e.preventDefault(); devMode.toggle(); return; }
-      if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
-      typed = (typed + e.key.toLowerCase()).slice(-3);
-      if (typed === 'dev') { typed = ''; devMode.toggle(); }
-    };
+    const on = devKeyListener(() => devMode.toggle());
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
   }, []);
