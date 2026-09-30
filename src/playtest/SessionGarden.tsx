@@ -4,7 +4,9 @@
 // character standing in it wearing the outfit chosen in the wardrobe. Read
 // only (nothing to drag), huddled round the first bed (the child beside it,
 // a tree or a critter close by) and framed on it, so a session's ten or
-// fifteen seeds fill the page instead of a corner of the year's meadow.
+// fifteen seeds fill the page instead of a corner of the year's meadow. The
+// year's markers stay out: no sheet-number stake by a finished sheet's tree,
+// no dotted spots in a bed for the seeds still to come.
 
 import { useMemo, type ReactNode } from 'react';
 import { GARDEN_H, GARDEN_W, gardenOf, type Garden } from '../curriculum/garden';
@@ -66,7 +68,7 @@ export function SessionGarden({ cheer }: { cheer: number }) {
       y: b.y - 20 * b.s, key: `bed${b.i}`,
       node: (
         <g key={`bed${b.i}`}>
-          <BedSoil x={b.x} y={b.y} s={b.s} i={b.i} open={b.open} />
+          <BedSoil x={b.x} y={b.y} s={b.s} i={b.i} open={false} />
           {b.plants.map((pl) => (
             <g key={pl.i} className="pp-garden-plant" style={{ animationDelay: `${300 + pl.i * 110}ms` }}>
               <SeedPlant x={pl.x} y={pl.y} s={b.s} stage={pl.stage} color={pl.color} i={pl.i} />
@@ -76,7 +78,7 @@ export function SessionGarden({ cheer }: { cheer: number }) {
       ),
     });
   }
-  for (const t of g.big) drawn.push({ y: t.y, key: t.id, node: <g key={t.id} transform={`translate(${t.x} ${t.y})`}><SheetPlant kind={t.kind} sheet={t.sheet} s={t.s} /></g> });
+  for (const t of g.big) drawn.push({ y: t.y, key: t.id, node: <g key={t.id} transform={`translate(${t.x} ${t.y})`}><SheetPlant kind={t.kind} sheet={t.sheet} s={t.s} stake={false} /></g> });
   for (const r of g.rare) drawn.push({ y: r.y, key: r.id, node: <g key={r.id} transform={`translate(${r.x} ${r.y}) scale(${r.s})`}><RarePlantArt id={r.id} /></g> });
   g.pots.forEach((pt, i) => drawn.push({ y: pt.y, key: `pot${i}`, node: <GoldPot key={`pot${i}`} x={pt.x} y={pt.y} i={i} /> }));
   for (const c of g.critters) drawn.push({ y: c.y, key: c.id, node: <g key={c.id} transform={`translate(${c.x} ${c.y}) scale(${c.s})`} data-critter={c.id}><CritterArt id={c.id} /></g> });

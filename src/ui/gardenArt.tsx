@@ -160,8 +160,8 @@ export const GoldPot = memo(function GoldPot({ x, y, i }: { x: number; y: number
 
 // ------------------------------------------------------------------ a finished sheet's tree or bush
 
-/** Something bigger for a finished sheet: a tree or a pine (the forest), a bush or a flowering one (the river), with a stake with the sheet's number. */
-export const SheetPlant = memo(function SheetPlant({ kind, sheet, s }: { kind: BigKind; sheet: number; s: number }) {
+/** Something bigger for a finished sheet: a tree or a pine (the forest), a bush or a flowering one (the river), with a stake with the sheet's number (`stake: false` leaves it out: the pilot playtest has no sheets to name). */
+export const SheetPlant = memo(function SheetPlant({ kind, sheet, s, stake = true }: { kind: BigKind; sheet: number; s: number; stake?: boolean }) {
   const seed = 600 + sheet * 7;
   return (
     <g>
@@ -174,7 +174,7 @@ export const SheetPlant = memo(function SheetPlant({ kind, sheet, s }: { kind: B
           <circle r={1.8} fill="#de8a56" stroke={INK} strokeWidth={0.9} />
         </g>
       ))}
-      <Stake n={sheet} x={kind === 'pine' || kind === 'tree' ? 22 * s : 30 * s} />
+      {stake && <Stake n={sheet} x={kind === 'pine' || kind === 'tree' ? 22 * s : 30 * s} />}
     </g>
   );
 });
