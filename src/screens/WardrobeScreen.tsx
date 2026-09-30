@@ -11,11 +11,11 @@
 // end of a class (the dev drawer's switch in this demo; always in dev mode):
 // shut, its doors carry a wooden bar and the character only waits.
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { CHARACTERS } from '../ink/characters.js';
 import { CHARACTER_NAME, ITEMS, itemKey, type CharacterId, type Item } from '../curriculum/motivation';
 import { chooseCharacter, markSeen, progress, useProgress } from '../curriculum/progress';
-import { isUnlocked, newItems, outfitOf, unlockSay, wear } from '../curriculum/rewards';
+import { isUnlocked, newItems, outfitOf, unlockOf, unlockSay, wear } from '../curriculum/rewards';
 import { MAP_HREF, sheetHref } from '../curriculum/route';
 import { useDev } from '../ui/devMode';
 import { REDUCED } from '../ui/runtime';
@@ -50,7 +50,7 @@ function WardrobeTask({ open }: { open: boolean }) {
 
 /** A hook with a piece hanging from it (unlocked, worn, or a silhouette with what unlocks it). */
 function Hook({ item, worn, locked, fresh, onTap }: { item: Item; worn: boolean; locked: boolean; fresh: boolean; onTap: (el: HTMLElement) => void }) {
-  const label = locked ? `${item.name}: ${unlockSay(item.unlock)}` : `${item.name}${worn ? ', puesta' : ''}`;
+  const label = locked ? `${item.name}: ${unlockSay(unlockOf(item))}` : `${item.name}${worn ? ', puesta' : ''}`;
   return (
     <li className="hook">
       <svg className="hook-art" viewBox="-12 -14 24 22" aria-hidden="true">
@@ -65,7 +65,7 @@ function Hook({ item, worn, locked, fresh, onTap }: { item: Item; worn: boolean;
         onClick={(e) => onTap(e.currentTarget)}
       >
         <ItemIcon id={item.id} className="prenda-art" />
-        {locked && <UnlockTag unlock={item.unlock} />}
+        {locked && <UnlockTag unlock={unlockOf(item)} />}
         {worn && <PenRing seed={item.id.length + 3} />}
         {fresh && !locked && <span className="prenda-new"><StarSticker /></span>}
       </button>
@@ -73,7 +73,19 @@ function Hook({ item, worn, locked, fresh, onTap }: { item: Item; worn: boolean;
   );
 }
 
-export function WardrobePage() {
+/**
+ * The wardrobe. The pilot playtest reuses it: `onPick` hears a character
+ * picked, `onTap` every tap on a piece (put on, taken off, or locked),
+ * `next` replaces the link back to the map ("listo"), `quit` null hides
+ * "salir", `title` replaces the adult's small print.
+ */
+export function WardrobePage({ onPick, onTap, next, quit = MAP_HREF, title }: {
+  onPick?: (id: CharacterId) => void;
+  onTap?: (item: Item, result: 'on' | 'off' | 'locked') => void;
+  next?: () => void;
+  quit?: string | null;
+  title?: ReactNode;
+} = {}) {
   const p = useProgress();
   const dev = useDev();
   const open = p.wardrobe || dev.on;
@@ -103,6 +115,7 @@ export function WardrobePage() {
     if (!open) { speak(LINES.shut); return; }
     if (id === p.character && p.picked) { void view.current?.nod(); return; }
     progress.update((q) => chooseCharacter(q, id));
+    onPick?.(id);
     speak(LINES.picked(CHARACTER_NAME[id]));
     setTimeout(() => void view.current?.cheer(false), REDUCED ? 0 : 420);
   };
@@ -112,12 +125,14 @@ export function WardrobePage() {
     const r = el.getBoundingClientRect();
     view.current?.look(r.left + r.width / 2, r.top + r.height / 2);
     if (!isUnlocked(item, p)) {
-      speak(unlockSay(item.unlock));
+      onTap?.(item, 'locked');
+      speak(unlockSay(unlockOf(item)));
       if (!REDUCED) el.animate([{ rotate: '0deg' }, { rotate: '-6deg' }, { rotate: '5deg' }, { rotate: '-3deg' }, { rotate: '0deg' }], { duration: 480, easing: 'ease-out' });
       return;
     }
     const on = worn[item.slot] === item.id;
     progress.update((q) => wear(q, item.id));
+    onTap?.(item, on ? 'off' : 'on');
     if (!on) speak(LINES.worn(item));
     setTimeout(() => void (on ? view.current?.nod() : view.current?.cheer(false)), REDUCED ? 0 : 420);
   };
@@ -132,7 +147,7 @@ export function WardrobePage() {
     <main ref={rootRef} className={`level mode-wardrobe${open ? '' : ' is-shut'}`} data-open={open || undefined}>
       <Bar
         instruction={<WardrobeTask open={open} />}
-        title={<><b>Vestidor{open ? '' : ' · cerrado'}</b> Personaje y ropa ganada; lo abre el docente al final de la clase</>}
+        title={title ?? <><b>Vestidor{open ? '' : ' · cerrado'}</b> Personaje y ropa ganada; lo abre el docente al final de la clase</>}
         pages={null}
         aside={<SeedPouch />}
         onSpeak={() => speak(line)}
@@ -177,9 +192,11 @@ export function WardrobePage() {
             </div>
           )}
         </div>
-        <a className="next-page cut wardrobe-next" href={MAP_HREF} aria-label="Volver al mapa"><NextPageArt /></a>
+        {next
+          ? <button type="button" className="next-page cut wardrobe-next" onClick={next} aria-label="Listo"><NextPageArt /></button>
+          : <a className="next-page cut wardrobe-next" href={MAP_HREF} aria-label="Volver al mapa"><NextPageArt /></a>}
       </section>
-      <Quit href={MAP_HREF} />
+      {quit != null && <Quit href={quit} />}
     </main>
   );
 }

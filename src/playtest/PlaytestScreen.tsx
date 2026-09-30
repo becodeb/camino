@@ -14,7 +14,9 @@ import { PlayerContext, useYearPlayer } from '../screens/player';
 import { DEBUG } from '../screens/levelKit';
 import { forgetRealtimeIntros } from '../screens/RealtimeLevel';
 import { forgetWorkshopGuides } from '../screens/WorkshopScreen';
+import { setUnlocks } from '../curriculum/rewards';
 import { setSpeechFilter } from '../ui/speech';
+import { PLAYTEST_UNLOCKS } from './WardrobeStep';
 import { withName } from './characterName';
 import { holdHash } from './hashHold';
 import { AdultControls } from './AdultControls';
@@ -37,6 +39,9 @@ export function PlaytestScreen() {
     setSpeechFilter((t) => withName(t, progress.get().character));
     return () => setSpeechFilter(null);
   }, []);
+  // the wardrobe's pieces unlock at a few seeds of this session (the year's milestones are for a year)
+  useState(() => { setUnlocks(PLAYTEST_UNLOCKS); return true; });
+  useEffect(() => () => setUnlocks(null), []);
   return <Playtest />;
 }
 

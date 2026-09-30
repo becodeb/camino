@@ -60,7 +60,7 @@ export function GardenIcon({ size = 46 }: { size?: number }) {
 type Drawn = { y: number; key: string; node: ReactNode };
 
 /** The child's character standing in the garden: a living stage nested in the drawing; `cheer` changing makes it celebrate (the tour's last stop). */
-function GardenMe({ x, y, cheer = 0, awake }: { x: number; y: number; cheer?: number; awake?: number }) {
+export function GardenMe({ x, y, cheer = 0, awake }: { x: number; y: number; cheer?: number; awake?: number }) {
   const player = usePlayer();
   const { ref, view } = useStage(player, { x: -58, y: -118, w: 116, h: 128 });
   useEffect(() => { if (cheer) void view.current?.cheer(false); }, [cheer, view]);

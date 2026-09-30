@@ -3,15 +3,18 @@
 //   tapping drawn faces or pictures, never by reading. "¿Qué te gustó más?"
 //   shows only the activities the child did (asked when there are two or
 //   more). Each answer is a `survey_answer`; all of them go on the session.
-// - The goodbye: the character, alive, the seeds this session grew, and the
-//   session code again for the adult; a small "para el adulto" link.
+// - The goodbye: the session's garden (every page solved planted a seed; a
+//   boss won sent its critter or plant) with the character in it, wearing
+//   the outfit kept in the wardrobe, and the session code again for the
+//   adult; a small "para el adulto" link.
 // - The adult form (after the child leaves): engagement, help needed, a
 //   comment without names; then a new session.
 
 import { useEffect, useRef, useState } from 'react';
 import { CHARACTER_NAME, isCharacterId } from '../curriculum/motivation';
-import { useProgress } from '../curriculum/progress';
-import { PlayerFace, usePlayer, useStage } from '../screens/player';
+import { progress, useProgress } from '../curriculum/progress';
+import { arrivedCritters, arrivedPlants, outfitOf } from '../curriculum/rewards';
+import { PlayerFace } from '../screens/player';
 import { PenRing, SeedIcon } from '../ui/art';
 import { SpeakerIcon } from '../ui/icons';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
@@ -20,6 +23,7 @@ import { usePlaytest } from './context';
 import { ActivityPicture, Face, YesNo } from './surveyArt';
 import type { StepViewProps } from './steps';
 import { GRADE_LABEL } from './labels';
+import { SessionGarden } from './SessionGarden';
 
 type QuestionId = 'liked' | 'difficulty' | 'favorite_activity' | 'play_again';
 interface Option { value: string; word: string; art: React.ReactNode }
@@ -141,32 +145,32 @@ const BYE = {
 export function Goodbye() {
   const api = usePlaytest();
   const p = useProgress();
-  const player = usePlayer();
-  const { ref, view } = useStage(player, { x: -92, y: -176, w: 184, h: 196 }, { shadow: true });
   const since = useRef(Date.now());
+  const [cheer, setCheer] = useState(0);
   const name = isCharacterId(p.character) ? CHARACTER_NAME[p.character] : 'Brote';
 
   useEffect(() => {
     const off = speakWhenAllowed(BYE.say(name));
-    const t = setTimeout(() => { void view.current?.cheer(); }, 600);
-    return () => { off(); clearTimeout(t); api.log('garden_view', { duration_ms: Date.now() - since.current, seeds: p.seeds }); };
+    const t = setTimeout(() => setCheer(1), 900);
+    return () => {
+      off();
+      clearTimeout(t);
+      const q = progress.get();
+      api.log('garden_view', { duration_ms: Date.now() - since.current, seeds: q.seeds, critters: arrivedCritters(q), plants: arrivedPlants(q), outfit: outfitOf(q) });
+    };
     // once, when the goodbye opens
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const shown = Math.min(p.seeds, 18);
   return (
     <main className="pp-page pp-bye">
-      <section className="sheet pp-card pp-bye-card" aria-label="Chau">
+      <section className="sheet pp-bye-card" aria-label="Chau">
         <span className="tape tape-l" aria-hidden="true" />
         <span className="tape tape-r" aria-hidden="true" />
-        <svg ref={ref} className="pp-bye-stage" aria-hidden="true" onClick={() => void view.current?.cheer()} />
-        <div className="pp-bye-garden" aria-label={`${p.seeds} semillas`}>
-          {Array.from({ length: shown }, (_, k) => <span key={k} className="pp-bye-seed" style={{ animationDelay: `${300 + k * 120}ms` }}><SeedIcon size={44} /></span>)}
-          <svg className="pp-bye-soil" viewBox="0 0 600 40" preserveAspectRatio="none" aria-hidden="true">
-            <path d="M4,14 C120,6 240,18 360,10 S520,8 596,14 L596,36 L4,36 Z" fill="#c9a979" stroke="#2b2622" strokeWidth={2.6} strokeLinejoin="round" />
-          </svg>
+        <div className="pp-bye-garden" onClick={() => setCheer((c) => c + 1)}>
+          <SessionGarden cheer={cheer} />
         </div>
+        <p className="pp-bye-seeds" aria-label={`${p.seeds} semillas`}><SeedIcon size={34} /> <b>{p.seeds}</b></p>
         {api.session && <p className="pp-bye-code">{api.session.code}</p>}
       </section>
       <button type="button" className="pp-for-adult" onClick={api.next}>para el adulto</button>

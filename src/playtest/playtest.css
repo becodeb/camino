@@ -145,6 +145,15 @@
 .pp-print { position: absolute; overflow: visible; opacity: 0; animation: pp-print 6.5s ease-out forwards; }
 @keyframes pp-print { 0% { opacity: 0; scale: 0.6; } 6% { opacity: 1; scale: 1.08; } 10% { scale: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
 
+/* ------------------------------------------------ the goodbye: the session's garden */
+.pp-bye-card { position: relative; width: min(100%, calc((100dvh - 120px) * 2)); padding: 10px; }
+.pp-bye-garden { cursor: pointer; }
+.pp-garden-svg { display: block; width: 100%; aspect-ratio: 2; overflow: hidden; }
+.pp-garden-plant { animation: pop-in 460ms ease-out both; transform-box: fill-box; transform-origin: 50% 100%; }
+.pp-bye-seeds { position: absolute; left: 24px; top: 18px; margin: 0; display: flex; align-items: center; gap: 4px; padding: 4px 12px 4px 6px; border-radius: 12px; background: rgba(251, 247, 238, 0.86); font: 700 26px var(--body); color: var(--ink); }
+.pp-bye-code { position: absolute; right: 26px; bottom: 16px; margin: 0; padding: 2px 10px; border-radius: 10px; background: rgba(251, 247, 238, 0.86); font: 700 22px var(--body); color: var(--ink-2); }
+@media (prefers-reduced-motion: reduce) { .pp-garden-plant { animation: none; } }
+
 /* ------------------------------------------------ the survey */
 .pp-survey { grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: 11vh; padding: 10px 18px 22px; }
 .pp-survey-bar { grid-area: auto; width: 100%; }
@@ -172,12 +181,6 @@
 .pp-option.is-other { opacity: 0.35; }
 
 /* ------------------------------------------------ goodbye */
-.pp-bye-card { gap: 6px; padding-top: 18px; }
-.pp-bye-stage { width: 250px; height: 266px; overflow: visible; cursor: pointer; }
-.pp-bye-garden { position: relative; width: min(600px, 100%); display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 2px 6px; padding: 0 20px 14px; min-height: 70px; }
-.pp-bye-seed { position: relative; z-index: 1; animation: pop-in 420ms ease-out both; }
-.pp-bye-soil { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 34px; }
-.pp-bye-code { margin: 8px 0 0; font: 700 26px var(--body); color: var(--ink-2); }
 .pp-for-adult {
   position: fixed; right: 12px; bottom: 6px;
   min-height: 48px; padding: 8px 12px;

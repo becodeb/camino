@@ -361,16 +361,30 @@ is not a level; `left`: the flow moved on (the adult skipped the step or
 ended the session; the open page's `level_end` may then come after it).
 
 ### `wardrobe`
-Time/choices in the wardrobe step. **RQ 6.**
+The wardrobe step. **RQ 6.**
 ```
-{ action: 'open' | 'close' | 'equip', outfit_id?: string, duration_ms?: number }
+{ action: 'open', seeds: number, unlocked: string[] }                       // the step opened: seeds this session, the pieces unlocked
+{ action: 'on' | 'off', outfit_id: string, slot: string }                  // a piece tapped: put on, or taken off
+{ action: 'locked', outfit_id: string, slot: string, needs: number }       // a locked piece tapped (it says how many seeds it needs)
+{ action: 'character', character: string }                                // another character picked (also a `choice`)
+{ action: 'close', reason: 'done' | 'time' | 'left', outfit: {slot: id}, character: string, duration_ms: number, taps: number, seeds: number }
 ```
+`close` is the outfit kept: `done` the child turned the page ("listo"),
+`time` about three minutes passed (a gentle "¡Qué lindo quedó!"), `left` the
+adult moved on. In the playtest the pieces unlock at a few seeds, known in
+advance and drawn on each locked piece (a seed and its number): bufanda and
+gorro de hongo 0 (everyone), mochila 4, capa 7, botas 10, flotador 13,
+corona 16 (`PLAYTEST_UNLOCKS`, `src/playtest/WardrobeStep.tsx`; the year's
+milestones are 3–50 seeds and whole sheets). Seeds are never spent.
 
 ### `garden_view`
-The child looked at their session's garden (T2: the goodbye screen, with
-the seeds grown this session; logged when it closes). **RQ 6.**
+The child looked at their session's garden: the goodbye screen, the year's
+garden grown from this session's seeds (every level page solved in the
+playtest plants one: the tool check's, the ladder's, free play's, the
+typing minigame's), what a boss sent if one was won in free play, and the
+character in the outfit kept in the wardrobe; logged when it closes. **RQ 6.**
 ```
-{ duration_ms?: number, seeds?: number }
+{ duration_ms: number, seeds: number, critters?: string[], plants?: string[], outfit?: {slot: id} }
 ```
 
 ### Free play

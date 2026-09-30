@@ -4,7 +4,7 @@
 // `did(activity)` for the survey, `log()` for its events. Later tasks plug
 // their step in here (T5: free_play and wardrobe; T6: typing) in place of
 // the placeholder. T4's tool check and ladder: ToolCheck.tsx, Ladder.tsx;
-// T5's free play: FreePlay.tsx.
+// T5's free play and wardrobe: FreePlay.tsx, WardrobeStep.tsx.
 
 import { useState, type ComponentType } from 'react';
 import { ChoicePage } from '../screens/WardrobeScreen';
@@ -17,6 +17,7 @@ import { AdultForm, Goodbye, Survey } from './closing';
 import { FreePlay } from './FreePlay';
 import { Ladder } from './Ladder';
 import { ToolCheck } from './ToolCheck';
+import { WardrobeStep } from './WardrobeStep';
 import type { StartInput } from './telemetry';
 
 export interface StepViewProps {
@@ -143,7 +144,7 @@ export const STEP_VIEWS: Record<StepId, ComponentType<StepViewProps>> = {
   ladder: Ladder,
   free_play: FreePlay,
   typing: Placeholder,
-  wardrobe: Placeholder,
+  wardrobe: WardrobeStep,
   survey: Survey,
   goodbye: Goodbye,
   adult_form: AdultForm,

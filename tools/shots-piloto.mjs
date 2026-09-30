@@ -115,6 +115,16 @@ async function solveTurn(p) {
   await p.waitForTimeout(700);
 }
 
+/** The wardrobe after `n` pages of sheet 6 solved in free play (n seeds), Mina chosen. */
+async function toWardrobe(p, n = 4) {
+  await toFreePlay(p, '1ro', 'mina');
+  await pickCard(p, 'sheet', 'main.level[data-level]');
+  for (let i = 0; i < n; i++) await solveTurn(p);
+  await jump(p, 'wardrobe');
+  await p.waitForSelector('.mode-wardrobe .hooks');
+  await p.waitForTimeout(1200);
+}
+
 const SCENARIOS = [
   { name: 'pp-setup', run: async (p) => { await p.waitForSelector('.pp-setup'); } },
   {
@@ -302,6 +312,40 @@ const SCENARIOS = [
   },
   // the spoken-name check: Mina chosen, a page whose title says the character's name
   { name: 'pp-fp-name-mina', run: async (p) => { await toFreePlay(p, '3ro', 'mina', 'nointro'); await pickCard(p, 'rule_game', 'main.level[data-level]'); } },
+  // the wardrobe with this session's seeds: two pieces for everyone, the rest locked with their seeds
+  { name: 'pp-wardrobe-open', run: async (p) => { await toWardrobe(p); } },
+  {
+    name: 'pp-wardrobe-tried',
+    run: async (p) => {
+      await toWardrobe(p);
+      for (const id of ['bufanda', 'hongo', 'mochila']) { await p.locator(`[data-prenda="${id}"]`).click(); await p.waitForTimeout(900); }
+      await p.locator('[data-prenda="corona"]').click();
+      await p.waitForTimeout(900);
+    },
+  },
+  {
+    name: 'pp-bye-garden',
+    run: async (p) => {
+      await toWardrobe(p);
+      for (const id of ['bufanda', 'mochila']) { await p.locator(`[data-prenda="${id}"]`).click(); await p.waitForTimeout(700); }
+      await p.locator('.wardrobe-next').click({ force: true });
+      await jump(p, 'goodbye');
+      await p.waitForSelector('.pp-bye .pp-garden-svg');
+      await p.waitForTimeout(2600);
+    },
+  },
+  // the survey's favourite with free play's pictures
+  {
+    name: 'pp-fp-survey',
+    run: async (p) => {
+      await toFreePlay(p);
+      for (const id of ['sheet', 'recess', 'editor']) { await pickCard(p, id, 'main'); await p.locator('.pp-menu-back').click(); await p.waitForSelector('.pp-menu'); await p.waitForTimeout(400); }
+      await jump(p, 'survey');
+      for (const a of ['yes', 'mid']) { await p.locator(`[data-answer="${a}"]`).click(); await p.waitForTimeout(1400); }
+      await p.waitForSelector('[data-question="favorite_activity"]');
+      await p.waitForTimeout(800);
+    },
+  },
 ];
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox', '--disable-gpu'] });

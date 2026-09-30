@@ -21,8 +21,20 @@ const finished = (n: number, p: Progress) => {
 /** Whether an unlock condition is met (seeds in the pouch, or a sheet finished). */
 export const reached = (u: Unlock, p: Progress) => ('seeds' in u ? p.seeds >= u.seeds : finished(u.sheet, p));
 
+/**
+ * Other milestones for a while (the pilot playtest unlocks the pieces at a
+ * few seeds of one session); null goes back to the year's. Nothing is
+ * stored: it is how the pieces are read while it is set.
+ */
+let unlocks: Partial<Record<ItemId, Unlock>> | null = null;
+export function setUnlocks(table: Partial<Record<ItemId, Unlock>> | null): void {
+  unlocks = table;
+}
+/** What unlocks a piece (the year's milestone, or the one set by setUnlocks). */
+export const unlockOf = (item: Item): Unlock => unlocks?.[item.id] ?? item.unlock;
+
 /** Unlocked: its milestone reached, or given by the dev drawer. */
-export const isUnlocked = (item: Item, p: Progress) => !!p.items[item.id] || reached(item.unlock, p);
+export const isUnlocked = (item: Item, p: Progress) => !!p.items[item.id] || reached(unlockOf(item), p);
 
 export const unlockedItems = (p: Progress): ItemId[] => ITEMS.filter((i) => isUnlocked(i, p)).map((i) => i.id);
 

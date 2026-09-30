@@ -7,10 +7,13 @@
 //   adult answers, a failed run ends the item (fail) and the ladder stops
 //   (ceiling 2); the cheer; free play: the menu, sheet 6 (three core pages,
 //   the easy door and its first extra), back to the menu, the music recess
-//   (one song), back, the time runs out on the menu (the cheer); the adult
-//   ends the session from the corner; the survey, the goodbye, the adult form.
+//   (one song), back, the time runs out on the menu (the cheer); the typing
+//   placeholder turned; the wardrobe (the scarf kept, the hat on and off, the
+//   crown locked, "listo"); the survey, the goodbye garden with the session's
+//   seeds, the adult form.
 // 5to — enters at rung 9 (fog): two failed runs (fail), the floor check on
-//   rung 8 passes, the ladder stops (floor, ceiling 8).
+//   rung 8 passes, the ladder stops (floor, ceiling 8); the adult ends the
+//   session from the corner.
 // 3ro — the rule game (rung 11, opened with the ?debug ladder hook): a game
 //   stopped before any arrow (no_play), one stopped after arrows (stopped),
 //   then the rules and the arrows that win it.
@@ -199,11 +202,17 @@ await p.waitForSelector('[data-interlude="cheer"]', { timeout: 15_000 });
 ok(true, `free play's time is over on the menu: the cheer (${seedsFree} seeds in the pouch)`);
 await p.locator('.pp-cheer-next').click({ force: true });
 
-// the typing minigame (still a placeholder): the adult ends the session from the corner
+// the typing minigame (still a placeholder): turned
 await p.waitForSelector('.pp-soon');
-await hold(p, 18, 18, 1700);
-await p.locator('[data-act="end"]').click();
-await p.locator('[data-act="end-confirm"]').click();
+await p.locator('.pp-soon .next-page').click();
+
+// the wardrobe: the scarf on, the mushroom hat on and off, the crown locked; "listo"
+await p.waitForSelector('.mode-wardrobe .hooks');
+await p.waitForTimeout(900);
+const locked = await p.locator('.prenda[data-locked]').evaluateAll((els) => els.map((e) => e.dataset.prenda));
+ok(!locked.includes('bufanda') && !locked.includes('hongo') && locked.includes('corona'), `wardrobe: scarf and hat open for everyone, locked: ${locked.join(',')}`);
+for (const id of ['bufanda', 'hongo', 'hongo', 'corona']) { await p.locator(`[data-prenda="${id}"]`).click(); await p.waitForTimeout(700); }
+await p.locator('.wardrobe-next').click({ force: true });
 
 // the survey, the goodbye, the adult form
 await p.waitForSelector('.pp-survey');
@@ -217,8 +226,12 @@ await p.locator('[data-answer="ladder"]').click();
 await p.waitForTimeout(1300);
 await p.waitForSelector('[data-question="play_again"]');
 await p.locator('[data-answer="yes"]').click();
-await p.waitForSelector('.pp-bye');
+await p.waitForSelector('.pp-bye .pp-garden-svg');
 await p.waitForTimeout(1200);
+const byeSeeds = Number(await p.locator('.pp-garden-svg').getAttribute('data-seeds'));
+const planted = await p.locator('.pp-garden-plant').count();
+ok(byeSeeds === planted && byeSeeds >= seedsFree && byeSeeds >= 8, `the goodbye garden grows the session's ${byeSeeds} seeds (${planted} plants; the tool check, the ladder and free play)`);
+ok(await p.locator('.pp-garden-svg .garden-me').count() === 1, 'the character stands in the goodbye garden');
 await p.locator('.pp-for-adult').click();
 await p.locator('[data-value="high"]').click();
 await p.locator('[data-value="some"]').click();
@@ -252,6 +265,12 @@ await onLevel(p, '1ro-h13-2');
 ok(true, 'two failed runs end the item; the floor check opens rung 8');
 await solve(p);
 await p.waitForSelector('[data-interlude="cheer"]', { timeout: 15_000 });
+// the adult ends the session from the corner: straight to the survey
+await hold(p, 18, 18, 1700);
+await p.locator('[data-act="end"]').click();
+await p.locator('[data-act="end-confirm"]').click();
+await p.waitForSelector('.pp-survey');
+ok(true, 'the adult ended the 5to session from the corner: the survey');
 await drain(p);
 await five.ctx.close();
 
@@ -309,9 +328,19 @@ ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and ty
 const times = Object.fromEntries(sql(`select activity || '=' || round(seconds) from v_activity_time where session_id = '${s1.sid}';`).split('\n').map((x) => x.split('=')));
 ok(Number(times.sheet) > 5 && Number(times.recess) > 1 && Number(times.ladder) > 1 && Number(times.tool_check) > 1, `v_activity_time: ${JSON.stringify(times)}`);
 ok(Math.abs(Number(times.sheet) - fpEnds[0].time_ms / 1000) <= 1, 'the sheet\'s time is its visit (activity_end), not only its pages');
+// the wardrobe and the goodbye garden
+const ward = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'wardrobe' order by seq`)).map((x) => x.p);
+ok(ward.map((x) => x.action).join(',') === 'open,on,on,off,locked,close', `wardrobe events: ${ward.map((x) => x.action).join(',')}`);
+ok(ward[0]?.unlocked?.includes('bufanda') && ward[0]?.seeds === byeSeeds, `wardrobe open: ${JSON.stringify(ward[0])}`);
+ok(ward[4]?.outfit_id === 'corona' && ward[4]?.needs === 16, `a locked piece says what it needs: ${JSON.stringify(ward[4])}`);
+const close = ward[5];
+ok(close?.reason === 'done' && close?.outfit?.neck === 'bufanda' && !close?.outfit?.head && close?.duration_ms > 1000 && close?.taps === 4, `the outfit kept: ${JSON.stringify(close)}`);
+const gv = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'garden_view'`))[0]?.p;
+ok(gv?.seeds === byeSeeds && gv?.duration_ms > 500 && gv?.outfit?.neck === 'bufanda', `garden_view: ${JSON.stringify(gv)}`);
+ok(Number(times.wardrobe ?? 0) === 0, 'the wardrobe is not a free-play activity in v_activity_time');
 const types = sql(`select type || ':' || count(*) from events where session_id = '${s1.sid}' group by type order by type;`).split('\n');
 console.log(`     1ro: ${types.join(' ')}`);
-for (const t of ['step', 'choice', 'tool_check', 'level_start', 'run', 'level_end', 'help', 'ghost_demo', 'speak', 'tap_add', 'drag', 'call_adult', 'adult_help', 'ladder_step', 'ladder_end', 'activity_end', 'survey_answer', 'garden_view']) {
+for (const t of ['step', 'choice', 'tool_check', 'level_start', 'run', 'level_end', 'help', 'ghost_demo', 'speak', 'tap_add', 'drag', 'call_adult', 'adult_help', 'ladder_step', 'ladder_end', 'activity_end', 'wardrobe', 'survey_answer', 'garden_view']) {
   ok(types.some((x) => x.startsWith(`${t}:`)), `1ro has ${t}`);
 }
 
@@ -339,7 +368,8 @@ ok(lvEnd3?.outcome === 'fail' && lvEnd3?.adult_helped === true && lvEnd3?.rung =
 ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'run' and (payload->>'after_ghost')::boolean;`)) >= 1, 'a run after the ghost demo is marked after_ghost');
 const sess = JSON.parse(sql(`select row_to_json(s) from (select code, grade, division, consent, ended_at is not null as ended, end_reason, survey, adult_form from sessions where id = '${s1.sid}') s;`));
 ok(sess.code === s1.code && sess.division === 'A' && sess.consent === true, `session ${sess.code}, grade ${sess.grade}, division ${sess.division}`);
-ok(sess.ended && sess.end_reason === 'adult_ended', `ended, end_reason ${sess.end_reason}`);
+ok(sess.ended && sess.end_reason === 'completed', `ended, end_reason ${sess.end_reason}`);
+ok(sql(`select end_reason from sessions where id = '${s5.sid}';`) === 'adult_ended', '5to: end_reason adult_ended');
 ok(sess.survey?.liked === 'yes' && sess.survey?.favorite_activity === 'ladder' && sess.survey?.play_again === 'yes', `survey ${JSON.stringify(sess.survey)}`);
 ok(sess.adult_form?.engagement === 'high' && sess.adult_form?.help_needed === 'some', `adult form ${JSON.stringify(sess.adult_form)}`);
 
