@@ -111,6 +111,12 @@ async function toGameMaker(p, stage = 'play', who = 'mina') {
   await pickCard(p, 'game_maker', 'main');
   if (stage !== 'play') { await pil(p, (s) => window.__gm.go(s), stage); await p.waitForTimeout(1200); }
 }
+/** Free play of 5to, the text probe's card; `item`: an item of the probe (the debug hook), after the tour. */
+async function toText(p, item = null, who = 'mina') {
+  await toFreePlay(p, '5to', who);
+  await pickCard(p, 'text_probe', 'main');
+  if (item != null) { await pil(p, (i) => window.__tx.item(i), item); await p.waitForTimeout(1400); }
+}
 /** Plays the ready game for a while: the arrows towards the seed. */
 async function playChase(p, n) {
   for (let i = 0; i < n; i++) {
@@ -520,6 +526,26 @@ const SCENARIOS = [
     },
   },
   { name: 'pp-gm-liked', run: async (p) => { await toGameMaker(p, 'liked'); } },
+  // T8: "Del bloque al texto" (5to)
+  { name: 'pp-tx-menu-5to', run: async (p) => { await toFreePlay(p, '5to'); } },
+  { name: 'pp-tx-tour', run: async (p) => { await toText(p); } },
+  { name: 'pp-tx-tour-link', run: async (p) => { await toText(p); const b = await p.locator('.tx-code .tx-line[data-line="3"]').boundingBox(); await p.mouse.move(b.x + 40, b.y + b.height / 2); await p.waitForTimeout(400); } },
+  { name: 'pp-tx-tour-run', run: async (p) => { await toText(p); await p.click('.tx-root .btn-play'); await p.waitForTimeout(2600); } },
+  { name: 'pp-tx-predict', run: async (p) => { await toText(p, 0); } },
+  { name: 'pp-tx-predict-run', run: async (p) => { await toText(p, 0); await p.click('[data-answer="end_2_0"]'); await p.waitForTimeout(2400); } },
+  { name: 'pp-tx-predict-if', run: async (p) => { await toText(p, 1); } },
+  { name: 'pp-tx-predict-if-run', run: async (p) => { await toText(p, 1); await p.click('[data-answer="bump_1"]'); await p.waitForTimeout(3400); } },
+  { name: 'pp-tx-number', run: async (p) => { await toText(p, 2); } },
+  { name: 'pp-tx-number-edit', run: async (p) => { await toText(p, 2); await p.keyboard.press('Backspace'); await p.keyboard.type('4'); await p.waitForTimeout(500); } },
+  { name: 'pp-tx-number-run', run: async (p) => { await toText(p, 2); await p.keyboard.press('Backspace'); await p.keyboard.type('4'); await p.click('.tx-root .btn-play'); await p.waitForTimeout(2800); } },
+  { name: 'pp-tx-typo-error', run: async (p) => { await toText(p, 3); await p.click('.tx-root .btn-play'); await p.waitForTimeout(1200); } },
+  { name: 'pp-tx-typo-colon', run: async (p) => { await toText(p, 4); await p.click('.tx-root .btn-play'); await p.waitForTimeout(1200); } },
+  { name: 'pp-tx-typo-help', run: async (p) => { await toText(p, 3); for (let i = 0; i < 3; i++) { await p.click('.tx-root .level-bar .help'); await p.waitForFunction(() => !document.querySelector('.tx-root.is-demo'), null, { timeout: 30_000 }); await p.waitForTimeout(i < 2 ? 1500 : 200); } } },
+  { name: 'pp-tx-blocks', run: async (p) => { await toText(p, 5); } },
+  { name: 'pp-tx-blocks-until', run: async (p) => { await toText(p, 6); await p.click('[data-answer="same"]'); await p.waitForTimeout(700); } },
+  { name: 'pp-tx-write', run: async (p) => { await toText(p, 7); } },
+  { name: 'pp-tx-write-error', run: async (p) => { await toText(p, 7); await p.click('.tx-root .btn-play'); await p.waitForTimeout(1200); } },
+  { name: 'pp-tx-liked', run: async (p) => { await toText(p); await pil(p, () => window.__tx.go('liked')); await p.waitForTimeout(900); } },
 ];
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox', '--disable-gpu'] });

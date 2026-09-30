@@ -15,6 +15,7 @@ import type { ComponentType } from 'react';
 import type { ProbeId } from './freePlay';
 import type { LevelEnd } from './PlaytestLevel';
 import { GameMaker } from './GameMaker';
+import { TextProbe } from './TextProbe';
 
 export interface ProbeProps {
   /** The activity id to log on the probe's pages (`game_maker`, `text_probe`). */
@@ -25,7 +26,7 @@ export interface ProbeProps {
   done(): void;
 }
 
-export const PROBES: Partial<Record<ProbeId, ComponentType<ProbeProps>>> = { game_maker: GameMaker };
+export const PROBES: Partial<Record<ProbeId, ComponentType<ProbeProps>>> = { game_maker: GameMaker, text_probe: TextProbe };
 
 export const hasProbe = (id: ProbeId) => !!PROBES[id];
 
