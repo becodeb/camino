@@ -203,6 +203,76 @@ dbDescribe('API against Postgres', () => {
     expect(t.rows).toEqual([{ seconds: 245 }]);
   });
 
+  it('v_probe_game_maker sums up the game maker probe per session; the by-grade view counts it for RQ 8', async () => {
+    const app = createApp(pool, { distDir });
+    const post = (session: Record<string, unknown>, events: unknown[]) => app.request('/api/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session, events }),
+    });
+    const ev = (seq: number, type: string, payload: Record<string, unknown>) => event(seq, { type, payload });
+    const edit = (seq: number, phase: string, op: string, object: string, hat: string | null, action: string | null, extra: Record<string, unknown> = {}) =>
+      ev(seq, 'rule_edit', { probe: 'game_maker', phase, object, hat, action, op, rules: 9, running: false, ...extra });
+    const run = (seq: number, phase: string, result: string, keys: number, heard: number, broadcasts: string[], win_points: number | null) =>
+      ev(seq, 'game_run', { probe: 'game_maker', phase, result, keys, duration_ms: 20_000, score: 3, lives: 2, rules: 'me[key:left>move:left] game[points:5>win]', rule_count: 9, objects: ['me', 'game'], broadcasts, messages_heard: heard, win_points, lose_lives: true });
+    // 4to (no other test writes grade 4): one child goes all the way, one leaves after phase 1
+    const a = newSession({ grade: 4 });
+    expect((await post(a, [
+      ev(0, 'choice', { activity: 'game_maker', visit: 1 }),
+      run(1, 'play', 'win', 12, 0, [], 5),
+      ev(2, 'probe_phase', { probe: 'game_maker', phase: 'play', completed: true, time_ms: 60_000, runs: 1, edits: 0, help_levels: 0 }),
+      edit(3, 'change', 'change', 'seed', 'touch:me', 'score:2', { from: 'score:1', to: 'score:2' }),
+      run(4, 'change', 'lose', 8, 0, [], 5),
+      ev(5, 'probe_phase', { probe: 'game_maker', phase: 'change', completed: true, time_ms: 70_000, runs: 1, edits: 1, help_levels: 0 }),
+      edit(6, 'make', 'add', 'bird', null, null),
+      edit(7, 'make', 'add', 'bird', 'recv:yum', null),
+      edit(8, 'make', 'add', 'bird', 'recv:yum', 'say:pio'),
+      edit(9, 'make', 'add', 'seed', 'touch:me', 'send:yum'),
+      edit(10, 'make', 'change', 'game', 'points:10', null, { from: 'points:5', to: 'points:10' }),
+      edit(11, 'make', 'remove', 'stone', 'tick', null),
+      // the help's ghost hand building a rule is not the child's edit
+      edit(12, 'make', 'add', 'me', 'key:up', null, { ghost: true }),
+      run(13, 'make', 'stopped', 5, 2, ['yum'], 10),
+      ev(14, 'probe_phase', { probe: 'game_maker', phase: 'make', completed: true, time_ms: 200_000, runs: 1, edits: 6, help_levels: 3 }),
+      ev(15, 'scratch_predict', { item: 'key', answer: 'right', correct: true, position: 1, time_ms: 4000 }),
+      ev(16, 'scratch_predict', { item: 'star', answer: 'life_lost', correct: false, position: 2, time_ms: 6000 }),
+      ev(17, 'scratch_predict', { item: 'broadcast', answer: 'bird_says', correct: true, position: 2, time_ms: 5000 }),
+      ev(18, 'survey_answer', { question: 'game_maker_liked', answer: 'yes' }),
+      ev(19, 'probe_end', { probe: 'game_maker', reason: 'done', time_ms: 420_000 }),
+    ])).status).toBe(200);
+    const b = newSession({ grade: 4 });
+    expect((await post(b, [
+      ev(0, 'choice', { activity: 'game_maker', visit: 1 }),
+      run(1, 'play', 'stopped', 0, 0, [], 5),
+      ev(2, 'probe_end', { probe: 'game_maker', reason: 'left', time_ms: 50_000 }),
+    ])).status).toBe(200);
+
+    const { rows } = await pool.query('SELECT * FROM v_probe_game_maker WHERE session_id = $1', [a.id]);
+    expect(rows).toHaveLength(1);
+    const r = rows[0];
+    expect([Number(r.phases_reached), Number(r.phases_completed), r.play_done, r.change_done, r.make_done]).toEqual([3, 3, true, true, true]);
+    expect(Number(r.make_seconds)).toBe(200);
+    expect([Number(r.rule_edits), Number(r.adds), Number(r.removes), Number(r.changes), Number(r.make_edits)]).toEqual([7, 4, 1, 2, 6]);
+    expect(r.bird_added).toBe(true);
+    expect(Number(r.broadcast_edits)).toBe(2);
+    expect(Number(r.win_condition_edits)).toBe(1);
+    expect(Number(r.lose_condition_edits)).toBe(0);
+    expect([Number(r.games_run), Number(r.games_played), Number(r.wins), Number(r.losses)]).toEqual([3, 3, 1, 1]);
+    expect([Number(r.games_with_broadcast), Number(r.messages_heard), r.make_game_can_win]).toEqual([1, 2, true]);
+    expect([Number(r.predictions), Number(r.predictions_correct)]).toEqual([3, 2]);
+    expect(r.prediction_answers).toBe('key:right,star:life_lost,broadcast:bird_says');
+    expect([r.liked, r.end_reason, Number(r.probe_seconds)]).toEqual(['yes', 'done', 420]);
+    expect(r.last_rules).toContain('game[points:5>win]');
+
+    const left = (await pool.query('SELECT * FROM v_probe_game_maker WHERE session_id = $1', [b.id])).rows[0];
+    expect([Number(left.phases_reached), Number(left.games_run), Number(left.games_played), left.liked, left.end_reason]).toEqual([0, 1, 0, null, 'left']);
+
+    const g = (await pool.query('SELECT * FROM v_probe_game_maker_by_grade WHERE grade = 4')).rows[0];
+    expect([Number(g.sessions), Number(g.play_done), Number(g.make_done), Number(g.used_broadcast), Number(g.played_a_broadcast), Number(g.set_win_condition), Number(g.added_the_bird)]).toEqual([2, 1, 1, 1, 1, 1, 1]);
+    expect([Number(g.predictions_correct), Number(g.predictions), Number(g.liked_yes)]).toEqual([2, 3, 1]);
+    expect(Number(g.median_rule_edits)).toBe(3.5);
+  });
+
   it('retrying the exact same batch is idempotent: one row per seq, all acked again', async () => {
     const app = createApp(pool, { distDir });
     const session = newSession();

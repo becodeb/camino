@@ -243,7 +243,7 @@ logged. **RQ 1.**
 ### `choice`
 A free-choice made by the child. **RQ 5, 6.**
 ```
-{ activity?: string, visit?: number, door?: 'easy' | 'medium' | 'hard', sheet?: number, character?: 'brote'|'mina'|'pliegue'|'ovillo', where?: 'wardrobe' }
+{ activity?: string, visit?: number, door?: 'easy' | 'medium' | 'hard', sheet?: number, character?: 'brote'|'mina'|'pliegue'|'ovillo', where?: 'wardrobe', by?: 'adult' }
 ```
 One event type covers the character pick (sheet 1), the free-play menu and
 the door difficulty; only the relevant fields are set. The character step
@@ -253,7 +253,9 @@ the same with `where: 'wardrobe'`. A free-play pick is `{activity, visit}`
 (`visit`: 1, 2, 3… the activities picked so far, the same number as its
 `activity_end`); a door chosen is `{activity: 'sheet', door, sheet}` (logged
 when the child opens a page behind another door than the page before: from
-the doors page or the bar). Wardrobe pieces are in `wardrobe` events.
+the doors page or the bar). A probe opened from the adult's corner menu
+("Abrir «Hacé tu juego»", any grade) is a pick with `by: 'adult'`.
+Wardrobe pieces are in `wardrobe` events.
 
 ### `ladder_step`
 One item of the fixed placement-ladder item bank (`src/playtest/ladder.ts`),
@@ -463,7 +465,7 @@ menu opens and when the card is held (a tap picks it). **RQ 5.**
 | 1ro | `sheet` (sheet 6 "La escalera", its doors and boss), `recess` (sheet 9, the music recess), `guardas` (sheet 14), `editor` (sheet 7's workshop and corkboard) |
 | 2do | `sheet` (sheet 8 "Zigzag"), `recess`, `guardas`, `editor` (sheet 7) |
 | 3ro | `rule_game`, `sheet` (sheet 13 "Antes y después"), `recess`, `editor` (sheet 7) |
-| 4to | `rule_game`, `editor` (sheet 15, the workshop with few lines), `recess`, `game_maker` (T7's probe, once registered) |
+| 4to | `rule_game`, `editor` (sheet 15, the workshop with few lines), `recess`, `game_maker` (T7's probe "Hacé tu juego"; see below) |
 | 5to | `rule_game`, `editor` (sheet 15), `recess`, `text_probe` (T8's probe, once registered) |
 
 `rule_game` plays `3ro-1`, `3ro-2` (a page already solved is skipped) and
@@ -484,14 +486,126 @@ minutes. Then the character cheers "¡Ahora vamos a otro juego!" and the next
 step comes. The adult's corner menu can skip the step at any time (the open
 activity's `activity_end` says `left`).
 
+### The game maker probe, "Hacé tu juego" (4to)
+
+A probe of free play (`src/playtest/GameMaker.tsx`; engine
+`src/game/gameMaker.ts`; phases and prediction items
+`src/playtest/gameMakerProbe.ts`), about ten minutes. **RQ 8** (and 5, 3).
+It is a card of 4to's menu; the adult's corner menu opens it for any grade
+during free play (`choice.by: 'adult'`). Its events carry `probe:
+'game_maker'`; its `help`, `speak` and `ghost_demo` carry `level_id:
+'game_maker'` and `phase`. It logs no `level_start`/`level_end`: free play
+counts the whole visit in `activity_end` (one `levelEnded` at the end, win
+when phase 3 was completed).
+
+Phases on one screen (palette | rule cards with "La Traductora", the same
+rule as a Scratch script, beside each card | the board, 7 × 6):
+
+1. `play`: a ready-made game (the child's character catches falling seeds
+   with the arrows; a stone takes a life; 5 points win, 0 lives lose). The
+   rules are shown but cannot be edited. Completed: one game played with
+   at least one arrow. The next page shows after a game ends or 45 s after
+   the first ▶ (or at 90 s anyway).
+2. `change`: change one rule ("que cada semilla valga 2 puntos": tap the
+   number) and play again. Completed: an edit, then a game started after
+   it (the next page shows then, or at 3 minutes anyway).
+3. `make`: your own variant: add or change rules, add the bird, "avisar"
+   (broadcast), the win condition. Completed as phase 2 (4 minutes anyway).
+4. `predict`: three fixed Scratch scripts, "¿Qué pasa…?", three drawn
+   answers each (`scratch_predict`), never marked right or wrong.
+5. "¿Te gustó hacer tu juego?": `survey_answer` {question:
+   'game_maker_liked'}.
+
+Blocks are strings `kind:param` (the param is the block's chip, a tap cycles
+it like a Scratch dropdown). Hats: `start` (al empezar), `key:<dir>`
+(cuando aprieto), `tick` (siempre: each object at its own pace),
+`touch:<me|seed|stone|bird|ground|edge>` (cuando toco a), `recv:<yum|ouch|party>`
+(cuando recibo ¡ñam! / ¡ay! / ¡fiesta!), and on the whole game's card
+(`game`, the trophy) `points:<3|5|10|15>` (si los puntos llegan a) and
+`lives0` (si las vidas llegan a 0). Actions: `move:<dir|ahead>`, `turn`,
+`top` (volver arriba, a random column), `score:<1|2|3|-1>`, `lives:<-1|1>`,
+`say:<mia|ay|pio|bien>`, `send:<msg>` (avisar: heard by every object with
+that `recv` on the next tick), `vis:<hide|show>`, `win`, `lose`. Objects:
+`me` (the child's character), `seed`, `stone`, `bird` (added by the child),
+`game`. Lives start at 3; a game that ends shows a drawn card ("¡Ganaste!",
+or "¡Se acabaron las vidas!" with the hearts filling again) and "¡Otra vez!".
+
+✋: 1 the phase's line again and its target wiggles; 2 the ghost hand points
+(▶ and the arrows; the seed's number; a drag of "avisar" to the notebook);
+3 the ghost hand shows a working rule for real (plays a few arrows; makes a
+seed worth 2; adds the bird with "cuando recibo ¡ñam! → decir ¡Pío!" and
+"avisar ¡ñam!" on the seed's catch rule): these edits carry `ghost: true`
+and never complete a phase. A fourth press or a held ✋ raises the hand.
+
+#### `probe_phase`
+A phase ended (the child turned the page).
+```
+{ probe: 'game_maker', phase: 'play' | 'change' | 'make', completed: boolean, time_ms: number, runs: number, edits: number, help_levels: number }
+```
+`runs`: games in the phase; `edits`: the child's own edits; `help_levels`:
+✋ presses in the phase (0–3).
+
+#### `rule_edit`
+One edit of the rules.
+```
+{
+  probe: 'game_maker', phase: 'change' | 'make',
+  object: 'me' | 'seed' | 'stone' | 'bird' | 'game',
+  hat: string | null,       // the card's hat (null: the object itself was added)
+  action: string | null,    // the action concerned (null: a whole card)
+  op: 'add' | 'remove' | 'change',
+  from?: string, to?: string,  // a chip tapped: the block before and after
+  rules: number,            // cards in the whole game after the edit
+  running: boolean,         // edited while the game was playing (rules apply at once)
+  ghost?: true              // done by the help's ghost hand, not the child
+}
+```
+The bird added is `{op: 'add', object: 'bird', hat: null, action: null}`.
+Removing is a drag out of the notebook, or a tap on an action; a card goes
+with its hat dragged out.
+
+#### `game_run`
+One game, from ▶ to its end.
+```
+{
+  probe: 'game_maker', phase: 'play' | 'change' | 'make',
+  result: 'win' | 'lose' | 'stopped',  // stopped: ■, ↺, the page turned or left
+  duration_ms: number, score: number, lives: number,
+  keys: number,              // arrows the child pressed (not the ghost's)
+  rules: string,             // the whole game on one line: "me[key:left>move:left;…] seed[…] game[points:5>win;lives0>lose]"
+  rule_count: number, objects: string[],
+  broadcasts: string[],      // messages some object sends and some object hears in these rules
+  messages_heard: number,    // messages heard by a rule during this game
+  win_points: number | null, lose_lives: boolean  // the game's ways to end
+}
+```
+
+#### `scratch_predict`
+One item of the prediction task (fixed, the same for every child).
+```
+{ item: 'key' | 'star' | 'broadcast', answer: string, correct: boolean, position: number, time_ms: number }
+```
+| Item | Script | Question | Answers (in order; right one marked) |
+|---|---|---|---|
+| `key` | al presionar tecla flecha derecha / cambiar x en 40 | ¿Qué pasa cuando apretás la flecha derecha? | `up`, **`right`**, `say_hola` |
+| `star` | Estrella: al hacer clic en 🏴 / por siempre / si ¿tocando <character>? entonces / sumar 1 a puntos / esconder | ¿Qué pasa cuando <character> toca la estrella? | **`star_points`**, `star_says`, `life_lost` |
+| `broadcast` | Piedra: … si ¿tocando <character>? entonces enviar ¡ay!; Pájaro: al recibir ¡ay! / decir ¡Cuidado! por 2 segundos | Cuando la piedra toca a <character>, ¿quién habla? | `stone_says`, `nobody`, **`bird_says`** |
+
+`time_ms` from the item on screen to the tap; `position` 0–2.
+
+#### `probe_end`
+The probe was left: `{ probe: 'game_maker', reason: 'done' | 'left', time_ms: number, runs?: number, edits?: number, rules?: string }`
+(`left`: back to the menu, the time or the adult ended it before the end).
+
 ### `survey_answer`
 One spoken survey question answered with drawn faces/pictures. **RQ 9.**
 ```
-{ question: 'liked' | 'difficulty' | 'favorite_activity' | 'play_again' | 'typing_liked', answer: string }
+{ question: 'liked' | 'difficulty' | 'favorite_activity' | 'play_again' | 'typing_liked' | 'game_maker_liked', answer: string }
 ```
 `liked`: `'yes'|'mid'|'no'`. `typing_liked` (`'yes'|'mid'|'no'`) is asked by
-the typing game at its end, not by the survey step, and is not mirrored onto
-`sessions.survey`. `difficulty`: `'easy'|'mid'|'hard'`.
+the typing game at its end, and `game_maker_liked` (`'yes'|'mid'|'no'`,
+"¿Te gustó hacer tu juego?") by the game maker probe at its end, not by the
+survey step; neither is mirrored onto `sessions.survey`. `difficulty`: `'easy'|'mid'|'hard'`.
 `favorite_activity`: the activity id tapped, among the activities the child
 did this session (`character`, `ladder`, `tool_check`, `typing`, `wardrobe`,
 and the free-play entries' `activity` ids); asked only when there are two
@@ -562,7 +676,7 @@ for a session therefore mean a 400-dropped batch, never a network failure.
 
 ## SQL views
 
-Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`), always available for ad hoc
+Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`, `004_game_maker.sql`), always available for ad hoc
 analysis (`psql`, or any tool that can read Postgres directly).
 
 - **`v_ladder_ceiling`** — one row per `(session_id, concept)`: the highest
@@ -590,6 +704,22 @@ analysis (`psql`, or any tool that can read Postgres directly).
   only), `touch_attempts` (keys tapped on the drawn keyboard) and `liked_yes`,
   `liked_mid`, `liked_no` (the `typing_liked` answers). Redefined in
   `server/migrations/003_typing.sql`. Feeds RQ 7.
+- **`v_probe_game_maker`** — one row per session that opened "Hacé tu
+  juego": `phases_reached`, `phases_completed`, `play_done`, `change_done`,
+  `make_done`, `make_seconds`; the child's own `rule_edits` (`adds`,
+  `removes`, `changes`, `make_edits`; ghost edits left out), `bird_added`,
+  `broadcast_edits` (avisar / cuando recibo placed or changed),
+  `win_condition_edits`, `lose_condition_edits`; `games_run`,
+  `games_played` (with an arrow), `wins`, `losses`, `games_with_broadcast`,
+  `messages_heard`, `make_game_can_win`; `predictions`,
+  `predictions_correct`, `prediction_answers` ("key:right,star:…");
+  `liked`; `end_reason`, `probe_seconds`; `last_rules` (the last game's
+  rules). `server/migrations/004_game_maker.sql`. Feeds RQ 8.
+- **`v_probe_game_maker_by_grade`** — RQ 8 per grade: `sessions`,
+  `play_done`, `change_done`, `make_done`, `median_rule_edits`,
+  `used_broadcast`, `played_a_broadcast`, `set_win_condition`,
+  `added_the_bird`, `predictions_correct` / `predictions`, `liked_yes`,
+  `liked_mid`, `liked_no`.
 
 ## Retention and deletion
 

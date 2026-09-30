@@ -191,11 +191,14 @@ function Workshop({ phase, game, gameRef, setGame, onDone }: {
     }
     setGame(res.game);
     const e = res.edit;
+    // the ghost hand's own edits (help's third step) are logged apart and never complete a phase
+    const ghost = demoRef.current;
     log('rule_edit', {
       probe: PROBE, phase, object: e.object, hat: e.hat || null, action: e.action, op: e.op,
       ...(e.from ? { from: e.from, to: e.to } : {}), rules: ruleCount(res.game), running: board.current?.running() ?? false,
+      ...(ghost ? { ghost: true } : {}),
     });
-    track.current = trackEdit(track.current, Date.now());
+    if (!ghost) track.current = trackEdit(track.current, Date.now());
     if (res.rule >= 0) setActive(res.rule);
     check();
     return true;
