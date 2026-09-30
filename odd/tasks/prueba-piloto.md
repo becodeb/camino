@@ -61,7 +61,7 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 - [x] T1 (P0) API and data: Node API (Hono) serving the built front end and `/api`; idempotent migrations; `sessions`/`events`; sync endpoint idempotent on (session_id, seq); admin and export endpoints with tokens; retention; `Dockerfile.prueba`, `docker-compose.prueba.yml`; self-hosted fonts; data dictionary and SQL views; `tools/export-playtest.mjs`. Checks: API tests against Postgres, compose up locally.
 - [x] T2 (P0/P1) Playtest shell and telemetry client: offline queue with batched retries; adult setup and session code; flow state machine; character choice; instrumentation hooks in the level player (level_start, run, level_end, help, ghost_demo, speak, drag, tap_add, idle, visibility, error); hidden adult controls; raised hand (`call_adult`) and `adult_help`; survey; adult form; goodbye; admin page.
 - [x] T3 (P0) First deploy: push, create the Coolify app, env vars, domain, verify `running:healthy` and a sync + export against the live URL.
-- [ ] T4 (P1) Tool check and placement ladder: two tiny tool levels; fixed item bank by concept with grade entry points and the step-up / floor rules; `ladder_step` events.
+- [x] T4 (P1) Tool check and placement ladder: two tiny tool levels; fixed item bank by concept with grade entry points and the step-up / floor rules; `ladder_step` events.
 - [ ] T5 (P2) Free-play menu (existing activities by grade), wardrobe step with compressed thresholds, session garden.
 - [ ] T6 (P2) Typing minigame "Teclas del bosque" (new art).
 - [ ] T7 (P3) 4to probe "Hacé tu juego" (rule engine extended: objects, score, lives, win/lose, avisar; Scratch equivalents; predict a Scratch script).
@@ -121,6 +121,50 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 - 2026-09-30: T3 done by the parent (route: inline, state-only API calls): pushed feat/prueba-piloto (75ca705); created Coolify app `camino-prueba` uuid nsb2m6xsopyv3drjwfqloigv (compose `/docker-compose.prueba.yml`, public repo); env vars POSTGRES_PASSWORD, ADMIN_TOKEN, EXPORT_TOKEN, RETENTION_DAYS set via API from `~/.credentials/camino-prueba.env` (never printed); deploy 1 finished, domains patched (`https://camino-prueba.becode.com.ar` + sslip.io), deploy 2 finished; status `running:healthy`. Live: `/api/health` 200 on both URLs, `/` 200 with `cache-control: no-cache`, `/admin` 200, `/api/export` 401 without token and 200 with it, `/api/sync` rejects a bad uuid with 400. A full sync round trip against production is deferred to T9 to avoid test rows in the real data (T9 adds a way to delete check sessions).
 - 2026-09-30: parent review of T2 screenshots: the level header shows internal ids to the child ("Prueba piloto · ladder", "1ro-h1-2 · Entre dos piedras"); T4 replaces it with kid-safe copy. Raise the `/api/sync` rate limit in T4.
 
+- 2026-09-30: T4 done (route: delegated direct, one writer; 2+ non-trivial files), two work-unit commits on `feat/prueba-piloto` (not pushed):
+  - `f809464` server: `/api/sync` allows 1500 posts per IP per minute (in memory, IP never stored; a class of ~25 devices behind one NAT posts ~300); `DELETE /api/admin/sessions/:id` (ADMIN_TOKEN, cascades events, 400/404); a confirmed "Borrar" button per row on `/admin`; tests; dictionary lines.
+  - `4ab9e2c` tool check (`toolCheck.ts`, `ToolCheck.tsx`), placement ladder (`ladder.ts` pure rules, `Ladder.tsx`), the walk-on and cheer interludes (`interlude.tsx`, new drawn scene; `StageView.walkTo`), rule-game run reports (`RealtimeLevel` → `nav.onRunReport`, demo unchanged without the hook), kid-safe level bar (the page's own title), `SampleLadder`/`SAMPLE_LEVELS` removed, dictionary, `check-piloto.mjs` and `shots-piloto.mjs` extended.
+
+  Item bank (fixed; also in the dictionary):
+
+  | Rung | Concept | Format | Item |
+  |---|---|---|---|
+  | 1 | sequence | solve | `1ro-h1-2` |
+  | 2 | long_sequence | solve | `1ro-h2-1` |
+  | 3 | fix | fix | `1ro-h3-3` |
+  | 4 | predict | predict | `1ro-h3-4` |
+  | 5 | repeat | solve (ghost intro) | `1ro-h4-1` |
+  | 6 | repeat_count | complete | `1ro-h5-1` |
+  | 7 | repeat_pattern | solve | `1ro-h6-2` |
+  | 8 | before_after_repeat | solve | `1ro-h13-2` |
+  | 9 | fog_si | solve | `2do-1` |
+  | 10 | three_worlds | solve | `2do-2` |
+  | 11 | events_rules | rule game | `3ro-1` |
+  | 12 | rules_score | rule game | `3ro-2` |
+
+  Evidence:
+  - `npm run typecheck` clean; `npm test` 24 files, 841 tests (new: `ladder.test.ts` item bank, entry by grade, step up, floor check, top/ceiling/bottom/floor stops, 10-item and 12-minute caps, item result, item verdict; `toolCheck.test.ts`; `levels.test.ts` failed-run rules, rules text); `npm run build` ok; `npm run test:api` 21/21 on a disposable Postgres (54340), incl. the rate limit (25 devices × 12/min + flushes pass, a runaway IP is stopped, 429 through the route) and the delete (cascade, 404, 400, export token refused).
+  - `tools/check-piloto.mjs` (vite 8811 → API 8810 → Postgres 54340): all checks passed. 1ro: the real tool check (5 `tool_check` rows in order, all done alone, the drag also a `drag` drop success, the tap a `tap_add`), ladder 1✓ 2✓ 3✗ (the fix page offline with helps 1–3, 🔊, the raised hand and the adult's answer; one failed run then ends it), `ladder_end` reason `ceiling`, ceiling 2 = `v_session_summary.ladder_ceiling_rung` = `v_ladder_ceiling` (sequence:1, long_sequence:2), 50 events seq 0..49, survey and adult form stored. 5to: the tap never done → ghost at 20 s, moved on at 40 s (`done:false, shown_by_ghost:true`, one `ghost_demo` kind `tool`), enters at rung 9 (fog), two bumps → fail, floor rung 8 passes → `ladder_end` `floor`, ceiling 8. 3ro: the rule game's runs `no_play`(0 keys), `stopped`(2 keys, `key:right(right)`), `win`(10 keys); item pass with 3 runs.
+  - `/admin` in chromium: dismissing the confirm keeps the session; accepting removes it and its 14 events; the status line confirms.
+  - Demo regressions against 8811: `tools/check-primer.mjs` and `tools/check-3ro.mjs` all ok, no console errors.
+  - Screenshots `tools/shots-piloto.mjs` (38 `pp-` scenarios × 1366×768 and 1280×800, 76 ok, no console errors), reviewed: each tool-check gesture prompt (`pp-tool-tap/play/drag/reset/help`), the ghost dragging (`pp-tool-ghost`), ladder items of each board kind (`pp-ladder-sequence/fix/predict/repeat/count/pattern/fog/fog-prints/worlds/worlds-prints/rules/score`), the walk (`pp-ladder-walk`) and the cheer (`pp-ladder-cheer`). Fixed after review: one-row tool boards got a tall sky with a cloud poking out of the sheet (now 2×2 and 4×2); the ↺ gesture was never detected (a stale closure in the click listener), so the ring stayed on ↺ and never moved to ✋.
+
+  Decisions and deviations:
+  - A failed run is a run that ran and did not win: not `empty`/`incomplete`/`no_guess`/`no_play`, and not the given program run unchanged on a fix page (pressing ▶ first to see the mistake is part of fixing it).
+  - Item end: two failed runs, 3 minutes, or, after the solution hint or an adult's help (the result is already a fail), the next failed run: the child gets one more try with the help instead of the page vanishing under the footprints. A solved page is never cut; it turns by itself after 8 s if the child does not turn it. `watch` also runs every 5 s for the time limit.
+  - Rule game: a run is one game (▶ to ■/↺/the win); `stopped` = stopped after the child pressed an arrow (failed run), `no_play` = before any arrow (not failed); the ghost's own presses do not count. A game still running when the page ends logs no run.
+  - `ladder_step.result` is `pass`|`fail` plus `check: 'climb'|'floor'` (the dictionary's old `floor` result is gone: a floor check that passes must count toward the ceiling). `ladder_end` added (entry, ceiling, items, time, reason). No migration needed: `v_ladder_ceiling` and `v_session_summary` already agree with one concept per rung (only a comment in `001_init.sql` changed).
+  - `tool_check` payload replaced (`{gesture, done, time_ms, attempts, shown_by_ghost, level_id, via?}` instead of `{control, success}`; nothing was logged with the old shape).
+  - "One forced fail → floor → stop" cannot happen in a 1ro session (entry rung 1, nothing below); the scripted 1ro session stops at the ceiling and the 5to session covers the floor check.
+  - Caps are checked between items: an item open at 12 minutes finishes (at most 3 more minutes).
+  - The 3ro rule game played its first-entry ghost demo once per page load; a new session now clears that memory (`forgetRealtimeIntros`) so the next child on the same device sees it too.
+
+  For T5 (free play, wardrobe, garden):
+  - Steps plug into `STEP_VIEWS` as before; `WalkOn` and `Cheer` (`interlude.tsx`) are reusable between activities.
+  - `PlaytestLevel` now also takes `listen` (every event it logs), `autoNextMs` and runs `watch` every 5 s; `LevelStats.fails` counts failed runs.
+  - The level pages' spoken lines still say "Brote" when the child picked another character (demo text, pre-existing).
+  - After the ladder the flow reaches free play (still the placeholder).
+
 ## Next step
 
-T4 (tool check and placement ladder).
+T5 (free-play menu, wardrobe, session garden).
