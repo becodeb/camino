@@ -1,4 +1,5 @@
 import { createRoot } from 'react-dom/client';
+import './ui/fonts.css';
 import './ui/notebook.css';
 import './ui/camino.css';
 import './ui/primer.css';

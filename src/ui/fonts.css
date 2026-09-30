@@ -1,0 +1,28 @@
+/* Self-hosted Andika and Gochi Hand (both OFL, licenses in src/fonts/).
+   Children's devices must never call Google Fonts: these files are imported
+   from src/, so Vite content-hashes them into dist/assets like any other
+   asset, and index.html no longer links fonts.googleapis.com. */
+
+@font-face {
+  font-family: 'Andika';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/andika-400-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Andika';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fonts/andika-700-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Gochi Hand';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/gochihand-400-latin.woff2') format('woff2');
+}

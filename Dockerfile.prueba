@@ -1,0 +1,34 @@
+# Pilot playtest image. Two stages: Vite builds the front end (VITE_PLAYTEST=1
+# selects the playtest entry once T2 adds it), then a slim Node 24 runtime
+# runs the API directly with `node server/index.ts` (type stripping, no
+# compile step) and serves dist/ itself. Both base images are multi-arch, so
+# this builds on an ARM64 host (the Raspberry Pi) or x86 alike. No BuildKit
+# cache mounts: this Coolify host does not support them.
+
+FROM node:24-alpine AS build
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN VITE_PLAYTEST=1 npm run build
+
+FROM node:24-alpine AS runtime
+
+WORKDIR /app
+RUN addgroup -S camino && adduser -S camino -G camino
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY server ./server
+COPY --from=build /app/dist ./dist
+
+USER camino
+ENV NODE_ENV=production
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=10s \
+  CMD wget --spider -q http://127.0.0.1:3000/api/health || exit 1
+
+CMD ["node", "server/index.ts"]

@@ -1,3 +1,10 @@
 node_modules
 dist
 *.tsbuildinfo
+
+# Local-only pilot playtest testing (never committed: secrets and a host
+# port mapping the committed compose file intentionally omits).
+docker-compose.prueba.override.yml
+.env
+.env.*
+exports/

@@ -1,0 +1,50 @@
+# Deployed by Coolify as a separate app from the existing `camino` demo.
+# Publishes no host port and declares no external network on purpose:
+# Coolify attaches the container to its own proxy network, generates the
+# Traefik labels itself (routed to `app` because it exposes 3000), and
+# injects `env_file: .env` into every service from its own panel. For local
+# testing only, add ports via a gitignored override file or the CLI — this
+# committed file must stay portless.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prueba
+    container_name: camino-prueba
+    restart: unless-stopped
+    expose:
+      - '3000'
+    environment:
+      DATABASE_URL: postgres://camino:${POSTGRES_PASSWORD}@db:5432/camino_prueba
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      EXPORT_TOKEN: ${EXPORT_TOKEN}
+      RETENTION_DAYS: ${RETENTION_DAYS:-180}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  db:
+    image: postgres:16-alpine
+    container_name: camino-prueba-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: camino
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: camino_prueba
+    volumes:
+      - camino-prueba-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U camino -d camino_prueba']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  camino-prueba-db-data:

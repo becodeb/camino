@@ -4,3 +4,7 @@ dist
 *.tsbuildinfo
 docs
 odd
+exports
+.env
+.env.*
+docker-compose.prueba.override.yml
