@@ -60,7 +60,7 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 
 - [x] T1 (P0) API and data: Node API (Hono) serving the built front end and `/api`; idempotent migrations; `sessions`/`events`; sync endpoint idempotent on (session_id, seq); admin and export endpoints with tokens; retention; `Dockerfile.prueba`, `docker-compose.prueba.yml`; self-hosted fonts; data dictionary and SQL views; `tools/export-playtest.mjs`. Checks: API tests against Postgres, compose up locally.
 - [x] T2 (P0/P1) Playtest shell and telemetry client: offline queue with batched retries; adult setup and session code; flow state machine; character choice; instrumentation hooks in the level player (level_start, run, level_end, help, ghost_demo, speak, drag, tap_add, idle, visibility, error); hidden adult controls; raised hand (`call_adult`) and `adult_help`; survey; adult form; goodbye; admin page.
-- [ ] T3 (P0) First deploy: push, create the Coolify app, env vars, domain, verify `running:healthy` and a sync + export against the live URL.
+- [x] T3 (P0) First deploy: push, create the Coolify app, env vars, domain, verify `running:healthy` and a sync + export against the live URL.
 - [ ] T4 (P1) Tool check and placement ladder: two tiny tool levels; fixed item bank by concept with grade entry points and the step-up / floor rules; `ladder_step` events.
 - [ ] T5 (P2) Free-play menu (existing activities by grade), wardrobe step with compressed thresholds, session garden.
 - [ ] T6 (P2) Typing minigame "Teclas del bosque" (new art).
@@ -118,6 +118,9 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 
   Open (not T2): `/api/sync` allows 120 requests per IP per minute; a class of 10+ devices behind one school NAT posting every 5 s will hit 429s (the client backs off and loses nothing, but syncing slows). Raise it before the classroom sessions (T3 or T9). Engram mirror still pending (see Constraints).
 
+- 2026-09-30: T3 done by the parent (route: inline, state-only API calls): pushed feat/prueba-piloto (75ca705); created Coolify app `camino-prueba` uuid nsb2m6xsopyv3drjwfqloigv (compose `/docker-compose.prueba.yml`, public repo); env vars POSTGRES_PASSWORD, ADMIN_TOKEN, EXPORT_TOKEN, RETENTION_DAYS set via API from `~/.credentials/camino-prueba.env` (never printed); deploy 1 finished, domains patched (`https://camino-prueba.becode.com.ar` + sslip.io), deploy 2 finished; status `running:healthy`. Live: `/api/health` 200 on both URLs, `/` 200 with `cache-control: no-cache`, `/admin` 200, `/api/export` 401 without token and 200 with it, `/api/sync` rejects a bad uuid with 400. A full sync round trip against production is deferred to T9 to avoid test rows in the real data (T9 adds a way to delete check sessions).
+- 2026-09-30: parent review of T2 screenshots: the level header shows internal ids to the child ("Prueba piloto · ladder", "1ro-h1-2 · Entre dos piedras"); T4 replaces it with kid-safe copy. Raise the `/api/sync` rate limit in T4.
+
 ## Next step
 
-T3 (first deploy) or T4 (tool check and placement ladder).
+T4 (tool check and placement ladder).
