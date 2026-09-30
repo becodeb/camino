@@ -160,7 +160,12 @@
 .pp-survey-dots li.is-done { background: #a4b86d; }
 .pp-survey-dots li.is-here { background: var(--yellow); }
 .pp-options { width: auto; max-width: 100%; grid-auto-flow: column; gap: 34px; padding: 34px 44px 38px; }
-.pp-options.n5, .pp-options.n6, .pp-options.n7 { grid-auto-flow: row; grid-template-columns: repeat(4, auto); }
+/* "¿Qué te gustó más?" offers every activity done (up to ten): two rows, never a row wider than the screen */
+.pp-options.n5, .pp-options.n6, .pp-options.n7, .pp-options.n8 { grid-auto-flow: row; grid-template-columns: repeat(4, auto); }
+.pp-options.n9, .pp-options.n10 { grid-auto-flow: row; grid-template-columns: repeat(5, auto); gap: 26px; }
+.pp-options.n9 .pp-option, .pp-options.n10 .pp-option { width: 180px; height: 180px; }
+.pp-options.n9 .pp-activity-art, .pp-options.n10 .pp-activity-art { width: 130px; height: 130px; }
+.pp-options.n9 .pp-activity-art > svg, .pp-options.n10 .pp-activity-art > svg { width: 122px; height: 122px; }
 .pp-option {
   --r-cut: 18px 14px 20px 13px / 14px 19px 13px 18px;
   width: 200px; height: 200px;
