@@ -33,14 +33,14 @@ import { SeedPouch } from '../screens/yearKit';
 import { ThenArrow } from '../ui/art';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { usePlaytest } from './context';
-import { budgetFrom, budgetVerdict, menuFor, MENU_LINES, type Activity } from './freePlay';
+import { activityFor, budgetFrom, budgetVerdict, menuFor, MENU_LINES, type Activity, type ProbeId } from './freePlay';
 import { setHashConsumer } from './hashHold';
 import { Cheer, WalkOn } from './interlude';
 import type { LevelDef } from '../game/levels';
 import { pilotLevel, RULE_GAME_PAGES } from './levels';
 import { ActivityArt, MenuBackArt } from './menuArt';
 import { InstrumentedPage, PlaytestLevel, type LevelEnd } from './PlaytestLevel';
-import { hasProbe, PROBES } from './probes';
+import { hasProbe, OPEN_PROBE_EVENT, PROBES } from './probes';
 
 /** How long a card is held before its name is said (a shorter press picks it). */
 const HOLD_MS = 550;
@@ -121,11 +121,11 @@ export function FreePlay() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
-  const pick = (a: Activity) => {
+  const pick = (a: Activity, by?: 'adult') => {
     if (finished.current || viewRef.current.kind !== 'menu') return;
     const n = ++visits.current;
     stopSpeaking();
-    log('choice', { activity: a.id, visit: n });
+    log('choice', { activity: a.id, visit: n, ...(by ? { by } : {}) });
     apiRef.current.did(a.id);
     visit.current = { a, n, at: Date.now(), levels: 0, wins: 0, extras: 0 };
     const sheet = 'sheet' in a.kind ? sheetByN(a.kind.sheet) : null;
@@ -188,6 +188,23 @@ export function FreePlay() {
   // the flow moved on (the adult skipped the step or ended the session): the open activity ends where it was
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => () => closeVisit('left'), []);
+
+  // the adult menu opens a probe (any grade): the open activity is left for it
+  useEffect(() => {
+    const on = (e: Event) => {
+      const a = activityFor((e as CustomEvent<ProbeId>).detail, grade);
+      if (!a || finished.current) return;
+      if (viewRef.current.kind === 'activity') {
+        if (viewRef.current.a.id === a.id) return;
+        leaving.current = 'menu';
+        setView({ kind: 'menu', n: visits.current });
+      }
+      window.setTimeout(() => { if (viewRef.current.kind === 'menu') pick(a, 'adult'); }, 60);
+    };
+    window.addEventListener(OPEN_PROBE_EVENT, on);
+    return () => window.removeEventListener(OPEN_PROBE_EVENT, on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!DEBUG) return;

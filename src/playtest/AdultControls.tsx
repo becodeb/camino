@@ -2,6 +2,8 @@
 // - a long press (1.5 s) on the top-left corner of the screen opens the
 //   adult menu: log help given without a call, skip the step, end the
 //   session (straight to the survey), the sync status;
+// - in free play, the adult menu also opens a probe for any grade ("Hacé
+//   tu juego", for testing it, or for a 5to that wants it);
 // - a long press (1.2 s) on the character's raised hand opens the help
 //   panel: what the adult did, which lowers the hand.
 // The corner is watched on the window (capture phase), so the page under it
@@ -13,6 +15,7 @@ import { canEndNow, canSkip } from './flow';
 import { useSyncStatus } from './runtime';
 import { STEP_NAME } from './labels';
 import { RaisedHand } from './RaisedHand';
+import { openProbe } from './probes';
 
 export const CORNER_PX = 64;
 export const CORNER_HOLD_MS = 1500;
@@ -163,6 +166,7 @@ function AdultMenu({ onClose }: { onClose: () => void }) {
       ) : (
         <div className="pp-kinds">
           <button type="button" className="pp-adult-btn cut" data-act="log-help" onClick={() => { setHelp(true); setNoted(false); }}>Registrar ayuda{noted ? ' ✓' : ''}</button>
+          {step === 'free_play' && <button type="button" className="pp-adult-btn cut" data-act="open-game-maker" onClick={() => { openProbe('game_maker'); onClose(); }}>Abrir «Hacé tu juego»</button>}
           {canSkip(step) && <button type="button" className="pp-adult-btn cut" data-act="skip" onClick={() => { api.skip(); onClose(); }}>Saltar este paso</button>}
           {canEndNow(step) && (
             confirmEnd

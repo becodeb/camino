@@ -14,6 +14,7 @@
 import type { ComponentType } from 'react';
 import type { ProbeId } from './freePlay';
 import type { LevelEnd } from './PlaytestLevel';
+import { GameMaker } from './GameMaker';
 
 export interface ProbeProps {
   /** The activity id to log on the probe's pages (`game_maker`, `text_probe`). */
@@ -24,6 +25,12 @@ export interface ProbeProps {
   done(): void;
 }
 
-export const PROBES: Partial<Record<ProbeId, ComponentType<ProbeProps>>> = {};
+export const PROBES: Partial<Record<ProbeId, ComponentType<ProbeProps>>> = { game_maker: GameMaker };
 
 export const hasProbe = (id: ProbeId) => !!PROBES[id];
+
+/** The adult menu asks free play to open a probe (any grade: to test it, or for a 5to who wants the game maker). */
+export const OPEN_PROBE_EVENT = 'pp-open-probe';
+export function openProbe(id: ProbeId) {
+  window.dispatchEvent(new CustomEvent<ProbeId>(OPEN_PROBE_EVENT, { detail: id }));
+}

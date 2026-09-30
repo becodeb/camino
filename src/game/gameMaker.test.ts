@@ -27,12 +27,12 @@ describe('the ready game', () => {
     const g = game({ id: 'seed', rules: READY[1].rules });
     let s = gmInit(g);
     const rows: number[] = [];
-    for (let i = 0; i < SPRITE_DEFS.seed.pace * 6; i++) {
+    for (let i = 0; i < SPRITE_DEFS.seed.pace * 7; i++) {
       s = gmStep(g, s).state;
       if (s.tick % SPRITE_DEFS.seed.pace === 0) rows.push(s.sprites.seed!.r);
     }
-    // 1, 2, 3, 4, then off the bottom: the ground rule puts it on row 0, then it falls again
-    expect(rows).toEqual([1, 2, 3, 4, 0, 1]);
+    // 1 … 5, then off the bottom: the ground rule puts it on row 0, then it falls again
+    expect(rows).toEqual([1, 2, 3, 4, 5, 0, 1]);
   });
 
   it('the arrows move the character, clamped at the edges (an edge is a bump)', () => {
@@ -362,7 +362,7 @@ describe("3ro's rule game is unchanged", () => {
     expect(r2.state.won).toBe(true);
   });
 
-  it('the board is 7 × 5', () => {
-    expect([GM_COLS, GM_ROWS]).toEqual([7, 5]);
+  it('the board is 7 × 6', () => {
+    expect([GM_COLS, GM_ROWS]).toEqual([7, 6]);
   });
 });

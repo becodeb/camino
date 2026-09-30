@@ -26,7 +26,7 @@ import { nextRandom } from './rules';
 export { TICK_MS } from './rules';
 
 export const GM_COLS = 7;
-export const GM_ROWS = 5;
+export const GM_ROWS = 6;
 
 export const SPRITES = ['me', 'seed', 'stone', 'bird'] as const;
 export type SpriteId = typeof SPRITES[number];
@@ -44,7 +44,7 @@ export type GmGame = GmObject[];
 /** Where each sprite starts, which way it faces ("mover adelante"), and how often its "siempre" fires (ticks). */
 export interface SpriteDef { start: Cell; dir: Dir; pace: number }
 export const SPRITE_DEFS: Record<SpriteId, SpriteDef> = {
-  me: { start: { c: 3, r: 4 }, dir: 'right', pace: 4 },
+  me: { start: { c: 3, r: 5 }, dir: 'right', pace: 4 },
   seed: { start: { c: 1, r: 0 }, dir: 'down', pace: 5 },
   stone: { start: { c: 5, r: 0 }, dir: 'down', pace: 6 },
   bird: { start: { c: 0, r: 1 }, dir: 'right', pace: 4 },
