@@ -3,6 +3,8 @@
 // each item a `ladder_step`, then the character walks on to the next page
 // (no scores, never "wrong"); when the ladder stops, a `ladder_end` with the
 // ceiling and a cheer ("¡Muy bien! Vamos a jugar"), then the next step.
+// Its items so far survive a reload of the tab (resume.ts): the ladder
+// carries on with the item that was on screen.
 
 import { useEffect, useRef, useState } from 'react';
 import { formatOf } from '../game/formats';
@@ -15,6 +17,7 @@ import {
 } from './ladder';
 import { pilotLevel } from './levels';
 import { PlaytestLevel, type LevelEnd } from './PlaytestLevel';
+import { rememberPart, resumedPart } from './resume';
 
 /** Said while the character walks to the next page (in turn, never about how it went). */
 const WALK_LINES = ['¡Vamos a la próxima!', '¡Seguimos!', '¡Otra hoja!', '¡A ver esta!'];
@@ -28,22 +31,31 @@ type View =
   | { kind: 'walk'; rung: number; check: Check; n: number }
   | { kind: 'end' };
 
+interface SavedLadder { state: LadderState; ended: boolean }
+
 export function Ladder() {
   const { session, next, log } = usePlaytest();
   const [start] = useState(() => {
+    const saved = resumedPart<SavedLadder>('ladder');
+    if (saved?.state && Array.isArray(saved.state.items)) {
+      const d = saved.ended ? null : decide(saved.state, Date.now());
+      const view: View = !d || 'stop' in d ? { kind: 'end' } : { kind: 'item', rung: d.rung, check: d.check, n: saved.state.items.length };
+      return { s: saved.state, view, ended: saved.ended, stop: d && 'stop' in d ? d.stop : null };
+    }
     const s = startLadder(session?.grade ?? 1, Date.now());
     const f = firstItem(s) as { rung: number; check: Check };
-    return { s, f };
+    return { s, view: { kind: 'item', ...f, n: 0 } as View, ended: false, stop: null };
   });
   const state = useRef<LadderState>(start.s);
-  const [view, setView] = useState<View>({ kind: 'item', ...start.f, n: 0 });
+  const [view, setView] = useState<View>(start.view);
   const memo = useRef(newItemMemo());
-  const stopped = useRef(false);
+  const stopped = useRef(start.ended);
 
   const endLadder = (reason: StopReason | 'left') => {
     if (stopped.current) return;
     stopped.current = true;
     const s = state.current;
+    rememberPart('ladder', { state: s, ended: true } satisfies SavedLadder);
     log('ladder_end', {
       entry_rung: s.entry,
       ceiling_rung: ceiling(s),
@@ -61,6 +73,10 @@ export function Ladder() {
       go: (rung: number) => { memo.current = newItemMemo(); setView((v) => ({ kind: 'item', rung, check: 'climb', n: ('n' in v ? v.n : 0) + 1 })); },
     };
   }, []);
+
+  // resumed after a reload with the ladder over by now (its time ran out)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (start.stop) endLadder(start.stop); }, []);
 
   // the flow moved on mid-ladder (the adult ended the session or skipped the step)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,6 +103,7 @@ export function Ladder() {
     const result = itemResult(end);
     const s = record(state.current, { rung: r.rung, check: view.check, result });
     state.current = s;
+    rememberPart('ladder', { state: s, ended: false } satisfies SavedLadder);
     const d = decide(s, Date.now());
     log('ladder_step', {
       concept: r.concept,

@@ -30,7 +30,7 @@ One row per playtest session (one child, one sitting).
 | `consent` | boolean | Adult confirmed the session at setup. | — |
 | `started_at` | timestamptz | When the session began. | 5 (duration, idle) |
 | `ended_at` | timestamptz, nullable | When the session ended (set on goodbye or an adult end-session gesture). | 5 |
-| `end_reason` | text, nullable | `'completed'` (the child reached the goodbye), `'adult_ended'` (the adult's hidden "end the session"; the survey still follows), `'abandoned'` (set by the client when a new session starts on the device while this one never ended, e.g. a reload mid-session; `ended_at` is then its last event's time). | 5 |
+| `end_reason` | text, nullable | `'completed'` (the child reached the goodbye), `'adult_ended'` (the adult's hidden "end the session"; the survey still follows), `'abandoned'` (set by the client when a new session starts on the device while this one never ended, e.g. the adult set up a new child without ending the last one, or a tab reloaded more than 2 hours after its last save; `ended_at` is then its last event's time). A reload within a session no longer abandons it: the session carries on (see `resume`). | 5 |
 | `app_version` | text, nullable | Front-end build version at the time of the session. | — |
 | `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language. | 1 (device capability vs. tool failures) |
 | `survey` | jsonb, nullable | See "survey_answer" below; the final answers, keyed by question. | 9 |
@@ -763,6 +763,29 @@ The session moved to another flow step (the same change also updates
 `skip` is the adult skipping a step (or a step with nothing to show);
 `end_now` is the adult's "end the session" gesture (straight to the survey).
 
+### `resume`
+The tab reloaded (a stray F5, a Chromebook discarding the tab, the adult
+reloading) and the session carried on (`src/playtest/resume.ts`). The tab
+keeps the session's flow, progress and a few steps' state in
+`sessionStorage` (`camino.piloto.resume.v1`, this tab only); after a reload
+the playtest opens on the same step, from that step's start: the ladder
+carries on with the item that was on screen (its earlier items stand) and
+free play keeps its clock and visit count (the child is back on the menu);
+the tool check, typing game, wardrobe and survey start that step again.
+Offline, the service worker (`src/playtest/serviceWorker.ts`) still opens
+the app. No `step` event is logged for it. A resume needs the device's
+current queued session, a step past the setup and a save younger than
+2 hours; otherwise the setup opens as before. **RQ 5** (and data cleaning:
+the page that was open logged a `level_start` with no `level_end`, and an
+open free-play activity no `activity_end`).
+```
+{
+  step: string,          // the flow step it carries on at
+  since_save_ms: number, // since the tab last saved the session (≈ since the reload's last activity)
+  step_ms: number        // since the step began (before the reload)
+}
+```
+
 ## How the client sends (offline queue)
 
 `src/playtest/telemetry.ts`. Every event is stored first in the browser
@@ -777,7 +800,9 @@ network error, a 429 or a 5xx is retried with exponential backoff (1 s,
 drops the batch (with a console warning), a 413 halves the batch size. When
 the page is hidden or closed the queue is flushed with `fetch(…, {keepalive:
 true})` (≤ 60 KB per request). Sessions left in the queue by an earlier page
-load sync on the next load. Session changes (`current_step`, `ended_at`,
+load sync on the next load (a reload, even offline: the playtest build's
+service worker serves the app from its cache when the network fails or
+does not answer in 4 s; it never caches `/api` or `/admin`). Session changes (`current_step`, `ended_at`,
 `end_reason`, `survey`, `adult_form`) travel in the same posts. Gaps in `seq`
 for a session therefore mean a 400-dropped batch, never a network failure.
 

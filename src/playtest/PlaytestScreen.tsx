@@ -6,7 +6,8 @@
 // end the session, skip a step, log help and answer the raised hand.
 //
 // The playtest keeps its own progress in memory (never the demo's
-// `camino.progress.v1`), fresh for every session.
+// `camino.progress.v1`), fresh for every session. A reload of the tab
+// carries on with the session on the step it was on (resume.ts).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { progress } from '../curriculum/progress';
@@ -23,14 +24,19 @@ import { AdultControls } from './AdultControls';
 import { PlaytestContext, type AdultHelpKind, type HandState, type LevelTrack, type PlaytestApi } from './context';
 import { STEPS, canSkip, initialFlow, reduce, type FlowAction, type FlowState, type StepId } from './flow';
 import { enterPlaytestProgress, leavePlaytestProgress } from './progressScope';
+import { rememberFlow, takeResume, type SavedSession } from './resume';
 import { installWatchers, telemetry } from './runtime';
 import { STEP_VIEWS } from './steps';
 import type { SessionRecord, StartInput } from './telemetry';
 import './playtest.css';
 
 export function PlaytestScreen() {
-  // before any child reads the progress: the playtest's own, in memory
-  useState(() => { enterPlaytestProgress(); return true; });
+  // before any child reads the progress: the playtest's own, in memory (a reloaded tab's, when it carries on)
+  const [resumed] = useState(() => {
+    const r = takeResume(telemetry().session?.id);
+    enterPlaytestProgress(r?.progress ?? null);
+    return r;
+  });
   useEffect(() => () => leavePlaytestProgress(), []);
   // the year's screens it hosts move by the hash: they stay inside
   useEffect(() => holdHash(), []);
@@ -42,15 +48,15 @@ export function PlaytestScreen() {
   // the wardrobe's pieces unlock at a few seeds of this session (the year's milestones are for a year)
   useState(() => { setUnlocks(PLAYTEST_UNLOCKS); return true; });
   useEffect(() => () => setUnlocks(null), []);
-  return <Playtest />;
+  return <Playtest resumed={resumed} />;
 }
 
-function Playtest() {
+function Playtest({ resumed }: { resumed: SavedSession | null }) {
   const tel = telemetry();
-  const [flow, setFlow] = useState<FlowState>(() => initialFlow(Date.now()));
+  const [flow, setFlow] = useState<FlowState>(() => resumed?.flow ?? initialFlow(Date.now()));
   const flowRef = useRef(flow);
   flowRef.current = flow;
-  const [session, setSession] = useState<SessionRecord | null>(null);
+  const [session, setSession] = useState<SessionRecord | null>(() => (resumed ? tel.session : null));
   const [hand, setHand] = useState<HandState | null>(null);
   const handRef = useRef(hand);
   handRef.current = hand;
@@ -67,6 +73,7 @@ function Playtest() {
     if (t.state === flowRef.current) return;
     flowRef.current = t.state;
     setFlow(t.state);
+    rememberFlow(tel.session?.id, t.state, now);
     const c = t.change;
     if (!c) return;
     tel.log('step', { ...c });
@@ -97,6 +104,7 @@ function Playtest() {
     const s = initialFlow(Date.now());
     flowRef.current = s;
     setFlow(s);
+    rememberFlow(null, s);
   }, []);
 
   const raiseHand = useCallback((reason: HandState['reason']) => {
@@ -136,6 +144,15 @@ function Playtest() {
   }), [session, flow, apply, log, hand, raiseHand, adultHelp, tel]);
 
   useEffect(() => installWatchers(() => (flowRef.current.step === 'setup' ? null : flowRef.current.step)), []);
+
+  // a reloaded tab carried on: the data says so (the step starts over; the ladder and free play keep their state)
+  const resumeLogged = useRef(false);
+  useEffect(() => {
+    if (!resumed || resumeLogged.current) return;
+    resumeLogged.current = true;
+    const visit = resumed.flow.visits[resumed.flow.visits.length - 1];
+    log('resume', { step: resumed.flow.step, since_save_ms: Date.now() - resumed.at, step_ms: Date.now() - (visit?.at ?? Date.now()) });
+  }, [resumed, log]);
 
   useEffect(() => {
     if (!DEBUG) return;

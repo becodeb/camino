@@ -41,6 +41,7 @@ import { pilotLevel, RULE_GAME_PAGES } from './levels';
 import { ActivityArt, MenuBackArt } from './menuArt';
 import { InstrumentedPage, PlaytestLevel, type LevelEnd } from './PlaytestLevel';
 import { hasProbe, OPEN_PROBE_EVENT, PROBES } from './probes';
+import { rememberPart, resumedPart } from './resume';
 
 /** How long a card is held before its name is said (a shorter press picks it). */
 const HOLD_MS = 550;
@@ -74,13 +75,18 @@ export function FreePlay() {
   const grade = api.session?.grade ?? 1;
   const [menu] = useState(() => menuFor(grade, hasProbe));
   const [budget, setBudget] = useState(() => budgetFrom(location.search));
-  const startedAt = useRef(Date.now());
-  const [view, setView] = useState<View>({ kind: 'menu', n: 0 });
+  // a reloaded tab carries on with free play's clock and visit count (resume.ts); the child is back on the menu
+  const [kept] = useState(() => resumedPart<{ startedAt: number; visits: number }>('free_play'));
+  const startedAt = useRef(kept?.startedAt ?? Date.now());
+  const [view, setView] = useState<View>({ kind: 'menu', n: kept?.visits ?? 0 });
   const viewRef = useRef(view);
   viewRef.current = view;
   const visit = useRef<Visit | null>(null);
   /** Activities picked so far (the `visit` number of choice and activity_end). */
-  const visits = useRef(0);
+  const visits = useRef(kept?.visits ?? 0);
+  const keep = () => rememberPart('free_play', { startedAt: startedAt.current, visits: visits.current });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(keep, []);
   /** Level pages open inside a sheet activity (the wrap counts them). */
   const levelsOpen = useRef(0);
   /** When the time ran out while something was open. */
@@ -124,6 +130,7 @@ export function FreePlay() {
   const pick = (a: Activity, by?: 'adult') => {
     if (finished.current || viewRef.current.kind !== 'menu') return;
     const n = ++visits.current;
+    keep();
     stopSpeaking();
     log('choice', { activity: a.id, visit: n, ...(by ? { by } : {}) });
     apiRef.current.did(a.id);
