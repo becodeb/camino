@@ -71,9 +71,6 @@
 .pp-code-n { color: var(--blue-ink); }
 .pp-code-under { position: absolute; left: 2%; right: 2%; bottom: -16px; width: 96%; height: 20px; overflow: visible; }
 
-/* ------------------------------------------------ steps still to come */
-.pp-soon-face { width: 120px; height: 130px; overflow: visible; }
-
 /* ------------------------------------------------ the adult's sheets */
 .pp-adult-veil {
   position: fixed; inset: 0; z-index: 90;
@@ -276,3 +273,83 @@
 .pp-fp-activity .level-bar .help { order: 3; }
 /* the year's pages that are not levels (the doors, the editor, the corkboard) print "Hoja 7 · taller" for the teacher: the playtest keeps only their title */
 .pp-fp-activity .adult-title b { display: none; }
+
+/* ------------------------------------------------ Teclas del bosque: the forest above, the drawn keyboard below */
+.pp-typing {
+  height: 100dvh;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  place-items: stretch;
+  gap: 12px;
+  padding: 10px 18px 14px;
+}
+.pp-typing .level-bar { grid-area: auto; }
+.pp-tk-stage { position: relative; min-height: 0; display: grid; padding: 8px; }
+.pp-tk-scene { display: block; width: 100%; height: 100%; min-height: 0; overflow: hidden; }
+.tk-letter { font: 700 62px var(--body); fill: var(--ink); }
+.tk-upper { font: 700 24px var(--body); fill: var(--ink); }
+.tk-word-letter { font: 700 54px var(--body); fill: var(--ink); }
+.tk-word-letter.is-typed { fill: var(--blue-ink); }
+.tk-icon-ch { font: 700 28px var(--body); fill: var(--ink); }
+.tk-pop { animation: tk-pop 420ms ease-out both; transform-origin: 0px 0px; }
+.tk-sway { animation: tk-sway 2.6s ease-in-out infinite alternate; transform-origin: 0px -40px; }
+.is-words .tk-sway { animation-name: tk-sway-word; transform-origin: 0px -20px; }
+.tk-item.is-caught .tk-sway { animation-play-state: paused; }
+.tk-item.is-landed .tk-sway { animation: none; }
+.tk-item.is-landed .tk-pop { animation: tk-land 1.6s ease-out forwards; transform-origin: 0px 58px; }
+.tk-flight { animation: tk-flight 1.7s ease-in forwards; }
+@keyframes tk-pop { 0% { scale: 0.3; opacity: 0; } 70% { scale: 1.08; opacity: 1; } 100% { scale: 1; } }
+@keyframes tk-sway { from { rotate: -6deg; } to { rotate: 6deg; } }
+@keyframes tk-sway-word { from { rotate: -2.5deg; } to { rotate: 2.5deg; } }
+@keyframes tk-land { 0% { scale: 1.1 0.86; } 18% { scale: 1; } 65% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes tk-flight {
+  0% { transform: translate(322px, 320px) scale(0.5); opacity: 0; }
+  15% { transform: translate(322px, 240px) scale(1.4); opacity: 1; }
+  100% { transform: translate(1130px, 20px) scale(0.8); opacity: 0; }
+}
+
+.pp-tk-keys { position: relative; display: flex; justify-content: center; align-items: flex-end; min-height: 0; }
+.pp-tk-listo { position: absolute; right: 6px; bottom: 4px; }
+.pp-kb {
+  --k: clamp(48px, min(4.6vw, 7.4dvh), 62px);
+  --fill: #e6dbc2;
+  --r-cut: 20px 15px 22px 14px / 15px 21px 14px 20px;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding: 12px 18px 10px;
+}
+.pp-kb-row { display: flex; gap: 6px; }
+.pp-kb-row.r1 { margin-left: calc(var(--k) * 0.3); }
+.pp-kb-row.r2 { margin-left: calc(var(--k) * 0.85); }
+.pp-kb-space { margin-left: calc(var(--k) * 2.6); }
+.tk-space { display: block; width: calc(var(--k) * 5.4); height: calc(var(--k) * 0.6); overflow: visible; }
+.pp-key { position: relative; display: block; width: var(--k); height: calc(var(--k) * 62 / 60); padding: 0; border: 0; background: none; color: inherit; font: inherit; }
+button.pp-key { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+button.pp-key:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset: 3px; border-radius: 10px; }
+.tk-cap { display: block; width: 100%; height: 100%; overflow: visible; transition: transform 90ms ease-out; }
+.tk-cap-lip { fill: #d9ccb2; }
+.tk-cap-top { fill: #fbf7ee; }
+.tk-cap-ch { font: 700 25px var(--body); fill: var(--ink); }
+.pp-key.is-pressed .tk-cap { transform: translateY(4px); }
+.pp-key.is-expected { z-index: 1; animation: tk-key-bob 1.2s ease-in-out infinite; }
+.pp-key.is-expected .tk-cap-top { fill: var(--yellow); }
+.pp-key.is-expected .tk-cap-lip { fill: #d6ae4c; }
+.tk-ring { position: absolute; inset: -10px; width: calc(100% + 20px); height: calc(100% + 20px); overflow: visible; pointer-events: none; animation: pp-cue 0.9s ease-in-out infinite alternate; }
+/* ✋: the key glows harder; a wrong key: the expected one calls */
+.pp-kb.is-help .pp-key.is-expected { animation: tk-key-help 0.5s ease-in-out infinite alternate; }
+.pp-kb.is-help .tk-ring { inset: -18px; width: calc(100% + 36px); height: calc(100% + 36px); }
+.pp-kb.is-help .tk-ring path { stroke-width: 6; }
+.pp-kb.is-help .pp-key.is-expected .tk-cap-top { fill: #f7c948; }
+.pp-kb.is-nudge .pp-key.is-expected { animation: tk-key-help 0.3s ease-in-out 3 alternate; }
+/* the key pressed by mistake: a pink cap that wobbles over it and fades */
+.pp-key-wrong { position: absolute; inset: 0; pointer-events: none; animation: tk-wrong 800ms ease-out forwards; }
+.pp-key-wrong .tk-cap-top { fill: #f3cfc9; }
+@keyframes tk-key-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -3px; } }
+@keyframes tk-key-help { from { translate: 0 0; scale: 1; } to { translate: 0 -6px; scale: 1.1; } }
+@keyframes tk-wrong { 0% { rotate: 0deg; } 14% { rotate: -10deg; } 32% { rotate: 9deg; } 50% { rotate: -6deg; } 68% { rotate: 3deg; opacity: 1; } 100% { rotate: 0deg; opacity: 0; } }
+.pp-tk-liked-icon { display: flex; flex: none; }
+@media (prefers-reduced-motion: reduce) {
+  .tk-sway, .tk-pop, .pp-key.is-expected, .tk-ring, .pp-kb.is-help .pp-key.is-expected { animation: none; }
+}

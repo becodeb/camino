@@ -2,21 +2,21 @@
 // rendered while the flow is on it and gets the playtest's API from
 // usePlaytest(): `next()` when it is done, `skip()` to leave it undone,
 // `did(activity)` for the survey, `log()` for its events. Later tasks plug
-// their step in here (T5: free_play and wardrobe; T6: typing) in place of
-// the placeholder. T4's tool check and ladder: ToolCheck.tsx, Ladder.tsx;
-// T5's free play and wardrobe: FreePlay.tsx, WardrobeStep.tsx.
+// their step in here. T4's tool check and ladder: ToolCheck.tsx, Ladder.tsx;
+// T5's free play and wardrobe: FreePlay.tsx, WardrobeStep.tsx; T6's typing
+// minigame: TypingStep.tsx.
 
 import { useState, type ComponentType } from 'react';
 import { ChoicePage } from '../screens/WardrobeScreen';
-import { PlayerFace } from '../screens/player';
-import { NextPageArt, PenRing } from '../ui/art';
+import { PenRing } from '../ui/art';
 import { usePlaytest } from './context';
 import type { StepId } from './flow';
-import { GRADES, GRADE_LABEL, STEP_NAME } from './labels';
+import { GRADES, GRADE_LABEL } from './labels';
 import { AdultForm, Goodbye, Survey } from './closing';
 import { FreePlay } from './FreePlay';
 import { Ladder } from './Ladder';
 import { ToolCheck } from './ToolCheck';
+import { TypingStep } from './TypingStep';
 import { WardrobeStep } from './WardrobeStep';
 import type { StartInput } from './telemetry';
 
@@ -118,24 +118,6 @@ function Character() {
   );
 }
 
-// ------------------------------------------------------------------ steps still to come
-
-/** A step later tasks build (free play, typing, wardrobe): a page to turn; leaving it is a skip. */
-function Placeholder() {
-  const { flow, skip } = usePlaytest();
-  return (
-    <main className="pp-page pp-soon">
-      <section className="sheet pp-card" aria-label="Próximamente">
-        <span className="tape tape-l" aria-hidden="true" />
-        <span className="tape tape-r" aria-hidden="true" />
-        <PlayerFace className="pp-soon-face" />
-        <p className="pp-adult-note">Próximamente: {STEP_NAME[flow.step]}</p>
-        <button type="button" className="next-page cut" aria-label="Seguir" onClick={skip}><NextPageArt /></button>
-      </section>
-    </main>
-  );
-}
-
 export const STEP_VIEWS: Record<StepId, ComponentType<StepViewProps>> = {
   setup: Setup,
   code: Code,
@@ -143,7 +125,7 @@ export const STEP_VIEWS: Record<StepId, ComponentType<StepViewProps>> = {
   tool_check: ToolCheck,
   ladder: Ladder,
   free_play: FreePlay,
-  typing: Placeholder,
+  typing: TypingStep,
   wardrobe: WardrobeStep,
   survey: Survey,
   goodbye: Goodbye,

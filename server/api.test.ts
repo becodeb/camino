@@ -163,6 +163,46 @@ dbDescribe('API against Postgres', () => {
     ]);
   });
 
+  it('v_typing_by_grade reads the typing keys and the liking answer; v_activity_time counts the typing game whole', async () => {
+    const app = createApp(pool, { distDir });
+    const post = (session: Record<string, unknown>, events: unknown[]) => app.request('/api/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session, events }),
+    });
+    const key = (seq: number, correct: boolean, latency_ms: number, input = 'physical') =>
+      event(seq, { type: 'typing', payload: { key: correct ? 'a' : 'p', expected: 'a', correct, latency_ms, speed_level: 1, input, item: 'a', set: 'vowels', pos: 0 } });
+    // 5to (no other test writes grade 5): two sessions
+    const a = newSession({ grade: 5 });
+    expect((await post(a, [
+      key(0, true, 1000), key(1, false, 3000), key(2, true, 2000), key(3, true, 4000, 'touch'),
+      event(4, { type: 'typing_end', payload: { reason: 'time', time_ms: 245_000, keys: 4, correct: 3 } }),
+      event(5, { type: 'survey_answer', payload: { question: 'typing_liked', answer: 'yes' } }),
+      // the final survey's own "liked" is not the game's
+      event(6, { type: 'survey_answer', payload: { question: 'liked', answer: 'no' } }),
+    ])).status).toBe(200);
+    const b = newSession({ grade: 5 });
+    expect((await post(b, [
+      key(0, false, 500),
+      event(1, { type: 'survey_answer', payload: { question: 'typing_liked', answer: 'mid' } }),
+    ])).status).toBe(200);
+
+    const { rows } = await pool.query('SELECT * FROM v_typing_by_grade WHERE grade = 5');
+    expect(rows).toHaveLength(1);
+    const r = rows[0];
+    expect(Number(r.attempts)).toBe(5);
+    expect(Number(r.correct_count)).toBe(3);
+    expect(Number(r.accuracy_pct)).toBe(60);
+    expect(Number(r.median_latency_ms)).toBe(2000);
+    expect(Number(r.sessions)).toBe(2);
+    expect(Number(r.median_correct_latency_ms)).toBe(2000);
+    expect(Number(r.touch_attempts)).toBe(1);
+    expect([Number(r.liked_yes), Number(r.liked_mid), Number(r.liked_no)]).toEqual([1, 1, 0]);
+
+    const t = await pool.query("SELECT seconds::float AS seconds FROM v_activity_time WHERE session_id = $1 AND activity = 'typing'", [a.id]);
+    expect(t.rows).toEqual([{ seconds: 245 }]);
+  });
+
   it('retrying the exact same batch is idempotent: one row per seq, all acked again', async () => {
     const app = createApp(pool, { distDir });
     const session = newSession();

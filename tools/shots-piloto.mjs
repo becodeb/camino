@@ -125,6 +125,30 @@ async function toWardrobe(p, n = 4) {
   await p.waitForTimeout(1200);
 }
 
+/** "Teclas del bosque" for a grade (the character picked, the steps before skipped); `play`: wait for the intro to end. */
+async function toTyping(p, grade = '1ro', query = '', play = true) {
+  if (query) await p.goto(`${base}?debug&${query}#/piloto`);
+  await setup(p, grade);
+  await p.getByRole('button', { name: 'Empezar' }).click();
+  await p.waitForSelector('.choice-row');
+  await p.waitForTimeout(500);
+  await p.locator('[data-choice-char="mina"]').click();
+  await p.waitForTimeout(400);
+  await jump(p, 'typing');
+  await p.waitForSelector('.pp-typing');
+  if (play) await p.waitForFunction(() => window.__typing?.state().phase === 'play', null, { timeout: 20_000 });
+}
+/** Waits for something to fall, then presses its keys (all, or `n` of them). */
+async function typeTarget(p, n = 99) {
+  await p.waitForFunction(() => window.__typing.expected(), null, { timeout: 15_000 });
+  for (let i = 0; i < n; i++) {
+    const k = await pil(p, () => window.__typing.expected());
+    if (!k) break;
+    await p.keyboard.press(k === 'ñ' ? 'ñ' : k);
+    await p.waitForTimeout(260);
+  }
+}
+
 const SCENARIOS = [
   { name: 'pp-setup', run: async (p) => { await p.waitForSelector('.pp-setup'); } },
   {
@@ -226,7 +250,6 @@ const SCENARIOS = [
       await p.fill('.pp-comment textarea', 'Arrastró sin problemas; pidió ayuda con la consigna.');
     },
   },
-  { name: 'pp-soon', run: async (p) => { await toCharacter(p); await jump(p, 'free_play'); await p.waitForTimeout(500); } },
   // ---------------------------------------------------------------- T4: the tool check
   { name: 'pp-tool-tap', run: async (p) => { await toTool(p); await p.waitForTimeout(1200); } },
   { name: 'pp-tool-play', run: async (p) => { await toTool(p); await tapArrow(p); await p.waitForTimeout(1300); } },
@@ -344,6 +367,81 @@ const SCENARIOS = [
       for (const a of ['yes', 'mid']) { await p.locator(`[data-answer="${a}"]`).click(); await p.waitForTimeout(1400); }
       await p.waitForSelector('[data-question="favorite_activity"]');
       await p.waitForTimeout(800);
+    },
+  },
+  // ---------------------------------------------------------------- T6: Teclas del bosque
+  { name: 'pp-tk-1ro-intro', run: async (p) => { await toTyping(p, '1ro', '', false); await p.waitForTimeout(2600); } },
+  { name: 'pp-tk-1ro-falling', run: async (p) => { await toTyping(p, '1ro'); await p.waitForTimeout(2500); } },
+  { name: 'pp-tk-1ro-catch', run: async (p) => { await toTyping(p, '1ro'); await p.waitForTimeout(1500); await typeTarget(p, 1); await p.waitForTimeout(40); } },
+  {
+    name: 'pp-tk-1ro-wrong',
+    run: async (p) => {
+      await toTyping(p, '1ro'); await p.waitForTimeout(1500);
+      await p.waitForFunction(() => window.__typing.expected());
+      const k = await pil(p, () => window.__typing.expected());
+      await p.keyboard.press(k === 'p' ? 'q' : 'p');
+      await p.waitForTimeout(220);
+    },
+  },
+  { name: 'pp-tk-1ro-help', run: async (p) => { await toTyping(p, '1ro'); await p.waitForTimeout(1500); await p.click('.level-bar .help'); await p.waitForTimeout(600); } },
+  { name: 'pp-tk-1ro-two', run: async (p) => { await toTyping(p, '1ro'); await pil(p, () => window.__typing.speed(3)); await p.waitForTimeout(6500); } },
+  {
+    name: 'pp-tk-1ro-seed',
+    run: async (p) => {
+      await toTyping(p, '1ro');
+      for (let i = 0; i < 5; i++) { await typeTarget(p, 1); await p.waitForTimeout(800); }
+      await p.waitForTimeout(250);
+    },
+  },
+  { name: 'pp-tk-2do-word', run: async (p) => { await toTyping(p, '2do'); await p.waitForTimeout(1200); await typeTarget(p, 2); await p.waitForTimeout(300); } },
+  {
+    name: 'pp-tk-3ro-word',
+    run: async (p) => {
+      await toTyping(p, '3ro'); await pil(p, () => window.__typing.speed(3));
+      // a word of five letters or more, half typed
+      for (let i = 0; i < 6; i++) {
+        await p.waitForFunction(() => window.__typing.expected(), null, { timeout: 30_000 });
+        const w = await pil(p, () => window.__typing.state().items.find((x) => x.state === 'fall')?.text ?? '');
+        if (w.length >= 5) { await typeTarget(p, 3); break; }
+        await typeTarget(p); await p.waitForTimeout(900);
+      }
+      await p.waitForTimeout(300);
+    },
+  },
+  { name: 'pp-tk-5to-word', run: async (p) => { await toTyping(p, '5to'); await pil(p, () => window.__typing.speed(3)); await p.waitForTimeout(1200); await typeTarget(p, 1); await p.waitForTimeout(300); } },
+  { name: 'pp-tk-5to-landed', run: async (p) => { await toTyping(p, '5to', 'teclas=2'); await pil(p, () => window.__typing.speed(6)); await p.waitForFunction(() => window.__typing.state().items.some((x) => x.state === 'landed'), null, { timeout: 40_000 }); await p.waitForTimeout(300); } },
+  {
+    name: 'pp-tk-3ro-touch',
+    run: async (p) => {
+      await toTyping(p, '3ro', 'tactil');
+      await p.waitForTimeout(1200);
+      await p.waitForFunction(() => window.__typing.expected());
+      const k = await pil(p, () => window.__typing.expected());
+      await p.locator(`.pp-kb [data-key="${k}"]`).click({ force: true });
+      await p.waitForTimeout(400);
+    },
+  },
+  { name: 'pp-tk-listo', run: async (p) => { await toTyping(p, '3ro'); await pil(p, () => window.__typing.listo()); await p.waitForTimeout(900); } },
+  { name: 'pp-tk-liked', run: async (p) => { await toTyping(p, '1ro'); await pil(p, () => window.__typing.stop()); await p.waitForSelector('[data-question="typing_liked"]'); await p.waitForTimeout(800); } },
+  // the survey's favourites after the typing game: its picture among them
+  {
+    name: 'pp-tk-survey',
+    run: async (p) => {
+      await toTyping(p, '1ro'); await typeTarget(p, 1); await pil(p, () => window.__typing.stop());
+      await p.click('[data-question="typing_liked"] [data-answer="yes"]');
+      await p.waitForSelector('[data-interlude="cheer"]');
+      await jump(p, 'survey');
+      for (const a of ['yes', 'easy']) { await p.locator(`[data-answer="${a}"]`).click(); await p.waitForTimeout(1400); }
+      await p.waitForSelector('[data-question="favorite_activity"] [data-answer="typing"]');
+      await p.waitForTimeout(800);
+    },
+  },
+  {
+    name: 'pp-tk-cheer',
+    run: async (p) => {
+      await toTyping(p, '1ro'); await pil(p, () => window.__typing.stop());
+      await p.click('[data-question="typing_liked"] [data-answer="yes"]');
+      await p.waitForSelector('[data-interlude="cheer"]'); await p.waitForTimeout(2000);
     },
   },
 ];

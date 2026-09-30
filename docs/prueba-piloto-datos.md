@@ -334,10 +334,75 @@ the session or skipped the step; the item open then has no `ladder_step`,
 its `level_end` says `skipped`).
 
 ### `typing`
-One keystroke in "Teclas del bosque". **RQ 7.**
+One key pressed in "Teclas del bosque" (step `typing`, `src/playtest/TypingStep.tsx`,
+rules in `typing.ts`). **RQ 7.**
 ```
-{ key: string, expected: string, correct: boolean, latency_ms: number }
+{
+  key: string,            // the key pressed: one character, lowercased, accents off (a dead key's á is an a), ñ kept
+  expected: string,       // the letter that was expected
+  correct: boolean,
+  latency_ms: number,     // a letter, or a word's first letter: from the item's appearance; a word's next letters: from the key before (right or wrong)
+  speed_level: number,    // 1–6, the speed the item fell at (adaptive, see below)
+  input: 'physical' | 'touch',  // a real keyboard, or a tap on the drawn keyboard (touch screens)
+  item: string,           // the letter or word falling
+  set: 'vowels' | 'letters' | 'words' | 'commands',
+  pos: number             // the expected letter's place in the word (0 for a letter)
+}
 ```
+Only printable keys count (Shift, arrows, Enter, the space and a dead key alone
+are not logged); a held key's repeats are not logged; a key pressed while
+nothing is falling is not logged. On 1ro's two seeds at once, a key that
+matches either catches it (`expected` is that seed's letter); otherwise
+`expected` is the lowest seed's.
+
+What falls, by grade (the same lists for every child; the order is random):
+
+| Grade | Set | Items |
+|---|---|---|
+| 1ro | `vowels`, then `vowels` and `letters` mixed | a e i o u first (shuffled), then those and m s l p t n; never the same letter twice in a row. The seed shows the letter lowercase and big, and a small drawn key with it as the keyboard prints it (uppercase). |
+| 2do | `words` | sol mar pan oso (three letters while slow), sapo pato casa luna mesa nube rana taza lupa mapa (from speed 3) |
+| 3ro–5to | `commands` | si ir mover girar parar sumar tocar (up to five letters at speed 1), saltar pintar (speed 2), repetir avanzar esperar (speed 3+) |
+
+A word is typed letter by letter, in order; a wrong key changes nothing. The
+speed starts at 1: three quick right keys in a row (a first letter within 2 s
+of the appearance, a next letter within 1.2 s of the key before) → one level
+faster; two wrong keys, a slow right key (5 s / 3.5 s) or an item that reached
+the ground → one level slower. Top speed: 1ro 4, 2do 5, 3ro+ 6. A letter falls
+in 11 s at speed 1 down to 4.4 s at 6; a word in 3.5 s plus 3 s (speed 1) to
+1.2 s (speed 6) per letter. One thing falls at a time; 1ro's letters two at
+once from speed 3. An item that reaches the ground rests a moment and the next
+one falls: no misses counted, no lives, no countdown. A seed for the session's
+garden every 5 letters or 2 words caught (at most 8 per game).
+
+### `typing_end`
+The typing game ended (once per session that reached it). **RQ 7, 5.**
+```
+{
+  reason: 'time' | 'done' | 'left',  // about four minutes passed; the child pressed "listo" (shown after one minute); the adult moved on
+  mode: 'letters' | 'words',
+  set: 'letters' | 'words' | 'commands',
+  time_ms: number,        // from the step's first screen (the intro included) to the end
+  play_ms: number,        // from the end of the intro (0 if it never ended)
+  keys: number, correct: number,    // keys logged as `typing`, and the right ones
+  caught: number, landed: number,   // items caught; items that reached the ground
+  speed_end: number, speed_max: number,
+  input: 'physical' | 'touch' | 'mixed' | 'none',
+  seeds: number,          // seeds planted by the game
+  help_levels: number,    // ✋ presses (0–3)
+  adult_helped: boolean
+}
+```
+The game is never cut in the middle of a word: at the time or "listo" a word
+already begun is finished (or reaches the ground) first. `?teclas=<minutes>`
+in the URL sets another length (0.25–10; "listo" then shows at half of it, at
+most one minute). The typing game logs no `level_start`/`level_end`;
+`v_activity_time` counts it from `typing_end.time_ms`. Its `help`, `speak` and
+`ghost_demo` events carry `level_id: 'typing'` (✋ 1: the key glows harder and
+the letter is said; ✋ 2 and 3: the ghost hand points at the key too; a fourth
+press or a held ✋ raises the hand; the intro's ghost hand is `kind: 'intro'`),
+and an adult's help during the game marks `typing_end.adult_helped`. Right
+after the game the child is asked "¿Te gustó este juego?" with three drawn
+faces: `survey_answer` {question: 'typing_liked'}.
 
 ### `activity_end`
 The child left a free-play activity (see "Free play" below). One per
@@ -380,8 +445,8 @@ milestones are 3–50 seeds and whole sheets). Seeds are never spent.
 ### `garden_view`
 The child looked at their session's garden: the goodbye screen, the year's
 garden grown from this session's seeds (every level page solved in the
-playtest plants one: the tool check's, the ladder's, free play's, the
-typing minigame's), what a boss sent if one was won in free play, and the
+playtest plants one: the tool check's, the ladder's, free play's; the
+typing minigame plants one every few catches), what a boss sent if one was won in free play, and the
 character in the outfit kept in the wardrobe; logged when it closes. **RQ 6.**
 ```
 { duration_ms: number, seeds: number, critters?: string[], plants?: string[], outfit?: {slot: id} }
@@ -422,9 +487,11 @@ activity's `activity_end` says `left`).
 ### `survey_answer`
 One spoken survey question answered with drawn faces/pictures. **RQ 9.**
 ```
-{ question: 'liked' | 'difficulty' | 'favorite_activity' | 'play_again', answer: string }
+{ question: 'liked' | 'difficulty' | 'favorite_activity' | 'play_again' | 'typing_liked', answer: string }
 ```
-`liked`: `'yes'|'mid'|'no'`. `difficulty`: `'easy'|'mid'|'hard'`.
+`liked`: `'yes'|'mid'|'no'`. `typing_liked` (`'yes'|'mid'|'no'`) is asked by
+the typing game at its end, not by the survey step, and is not mirrored onto
+`sessions.survey`. `difficulty`: `'easy'|'mid'|'hard'`.
 `favorite_activity`: the activity id tapped, among the activities the child
 did this session (`character`, `ladder`, `tool_check`, `typing`, `wardrobe`,
 and the free-play entries' `activity` ids); asked only when there are two
@@ -495,7 +562,7 @@ for a session therefore mean a 400-dropped batch, never a network failure.
 
 ## SQL views
 
-Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`), always available for ad hoc
+Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`), always available for ad hoc
 analysis (`psql`, or any tool that can read Postgres directly).
 
 - **`v_ladder_ceiling`** — one row per `(session_id, concept)`: the highest
@@ -509,15 +576,20 @@ analysis (`psql`, or any tool that can read Postgres directly).
   spent. A free-play activity counts its visits whole: the sum of its
   `activity_end.time_ms` (the doors page, the editor and the corkboard are
   not level pages, so its pages alone would miss them). Any other activity
-  (the tool check, the ladder, the typing minigame) counts its level pages,
+  (the tool check, the ladder) counts its level pages,
   each `level_end` paired with the nearest preceding `level_start` in the
   same session (grouped by a running count of `level_start` events, since
   Postgres does not support `FILTER` on a non-aggregate window function like
-  `lag()`; a child never has two levels open at once). Redefined in
-  `server/migrations/002_activity_time.sql`. Feeds RQ 5 (engagement, time
-  per activity).
-- **`v_typing_by_grade`** — one row per grade: attempt count, `accuracy_pct`,
-  and `median_latency_ms` from `typing` events. Feeds RQ 7.
+  `lag()`; a child never has two levels open at once). The typing minigame
+  counts its `typing_end.time_ms`. Redefined in
+  `server/migrations/002_activity_time.sql` and `003_typing.sql`. Feeds RQ 5
+  (engagement, time per activity).
+- **`v_typing_by_grade`** — one row per grade: `attempts`, `correct_count`,
+  `accuracy_pct` and `median_latency_ms` from `typing` events, then
+  `sessions` (sessions that typed), `median_correct_latency_ms` (right keys
+  only), `touch_attempts` (keys tapped on the drawn keyboard) and `liked_yes`,
+  `liked_mid`, `liked_no` (the `typing_liked` answers). Redefined in
+  `server/migrations/003_typing.sql`. Feeds RQ 7.
 
 ## Retention and deletion
 

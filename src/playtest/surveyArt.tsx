@@ -10,6 +10,7 @@ import { WardrobeIcon } from '../ui/wardrobeArt';
 import { PlayerFace } from '../screens/player';
 import { activityFor, type ActivityId } from './freePlay';
 import { ActivityArt } from './menuArt';
+import { LetterSeed } from './typingArt';
 
 const INK = '#2b2622';
 const PEN = '#3d6ea5';
@@ -91,15 +92,16 @@ function SeedInline() {
   );
 }
 
-/** A keyboard: "Teclas del bosque". */
+/** "Teclas del bosque": the game's seed with its letter falling to the key that catches it. */
 function KeysPicture() {
   return (
-    <svg className="pp-activity-art" viewBox="0 0 100 80" aria-hidden="true">
-      <g filter="url(#rough)">
-        <rect x={6} y={20} width={88} height={46} rx={6} fill="#efe3c6" stroke={INK} strokeWidth={3} />
-        {[0, 1, 2].map((r) => Array.from({ length: 6 - r }, (_, i) => (
-          <rect key={`${r}-${i}`} x={14 + r * 6 + i * 12.5} y={27 + r * 12} width={9} height={8} rx={2} fill={r === 1 && i === 2 ? '#f0d27a' : '#fbf7ee'} stroke={INK} strokeWidth={1.6} />
-        )))}
+    <svg className="pp-activity-art" viewBox="-110 -140 220 220" aria-hidden="true">
+      <g transform="translate(-34 -56) scale(0.9)"><LetterSeed letter="a" upper={false} seed={31} /></g>
+      <path d="M-34,-6 Q-26,20 -2,30" fill="none" stroke={PEN} strokeWidth={3.4} strokeLinecap="round" strokeDasharray="1 9" />
+      <g transform="translate(4 -4) scale(1.45)">
+        <path d="M3,9 L57,8 L58,58 L2,59 Z" fill="#d6ae4c" stroke={INK} strokeWidth={2.6} strokeLinejoin="round" />
+        <path d="M6,3 L54,2.5 L54.5,49 L5.5,50 Z" fill="#f0d27a" stroke={INK} strokeWidth={2.6} strokeLinejoin="round" />
+        <text x={30} y={36} textAnchor="middle" className="tk-cap-ch">A</text>
       </g>
     </svg>
   );
