@@ -264,7 +264,7 @@ export function useRuleEditor(p: RuleEditorProps): { palette: ReactNode; noteboo
     );
   };
   const palette = (
-    <div ref={paletteRef} className="block-palette rule-palette can-drag" role="group" aria-label="Bloques">
+    <div ref={paletteRef} className={`block-palette rule-palette can-drag${p.blocks.length > 8 ? ' is-long' : ''}`} role="group" aria-label="Bloques">
       {hats.map(paletteItem)}
       <span className="palette-rule" aria-hidden="true" />
       {actions.map((id, i) => paletteItem(id, i + hats.length))}

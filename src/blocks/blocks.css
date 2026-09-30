@@ -106,6 +106,10 @@
 .hat-ear .ear-waves { opacity: 0.25; }
 .block-palette .rpblk .hat-ear { top: -14px; }
 .rpblk.is-hat { margin-top: 8px; }
+/* a long palette (the playtest's free rule page brings every key and every move): the actions two by two under the hats, so the last ones stay on the paper at 1366×768 */
+.rule-palette.is-long { display: grid; grid-template-columns: repeat(2, max-content); gap: 8px 12px; align-content: start; justify-items: start; }
+.rule-palette.is-long .is-hat, .rule-palette.is-long .palette-rule { grid-column: 1 / -1; }
+.rule-palette.is-long .palette-rule { justify-self: stretch; }
 
 /* the count of a tape: a paper disc with the number (tap to change it) */
 .blk-count {
