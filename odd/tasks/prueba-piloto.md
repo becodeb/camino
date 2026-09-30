@@ -65,7 +65,7 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 - [x] T5 (P2) Free-play menu (existing activities by grade), wardrobe step with compressed thresholds, session garden.
 - [x] T6 (P2) Typing minigame "Teclas del bosque" (new art); dev mode guarded in playtest builds; no sheet stake in the goodbye garden.
 - [x] T7 (P3) 4to probe "Hacé tu juego" (rule engine extended: objects, score, lives, win/lose, avisar; Scratch equivalents; predict a Scratch script).
-- [ ] T8 (P3) 5to probe "Del bloque al texto" (blocks and Python-like text side by side; predict, change a number, fix a typo).
+- [x] T8 (P3) 5to probe "Del bloque al texto" (blocks and Python-like text side by side; predict, change a number, fix a typo).
 - [ ] T9 Verification and final deploy: screenshot tours (1ro, 3ro, 5to at both sizes), scripted full 1ro and 5to sessions with an offline stretch confirming DB rows and export, locally and live.
 
 ## Progress
@@ -278,6 +278,48 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
   - `.pp-page` centres its content: use `.pp-page.<yours>` to lay a page out from the top. The stage's `.sheet { width: 100% }` rule in `.mode-gm` stretches any `.sheet` inside it.
   - A probe's own help steps must not be blocked by the "ghost is working" guard when the ghost itself applies them.
 
+- 2026-09-30: T8 done (route: delegated direct, one writer; 2+ non-trivial files), three work-unit commits on `feat/prueba-piloto` (not pushed), plus this record:
+  - `3234a4b` the text language `src/game/textCode.ts` (+ 66 unit tests): a strict parser for the subset, `runText` (the engine's own `applyCommand`, the line of every step), `toProgram`/`fromProgram`, `lineKeys`/`keyLines` (line ↔ block ref), `storedText`, `colorLine`, 19 error kinds each with its line and one Rioplatense sentence (`show` on screen, `say` spoken without code punctuation), the likely word for a slip (edit distance with swaps, accents and case forgiven).
+  - `d6669b1` the probe: `TextProbe.tsx` (tour, predict/choice/edit pages, the code editor, blocks zone, liking), `textProbe.ts` (the fixed items + 14 tests), `textProbeArt.tsx` (stamps, bar doodle, drawn answer boards, note arrow), `textProbe.css`; registered in `probes.ts` (5to's fourth card) and an "Abrir «Del bloque al texto»" button in the adult menu; 19 `pp-tx-*` screenshot scenarios.
+  - `0a49865` data: `005_text_probe.sql` (`v_probe_text`, `v_probe_text_by_grade`), the dictionary's section (language, error kinds, item table, events), an API test, `tools/check-texto.mjs`.
+
+  The text (documented in `textCode.ts` and the dictionary): `derecha()` `izquierda()` `arriba()` `abajo()` (Camino's absolute arrows), `saltar()` (a jump right), `for i in range(n):` (any loop name, 0–20), `while not llegue():`, `if hay_piedra():` (looks right) and `else:` (text only). `if hay_piedra():` + only `saltar()` is the "si hay piedra [saltar]" block; any other if runs but has no blocks (the blocks side stays dimmed on the last program that had them).
+
+  Items (fixed, in stamp order; also in the dictionary):
+
+  | # | Item | Kind | Task | Right |
+  |---|---|---|---|---|
+  | 1 | `predict_loop` | predict | `derecha()` / `for i in range(3): arriba()` / `derecha()`, 5×4 board | `end_2_0` (2nd) |
+  | 2 | `predict_if` | predict | `for i in range(4): if hay_piedra(): saltar()` / `derecha()`, row with 2 rocks | `end_8` (1st; `bump_1`, `end_4`) |
+  | 3 | `number` | number | `range(2)` → reach the seed (caret after the 2; blocks follow the text) | `range(4)` |
+  | 4 | `typo_name` | typo | `drecha()` on line 3 (no blocks) | `derecha()` |
+  | 5 | `typo_colon` | typo | `for i in range(2)` without `:` (no blocks) | `:` |
+  | 6 | `blocks_loop` | blocks_to_text | → , repetir 3 {↑ →} | `same` (3rd; `outside` = indentation, `count2`) |
+  | 7 | `blocks_until` | blocks_to_text | repetir hasta llegar {si hay piedra [saltar], →} | `same` (2nd; `inside_if` = indentation, `for3`) |
+  | 8 | `write_if` | write (stretch, "si querés") | write `saltar()` on the empty line inside the if | reaches the seed |
+
+  Evidence:
+  - `npm run typecheck` clean; `npm test` 33 files, 1007 tests (new: `textCode.test.ts` 66 — every valid form, each of the 19 error kinds with its line (38 cases), the child's sentences, suggestions, `runText` lines and refs, the if's look/jump lines, else, a bump, the endless while, 7 programs whose trace equals `simulate` exactly on two boards, round trips text ↔ Program, no text for blocks outside the subset and no blocks for text-only forms, line ↔ block keys, `storedText`, `colorLine`; `textProbe.test.ts` 14 — the tour wins and round-trips, each predict's right drawing is where the program really ends and no other is, fixed answer positions, each edit item's given text does not win and its fix does with one line changed (the focus line, the caret on it), the typos' errors on their lines, each choice's answer is exactly the blocks' program, round trips, `nextOpen`); `npm run build` ok; `npm run test:api` 25/25 on a disposable Postgres (`camino-prueba-t8db`, 54340, database `apitest`), incl. the new views (an item left then solved counts once; a ghost fix is not correct; solo; runs without the tour; error kinds; by grade median).
+  - `tools/check-texto.mjs` (vite 8811 → API 8810 → Postgres 54340): all checks passed. 5to: menu `rule_game,editor,recess,text_probe`; tour: a tap on line 3 rings the arrow inside the repeat, ▶ lit lines 1, 3, 4; predict right then wrong; number: Backspace + 4 with the real keyboard at the starting caret, the repeat block shows 4, a backtick typed in the editor lands in the text and dev mode stays off, then erased; the editor has spellcheck/autocorrect/autocapitalize off; runs to the seed; typo_name: ▶ shows "En la línea 3 dice «drecha» y esa palabra no la conozco. ¿Será «derecha»?", line 3 ringed, the missing e typed, the note goes, the seed; typo_colon: the error, End + `:`, the seed; blocks right then wrong; write_if: the `empty_block` error, `saltar()` typed, the seed; liked yes; cheer; menu. 3ro: the adult's corner menu opened it; the typo_colon stamp; ✋ ×3 wrote the fix (ghost edit); ▶ the seed; back to the menu. DB: 29 events seq 0..28; 8 `text_item` rows in order with answers/positions/texts/errors/attempts; `text_run` errors `typo_name:unknown_name:3, typo_colon:missing_colon:1, write_if:empty_block:2`; probe_phase intro/items completed; `text_probe_liked` yes; `probe_end` done; `activity_end` text_probe done; `v_probe_text` tried 8, correct 6, solo 6, correct by kind, runs 7, won 4, parse errors 3; 3ro: `choice.by: adult`, `ghost_fixed: true, correct: false, help_levels: 3`, help 1,2,3 + `ghost_demo` fix, `probe_end` left, view correct 0.
+  - Regressions against 8811: `tools/check-primer.mjs` (37 ok), `tools/check-3ro.mjs` (8 ok), `tools/check-piloto.mjs` (122 ok, PSQL → the T8 container), no console errors.
+  - Screenshots (`tools/shots-piloto.mjs`, 19 `pp-tx-*` scenarios × 1366×768 and 1280×800, no console errors), all reviewed: 5to menu, the tour (still, a line linked with its block, running with line 3 lit and the block ringed), predict (the 5×4 and the row), each after the pick and during the run, number (start, edited: the repeat shows 4, running with the pass dots filling), the friendly errors (typo name, colon, the stretch's empty line), ✋ 3's ghost fix, blocks → text (both, one picked), the stretch item, the liking faces. Fixed after review: the syntax colours' `tk-*` classes collided with the typing game's (a space span was a block: the code broke into rows; now `txk-*`/`txa-*`); the predict boards took the whole stage and hid the answers (a CSS variable resolved at the root: the board size now lives on the stage); the error note covered the next code line (now under the program); a stray blue "focus corner" on the editor; the row board smaller than its answers; the choices' text clipped at 1280 (fluid font); the ghost's fix mark faded before the child looked (now stays until the next edit or run); the repeat's pass dots did not fill during a text run; a visible question over the choices and the predict answers.
+
+  Decisions and deviations:
+  - No `avanzar()`: Camino's moves are absolute (design rule 6), so the four arrows are `derecha()`/`izquierda()`/`arriba()`/`abajo()`; `saltar()` and `hay_piedra()` take no direction (every Camino jump and "si" goes right). The brief's `avansar()` typo became `drecha()` (a slip of a real name, so "¿Será «derecha»?" can be said).
+  - `else:` exists only in the text (the blocks have no "si no"); no item uses it. A loop cannot hold a loop, an if cannot hold an if (the editor's one level of nesting).
+  - Events: `probe: 'text'` as the T8 brief says (T7's note suggested `'text_probe'`; the activity id stays `text_probe`). `text_item` per answer/solve/leave (an edit item left and solved later has both rows; the view counts each item once). `correct` on a solved edit item is false when ✋ 3 wrote the fix (`ghost_fixed: true`). Added `text_edit` {ghost: true} for the ghost's edit, `reason`, `adult_helped`, `attempt` on runs, `links` in the tour's phase. A predict item's automatic run is not a `text_run`.
+  - Choices are final after the pick (like T7's predictions, never marked right or wrong to the child); revisiting shows the pick. The typo items hide the blocks (they would give the fix away); number and write show them, live.
+  - Next page: once the item is finished, or after 2 min (number/typo) / 30 s (the stretch); it goes to the next unfinished item, then the liking question; after 12 minutes in the items, next goes to the liking question.
+  - The editor: Tab inserts 4 spaces, Enter keeps the indentation (+4 after `:`), Backspace in the indentation removes 4, like a Python editor; its keydown events stop at the editor (the dev keys already ignore textareas; the typing game's capture listener is only mounted in its own step). Text is stored lowercased, only `a-z0-9_():`, spaces and newlines, ≤ 500 characters.
+  - The code font is the system monospace (`ui-monospace`, DejaVu Sans Mono, Cousine, Noto Sans Mono…), not a self-hosted font: nothing is fetched from outside.
+
+  Open: never tried with real children, voices, a touch Chromebook or its on-screen keyboard (the textarea opens it; `autocorrect`/`autocapitalize` are off, but Gboard-style composition only went through the `isComposing` guard in reasoning, not on hardware); whether an auto-focused editor opens the on-screen keyboard at once on a Chromebook is untested. The row boards keep the sky frame, so the strip is small on the predict page. The blocks item's pen ring is wide over the card. The probe's length (~8–10 min) is a guess. The local dev DB of the checks holds many 5to sessions from the screenshot tour (disposable container, now stopped). Engram mirror still pending.
+
+  For T9 (verification and deploy):
+  - The 5to scripted session can open the text probe card and do a short path (one predict, the number item, `__tx.go('liked')`); `tools/check-texto.mjs` covers the full probe. `window.__tx` (stage, go, item, finished) and `window.__txe` (text, setText, run, help) exist with `?debug`.
+  - Screenshots: `pp-tx-` prefix in `tools/shots-piloto.mjs`; the 5to menu now has four cards.
+  - Migration 005 runs at start (idempotent); the live DB gets it on the next deploy.
+
 ## Next step
 
-T8 (5to probe "Del bloque al texto").
+T9 (verification and final deploy).
