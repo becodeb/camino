@@ -496,7 +496,8 @@ during free play (`choice.by: 'adult'`). Its events carry `probe:
 'game_maker'`; its `help`, `speak` and `ghost_demo` carry `level_id:
 'game_maker'` and `phase`. It logs no `level_start`/`level_end`: free play
 counts the whole visit in `activity_end` (one `levelEnded` at the end, win
-when phase 3 was completed).
+when phase 3 was completed). For free play's time the whole probe is one
+page: the budget never cuts it; free play moves on when it ends.
 
 Phases on one screen (palette | rule cards with "La Traductora", the same
 rule as a Scratch script, beside each card | the board, 7 × 6):
