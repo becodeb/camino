@@ -25,6 +25,7 @@ import { LevelNavContext, type LevelNav, type RunReport } from '../screens/level
 import { glowTargets } from '../ui/ghost';
 import { speak } from '../ui/speech';
 import { HAND_HOLD_HELP_MS, useHold } from './AdultControls';
+import { withName } from './characterName';
 import { usePlaytest, type LevelTrack } from './context';
 import { showFootprints } from './footprints';
 import { blocksOf, isFailedRun, optimalBlocks, programText, ruleBlocksOf, rulesText } from './levels';
@@ -152,8 +153,8 @@ export function PlaytestLevel({ level, activity, extra, onEnd, watch, listen, au
 
   const nav = useMemo<LevelNav>(() => ({
     pages: () => null,
-    // a child may read it: the page's own title, never an id
-    title: (l) => l.title,
+    // a child may read it: the page's own title, never an id, with the chosen character's name
+    title: (l) => withName(l.title, progress.get().character),
     won: (l) => {
       stats.current.won = true;
       stats.current.wins++;

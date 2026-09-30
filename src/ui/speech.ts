@@ -28,8 +28,15 @@ export function currentVoice(): { name: string | null; lang: string } {
   return { name: chosen?.name ?? null, lang: chosen?.lang ?? 'es-AR' };
 }
 
+/** Rewrites every line before it is said (the pilot playtest says the chosen character's name); null says lines as written. */
+let filter: ((text: string) => string) | null = null;
+export function setSpeechFilter(f: ((text: string) => string) | null): void {
+  filter = f;
+}
+
 export function speak(text: string): void {
   if (!speechAvailable()) return;
+  if (filter) text = filter(text);
   if (chosen === undefined) chosen = pickVoice();
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);

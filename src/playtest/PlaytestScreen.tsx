@@ -13,6 +13,8 @@ import { progress } from '../curriculum/progress';
 import { PlayerContext, useYearPlayer } from '../screens/player';
 import { DEBUG } from '../screens/levelKit';
 import { forgetRealtimeIntros } from '../screens/RealtimeLevel';
+import { setSpeechFilter } from '../ui/speech';
+import { withName } from './characterName';
 import { AdultControls } from './AdultControls';
 import { PlaytestContext, type AdultHelpKind, type HandState, type LevelTrack, type PlaytestApi } from './context';
 import { STEPS, canSkip, initialFlow, reduce, type FlowAction, type FlowState, type StepId } from './flow';
@@ -26,6 +28,11 @@ export function PlaytestScreen() {
   // before any child reads the progress: the playtest's own, in memory
   useState(() => { enterPlaytestProgress(); return true; });
   useEffect(() => () => leavePlaytestProgress(), []);
+  // the pages say "Brote": the child's own character's name is said instead
+  useEffect(() => {
+    setSpeechFilter((t) => withName(t, progress.get().character));
+    return () => setSpeechFilter(null);
+  }, []);
   return <Playtest />;
 }
 
