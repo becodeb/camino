@@ -2,8 +2,8 @@
 // rendered while the flow is on it and gets the playtest's API from
 // usePlaytest(): `next()` when it is done, `skip()` to leave it undone,
 // `did(activity)` for the survey, `log()` for its events. Later tasks plug
-// their step in here (T4: tool_check and ladder; T5: free_play and wardrobe;
-// T6: typing) in place of the placeholder.
+// their step in here (T5: free_play and wardrobe; T6: typing) in place of
+// the placeholder. T4's tool check and ladder: ToolCheck.tsx, Ladder.tsx.
 
 import { useState, type ComponentType } from 'react';
 import { ChoicePage } from '../screens/WardrobeScreen';
@@ -13,7 +13,8 @@ import { usePlaytest } from './context';
 import type { StepId } from './flow';
 import { GRADES, GRADE_LABEL, STEP_NAME } from './labels';
 import { AdultForm, Goodbye, Survey } from './closing';
-import { SampleLadder } from './SampleLadder';
+import { Ladder } from './Ladder';
+import { ToolCheck } from './ToolCheck';
 import type { StartInput } from './telemetry';
 
 export interface StepViewProps {
@@ -116,7 +117,7 @@ function Character() {
 
 // ------------------------------------------------------------------ steps still to come
 
-/** A step later tasks build (tool check, free play, typing, wardrobe): a page to turn; leaving it is a skip. */
+/** A step later tasks build (free play, typing, wardrobe): a page to turn; leaving it is a skip. */
 function Placeholder() {
   const { flow, skip } = usePlaytest();
   return (
@@ -136,8 +137,8 @@ export const STEP_VIEWS: Record<StepId, ComponentType<StepViewProps>> = {
   setup: Setup,
   code: Code,
   character: Character,
-  tool_check: Placeholder,
-  ladder: SampleLadder,
+  tool_check: ToolCheck,
+  ladder: Ladder,
   free_play: Placeholder,
   typing: Placeholder,
   wardrobe: Placeholder,

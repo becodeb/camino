@@ -35,7 +35,7 @@ CREATE INDEX IF NOT EXISTS events_type_idx ON events (type);
 CREATE INDEX IF NOT EXISTS events_session_client_t_idx ON events (session_id, client_t);
 
 -- Highest concept rung passed per (session, concept), from ladder_step
--- events whose payload is {concept, rung (int), item, result: 'pass'|'fail'|'floor', next}.
+-- events whose payload is {concept, rung (int), item, result: 'pass'|'fail', check, next}.
 -- Defined before v_session_summary, which reads from it.
 CREATE OR REPLACE VIEW v_ladder_ceiling AS
 SELECT

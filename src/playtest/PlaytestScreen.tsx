@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { progress } from '../curriculum/progress';
 import { PlayerContext, useYearPlayer } from '../screens/player';
 import { DEBUG } from '../screens/levelKit';
+import { forgetRealtimeIntros } from '../screens/RealtimeLevel';
 import { AdultControls } from './AdultControls';
 import { PlaytestContext, type AdultHelpKind, type HandState, type LevelTrack, type PlaytestApi } from './context';
 import { STEPS, canSkip, initialFlow, reduce, type FlowAction, type FlowState, type StepId } from './flow';
@@ -63,6 +64,8 @@ function Playtest() {
 
   const start = useCallback((input: StartInput) => {
     progress.reset();
+    // a new child: the pages' first-entry demos play again
+    forgetRealtimeIntros();
     setHand(null);
     level.current = null;
     setSession(tel.startSession(input));

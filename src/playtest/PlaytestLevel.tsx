@@ -7,16 +7,19 @@
 // the character's hand, `call_adult`); holding ✋ 1 s raises it at once; and
 // `level_end` (outcome, time, attempts, help, blocks, adult help) when the
 // child turns the page, the step's `watch` ends it, or the flow moves on.
+// The bar shows the page's own title only (never an id): a child may read it.
 //
 // A step component plugs a level in with:
 //   <PlaytestLevel key={id} level={pilotLevel(id)!} activity="ladder"
 //     extra={{ concept, rung, item }} onEnd={(r) => …} watch={(s) => …} />
+// `watch` also runs every few seconds (a time limit); `listen` sees every
+// event the page logs (the tool check's gestures); `autoNextMs` turns a
+// solved page by itself if the child does not.
 
 import { useEffect, useMemo, useRef } from 'react';
 import { progress, solve } from '../curriculum/progress';
 import { formatOf } from '../game/formats';
 import type { LevelDef } from '../game/levels';
-import type { Program } from '../game/model';
 import { LevelScreen } from '../screens/LevelScreen';
 import { LevelNavContext, type LevelNav, type RunReport } from '../screens/levelKit';
 import { glowTargets } from '../ui/ghost';
@@ -24,7 +27,7 @@ import { speak } from '../ui/speech';
 import { HAND_HOLD_HELP_MS, useHold } from './AdultControls';
 import { usePlaytest, type LevelTrack } from './context';
 import { showFootprints } from './footprints';
-import { blocksOf, programText } from './levels';
+import { blocksOf, isFailedRun, optimalBlocks, programText, ruleBlocksOf, rulesText } from './levels';
 
 export type LevelOutcome = 'win' | 'fail' | 'skipped';
 
@@ -34,6 +37,8 @@ export interface LevelStats {
   startedAt: number;
   /** Presses of ▶ (empty and incomplete notebooks included). */
   runs: number;
+  /** Runs that ran and did not win (levels.ts `isFailedRun`). */
+  fails: number;
   wins: number;
   lastResult: string | null;
   helpStep: number;
@@ -60,7 +65,10 @@ const LINES = {
   prints: 'Mirá las huellitas: por ahí se llega.',
 };
 
-export function PlaytestLevel({ level, activity, extra, onEnd, watch }: {
+/** How often `watch` also runs with no run or help (for a time limit). */
+const WATCH_TICK_MS = 5000;
+
+export function PlaytestLevel({ level, activity, extra, onEnd, watch, listen, autoNextMs }: {
   level: LevelDef;
   activity: string;
   /** Merged into level_start and level_end (the ladder's concept, rung and item). */
@@ -68,14 +76,19 @@ export function PlaytestLevel({ level, activity, extra, onEnd, watch }: {
   onEnd(result: LevelEnd): void;
   /** Return an outcome to end the level now (the ladder's floor rule); null keeps it open. */
   watch?(stats: LevelStats): LevelOutcome | null;
+  /** Every event the page logs, as it is logged. */
+  listen?(type: string, payload: Record<string, unknown>): void;
+  /** Once solved, the page turns by itself after this long. */
+  autoNextMs?: number;
 }) {
   const api = usePlaytest();
   const apiRef = useRef(api);
   apiRef.current = api;
-  const props = useRef({ activity, extra, onEnd, watch });
-  props.current = { activity, extra, onEnd, watch };
-  const stats = useRef<LevelStats>({ level_id: level.id, startedAt: Date.now(), runs: 0, wins: 0, lastResult: null, helpStep: 0, adultHelped: false, won: false });
-  const lastProgram = useRef<Program | null>(null);
+  const props = useRef({ activity, extra, onEnd, watch, listen });
+  props.current = { activity, extra, onEnd, watch, listen };
+  const stats = useRef<LevelStats>({ level_id: level.id, startedAt: Date.now(), runs: 0, fails: 0, wins: 0, lastResult: null, helpStep: 0, adultHelped: false, won: false });
+  /** The last run's cards. */
+  const lastBlocks = useRef<number | null>(null);
   const ghostSinceRun = useRef(false);
   const ended = useRef(false);
   const track = useRef<LevelTrack>({ id: level.id, helpStep: 0, adultHelped: false });
@@ -92,17 +105,23 @@ export function PlaytestLevel({ level, activity, extra, onEnd, watch }: {
       time_ms: Date.now() - s.startedAt,
       attempts: s.runs,
       help_levels: s.helpStep,
-      ...(lastProgram.current ? { blocks_used: blocksOf(lastProgram.current) } : {}),
-      blocks_optimal: blocksOf(level.solution),
+      ...(lastBlocks.current != null ? { blocks_used: lastBlocks.current } : {}),
+      blocks_optimal: optimalBlocks(level),
       adult_helped: t.adultHelped,
       ...props.current.extra,
     };
-    apiRef.current.log('level_end', payload);
+    log('level_end', payload);
     if (apiRef.current.level.current === t) apiRef.current.level.current = null;
     if (notify) props.current.onEnd(payload);
   };
 
+  const log = (type: string, payload: Record<string, unknown>) => {
+    apiRef.current.log(type, payload);
+    props.current.listen?.(type, payload);
+  };
+
   const check = () => {
+    if (ended.current) return;
     const s = stats.current;
     s.adultHelped = track.current.adultHelped;
     const verdict = props.current.watch?.(s);
@@ -112,11 +131,19 @@ export function PlaytestLevel({ level, activity, extra, onEnd, watch }: {
   useEffect(() => {
     const a = apiRef.current;
     a.level.current = track.current;
-    a.log('level_start', { level_id: level.id, activity: props.current.activity, format: formatOf(level) === 'solve' && level.save ? 'save_blocks' : formatOf(level), ...props.current.extra });
+    log('level_start', { level_id: level.id, activity: props.current.activity, format: formatOf(level) === 'solve' && level.save ? 'save_blocks' : formatOf(level), ...props.current.extra });
     a.did(props.current.activity);
     // the flow moved on (the adult ended the session, skipped the step): the level ends where it was
     return () => end(stats.current.won ? 'win' : 'skipped', false);
     // one level per mount (the step keys it by id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // a time limit: the step's watch also runs every few seconds
+  useEffect(() => {
+    if (!props.current.watch) return;
+    const id = setInterval(check, WATCH_TICK_MS);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -125,11 +152,13 @@ export function PlaytestLevel({ level, activity, extra, onEnd, watch }: {
 
   const nav = useMemo<LevelNav>(() => ({
     pages: () => null,
-    title: (l) => <><b>Prueba piloto · {props.current.activity}</b> {l.id} · {l.title}</>,
+    // a child may read it: the page's own title, never an id
+    title: (l) => l.title,
     won: (l) => {
       stats.current.won = true;
       stats.current.wins++;
       progress.update((p) => solve(p, l.id));
+      if (autoNextMs != null) setTimeout(() => end('win'), autoNextMs);
     },
     next: () => end(stats.current.won ? 'win' : 'skipped'),
     quit: '#/piloto',
@@ -137,15 +166,18 @@ export function PlaytestLevel({ level, activity, extra, onEnd, watch }: {
       const s = stats.current;
       s.runs++;
       s.lastResult = r.result;
-      lastProgram.current = r.program;
-      apiRef.current.log('run', {
+      if (isFailedRun(level, r.result, r.program)) s.fails++;
+      const blocks = r.rules ? ruleBlocksOf(r.rules) : blocksOf(r.program);
+      lastBlocks.current = blocks;
+      log('run', {
         level_id: level.id,
         result: r.result,
-        blocks_used: blocksOf(r.program),
+        blocks_used: blocks,
         attempt: s.runs,
-        program: programText(r.program),
+        program: r.rules ? rulesText(r.rules) : programText(r.program),
         after_ghost: ghostSinceRun.current,
         help_step: s.helpStep,
+        ...(r.keys != null ? { keys: r.keys, score: r.score ?? 0 } : {}),
         ...(r.worlds ? { worlds: r.worlds } : {}),
         ...(r.culprit ? { culprit: r.culprit } : {}),
         ...(r.guess ? { guess: r.guess, final: r.final } : {}),
@@ -153,10 +185,10 @@ export function PlaytestLevel({ level, activity, extra, onEnd, watch }: {
       ghostSinceRun.current = false;
       check();
     },
-    onSpeak: (l) => apiRef.current.log('speak', { level_id: l.id }),
-    onTapAdd: (l) => apiRef.current.log('tap_add', { level_id: l.id }),
-    onDrag: (phase, info) => apiRef.current.log('drag', { level_id: level.id, phase, ...(info ? { success: info.success, outcome: info.outcome, from: info.from } : {}) }),
-    onIntro: (l) => { ghostSinceRun.current = true; apiRef.current.log('ghost_demo', { level_id: l.id, kind: 'intro' }); },
+    onSpeak: (l) => log('speak', { level_id: l.id }),
+    onTapAdd: (l) => log('tap_add', { level_id: l.id }),
+    onDrag: (phase, info) => log('drag', { level_id: level.id, phase, ...(info ? { success: info.success, outcome: info.outcome, from: info.from } : {}) }),
+    onIntro: (l) => { ghostSinceRun.current = true; log('ghost_demo', { level_id: l.id, kind: 'intro' }); },
     help: (l, show) => {
       const a = apiRef.current;
       const s = stats.current;
@@ -167,19 +199,19 @@ export function PlaytestLevel({ level, activity, extra, onEnd, watch }: {
       const step = s.helpStep + 1;
       s.helpStep = step;
       track.current.helpStep = step;
-      a.log('help', { level_id: l.id, step });
+      log('help', { level_id: l.id, step });
       if (step === 1) {
         speak(l.say);
         if (root) glowTargets(root, 3200);
       } else if (step === 2) {
         show();
         ghostSinceRun.current = true;
-        a.log('ghost_demo', { level_id: l.id, kind: 'hint' });
+        log('ghost_demo', { level_id: l.id, kind: 'hint' });
       } else {
         const drawn = root ? showFootprints(root, l) : false;
         if (drawn) speak(LINES.prints); else show();
         ghostSinceRun.current = true;
-        a.log('ghost_demo', { level_id: l.id, kind: drawn ? 'footprints' : 'hint' });
+        log('ghost_demo', { level_id: l.id, kind: drawn ? 'footprints' : 'hint' });
       }
       check();
     },

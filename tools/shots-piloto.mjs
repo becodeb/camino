@@ -32,6 +32,50 @@ async function toCharacter(p) {
   await p.getByRole('button', { name: 'Empezar' }).click();
   await p.waitForSelector('.choice-row');
 }
+/** The tool check's first page, by the real UI from the character. */
+async function toTool(p) {
+  await toCharacter(p);
+  await p.waitForTimeout(500);
+  await p.locator('.choice-btn').nth(2).click();
+  await p.waitForTimeout(600);
+  await p.locator('.doors-next').click({ force: true });
+  await p.waitForSelector('main.level[data-level="tool-1"]');
+  await p.waitForTimeout(400);
+}
+const tapArrow = async (p) => { await p.locator('.zone-palette [data-cmd="right"]').first().click(); await p.waitForTimeout(300); };
+/** Drags the palette's arrow into the notebook with the mouse. */
+async function dragArrow(p) {
+  const f = await p.locator('.zone-palette [data-cmd="right"]').first().boundingBox();
+  const t = await p.locator('.zone-program').boundingBox();
+  const [fx, fy] = [f.x + f.width / 2, f.y + f.height / 2];
+  await p.mouse.move(fx, fy); await p.mouse.down(); await p.mouse.move(fx + 30, fy + 10, { steps: 4 });
+  await p.mouse.move(t.x + t.width / 2, t.y + 140, { steps: 12 }); await p.mouse.up();
+  await p.waitForTimeout(400);
+}
+/** The tool check's second page: tap, ▶, and the first page's win. */
+async function toToolPage2(p) {
+  await toTool(p);
+  await tapArrow(p);
+  await p.waitForTimeout(900);
+  await p.click('.btn-play');
+  await p.waitForSelector('main.level[data-level="tool-2"]', { timeout: 20_000 });
+  await p.waitForTimeout(500);
+}
+/** A rung of the ladder's item bank (the debug hook), after the character. */
+async function toRung(p, rung, extra = '') {
+  if (extra) await p.goto(`${base}?debug&${extra}#/piloto`);
+  await toCharacter(p);
+  await p.waitForTimeout(500);
+  await p.locator('.choice-btn').nth(2).click();
+  await p.waitForTimeout(400);
+  await jump(p, 'ladder');
+  await p.waitForSelector('main.level');
+  await pil(p, (r) => window.__ladder.go(r), rung);
+  await p.waitForTimeout(1500);
+}
+async function helps(p, n) {
+  for (let i = 0; i < n; i++) { await p.click('.level-bar .help'); await p.waitForTimeout(i < n - 1 ? 3300 : 300); }
+}
 async function toLevel(p) {
   await toCharacter(p);
   await p.waitForTimeout(500);
@@ -143,7 +187,59 @@ const SCENARIOS = [
       await p.fill('.pp-comment textarea', 'Arrastró sin problemas; pidió ayuda con la consigna.');
     },
   },
-  { name: 'pp-soon', run: async (p) => { await toCharacter(p); await jump(p, 'tool_check'); await p.waitForTimeout(500); } },
+  { name: 'pp-soon', run: async (p) => { await toCharacter(p); await jump(p, 'free_play'); await p.waitForTimeout(500); } },
+  // ---------------------------------------------------------------- T4: the tool check
+  { name: 'pp-tool-tap', run: async (p) => { await toTool(p); await p.waitForTimeout(1200); } },
+  { name: 'pp-tool-play', run: async (p) => { await toTool(p); await tapArrow(p); await p.waitForTimeout(1300); } },
+  { name: 'pp-tool-drag', run: async (p) => { await toToolPage2(p); await p.waitForTimeout(1300); } },
+  { name: 'pp-tool-reset', run: async (p) => { await toToolPage2(p); await dragArrow(p); await p.waitForTimeout(1300); } },
+  {
+    name: 'pp-tool-help',
+    run: async (p) => { await toToolPage2(p); await dragArrow(p); await p.waitForTimeout(900); await p.click('.btn-restart'); await p.waitForTimeout(1400); },
+  },
+  // the drag not done in 20 s: the ghost hand shows it, mid-way
+  { name: 'pp-tool-ghost', run: async (p) => { await toToolPage2(p); await p.waitForTimeout(20_000 + 1300); } },
+  // ---------------------------------------------------------------- T4: the ladder, one item of each kind of board
+  { name: 'pp-ladder-sequence', run: async (p) => { await toRung(p, 1); } },
+  { name: 'pp-ladder-fix', run: async (p) => { await toRung(p, 3); } },
+  { name: 'pp-ladder-predict', run: async (p) => { await toRung(p, 4); } },
+  { name: 'pp-ladder-repeat', run: async (p) => { await toRung(p, 5); } },
+  { name: 'pp-ladder-count', run: async (p) => { await toRung(p, 6); } },
+  { name: 'pp-ladder-pattern', run: async (p) => { await toRung(p, 7); } },
+  { name: 'pp-ladder-fog', run: async (p) => { await toRung(p, 9); } },
+  { name: 'pp-ladder-fog-prints', run: async (p) => { await toRung(p, 9); await helps(p, 3); await p.waitForTimeout(1600); } },
+  { name: 'pp-ladder-worlds', run: async (p) => { await toRung(p, 10); } },
+  { name: 'pp-ladder-worlds-prints', run: async (p) => { await toRung(p, 10); await helps(p, 3); await p.waitForTimeout(2000); } },
+  { name: 'pp-ladder-rules', run: async (p) => { await toRung(p, 11, 'nointro'); } },
+  { name: 'pp-ladder-score', run: async (p) => { await toRung(p, 12); await p.click('.btn-play'); await p.waitForTimeout(3500); } },
+  {
+    name: 'pp-ladder-walk',
+    run: async (p) => {
+      await toRung(p, 1);
+      await pil(p, () => { window.__camino.setProgram(window.__camino.level.solution); });
+      await p.waitForTimeout(300);
+      await pil(p, () => window.__camino.run());
+      await p.locator('.next-page').click({ force: true, timeout: 20_000 });
+      await p.waitForSelector('[data-interlude="walk"]');
+      await p.waitForTimeout(1700);
+    },
+  },
+  {
+    name: 'pp-ladder-cheer',
+    run: async (p) => {
+      // 1ro fails rung 1 (two bumps): nothing below, the ladder stops with the cheer
+      await toRung(p, 1);
+      for (let i = 0; i < 2; i++) {
+        await pil(p, () => { window.__camino.setProgram([{ t: 'cmd', cmd: 'up' }]); });
+        await p.waitForTimeout(200);
+        await pil(p, () => window.__camino.run());
+        await p.waitForFunction(() => document.querySelector('main.level')?.dataset.busy !== 'true', null, { timeout: 20_000 });
+        await p.waitForTimeout(600);
+      }
+      await p.waitForSelector('[data-interlude="cheer"]');
+      await p.waitForTimeout(2200);
+    },
+  },
 ];
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox', '--disable-gpu'] });

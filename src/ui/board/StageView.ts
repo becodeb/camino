@@ -5,6 +5,7 @@
 // tapped), standing on a spot of its own drawing.
 
 import { el, blob } from '../../ink/ink.js';
+import { E } from '../../ink/anim.js';
 import type { CharacterDef } from '../../ink/characters.js';
 import type { Outfit } from '../../curriculum/motivation';
 import { REDUCED } from '../runtime';
@@ -40,6 +41,25 @@ export class StageView extends BoardView {
     a.sleeping = false;
     if (confetti) this.burstConfetti(0, -70);
     await a.act(() => a.perform('celebrate'));
+  }
+
+  /**
+   * Walks along its line to `x`, one step of its own gait per `stride` (the
+   * pilot playtest's walk to the next page). Nothing else in the app calls it.
+   */
+  async walkTo(x: number, stride = 100) {
+    const a = this.actor;
+    if (!a) return;
+    this.poke();
+    await a.act(async () => {
+      const dx = Math.sign(x - a.rig.x);
+      if (!dx) return;
+      if (Math.sign(a.rig.face) !== dx) await a.T({ face: dx }, REDUCED ? 1 : 150, E.inOut);
+      while (Math.abs(x - a.rig.x) > 1) {
+        const to = Math.abs(x - a.rig.x) <= stride ? x : a.rig.x + dx * stride;
+        await a.perform('step', { x: to, y: a.rig.y }, { dx, dy: 0 });
+      }
+    });
   }
 
   /** A little nod (something new to wear, a tap on a piece). */

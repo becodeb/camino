@@ -196,3 +196,25 @@
   background: #fffdf7; border: 2.4px solid var(--ink); border-radius: 8px 11px 7px 10px;
 }
 .pp-comment textarea:focus-visible { outline: 3px solid var(--blue-ink); outline-offset: 2px; }
+
+/* ------------------------------------------------ the tool check: the pen ring around the gesture's target */
+.pp-cue { position: absolute; overflow: visible; animation: pp-cue 0.9s ease-in-out infinite alternate; }
+@keyframes pp-cue { from { transform: scale(0.95); opacity: 0.55; } to { transform: scale(1.05); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pp-cue { animation: none; } }
+
+/* ------------------------------------------------ between pages: the character walks on; the ladder's cheer */
+.pp-walk-card {
+  position: relative;
+  width: min(980px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 26px 30px 22px;
+}
+.pp-walk-say { margin: 0; font: 400 46px/1.1 var(--hand); color: var(--blue-ink); rotate: -2deg; }
+.pp-walk-stage { position: relative; width: 100%; aspect-ratio: 900 / 250; }
+.pp-walk-scene, .pp-walk-actor { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.pp-walk-page { animation: pop-in 420ms ease-out 200ms both; transform-box: fill-box; transform-origin: 50% 100%; }
+.pp-cheer-stage { width: min(600px, 100%); aspect-ratio: 600 / 250; }
+.pp-cheer-say { font-size: 56px; }
+.pp-cheer-next { position: absolute; right: 18px; bottom: 16px; animation-delay: 1.2s; }

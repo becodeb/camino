@@ -33,6 +33,8 @@ const LINES = {
 
 /** Pages whose first-entry intro already played (per visit, like the stamps). */
 const introPlayed = new Set<string>();
+/** A new child on the same device (the pilot playtest's next session) sees the intros again. */
+export const forgetRealtimeIntros = () => introPlayed.clear();
 
 const cloneRules = (r: readonly Rule[]): Rule[] => r.map((x) => ({ hat: x.hat, actions: [...x.actions] }));
 
@@ -77,6 +79,22 @@ export function RealtimeLevel({ level }: { level: LevelDef }) {
   const pressed = useRef<Dir[]>([]);
   const lastMove = useRef<Promise<void>>(Promise.resolve());
   const apiRef = useRef<RuleEditorApi | null>(null);
+  /** The game running now, for nav.onRunReport: arrows the child pressed (not the ghost's). */
+  const game = useRef<{ keys: number } | null>(null);
+
+  /** One game ended (the win, ■ or ↺): the playtest logs it as a run; the demo has no hook and nothing changes. */
+  const report = (result: 'win' | 'stopped') => {
+    const g = game.current;
+    game.current = null;
+    if (!g || !nav.onRunReport) return;
+    nav.onRunReport({
+      result: result === 'stopped' && !g.keys ? 'no_play' : result,
+      program: [],
+      rules: cloneRules(rulesRef.current),
+      keys: g.keys,
+      score: sim.current.score,
+    });
+  };
 
   // the jar and the speed of the rain
   useEffect(() => {
@@ -136,10 +154,12 @@ export function RealtimeLevel({ level }: { level: LevelDef }) {
     if (wonRef.current || runningRef.current) return;
     sim.current = rtInit(board, def);
     pressed.current = [];
+    game.current = { keys: 0 };
     setGame(true);
   };
 
   const stop = () => {
+    if (runningRef.current) report('stopped');
     setGame(false);
     sim.current = rtInit(board, def);
     pressed.current = [];
@@ -147,6 +167,7 @@ export function RealtimeLevel({ level }: { level: LevelDef }) {
   };
 
   const finish = async () => {
+    report('win');
     setGame(false);
     await lastMove.current;
     wonRef.current = true;
@@ -166,6 +187,7 @@ export function RealtimeLevel({ level }: { level: LevelDef }) {
       return;
     }
     pressed.current.push(d);
+    if (game.current && !demoRef.current) game.current.keys++;
   });
 
   useEffect(() => {
@@ -279,6 +301,7 @@ export function RealtimeLevel({ level }: { level: LevelDef }) {
     const r = def.intro;
     if (!r || demoRef.current || wonRef.current || rulesRef.current.some((x) => x.hat === r.hat)) return;
     introPlayed.add(level.id);
+    nav.onIntro?.(level);
     const k = keyOf(r.hat);
     const steps: DemoStep[] = [
       ...buildSteps(r),

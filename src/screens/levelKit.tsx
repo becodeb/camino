@@ -19,6 +19,7 @@ import { NextPageArt } from '../ui/art';
 import { notebookWidth } from '../blocks/BlockEditor';
 import { GRADES, nextLevel, type LevelDef, type PaletteBlock } from '../game/levels';
 import { cmdProgram, type Program } from '../game/model';
+import type { Rule } from '../game/rules';
 import { stamp, useStamps } from '../game/progress';
 import { LevelBar, TramoPages } from './LevelBar';
 import { playerKey, usePlayer } from './player';
@@ -122,10 +123,19 @@ export interface LevelNav {
  * 'short', 'wrong_note' (a song), 'smudge' (a guarda), 'wrong_guess' (a
  * predict page); or, without a run, 'empty', 'incomplete' (a complete page
  * with a line or a count missing), 'no_guess' (predict, ▶ before a guess).
+ * A rule game (3ro) reports one game, from ▶ to ■, ↺ or the win: 'win',
+ * 'stopped' (stopped after the child pressed an arrow) or 'no_play'
+ * (stopped before any arrow), with its rules, keys and score.
  */
 export interface RunReport {
   result: string;
+  /** The notebook as run (empty for a rule game: see `rules`). */
   program: Program;
+  /** A rule game's rules when the game ended. */
+  rules?: Rule[];
+  /** A rule game: arrows the child pressed while it ran, and the points in the jar. */
+  keys?: number;
+  score?: number;
   /** Per world, when there are several ('win' | 'crash' | 'short'). */
   worlds?: string[];
   /** The block that tripped (its ref key in the notebook). */

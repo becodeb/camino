@@ -57,10 +57,30 @@ One row per instrumented event, append-only.
 Every payload is a plain JSON object. Optional fields are marked `?`.
 
 ### `tool_check`
-Tap/drag/▶/↺/✋ on the two tiny tool-check levels. **RQ 1.**
+One gesture of the tool check (1–2 min, before the ladder): two tiny pages
+built with the real engine and 1ro's arrow (`tool-1`: 2×2, one step to the
+seed; `tool-2`: 4×2, three steps), five gestures asked aloud one at a time,
+each circled with a blue pen ring: `tap` (tap the arrow in the palette:
+tap-to-add), `play` (▶ Probar), then `drag` (drag the arrow into the
+notebook), `reset` (↺ Volver a empezar), `help` (✋ once). A gesture not done
+in 20 s is shown once by the ghost hand (`ghost_demo` kind `tool`) and said
+again; 20 s later the check moves on (`done: false`). One event per gesture,
+in that order. **RQ 1.**
 ```
-{ control: 'tap' | 'drag' | 'play' | 'reset' | 'help', success: boolean }
+{
+  gesture: 'tap' | 'play' | 'drag' | 'reset' | 'help',
+  done: boolean,            // the gesture asked was done (false: moved on after 40 s, or see `via`)
+  time_ms: number,          // from the moment it was asked to the moment it was seen (for `play`, the run's end)
+  attempts: number,         // tries that answered it: taps, runs, drag drops (dropped nowhere included), ↺ and ✋ presses
+  shown_by_ghost: boolean,  // the ghost hand showed it (20 s without it)
+  level_id: 'tool-1' | 'tool-2',
+  via?: 'drag' | 'tap'      // the block got in the other way: a drag when a tap was asked (moves on, done false); a tap when a drag was asked (keeps waiting)
+}
 ```
+The pages' own `drag` (start/drop, success, from) and `tap_add` events are
+logged as everywhere (`level_id` `tool-1`/`tool-2`), so drag attempts vs
+successes and taps are read from them too. `level_start`/`level_end` carry
+`activity: 'tool_check'`.
 
 ### `level_start`
 Opens any level (ladder item, free-play activity, probe). **RQ 4, 5.**
@@ -94,7 +114,23 @@ ended before the goal, `wrong_note` a song that played a wrong beat,
 `smudge` a guarda that left the guide, `wrong_guess` a predict page whose
 character ended elsewhere; `empty`, `incomplete` (a complete page with a
 line or count still missing) and `no_guess` are presses of ▶ that ran
-nothing. The 3ro rule game (realtime pages) does not log `run` yet (T4).
+nothing.
+
+The 3ro rule game (realtime pages: `3ro-1`, `3ro-2`) logs one `run` per game,
+from ▶ to ■ Parar, ↺ or the win: `result` is `win` (the goal reached, or the
+jar full), `stopped` (stopped after the child pressed at least one arrow:
+a failed run) or `no_play` (stopped before any arrow: not a failed run, like
+`empty`); `program` is the rules as one line (`key:right(right)
+touch:seed(score)`), `blocks_used` their cards (each hat and each action),
+plus `keys` (arrows the child pressed while it ran; the ghost hand's do not
+count) and `score` (points in the jar). A game still running when the page
+ends logs no `run`.
+```
+{ …, keys?: number, score?: number }   // rule game only
+```
+A failed run (the ladder's "two failed runs") is a run that ran and did not
+win: not `empty`, `incomplete`, `no_guess` or `no_play`, and not the given
+program run unchanged on a fix page (seeing the mistake is part of fixing it).
 
 ### `level_end`
 Closes a level. **RQ 2, 4, 5.**
@@ -115,9 +151,13 @@ Closes a level. **RQ 2, 4, 5.**
 highest automatic help step shown (0–3); `blocks_used` the last run's
 cards; `blocks_optimal` the page's reference solution's cards. `outcome` is
 `skipped` when the flow moved on without the page being solved (the
-adult's end-session or skip); T4's ladder sets `fail` by its floor rule. A
-level_end also carries whatever the step merges in (`extra`: the ladder's
-`concept`, `rung`, `item`; T2's stand-in ladder `item`, `sample: true`).
+adult's end-session or skip). A level_end also carries whatever the step
+merges in (`extra`: the ladder's `concept`, `rung`, `item`, `check`);
+`level_start` carries the same. On a ladder item `outcome` is `fail` when the
+ladder ended the item (two failed runs, three minutes, or a failed run after
+the solution hint or an adult's help); a solved page the child does not turn
+turns by itself after 8 s. `blocks_optimal` of a rule game counts its
+reference rules' cards.
 
 ### `help`
 The child pressed ✋ (any of its three automatic steps). **RQ 3.**
@@ -133,12 +173,14 @@ raises the character's hand (`call_adult`).
 ### `ghost_demo`
 A demonstration played on the page. **RQ 3.**
 ```
-{ level_id: string, kind: 'hint' | 'footprints' | 'intro' }
+{ level_id: string, kind: 'hint' | 'footprints' | 'intro' | 'tool' }
 ```
 `hint`: ✋ step 2 (or step 3's fallback), the ghost hand shows the next
 thing to do; `footprints`: ✋ step 3, the solution's way on the board;
 `intro`: the concept demo the page plays by itself (a new idea, after a full
-notebook or a failed run). Events are append-only, so "does the demo lead
+notebook or a failed run; the 3ro rule game's first-page demo too); `tool`:
+the tool check showing a gesture not done in 20 s. Events are append-only,
+so "does the demo lead
 to success" is read from the next `run` on the same level, which carries
 `after_ghost: true`.
 
@@ -198,15 +240,82 @@ The character step logs `{activity: 'character', character}` on every pick
 (a child may change their mind; the last one counts).
 
 ### `ladder_step`
-One item of the fixed placement-ladder item bank. **RQ 2.**
+One item of the fixed placement-ladder item bank (`src/playtest/ladder.ts`),
+logged when the item ends. **RQ 2, 3, 4.**
 ```
-{ concept: string, rung: number, item: string, result: 'pass' | 'fail' | 'floor', next: string | null, time_ms: number, help_levels: number }
+{
+  concept: string,          // the rung's concept (table below)
+  rung: number,             // 1–12, the item bank's order (easiest first)
+  item: string,             // the page played (level id)
+  format: 'solve' | 'complete' | 'fix' | 'predict',
+  check: 'climb' | 'floor', // floor: the one easier item tried after the first non-pass
+  result: 'pass' | 'fail',
+  next: string | null,      // the next item's id, null when the ladder stops here
+  time_ms: number,
+  help_levels: number,      // automatic help steps shown (0–3)
+  adult_helped: boolean,
+  attempts: number,         // presses of ▶ (level_end's)
+  outcome: 'win' | 'fail' | 'skipped'  // level_end's
+}
 ```
-`concept` is one of the ladder's named concepts (sequence, long_sequence,
-fix_predict, repeat, repeat_pattern, before_after_repeat, fog_si,
-three_worlds, events_rules_score); `rung` is that concept's difficulty step.
-`v_ladder_ceiling` takes the max `rung` with `result = 'pass'` per
-`(session_id, concept)`.
+
+The item bank (the same pages for every child):
+
+| Rung | Concept | Format | Item |
+|---|---|---|---|
+| 1 | `sequence` (short) | solve | `1ro-h1-2` Entre dos piedras |
+| 2 | `long_sequence` | solve | `1ro-h2-1` Un camino largo |
+| 3 | `fix` | fix | `1ro-h3-3` Casi llega a la maceta |
+| 4 | `predict` | predict | `1ro-h3-4` Un camino con vueltas |
+| 5 | `repeat` | solve (ghost-hand intro) | `1ro-h4-1` Repetir: muchos pasos, pocos renglones |
+| 6 | `repeat_count` (complete the count) | complete | `1ro-h5-1` ¿Cuántas veces para llegar a la esquina? |
+| 7 | `repeat_pattern` (two-block body) | solve | `1ro-h6-2` La escalera: repetir → ↑ |
+| 8 | `before_after_repeat` | solve | `1ro-h13-2` Subir la cascada |
+| 9 | `fog_si` ("si" in fog) | solve | `2do-1` Niebla |
+| 10 | `three_worlds` | solve | `2do-2` Tres caminos, un programa |
+| 11 | `events_rules` (key rules) | solve (rule game) | `3ro-1` Mi primer juego |
+| 12 | `rules_score` (touch rule, score) | solve (rule game) | `3ro-2` Siempre que Brote toque una semilla |
+
+Rules: entry by grade (1ro rung 1, 2do 2, 3ro 5, 4to 7, 5to 9). `pass` =
+solved with fewer than 3 help steps (the solution hint never shown) and no
+adult help during it; anything else is `fail`: the solution hint or adult
+help was used, two failed runs, or three minutes without solving it (after
+the solution hint or an adult's help the child keeps one more try: the next
+failed run ends the item). After a pass, one rung up (a pass on rung 12
+stops). After the first non-pass: if the rung below was not passed in this
+ladder, it is tried once (`check: 'floor'`) and the ladder stops whatever
+happens; if it was passed, or there is none (rung 1), the ladder stops. At
+most 10 items or 12 minutes (checked between items, so an item open at 12
+minutes finishes). The child never sees a result: between items the
+character walks on to the next page, and at the end it cheers ("¡Muy bien!
+Vamos a jugar").
+
+A rule game (rungs 11–12) is solved when the game is won (`3ro-1`: Brote
+reaches the seed with the arrows; `3ro-2`: five points in the jar); a failed
+run there is a game stopped (■ or ↺) after the child pressed an arrow.
+
+The ceiling is the highest rung passed. `v_ladder_ceiling` takes the max
+`rung` with `result = 'pass'` per `(session_id, concept)` (one rung per
+concept, so a row means that concept's item was passed), and
+`v_session_summary.ladder_ceiling_rung` the max over the session: the same
+number as `ladder_end.ceiling_rung`.
+
+### `ladder_end`
+The ladder stopped (once per session that reached it). **RQ 2.**
+```
+{
+  entry_rung: number,
+  ceiling_rung: number | null,  // highest rung passed, null if none
+  items: number,
+  time_ms: number,
+  reason: 'top' | 'ceiling' | 'floor' | 'bottom' | 'max_items' | 'max_time' | 'left'
+}
+```
+`top`: rung 12 passed; `ceiling`: a fail right above a passed rung;
+`floor`: after the floor check; `bottom`: rung 1 failed; `max_items`,
+`max_time`: the caps; `left`: the flow moved on mid-ladder (the adult ended
+the session or skipped the step; the item open then has no `ladder_step`,
+its `level_end` says `skipped`).
 
 ### `typing`
 One keystroke in "Teclas del bosque". **RQ 7.**
