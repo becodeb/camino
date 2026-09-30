@@ -15,6 +15,7 @@
 
 import { useEffect, useState } from 'react';
 import { DOORS, DOOR_LABEL, goalId, hasCore, isBuilt, type Door, type HubGoal, type Sheet } from '../curriculum/model';
+import { PRESETS, PRESET_IDS, type PresetId } from '../curriculum/presets';
 import { PRIMER, sheetByN } from '../curriculum/primer';
 import { chooseCharacter, clearMade, earnGold, grant, grantCritter, grantItem, openSheet, played, progress, publish, reachGoal, setWardrobe, sheetState, solve, useProgress } from '../curriculum/progress';
 import { CHARACTER_IDS, CHARACTER_NAME, CRITTER_IDS, ITEMS, critterReward } from '../curriculum/motivation';
@@ -161,6 +162,11 @@ export function DevDrawer({ route }: { route: Route }) {
     progress.reset();
     setConfirm(false);
   };
+  /** For the adult preparing a school demo: replaces the saved progress with a ready-made state and goes to the map. Dev mode only, so it asks nothing first. */
+  const applyPreset = (id: PresetId) => {
+    progress.update(() => PRESETS[id].build());
+    location.hash = MAP_HREF;
+  };
 
   return (
     <aside className="dev-drawer" aria-label="Cajón dev">
@@ -170,6 +176,16 @@ export function DevDrawer({ route }: { route: Route }) {
         <button type="button" onClick={devMode.toggle} title="Plegar (sigue en modo dev)">▾</button>
         <button type="button" onClick={devMode.off} title="Salir del modo dev">apagar</button>
       </header>
+
+      <section className="dev-sec" data-dev-presentation>
+        <h2>presentación</h2>
+        <p className="dev-small">Arma el progreso guardado para mostrar la demo sin jugar el año, y abre el mapa.</p>
+        <div className="dev-row">
+          {PRESET_IDS.map((id) => (
+            <button key={id} type="button" onClick={() => applyPreset(id)} data-dev-preset={id}>{PRESETS[id].label}</button>
+          ))}
+        </div>
+      </section>
 
       <section className="dev-sec">
         <p className="dev-where">{where(route)}</p>
