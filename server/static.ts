@@ -1,7 +1,7 @@
 // Serves the built front end from dist/, mirroring docker/nginx.conf's
 // rules for the existing demo: index.html is never cached (a deploy must be
 // noticed immediately), everything under /assets/ is content-hashed by Vite
-// and cached for a year, and an unknown path is a genuine 404 — routes live
+// and cached for a year, the playtest's /sw.js is never cached either, and an unknown path is a genuine 404 — routes live
 // in the URL hash, not in the path, so there is no SPA fallback.
 
 import { readFile, stat } from 'node:fs/promises';
@@ -47,7 +47,8 @@ export function serveDist(distDir: string) {
     const ext = path.extname(filePath);
     const headers = new Headers();
     headers.set('content-type', MIME[ext] ?? 'application/octet-stream');
-    if (path.basename(filePath) === 'index.html') {
+    if (path.basename(filePath) === 'index.html' || normalized === '/sw.js') {
+      // the playtest's service worker must be re-checked on every load too, or a deploy's new one is missed
       headers.set('cache-control', 'no-cache');
     } else if (normalized.startsWith('/assets/')) {
       headers.set('cache-control', 'public, max-age=31536000, immutable');
