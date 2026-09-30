@@ -1,8 +1,12 @@
 // Small drawings of boards: the home's page cards, the boss page of a sheet.
 // A board drawn at 40 units a cell: grid, start mark, stone, rocks, seeds,
-// the goal; in the fog only what Brote sees.
+// the goal; in the fog only what Brote sees. The character on the start
+// cell is Brote, or the one a ThumbCharacterContext names (the pilot
+// playtest's menu draws the child's own).
 
-import { memo } from 'react';
+import { createContext, memo, useContext, useEffect, useRef } from 'react';
+import { CHARACTERS } from '../ink/characters.js';
+import { drawPortrait } from './board/BoardView';
 import { blob, leaf, rng, wobblyLine, wobblyPoly } from '../ink/ink.js';
 import type { LevelDef } from '../game/levels';
 import { visibleFrom, type Board } from '../game/model';
@@ -11,6 +15,9 @@ import { guidePath } from '../game/guarda';
 import { BAR_DARK, BAR_FILL, BAR_LEN, REST_PATH, barPath } from './noteArt';
 
 type Place = { x: number; y: number; width: number; height: number };
+
+/** The character the board thumbs draw on their start cell (a character id; none or 'brote': the tiny Brote). */
+export const ThumbCharacterContext = createContext<string | null>(null);
 
 /** A small drawing of any page (the boss page of a sheet): its board, or its song and xylophone. */
 export function PageThumb({ level, place }: { level: LevelDef; place?: Place }) {
@@ -106,7 +113,7 @@ export const BoardThumb = memo(function BoardThumb({ b, fog, rain, keys, place }
         ))}
         <path d={wobblyPoly([[0, 0], [w, 0], [w, h], [0, h]], { wob: 0.8, bow: 1.2, seed: b.seed })} fill="none" stroke={INK} strokeWidth={2.4} strokeLinejoin="round" />
         <ellipse cx={cx(b.start.c)} cy={cy(b.start.r) + 13} rx={14} ry={4.5} fill="none" stroke="#3d6ea5" strokeWidth={2} strokeDasharray="1.5 4.5" strokeLinecap="round" />
-        <ThumbBrote x={cx(b.start.c)} y={cy(b.start.r)} />
+        <ThumbStartCharacter x={cx(b.start.c)} y={cy(b.start.r)} />
         {stone.map((o, i) => (o.r > 0 && !stone.some((x) => x.c === o.c && x.r === o.r - 1)
           ? <path key={`t${i}`} d={wobblyLine(o.c * S, o.r * S, o.c * S + S, o.r * S, { bow: 0.6, seed: o.seed })} stroke={INK} strokeWidth={2.2} fill="none" />
           : null))}
@@ -147,6 +154,20 @@ export const BoardThumb = memo(function BoardThumb({ b, fog, rain, keys, place }
     </svg>
   );
 });
+
+/** The character on the start cell: tiny Brote, or another character's portrait at the same size. */
+function ThumbStartCharacter({ x, y }: { x: number; y: number }) {
+  const id = useContext(ThumbCharacterContext);
+  const def = id && id !== 'brote' ? CHARACTERS.find((c) => c.id === id) : undefined;
+  if (!def) return <ThumbBrote x={x} y={y} />;
+  return <ThumbPortrait def={def} x={x} y={y} />;
+}
+
+function ThumbPortrait({ def, x, y }: { def: (typeof CHARACTERS)[number]; x: number; y: number }) {
+  const ref = useRef<SVGSVGElement>(null);
+  useEffect(() => { if (ref.current) drawPortrait(def, ref.current, { x: 0.1, y: 0.2 }); }, [def]);
+  return <svg ref={ref} x={x - 18} y={y - 24} width={36} height={36} viewBox="-52 -100 104 104" aria-hidden="true" />;
+}
 
 /** Brote, tiny: an orange seed with its sprout, on the start cell. */
 function ThumbBrote({ x, y }: { x: number; y: number }) {

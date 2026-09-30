@@ -8,10 +8,11 @@
 // curling back to them. Ink boiled by #rough, flat facets, no text needed.
 
 import { memo, type ReactNode } from 'react';
+import { useProgress } from '../curriculum/progress';
 import { blob, leaf, wobblyLine, wobblyPoly } from '../ink/ink.js';
 import { sheetByN } from '../curriculum/primer';
 import { levelById } from '../game/levels';
-import { BoardThumb, PageThumb } from '../ui/thumbs';
+import { BoardThumb, PageThumb, ThumbCharacterContext } from '../ui/thumbs';
 import { BossPageArt, DoorArt } from '../ui/forestArt';
 import { Pencil } from '../ui/workshopArt';
 import type { Activity } from './freePlay';
@@ -223,8 +224,13 @@ function TextProbeCard() {
   );
 }
 
-/** The picture of a free-play activity (the menu's card, the survey's "¿Qué te gustó más?"). */
+/** The picture of a free-play activity (the menu's card, the survey's "¿Qué te gustó más?"), with the child's own character on its boards. */
 export const ActivityArt = memo(function ActivityArt({ a }: { a: Pick<Activity, 'id' | 'kind'> }) {
+  const character = useProgress().character;
+  return <ThumbCharacterContext.Provider value={character}><CardArt a={a} /></ThumbCharacterContext.Provider>;
+});
+
+function CardArt({ a }: { a: Pick<Activity, 'id' | 'kind'> }) {
   switch (a.id) {
     case 'sheet': return <SheetCard n={'sheet' in a.kind ? a.kind.sheet : 6} />;
     case 'recess': return <RecessCard n={'sheet' in a.kind ? a.kind.sheet : 9} />;
@@ -234,7 +240,7 @@ export const ActivityArt = memo(function ActivityArt({ a }: { a: Pick<Activity, 
     case 'game_maker': return <GameMakerCard />;
     case 'text_probe': return <TextProbeCard />;
   }
-});
+}
 
 /** "Volver al menú": four little cards of the menu, and a blue pen arrow curling back to them. */
 export function MenuBackArt() {
