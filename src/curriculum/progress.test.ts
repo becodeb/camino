@@ -128,6 +128,29 @@ describe('the progress store', () => {
       expect(s.get()).toBe(EMPTY);
     }
   });
+
+  it('swaps onto another storage without reading or writing the first key (the pilot playtest)', () => {
+    const disk = fakeStorage();
+    disk.data.set(STORAGE_KEY, JSON.stringify({ ...EMPTY, seeds: 7 }));
+    const reads: string[] = [];
+    const spy = { ...disk, getItem: (k: string) => { reads.push(k); return disk.getItem(k); } };
+    const s = createProgressStore(spy);
+    const memory = fakeStorage();
+    let calls = 0;
+    s.subscribe(() => calls++);
+    s.swap(memory, 'pilot');
+    expect(s.get().seeds).toBe(0);
+    s.update((p) => grant(p, 2));
+    expect(reads).not.toContain(STORAGE_KEY);
+    expect(JSON.parse(disk.data.get(STORAGE_KEY)!).seeds).toBe(7);
+    expect(JSON.parse(memory.data.get('pilot')!).seeds).toBe(2);
+    s.reset();
+    expect(s.get()).toBe(EMPTY);
+    // back to the demo's key: its progress is there, untouched
+    s.swap(spy);
+    expect(s.get().seeds).toBe(7);
+    expect(calls).toBeGreaterThanOrEqual(3);
+  });
 });
 
 /** A level made on this device in workshop `sheet`, from its default board. */

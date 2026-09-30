@@ -81,6 +81,7 @@ function where(route: Route): string {
   if (route.screen === 'garden') return route.seeds != null ? `el jardín (vista de prueba con ${route.seeds} semillas)` : 'el jardín';
   if (route.screen === 'wardrobe') return 'el vestidor';
   if (route.screen === 'fitting') return 'el probador (cada prenda en cada personaje)';
+  if (route.screen === 'piloto') return 'la prueba piloto';
   const s = sheetByN(route.n)!;
   const pg = route.page;
   return `hoja ${s.n} · ${s.title} · ${isBuilt(s) ? partOf(pg) : 'próximamente'}${isGold(pg) ? ' · sello dorado' : ''}`;

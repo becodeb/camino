@@ -1,0 +1,110 @@
+/* The pilot playtest's own pages (setup, code, placeholders, survey,
+   goodbye, adult form), the raised hand and the adult's sheets. Same paper,
+   ink and cut-paper primitives as the rest (notebook.css, camino.css). */
+
+.piloto { min-height: 100dvh; -webkit-touch-callout: none; user-select: none; }
+.piloto textarea, .piloto input { user-select: text; }
+/* the child never leaves the playtest by a link */
+.piloto .quit { display: none; }
+
+.pp-page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 28px 16px;
+}
+.pp-card {
+  width: min(760px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  padding: 26px 34px 30px;
+}
+.pp-adult-title { margin: 0; font: 700 22px/1.2 var(--body); color: var(--ink); text-align: center; }
+.pp-adult-title small { display: block; font-weight: 400; font-size: 16px; color: var(--ink-2); }
+.pp-adult-note { margin: 0; font: 400 18px/1.35 var(--body); color: var(--ink-2); text-align: center; }
+
+/* ------------------------------------------------ setup */
+.pp-field { border: 0; margin: 0; padding: 0; display: grid; justify-items: center; gap: 10px; }
+.pp-field legend { font: 700 18px var(--body); color: var(--ink); padding: 0; margin-bottom: 6px; text-align: center; width: 100%; }
+.pp-field legend small { font-weight: 400; color: var(--ink-2); }
+.pp-grades, .pp-divisions { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+.pp-grade {
+  --r-cut: 16px 12px 18px 11px / 12px 17px 11px 16px;
+  width: 104px; height: 78px;
+  font: 700 28px var(--body);
+}
+.pp-grade.g1 { --fill: #cfdcaa; }
+.pp-grade.g2 { --fill: #bcd0e6; }
+.pp-grade.g3 { --fill: #f2c29f; }
+.pp-grade.g4 { --fill: #f1c9c6; }
+.pp-grade.g5 { --fill: #f5e2a6; }
+.pp-grade .pen-ring, .pp-div .pen-ring { position: absolute; inset: -9px -10px; width: calc(100% + 20px); height: calc(100% + 18px); overflow: visible; pointer-events: none; }
+.pp-div {
+  --r-cut: 12px 10px 13px 9px / 10px 13px 9px 12px;
+  width: 58px; height: 54px;
+  font: 700 22px var(--body);
+}
+.pp-div.is-on { --fill: #dce6f0; outline: 3px solid var(--blue-ink); outline-offset: 3px; border-radius: 12px; }
+.pp-consent {
+  --r-cut: 12px 16px 11px 15px / 15px 11px 16px 12px;
+  display: flex; align-items: center; gap: 14px;
+  min-height: 64px; max-width: 560px;
+  padding: 10px 18px;
+  font: 400 18px/1.3 var(--body); text-align: left;
+}
+.pp-check { flex: none; width: 34px; height: 34px; border: 2.6px solid var(--ink); border-radius: 7px 9px 6px 8px; background: var(--sheet); display: grid; place-items: center; }
+.pp-check svg { width: 28px; height: 28px; overflow: visible; }
+.pp-consent.is-on { --fill: #e9efd8; }
+.pp-start { margin-top: 4px; }
+
+/* ------------------------------------------------ the session code */
+.pp-code-word {
+  position: relative;
+  margin: 8px 0 4px;
+  font: 700 clamp(56px, 7.4vw, 100px)/1 var(--body);
+  white-space: nowrap;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+.pp-code-n { color: var(--blue-ink); }
+.pp-code-under { position: absolute; left: 2%; right: 2%; bottom: -16px; width: 96%; height: 20px; overflow: visible; }
+
+/* ------------------------------------------------ steps still to come */
+.pp-soon-face { width: 120px; height: 130px; overflow: visible; }
+
+/* ------------------------------------------------ the adult's sheets */
+.pp-adult-veil {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center;
+  padding: 16px;
+  background: rgba(242, 233, 216, 0.72);
+}
+.pp-adult-sheet {
+  width: min(560px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 22px 26px 18px;
+}
+.pp-adult-h { margin: 0; font: 700 24px var(--body); color: var(--ink); }
+.pp-kinds { display: grid; gap: 12px; }
+.pp-adult-btn {
+  --r-cut: 12px 16px 11px 15px / 15px 11px 16px 12px;
+  min-height: 58px;
+  padding: 8px 18px;
+  font: 700 19px/1.25 var(--body);
+  text-align: left;
+}
+.pp-adult-btn.is-danger { --fill: #f3cfc9; }
+.pp-adult-close {
+  justify-self: end;
+  min-height: 48px; padding: 8px 16px;
+  border: 0; background: none;
+  font: 400 18px var(--body); color: var(--ink-2);
+  text-decoration: underline wavy; cursor: pointer;
+}
+.pp-sync { display: flex; align-items: center; gap: 10px; margin: 0; font: 400 16px/1.3 var(--body); color: var(--ink-2); }
+.pp-sync-dot { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); background: #a4b86d; }
+.pp-sync[data-sync="wait"] .pp-sync-dot { background: var(--yellow); }
+.pp-sync[data-sync="off"] .pp-sync-dot { background: var(--red); }

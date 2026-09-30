@@ -288,14 +288,26 @@ export interface ProgressStore {
   /** Forgets everything (and the stored copy). */
   reset(): void;
   subscribe(fn: () => void): () => void;
+  /**
+   * Moves the store onto another storage (the pilot playtest keeps its own
+   * progress, in memory, and never touches the demo's key); the value is read
+   * from there on next use and every screen redraws.
+   */
+  swap(backing: Backing | null, key?: string): void;
 }
 
-export function createProgressStore(backing: Backing | null): ProgressStore {
+/** The store reads its storage lazily, on first use, so a mode that swaps it before any screen reads it never reads the other key. */
+export function createProgressStore(backing: Backing | null, key = STORAGE_KEY): ProgressStore {
   let current = EMPTY;
-  try { current = parse(backing?.getItem(STORAGE_KEY)); } catch { current = EMPTY; }
+  let loaded = false;
+  const load = () => {
+    if (loaded) return;
+    loaded = true;
+    try { current = parse(backing?.getItem(key)); } catch { current = EMPTY; }
+  };
   const subs = new Set<() => void>();
   const save = () => {
-    try { backing?.setItem(STORAGE_KEY, JSON.stringify(current)); } catch { /* storage full or blocked: keep playing in memory */ }
+    try { backing?.setItem(key, JSON.stringify(current)); } catch { /* storage full or blocked: keep playing in memory */ }
   };
   const set = (next: Progress) => {
     if (next === current) return;
@@ -304,19 +316,28 @@ export function createProgressStore(backing: Backing | null): ProgressStore {
     subs.forEach((f) => f());
   };
   return {
-    get: () => current,
-    update(fn) { set(fn(current)); return current; },
+    get: () => { load(); return current; },
+    update(fn) { load(); set(fn(current)); return current; },
     reset() {
-      try { backing?.removeItem(STORAGE_KEY); } catch { /* nothing stored, nothing to forget */ }
+      try { backing?.removeItem(key); } catch { /* nothing stored, nothing to forget */ }
+      loaded = true;
       current = EMPTY;
       subs.forEach((f) => f());
     },
     subscribe(fn) { subs.add(fn); return () => { subs.delete(fn); }; },
+    swap(next, nextKey = STORAGE_KEY) {
+      if (next === backing && nextKey === key) return;
+      backing = next;
+      key = nextKey;
+      loaded = false;
+      current = EMPTY;
+      subs.forEach((f) => f());
+    },
   };
 }
 
 /** localStorage, or null where touching it throws (privacy modes, blocked site data). */
-function browserStorage(): Backing | null {
+export function browserStorage(): Backing | null {
   try {
     if (typeof localStorage === 'undefined') return null;
     const probe = `${STORAGE_KEY}.probe`;

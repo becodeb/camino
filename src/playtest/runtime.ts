@@ -95,32 +95,34 @@ function statusSnapshot(): SyncStatus {
  * Installs the automatic events for the page: `idle` (30 s without pointer or
  * key input, logged when input resumes), `visibility`, `error`; flushes the
  * queue when the page is hidden or closed, and sends at once when the network
- * comes back. `step()` names the flow step for the idle event. Returns the
+ * comes back. `step()` names the flow step for the idle event; while it is
+ * null (the adult's setup, no session yet) nothing is logged. Returns the
  * uninstaller.
  */
-export function installWatchers(step: () => string): () => void {
+export function installWatchers(step: () => string | null): () => void {
   const t = telemetry();
   const idle = createIdleTracker(Date.now());
   const limit = createErrorLimiter();
-  const logIdle = (d: number | null) => { if (d != null) t.log('idle', { step: step(), duration_ms: d }); };
+  const on = () => step() != null;
+  const logIdle = (d: number | null) => { if (d != null && on()) t.log('idle', { step: step(), duration_ms: d }); };
   const onInput = () => logIdle(idle.input(Date.now()));
   const onVisibility = () => {
     const hidden = document.visibilityState === 'hidden';
     if (hidden) logIdle(idle.pause(Date.now()));
     else idle.resume(Date.now());
-    t.log('visibility', { state: hidden ? 'hidden' : 'visible' });
+    if (on()) t.log('visibility', { state: hidden ? 'hidden' : 'visible' });
     if (hidden) t.flushKeepalive();
   };
   const onPageHide = () => t.flushKeepalive();
   const onOnline = () => t.online();
   const onError = (e: ErrorEvent) => {
     const info = limit({ message: e.message, source: sourceFile(e.filename), line: e.lineno || undefined, col: e.colno || undefined }, Date.now());
-    if (info) t.log('error', { ...info });
+    if (info && on()) t.log('error', { ...info });
   };
   const onRejection = (e: PromiseRejectionEvent) => {
     const r = e.reason as { message?: unknown } | undefined;
     const info = limit({ message: `unhandled rejection: ${typeof r?.message === 'string' ? r.message : String(e.reason)}` }, Date.now());
-    if (info) t.log('error', { ...info });
+    if (info && on()) t.log('error', { ...info });
   };
   const inputs = ['pointerdown', 'pointermove', 'keydown', 'wheel'] as const;
   inputs.forEach((n) => window.addEventListener(n, onInput, { passive: true, capture: true }));

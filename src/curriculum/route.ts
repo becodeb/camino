@@ -30,6 +30,9 @@
 //   #/1ro/hoja/17/familia/<i>              the family plays the i-th of them
 //   #/1ro/hoja/17/jardin                   the garden tour
 //   #/1ro/hoja/17/afiche                   the poster of the year
+// The pilot playtest (a separate deploy opens it at the root):
+//   #/piloto                               the playtest's session flow
+//   #/demo                                 the demo's home (a playtest build's root is the playtest)
 // The motivation layer, outside the sheets:
 //   #/1ro/jardin                           the child's garden (…/jardin/<n>: dev preview with n seeds)
 //   #/1ro/vestidor                         the wardrobe
@@ -103,7 +106,9 @@ export type Route =
   | { screen: 'garden'; seeds?: number }
   | { screen: 'wardrobe' }
   /** Dev: every wardrobe piece on every character. */
-  | { screen: 'fitting' };
+  | { screen: 'fitting' }
+  /** The pilot playtest (src/playtest): `#/piloto`, and the empty hash of a playtest build. */
+  | { screen: 'piloto' };
 
 /** The doors in the URL (Spanish, like `nivel` and `hoja`). */
 const DOOR_SLUG: Record<Door, string> = { easy: 'facil', medium: 'media', hard: 'dificil' };
@@ -156,6 +161,9 @@ export function parseRoute(hash: string): Route {
   if (h === '/1ro') return { screen: 'map' };
   if (h === '/1ro/vestidor') return { screen: 'wardrobe' };
   if (h === '/probador') return { screen: 'fitting' };
+  if (h === '/piloto') return { screen: 'piloto' };
+  // the demo's home under its own name, for a playtest build whose root is the playtest
+  if (h === '/demo') return { screen: 'home' };
   m = h.match(/^\/1ro\/jardin(?:\/(\d+))?$/);
   if (m) return m[1] ? { screen: 'garden', seeds: Number(m[1]) } : { screen: 'garden' };
   m = h.match(/^\/1ro\/hoja\/(\d+)(?:\/(.*))?$/);

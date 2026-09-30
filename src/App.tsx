@@ -1,6 +1,7 @@
 // Hash routes (curriculum/route.ts): #/ the home page (the whole tramo),
 // #/nivel/<id> one page of the demo, #/1ro the forest map of 1ro's year,
-// #/1ro/hoja/<n>/… a sheet of that year.
+// #/1ro/hoja/<n>/… a sheet of that year. #/piloto the pilot playtest (the
+// root of a playtest build, VITE_PLAYTEST=1, where #/demo is the demo's home).
 
 import { useEffect, useState } from 'react';
 import { InkDefs } from './ui/InkDefs';
@@ -16,6 +17,9 @@ import { GardenPage } from './screens/GardenScreen';
 import { PreviewHost } from './screens/PreviewCard';
 import { levelById } from './game/levels';
 import { parseRoute, type Route } from './curriculum/route';
+import { PlaytestScreen } from './playtest/PlaytestScreen';
+import { PLAYTEST_BUILD, routeFor } from './playtest/mode';
+import { DEBUG } from './screens/levelKit';
 import './ui/runtime';
 
 function useHash() {
@@ -32,6 +36,7 @@ function Screen({ route, hash }: { route: Route; hash: string }) {
   if (route.screen === 'map') return <YearPlayer><ForestMap /></YearPlayer>;
   if (route.screen === 'sheet') return <YearPlayer><SheetScreen key={hash} n={route.n} page={route.page} /></YearPlayer>;
   if (route.screen === 'fitting') return <FittingRoom />;
+  if (route.screen === 'piloto') return <PlaytestScreen />;
   if (route.screen === 'wardrobe') return <YearPlayer><WardrobePage /></YearPlayer>;
   if (route.screen === 'garden') return <YearPlayer><GardenPage key={route.seeds ?? 'mine'} preview={route.seeds} /></YearPlayer>;
   if (route.screen === 'level') {
@@ -43,14 +48,14 @@ function Screen({ route, hash }: { route: Route; hash: string }) {
 
 export function App() {
   const hash = useHash();
-  const route = parseRoute(hash);
+  const route = routeFor(hash, parseRoute);
   useEffect(() => { window.scrollTo(0, 0); }, [hash]);
   return (
     <>
       <InkDefs />
       <Screen route={route} hash={hash} />
       <PreviewHost />
-      <DevDrawer route={route} />
+      {(!PLAYTEST_BUILD || DEBUG) && <DevDrawer route={route} />}
     </>
   );
 }

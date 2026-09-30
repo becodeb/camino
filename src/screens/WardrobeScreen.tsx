@@ -224,9 +224,18 @@ function Stump({ seed }: { seed: number }) {
  * Sheet 1 opens on the character choice the first time: the four stand on
  * stumps in the forest, each alive; a tap picks one (it celebrates, the others
  * look at it), and the page to turn leads to the sheet's first page. The
- * wardrobe changes it later.
+ * wardrobe changes it later. The pilot playtest reuses it: `onPick` hears
+ * each pick, `next` replaces the link to the sheet's first page, `quit`
+ * null hides "salir", `title` replaces the adult's small print.
  */
-export function ChoicePage({ sheet, pages }: { sheet: { n: number; say: string; title: string }; pages: React.ReactNode }) {
+export function ChoicePage({ sheet, pages, onPick, next, quit = MAP_HREF, title }: {
+  sheet: { n: number; say: string; title: string };
+  pages: React.ReactNode;
+  onPick?: (id: CharacterId) => void;
+  next?: () => void;
+  quit?: string | null;
+  title?: React.ReactNode;
+}) {
   const p = useProgress();
   const rootRef = useRef<HTMLElement>(null);
   const ghost = useGhost(rootRef);
@@ -244,6 +253,7 @@ export function ChoicePage({ sheet, pages }: { sheet: { n: number; say: string; 
 
   const pick = (id: CharacterId) => {
     progress.update((q) => chooseCharacter(q, id));
+    onPick?.(id);
     speak(CHOICE_LINES.picked(CHARACTER_NAME[id]));
     const me = stages.current.get(id);
     void me?.cheer();
@@ -257,7 +267,7 @@ export function ChoicePage({ sheet, pages }: { sheet: { n: number; say: string; 
     <main ref={rootRef} className="level mode-doors mode-choice" data-sheet={sheet.n}>
       <Bar
         instruction={<span className="drawn-task" aria-hidden="true"><PlayerFace className="bar-face" /><ThenArrow /><span className="choice-q">?</span></span>}
-        title={<><b>Hoja {sheet.n} · elegir personaje</b> {sheet.title}</>}
+        title={title ?? <><b>Hoja {sheet.n} · elegir personaje</b> {sheet.title}</>}
         pages={pages}
         aside={<SeedPouch />}
         onSpeak={() => speak(line)}
@@ -276,10 +286,12 @@ export function ChoicePage({ sheet, pages }: { sheet: { n: number; say: string; 
           </div>
         </div>
         {picked
-          ? <a className="next-page cut doors-next" href={sheetHref(sheet.n, { kind: 'core', k: 1 })} aria-label="Empezar la hoja"><NextPageArt /></a>
+          ? next
+            ? <button type="button" className="next-page cut doors-next" onClick={next} aria-label="Seguir"><NextPageArt /></button>
+            : <a className="next-page cut doors-next" href={sheetHref(sheet.n, { kind: 'core', k: 1 })} aria-label="Empezar la hoja"><NextPageArt /></a>
           : <span className="doors-next-slot" aria-hidden="true" />}
       </section>
-      <Quit href={MAP_HREF} />
+      {quit != null && <Quit href={quit} />}
     </main>
   );
 }
