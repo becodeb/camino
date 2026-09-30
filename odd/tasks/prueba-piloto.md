@@ -66,7 +66,7 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 - [x] T6 (P2) Typing minigame "Teclas del bosque" (new art); dev mode guarded in playtest builds; no sheet stake in the goodbye garden.
 - [x] T7 (P3) 4to probe "Hacé tu juego" (rule engine extended: objects, score, lives, win/lose, avisar; Scratch equivalents; predict a Scratch script).
 - [x] T8 (P3) 5to probe "Del bloque al texto" (blocks and Python-like text side by side; predict, change a number, fix a typo).
-- [ ] T9 Verification and final deploy: screenshot tours (1ro, 3ro, 5to at both sizes), scripted full 1ro and 5to sessions with an offline stretch confirming DB rows and export, locally and live.
+- [x] T9 Verification and final deploy: screenshot tours (1ro, 3ro, 5to at both sizes), scripted full 1ro and 5to sessions with an offline stretch confirming DB rows and export, locally and live.
 
 ## Progress
 
@@ -355,6 +355,9 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
   3. `node tools/delete-sessions.mjs <SESSION_IDS>`; export again and confirm they are gone.
   4. Coolify status `running:healthy`; `curl -sI https://camino-prueba.becode.com.ar/sw.js` shows `cache-control: no-cache` (Cloudflare must not cache it long).
 
+- 2026-10-01: T9 live part done by the parent (route: inline, state-only commands). Pushed `156874f`, redeployed `camino-prueba` through the Coolify API (deployment finished; `running:healthy`, `last_online_at` after the push). Live index serves the new hashed assets; `/sw.js` reaches Cloudflare as `cf-cache-status: EXPIRED` on every request (the edge revalidates against the origin's `no-cache`), and the default `updateViaCache: 'imports'` makes browsers bypass their HTTP cache for SW update checks. `tools/check-session.mjs https://camino-prueba.becode.com.ar/ 1ro 5to 3ro`: 1ro and 5to passed end to end; 3ro failed once on the free-play menu (`locator.click: Element is not visible`, a script timing flake: the menu was on screen in the failure shot) and passed end to end on a rerun. `tools/export-playtest.mjs` + `tools/check-session-data.mjs` on the three passing sessions: all checks passed (no seq gaps, every expected event type, survey and adult form, JSON/CSV row counts equal). The four check sessions (including the aborted one) were deleted with `tools/delete-sessions.mjs`; a fresh export returned 0 sessions and 0 events. The `camino` demo app was not touched (still 200).
+  Not verified: real children, real devices (touch Chromebook, tablets, a physical Spanish keyboard with Ñ), real voices on classroom devices, a real network cut on a Chromebook. The 3ro menu click in `check-session.mjs` can flake on a slow network (a wait on the card being visible would fix it).
+
 ## Next step
 
-T9 live part (the parent): push, deploy, the live commands above, then check T9 off.
+Run the pilot with children. Afterwards, a later session analyzes the data (`tools/export-playtest.mjs`, the views in `docs/prueba-piloto-datos.md`).
