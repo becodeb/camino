@@ -73,7 +73,7 @@ All new art is designed by Opus with the style references: `docs/style-guide.md`
 - [x] T3b — Workshops: level editor + classmates' gallery (7, 15) and the comodín hub (16). Route: delegated direct.
   - Split from T3 by the parent on 2026-09-27: four new mechanics were too much for one writer's context after T2 needed ~700k tokens.
 - [x] T4 — Motivation: garden, critters, wardrobe, end-of-sheet preview, showcase sheet (17). Route: delegated direct.
-- [ ] T5 — Parent pass: full screenshot tour, presentation script for the school, LAN instructions.
+- [x] T5 — Parent pass: full screenshot tour, presentation script for the school, LAN instructions. Route: inline (parent) plus one delegated writer for the presets, resumed inline.
 
 ## Progress
 
@@ -120,6 +120,14 @@ All new art is designed by Opus with the style references: `docs/style-guide.md`
   - For T5: the whole year can be shown with the dev drawer: `FULLYEAR`/`SHOW`/`SHOWN` in `tools/shots.mjs` are ready-made progresses (the whole year of pages and bosses, 150 seeds, gold, a level made, Mina dressed; favourites picked; the family's win); `?dev&debug` plus the drawer's "jardín con 150", "dar ropa", "mandar bicho", "ver el adelanto" and "muestra" cover a presentation without playing the year. A fresh start opens sheet 1 on the character choice; the wardrobe needs the teacher's switch (or dev mode) to open.
   - Engram mirror pending (the engram MCP resolves `~/projects` as an ambiguous project and does not offer `camino`).
 
+- 2026-09-30 T5 (parent):
+  - Reviewed the p1–p4 tours. Fixed gendered copy: the wardrobe and the dev drawer said "la maestra"; they now say "el docente" (the user speaks of "el profe") — `ed00403`.
+  - Presentation presets in the dev drawer ("Presentación": Arranque, Mitad de año, Año completo), built from the sheet data with the store's pure transitions — `7cdd226`. A delegated writer built most of it and stopped on a usage limit; the parent reviewed, finished and verified it. `tools/check-presets.mjs` added.
+  - Script for the school presentation: `docs/guion-presentacion-1ro.md` — `70028ff`.
+  - Deploy: nginx image (`Dockerfile`, `docker/nginx.conf`, `docker-compose.yml`, `.dockerignore`) — `3fd7422`; built and smoke-tested locally with Docker. Public repo `becodeb/camino` (all three branches pushed); Coolify app `camino` (uuid `rjsph4ipohlqiq6efcpscqun`, branch `feat/primer-grado`, compose build pack) on `https://camino.becode.com.ar` plus its sslip.io URL. No auto-deploy: redeploy through the Coolify API after pushing.
+  - Evidence: `npm run typecheck` clean; `npx vitest run --maxWorkers=2` 18 files, 790 passed; `npm run build` ok; `tools/check-presets.mjs` 4/4 ok on 8797 and on the live site; `tools/check-primer.mjs` 37/37 ok on 8797 and on the live site; the live `index-*.js` has the same sha256 as the local build; Coolify status `running:healthy`.
+  - Not merged to `main` (the user's decision). Untested: speech and synth audio on real speakers, a touch Chromebook, printing, real kids.
+
 ## Next step
 
-T5 (parent): the full screenshot tour (p1–p4), a presentation script for the school, LAN instructions.
+The user presents the 1ro demo at the school. Next iteration (not started): see `docs/next-iteration.md`. Pilot playtest: see `docs/prompts/prueba-piloto.md`.
