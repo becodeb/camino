@@ -4,7 +4,7 @@
 
 import { createContext, useContext, type MutableRefObject } from 'react';
 import type { FlowState } from './flow';
-import type { SessionRecord } from './telemetry';
+import type { SessionPatch, SessionRecord } from './telemetry';
 
 /** The level on screen, as the adult's gestures need it (PlaytestLevel registers it). */
 export interface LevelTrack {
@@ -37,6 +37,8 @@ export interface PlaytestApi {
   endNow(): void;
   /** The child did an activity (the survey offers it as a favourite). */
   did(activity: string): void;
+  /** Changes the session record (the survey, the adult form); synced like events. */
+  patchSession(patch: SessionPatch): void;
   /** Logs an event of the session (docs/prueba-piloto-datos.md). */
   log(type: string, payload?: Record<string, unknown>): void;
   level: MutableRefObject<LevelTrack | null>;

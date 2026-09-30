@@ -108,11 +108,12 @@ function Playtest() {
     endNow: () => apply({ type: 'end_now' }),
     did: (activity) => apply({ type: 'did', activity }),
     log,
+    patchSession: (patch) => tel.updateSession(patch),
     level,
     hand,
     raiseHand,
     adultHelp,
-  }), [session, flow, apply, log, hand, raiseHand, adultHelp]);
+  }), [session, flow, apply, log, hand, raiseHand, adultHelp, tel]);
 
   useEffect(() => installWatchers(() => (flowRef.current.step === 'setup' ? null : flowRef.current.step)), []);
 

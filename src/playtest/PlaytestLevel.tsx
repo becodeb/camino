@@ -160,12 +160,14 @@ export function PlaytestLevel({ level, activity, extra, onEnd, watch }: {
     help: (l, show) => {
       const a = apiRef.current;
       const s = stats.current;
+      const root = document.querySelector<HTMLElement>('main.level');
+      // while a run plays, or once the page is solved, ✋ does nothing on the page: nothing to count either
+      if (root?.dataset.busy === 'true' || s.won) return;
       if (s.helpStep >= 3) { a.raiseHand('help_step_3'); return; }
       const step = s.helpStep + 1;
       s.helpStep = step;
       track.current.helpStep = step;
       a.log('help', { level_id: l.id, step });
-      const root = document.querySelector<HTMLElement>('main.level');
       if (step === 1) {
         speak(l.say);
         if (root) glowTargets(root, 3200);

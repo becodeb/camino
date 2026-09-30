@@ -73,7 +73,8 @@ Opens any level (ladder item, free-play activity, probe). **RQ 4, 5.**
 
 ### `run`
 One press of ▶ inside a level (T2 logs it for walking, song, guarda and
-predict pages through the level's LevelNav). **RQ 2, 4.**
+predict pages through the level's LevelNav), logged when the run ends (its
+`client_t` is the end of the animation). **RQ 2, 4.**
 ```
 {
   level_id: string,
@@ -220,9 +221,10 @@ Time/choices in the wardrobe step. **RQ 6.**
 ```
 
 ### `garden_view`
-The child looked at their session's garden. **RQ 6.**
+The child looked at their session's garden (T2: the goodbye screen, with
+the seeds grown this session; logged when it closes). **RQ 6.**
 ```
-{ duration_ms?: number }
+{ duration_ms?: number, seeds?: number }
 ```
 
 ### `survey_answer`
@@ -231,7 +233,11 @@ One spoken survey question answered with drawn faces/pictures. **RQ 9.**
 { question: 'liked' | 'difficulty' | 'favorite_activity' | 'play_again', answer: string }
 ```
 `liked`: `'yes'|'mid'|'no'`. `difficulty`: `'easy'|'mid'|'hard'`.
-`favorite_activity`: the activity id tapped. `play_again`: `'yes'|'no'`. The
+`favorite_activity`: the activity id tapped, among the activities the child
+did this session (`character`, `ladder`, `tool_check`, `typing`, `wardrobe`,
+and the free-play entries' `activity` ids); asked only when there are two
+or more. `play_again`: `'yes'|'no'`. The first tap answers (the choice is
+said aloud and the next question comes). The
 full set of answers is also mirrored onto `sessions.survey` (keyed by
 `question`) when the survey step ends, so a session's answers can be read
 without scanning events.

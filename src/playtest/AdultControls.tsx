@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { usePlaytest, type AdultHelpKind } from './context';
 import { canEndNow, canSkip } from './flow';
 import { useSyncStatus } from './runtime';
-import { STEP_NAME } from './steps';
+import { STEP_NAME } from './labels';
 import { RaisedHand } from './RaisedHand';
 
 export const CORNER_PX = 64;
@@ -139,7 +139,7 @@ export function AdultSheet({ title, onClose, children }: { title: string; onClos
   );
 }
 
-function SyncDot() {
+export function SyncDot() {
   const s = useSyncStatus();
   const state = s.failures > 0 ? 'off' : s.pending > 0 || s.dirty > 0 ? 'wait' : 'ok';
   const text = state === 'ok' ? 'Todo enviado' : state === 'wait' ? `${s.pending} eventos por enviar` : `Sin conexión: ${s.pending} eventos guardados, se envían solos después`;

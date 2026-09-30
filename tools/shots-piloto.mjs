@@ -34,6 +34,9 @@ async function toCharacter(p) {
 }
 async function toLevel(p) {
   await toCharacter(p);
+  await p.waitForTimeout(500);
+  await p.locator('.choice-btn').nth(2).click();
+  await p.waitForTimeout(400);
   await jump(p, 'ladder');
   await p.waitForSelector('main.level');
   await p.waitForTimeout(900);
@@ -86,6 +89,58 @@ const SCENARIOS = [
       const h = await p.locator('.pp-hand').boundingBox();
       await hold(p, h.x + h.width / 2, h.y + h.height / 2, 1500);
       await p.waitForTimeout(300);
+    },
+  },
+  {
+    name: 'pp-survey-liked',
+    run: async (p) => { await toLevel(p); await pil(p, () => window.__piloto.endNow()); await p.waitForSelector('.pp-survey'); await p.waitForTimeout(700); },
+  },
+  {
+    name: 'pp-survey-difficulty',
+    run: async (p) => { await toLevel(p); await pil(p, () => window.__piloto.endNow()); await p.click('[data-answer="yes"]'); await p.waitForTimeout(1600); },
+  },
+  {
+    name: 'pp-survey-favorite',
+    run: async (p) => {
+      await toLevel(p); await pil(p, () => window.__piloto.endNow());
+      await p.click('[data-answer="yes"]'); await p.waitForTimeout(1400);
+      await p.click('[data-answer="hard"]'); await p.waitForTimeout(1600);
+    },
+  },
+  {
+    name: 'pp-survey-again',
+    run: async (p) => {
+      await toLevel(p); await pil(p, () => window.__piloto.endNow());
+      await p.click('[data-answer="mid"]'); await p.waitForTimeout(1400);
+      await p.click('[data-answer="easy"]'); await p.waitForTimeout(1400);
+      await p.click('[data-question="favorite_activity"] .pp-option >> nth=1'); await p.waitForTimeout(1400);
+      await p.click('[data-answer="yes"]'); await p.waitForTimeout(500);
+    },
+  },
+  {
+    name: 'pp-goodbye',
+    run: async (p) => {
+      await toLevel(p);
+      await pil(p, () => { window.__camino.setProgram(window.__camino.level.solution); });
+      await p.waitForTimeout(300);
+      await pil(p, () => window.__camino.run());
+      await p.waitForTimeout(800);
+      await p.locator('.next-page').click({ force: true });
+      await p.waitForTimeout(900);
+      await jump(p, 'survey');
+      for (const a of ['yes', 'easy']) { await p.click(`[data-answer="${a}"]`); await p.waitForTimeout(1400); }
+      await p.click('[data-question="favorite_activity"] .pp-option >> nth=0'); await p.waitForTimeout(1400);
+      await p.click('[data-answer="yes"]'); await p.waitForTimeout(1500);
+      await p.waitForSelector('.pp-bye'); await p.waitForTimeout(1500);
+    },
+  },
+  {
+    name: 'pp-adult-form',
+    run: async (p) => {
+      await toCharacter(p); await jump(p, 'goodbye'); await p.waitForSelector('.pp-bye');
+      await p.click('.pp-for-adult');
+      await p.click('[data-value="high"]'); await p.click('[data-value="some"]');
+      await p.fill('.pp-comment textarea', 'Arrastró sin problemas; pidió ayuda con la consigna.');
     },
   },
   { name: 'pp-soon', run: async (p) => { await toCharacter(p); await jump(p, 'tool_check'); await p.waitForTimeout(500); } },

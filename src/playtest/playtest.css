@@ -144,3 +144,55 @@
 .pp-prints { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
 .pp-print { position: absolute; overflow: visible; opacity: 0; animation: pp-print 6.5s ease-out forwards; }
 @keyframes pp-print { 0% { opacity: 0; scale: 0.6; } 6% { opacity: 1; scale: 1.08; } 10% { scale: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ------------------------------------------------ the survey */
+.pp-survey { grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: 11vh; padding: 10px 18px 22px; }
+.pp-survey-bar { grid-area: auto; width: 100%; }
+.pp-survey-adult { margin: 0; font: 400 16px var(--body); color: var(--ink-2); flex: 1; }
+.pp-survey-dots { display: flex; gap: 10px; list-style: none; margin: 0 8px 0 0; padding: 0; }
+.pp-survey-dots li { width: 18px; height: 18px; border: 2.4px solid var(--ink); border-radius: 50% 45% 52% 48%; background: var(--sheet); }
+.pp-survey-dots li.is-done { background: #a4b86d; }
+.pp-survey-dots li.is-here { background: var(--yellow); }
+.pp-options { width: auto; max-width: 100%; grid-auto-flow: column; gap: 34px; padding: 34px 44px 38px; }
+.pp-options.n5, .pp-options.n6, .pp-options.n7 { grid-auto-flow: row; grid-template-columns: repeat(4, auto); }
+.pp-option {
+  --r-cut: 18px 14px 20px 13px / 14px 19px 13px 18px;
+  width: 200px; height: 200px;
+  display: grid; place-items: center;
+  padding: 16px;
+  animation: pop-in 360ms ease-out both;
+}
+.pp-option:nth-child(4) { animation-delay: 90ms; }
+.pp-option:nth-child(5) { animation-delay: 180ms; }
+.pp-option .pp-face, .pp-option .pp-activity-art { width: 150px; height: 150px; overflow: visible; }
+.pp-option .pp-activity-art { display: grid; place-items: center; }
+.pp-option .pp-activity-art > svg { width: 140px; height: 140px; }
+.pp-option .pen-ring { position: absolute; inset: -12px; width: calc(100% + 24px); height: calc(100% + 24px); overflow: visible; pointer-events: none; }
+.pp-option.is-picked { --fill: #e9efd8; }
+.pp-option.is-other { opacity: 0.35; }
+
+/* ------------------------------------------------ goodbye */
+.pp-bye-card { gap: 6px; padding-top: 18px; }
+.pp-bye-stage { width: 250px; height: 266px; overflow: visible; cursor: pointer; }
+.pp-bye-garden { position: relative; width: min(600px, 100%); display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 2px 6px; padding: 0 20px 14px; min-height: 70px; }
+.pp-bye-seed { position: relative; z-index: 1; animation: pop-in 420ms ease-out both; }
+.pp-bye-soil { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 34px; }
+.pp-bye-code { margin: 8px 0 0; font: 700 26px var(--body); color: var(--ink-2); }
+.pp-for-adult {
+  position: fixed; right: 12px; bottom: 6px;
+  min-height: 48px; padding: 8px 12px;
+  border: 0; background: none; cursor: pointer;
+  font: 400 18px var(--hand); color: var(--ink-2); opacity: 0.6;
+  text-decoration: underline wavy;
+}
+
+/* ------------------------------------------------ the adult form */
+.pp-choice { width: auto; min-width: 118px; padding: 0 18px; font-size: 20px; }
+.pp-comment { display: grid; gap: 6px; width: min(560px, 100%); font: 700 18px var(--body); color: var(--ink); }
+.pp-comment small { font-weight: 400; color: var(--ink-2); }
+.pp-comment textarea {
+  font: 400 18px/1.35 var(--body); color: var(--ink);
+  padding: 10px 12px; resize: vertical;
+  background: #fffdf7; border: 2.4px solid var(--ink); border-radius: 8px 11px 7px 10px;
+}
+.pp-comment textarea:focus-visible { outline: 3px solid var(--blue-ink); outline-offset: 2px; }

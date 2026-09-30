@@ -11,6 +11,7 @@ import { PlayerFace } from '../screens/player';
 import { NextPageArt, PenRing } from '../ui/art';
 import { usePlaytest } from './context';
 import type { StepId } from './flow';
+import { GRADES, GRADE_LABEL, STEP_NAME } from './labels';
 import { AdultForm, Goodbye, Survey } from './closing';
 import { SampleLadder } from './SampleLadder';
 import type { StartInput } from './telemetry';
@@ -22,8 +23,6 @@ export interface StepViewProps {
   newSession(): void;
 }
 
-export const GRADES = [1, 2, 3, 4, 5] as const;
-export const GRADE_LABEL: Record<number, string> = { 1: '1ro', 2: '2do', 3: '3ro', 4: '4to', 5: '5to' };
 const DIVISIONS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
 
 // ------------------------------------------------------------------ the adult's setup
@@ -132,11 +131,6 @@ function Placeholder() {
     </main>
   );
 }
-
-export const STEP_NAME: Record<StepId, string> = {
-  setup: 'preparación', code: 'código', character: 'personaje', tool_check: 'prueba de herramientas', ladder: 'escalera de niveles',
-  free_play: 'juego libre', typing: 'Teclas del bosque', wardrobe: 'vestidor', survey: 'encuesta', goodbye: 'despedida', adult_form: 'formulario del adulto',
-};
 
 export const STEP_VIEWS: Record<StepId, ComponentType<StepViewProps>> = {
   setup: Setup,
