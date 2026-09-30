@@ -187,7 +187,7 @@
 .gm-option .gm-outcome { width: 176px; height: 150px; overflow: visible; }
 .gm-plus { font: 700 26px var(--body); fill: var(--blue-ink); }
 .gm-plus.is-minus { fill: #c24a3c; }
-.gm-dots { font: 700 34px var(--body); fill: var(--ink-2); }
+.gm-dots { font: 700 52px var(--body); fill: var(--ink-2); }
 .gm-mini-hearts { display: flex; gap: 2px; }
 .gm-liked-icon { display: grid; place-items: center; }
 
