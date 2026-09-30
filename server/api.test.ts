@@ -12,6 +12,8 @@ import { migrate } from './db.ts';
 import { createApp } from './app.ts';
 import { csvEscape, toCsv } from './lib/csv.ts';
 import { deleteOldSessions } from './retention.ts';
+import { createRateLimiter } from './lib/rateLimit.ts';
+import { SYNC_RATE_LIMIT, SYNC_RATE_WINDOW_MS } from './routes/sync.ts';
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 
@@ -28,6 +30,23 @@ describe('csv quoting (no database needed)', () => {
   it('builds a full CSV with a header row', () => {
     const csv = toCsv([{ a: 'x,y', b: 2 }], ['a', 'b']);
     expect(csv).toBe('a,b\r\n"x,y",2\r\n');
+  });
+});
+
+describe('sync rate limit (no database needed)', () => {
+  it('lets a class of 25 devices behind one NAT sync every 5 s with room to spare', () => {
+    const perDevicePerWindow = SYNC_RATE_WINDOW_MS / 5_000;
+    expect(SYNC_RATE_LIMIT).toBeGreaterThanOrEqual(25 * perDevicePerWindow * 4);
+    const limiter = createRateLimiter(SYNC_RATE_LIMIT, SYNC_RATE_WINDOW_MS);
+    // one minute of a class: 25 devices x 12 posts, plus a flush each when the page hides
+    for (let i = 0; i < 25 * perDevicePerWindow + 25; i++) expect(limiter.check('10.0.0.1')).toBe(true);
+  });
+
+  it('still stops one runaway IP within the window, and not the others', () => {
+    const limiter = createRateLimiter(SYNC_RATE_LIMIT, SYNC_RATE_WINDOW_MS);
+    for (let i = 0; i < SYNC_RATE_LIMIT; i++) limiter.check('10.0.0.2');
+    expect(limiter.check('10.0.0.2')).toBe(false);
+    expect(limiter.check('10.0.0.3')).toBe(true);
   });
 });
 
@@ -183,6 +202,59 @@ dbDescribe('API against Postgres', () => {
       body: JSON.stringify({ session, events: hugeEvents }),
     });
     expect(res.status).toBe(413);
+  });
+
+  it('answers 429 once the per-IP limit is spent', async () => {
+    const app = createApp(pool, { distDir, syncRateLimit: 2 });
+    const post = () => app.request('/api/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session: newSession(), events: [] }),
+    });
+    expect((await post()).status).toBe(200);
+    expect((await post()).status).toBe(200);
+    expect((await post()).status).toBe(429);
+  });
+
+  describe('deleting a session (admin)', () => {
+    const auth = { authorization: 'Bearer right-token' };
+
+    it('removes the session and cascades its events', async () => {
+      const app = createApp(pool, { adminToken: 'right-token', distDir });
+      const session = newSession({ code: 'Prueba 1' });
+      await app.request('/api/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ session, events: [event(0), event(1)] }),
+      });
+      const res = await app.request(`/api/admin/sessions/${session.id}`, { method: 'DELETE', headers: auth });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true, deleted: session.id });
+      const { rows: s } = await pool.query('SELECT id FROM sessions WHERE id = $1', [session.id]);
+      expect(s).toHaveLength(0);
+      const { rows: e } = await pool.query('SELECT seq FROM events WHERE session_id = $1', [session.id]);
+      expect(e).toHaveLength(0);
+    });
+
+    it('is 404 for an unknown session and 400 for a malformed id', async () => {
+      const app = createApp(pool, { adminToken: 'right-token', distDir });
+      expect((await app.request(`/api/admin/sessions/${randomUUID()}`, { method: 'DELETE', headers: auth })).status).toBe(404);
+      expect((await app.request('/api/admin/sessions/not-a-uuid', { method: 'DELETE', headers: auth })).status).toBe(400);
+    });
+
+    it('needs the admin token (the export token does not do)', async () => {
+      const app = createApp(pool, { adminToken: 'right-token', exportToken: 'export-token', distDir });
+      const session = newSession();
+      await app.request('/api/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ session, events: [event(0)] }),
+      });
+      expect((await app.request(`/api/admin/sessions/${session.id}`, { method: 'DELETE' })).status).toBe(401);
+      expect((await app.request(`/api/admin/sessions/${session.id}`, { method: 'DELETE', headers: { authorization: 'Bearer export-token' } })).status).toBe(401);
+      const { rows } = await pool.query('SELECT id FROM sessions WHERE id = $1', [session.id]);
+      expect(rows).toHaveLength(1);
+    });
   });
 
   describe('admin token', () => {

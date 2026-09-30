@@ -83,6 +83,8 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(43,38
 th { color: var(--ink-2); font-weight: 700; }
 .active-row { color: var(--green); font-weight: 700; }
 .error { color: var(--red); }
+button.del { padding: 3px 9px; font-size: 0.8rem; background: var(--sheet); border-color: var(--red); color: var(--red); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .exports { display: flex; gap: 8px; flex-wrap: wrap; }
 #status { font-size: 0.8rem; color: var(--ink-2); margin-top: 8px; }
 </style>
@@ -109,7 +111,7 @@ th { color: var(--ink-2); font-weight: 700; }
     <thead>
       <tr>
         <th>Código</th><th>Grado</th><th>División</th><th>Inicio</th><th>Visto</th>
-        <th>Duración</th><th>Paso</th><th>Estado</th><th>Eventos</th>
+        <th>Duración</th><th>Paso</th><th>Estado</th><th>Eventos</th><th><span class="sr">Borrar</span></th>
       </tr>
     </thead>
     <tbody id="sessions"></tbody>
@@ -183,15 +185,16 @@ th { color: var(--ink-2); font-weight: 700; }
         '<td>' + escapeHtml(s.current_step || '—') + '</td>' +
         '<td>' + estado + '</td>' +
         '<td>' + escapeHtml(s.event_count) + '</td>' +
+        '<td><button type="button" class="del" data-id="' + escapeHtml(s.session_id) + '" data-code="' + escapeHtml(s.code) + '" title="Borrar esta sesión">Borrar</button></td>' +
         '</tr>';
     });
-    document.getElementById('sessions').innerHTML = rows.join('') || '<tr><td colspan="9">Sin sesiones todavía.</td></tr>';
+    document.getElementById('sessions').innerHTML = rows.join('') || '<tr><td colspan="10">Sin sesiones todavía.</td></tr>';
   }
 
   function refresh() {
     var token = getToken();
     if (!token) { statusEl.textContent = 'Escribí el token para ver los datos.'; statusEl.className = ''; return; }
-    fetch('/api/admin/summary', { headers: { Authorization: 'Bearer ' + token } })
+    return fetch('/api/admin/summary', { headers: { Authorization: 'Bearer ' + token } })
       .then(function (res) {
         if (res.status === 401) throw new Error('Token incorrecto.');
         if (res.status === 503) throw new Error('El servidor no tiene ADMIN_TOKEN configurado.');
@@ -231,6 +234,29 @@ th { color: var(--ink-2); font-weight: 700; }
       });
   }
 
+  // Removes a check or test session (and its events) after a confirm.
+  document.getElementById('sessions').addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('button.del');
+    if (!btn) return;
+    var token = getToken();
+    if (!token) { statusEl.textContent = 'Escribí el token primero.'; statusEl.className = 'error'; return; }
+    if (!confirm('¿Borrar la sesión «' + btn.dataset.code + '» y todos sus eventos? No se puede deshacer.')) return;
+    btn.disabled = true;
+    fetch('/api/admin/sessions/' + encodeURIComponent(btn.dataset.id), { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } })
+      .then(function (res) {
+        if (!res.ok && res.status !== 404) throw new Error('No se pudo borrar (' + res.status + ').');
+        return refresh();
+      })
+      .then(function () {
+        statusEl.textContent = 'Sesión «' + btn.dataset.code + '» borrada.';
+        statusEl.className = '';
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        statusEl.textContent = err.message;
+        statusEl.className = 'error';
+      });
+  });
   document.getElementById('save').addEventListener('click', function () {
     setToken(tokenInput.value.trim());
     if (timer) clearInterval(timer);

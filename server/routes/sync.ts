@@ -11,8 +11,12 @@ import { validateSyncBody } from '../lib/validate.ts';
 import { createRateLimiter } from '../lib/rateLimit.ts';
 import type { EventInput, SessionInput } from '../types.ts';
 
-const SYNC_RATE_LIMIT = 120; // requests per IP per minute
-const SYNC_RATE_WINDOW_MS = 60_000;
+// Requests per IP per minute. A whole class (~25 devices) sits behind one
+// school NAT, so one IP is many children: each device posts about every 5 s
+// (12/min) plus flushes when the page hides, ~300/min for a class; 1500
+// leaves 5x headroom and still stops a runaway client.
+export const SYNC_RATE_LIMIT = 1500;
+export const SYNC_RATE_WINDOW_MS = 60_000;
 
 async function upsertSessionAndEvents(
   client: pg.PoolClient,
@@ -73,9 +77,9 @@ async function upsertSessionAndEvents(
   }
 }
 
-export function syncRoute(pool: pg.Pool): Hono {
+export function syncRoute(pool: pg.Pool, rateLimit = SYNC_RATE_LIMIT): Hono {
   const app = new Hono();
-  const limiter = createRateLimiter(SYNC_RATE_LIMIT, SYNC_RATE_WINDOW_MS);
+  const limiter = createRateLimiter(rateLimit, SYNC_RATE_WINDOW_MS);
 
   app.post('/', async (c) => {
     let ip = 'unknown';

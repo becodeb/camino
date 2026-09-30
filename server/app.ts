@@ -15,12 +15,14 @@ export interface AppOptions {
   adminToken?: string;
   exportToken?: string;
   distDir: string;
+  /** /api/sync requests per IP per minute (tests lower it). */
+  syncRateLimit?: number;
 }
 
 export function createApp(pool: pg.Pool, opts: AppOptions): Hono {
   const app = new Hono();
   app.route('/api/health', healthRoute(pool));
-  app.route('/api/sync', syncRoute(pool));
+  app.route('/api/sync', syncRoute(pool, opts.syncRateLimit));
   app.route('/api/admin', adminRoute(pool, opts.adminToken));
   app.route('/api/export', exportRoute(pool, opts.exportToken));
   app.get('/admin', (c) => c.html(ADMIN_PAGE_HTML));

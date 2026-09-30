@@ -289,7 +289,9 @@ The session moved to another flow step (the same change also updates
 (`localStorage` key `camino.piloto.queue.v1`, or memory when storage is
 blocked) with its per-session `seq` (0, 1, 2…) and `client_t`. A sender posts
 `POST /api/sync` with the session record and up to 100 of its events every
-5 s, or at once when 25 are waiting; the `acked` seqs leave the queue. A
+5 s, or at once when 25 are waiting (the server allows 1500 posts per
+IP per minute, an in-memory counter that never stores the IP: a class of ~25
+devices behind one school NAT posts about 300); the `acked` seqs leave the queue. A
 network error, a 429 or a 5xx is retried with exponential backoff (1 s,
 2 s, 4 s … capped at 60 s, with jitter) and never drops anything; only a 400
 drops the batch (with a console warning), a 413 halves the batch size. When
@@ -326,6 +328,12 @@ analysis (`psql`, or any tool that can read Postgres directly).
 `RETENTION_DAYS` (env var, default 180) is read at startup; the server
 deletes `sessions` older than that many days (by `started_at`), cascading to
 their `events`, once at boot and every 24h after.
+
+**To delete one session** (a check or test session, or one a school asks to
+remove): `DELETE /api/admin/sessions/:id` (Bearer `ADMIN_TOKEN`) removes the
+session row and, by `ON DELETE CASCADE`, all its events (200 `{ok, deleted}`,
+404 unknown id, 400 malformed id). The `/admin` page has a "Borrar" button per
+row that asks for confirmation first.
 
 **To delete everything immediately** (e.g. end of pilot, or a request to
 wipe the data early):

@@ -1,6 +1,7 @@
-// Admin API (Bearer ADMIN_TOKEN): a live summary for the /admin page and the
+// Admin API (Bearer ADMIN_TOKEN): a live summary for the /admin page, the
 // same JSON/CSV export the analyst-facing /api/export offers, so the
-// teacher-facing admin token can also pull a copy during the pilot.
+// teacher-facing admin token can also pull a copy during the pilot, and the
+// deletion of one session (check and test sessions).
 
 import { Hono } from 'hono';
 import type pg from 'pg';
@@ -10,6 +11,7 @@ import { EVENT_COLUMNS, SESSION_COLUMNS, fetchAllEvents, fetchAllSessions } from
 import { APP_VERSION } from '../version.ts';
 
 const ACTIVE_WINDOW_MINUTES = 2;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function adminRoute(pool: pg.Pool, adminToken: string | undefined): Hono {
   const app = new Hono();
@@ -44,6 +46,16 @@ export function adminRoute(pool: pg.Pool, adminToken: string | undefined): Hono 
       active_window_minutes: ACTIVE_WINDOW_MINUTES,
       generated_at: new Date().toISOString(),
     });
+  });
+
+  // Removes one session and (ON DELETE CASCADE) all its events: check and
+  // test sessions must not stay in the pilot's data.
+  app.delete('/sessions/:id', async (c) => {
+    const id = c.req.param('id');
+    if (!UUID_RE.test(id)) return c.json({ error: 'invalid_id' }, 400);
+    const res = await pool.query('DELETE FROM sessions WHERE id = $1', [id]);
+    if (!res.rowCount) return c.json({ error: 'not_found' }, 404);
+    return c.json({ ok: true, deleted: id });
   });
 
   app.get('/export', async (c) => {
