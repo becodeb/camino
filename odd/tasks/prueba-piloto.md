@@ -62,7 +62,7 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 - [x] T2 (P0/P1) Playtest shell and telemetry client: offline queue with batched retries; adult setup and session code; flow state machine; character choice; instrumentation hooks in the level player (level_start, run, level_end, help, ghost_demo, speak, drag, tap_add, idle, visibility, error); hidden adult controls; raised hand (`call_adult`) and `adult_help`; survey; adult form; goodbye; admin page.
 - [x] T3 (P0) First deploy: push, create the Coolify app, env vars, domain, verify `running:healthy` and a sync + export against the live URL.
 - [x] T4 (P1) Tool check and placement ladder: two tiny tool levels; fixed item bank by concept with grade entry points and the step-up / floor rules; `ladder_step` events.
-- [ ] T5 (P2) Free-play menu (existing activities by grade), wardrobe step with compressed thresholds, session garden.
+- [x] T5 (P2) Free-play menu (existing activities by grade), wardrobe step with compressed thresholds, session garden.
 - [ ] T6 (P2) Typing minigame "Teclas del bosque" (new art).
 - [ ] T7 (P3) 4to probe "Hacé tu juego" (rule engine extended: objects, score, lives, win/lose, avisar; Scratch equivalents; predict a Scratch script).
 - [ ] T8 (P3) 5to probe "Del bloque al texto" (blocks and Python-like text side by side; predict, change a number, fix a typo).
@@ -165,6 +165,50 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
   - The level pages' spoken lines still say "Brote" when the child picked another character (demo text, pre-existing).
   - After the ladder the flow reaches free play (still the placeholder).
 
+- 2026-09-30: T5 done (route: delegated direct, one writer; 2+ non-trivial files), three work-unit commits on `feat/prueba-piloto` (not pushed):
+  - `51deca9` the chosen character's name instead of "Brote": a speech filter (`ui/speech.ts` `setSpeechFilter`, installed by PlaytestScreen) and `withName` on level titles (`src/playtest/characterName.ts`; Mina takes "la": "¿La ayudás…?"); unit test sweeps every 1ro/demo line and title for the three other characters.
+  - `38de12a` free play: the drawn menu (`FreePlay.tsx`, data in `freePlay.ts`, new card art in `menuArt.tsx`), the hash hold (`hashHold.ts`: the year's screens move by the hash; the playtest keeps it and routes changes to the open activity, a reload starts a new session), `LevelWrapContext` in `levelKit`/`LevelScreen` (instruments pages hosted by another screen; `PlaytestLevel` split into `Instrumented`/`InstrumentedPage`, every solved page plants a seed), the back-to-menu button in each page's bar, `choice` {activity, visit}/{door}, `activity_end`, migration `002_activity_time.sql` (`v_activity_time` counts free-play visits whole), the 12-minute budget, the free rule game page `pp-reglas`, the probe registry (`probes.ts`), the survey's pictures from the menu art; dictionary, API test, check and shots extended.
+  - `4d216e4` wardrobe step (`WardrobeStep.tsx`: WardrobePage with new optional props `onPick`/`onTap`/`next`/`quit`/`title`; `rewards.ts` `setUnlocks`/`unlockOf`, the playtest's thresholds), the goodbye garden (`SessionGarden.tsx`, `GardenMe` exported), `garden_view` with arrivals and outfit; dictionary, tests, check and shots.
+
+  Free-play sets (menu order; `freePlay.ts` MENU):
+
+  | Grade | Cards |
+  |---|---|
+  | 1ro | sheet 6 "La escalera" (doors + boss) · recess (sheet 9) · guardas (sheet 14) · editor (sheet 7 workshop + corkboard) |
+  | 2do | sheet 8 "Zigzag" · recess · guardas · editor (sheet 7) |
+  | 3ro | rule game (`3ro-1`, `3ro-2`, then `pp-reglas`) · sheet 13 "Antes y después" · recess · editor (sheet 7) |
+  | 4to | rule game · editor (sheet 15, few lines) · recess · `game_maker` (T7, when registered) |
+  | 5to | rule game · editor (sheet 15) · recess · `text_probe` (T8, when registered) |
+
+  Evidence:
+  - `npm run typecheck` clean; `npm test` 27 files, 858 tests (new: `characterName.test.ts`, `freePlay.test.ts` menus/probe filter/sheets built/budget verdict/`?libre`, `wardrobe.test.ts` thresholds, unlock override on/off, garden frame); `npm run build` ok; `npm run test:api` 22/22 on a disposable Postgres (54340), incl. `v_activity_time` with visits whole plus ladder pages.
+  - `tools/check-piloto.mjs` (vite 8811 → API 8810 → Postgres 54340): all checks passed. 1ro: menu `sheet,recess,guardas,editor`; sheet 6 pages 1–3 solved, the easy door from the bar, its first extra solved, back to the menu; recess page 1 solved, back; budget set to 0 on the menu → the cheer → the typing placeholder → wardrobe (scarf on, hat on/off, crown locked, "listo") → survey → goodbye garden with the session's 8 seeds (8 plants, the character in it). DB: choices `sheet#1 door:easy recess#2`; `activity_end` sheet {levels 6, wins 4, extras 1, reason menu} and recess; the extra's `level_end` has `page: extra, door: easy, sheet: 6`; `v_activity_time` sheet 50 s (= its visit), recess, ladder, tool_check; wardrobe events `open,on,on,off,locked,close` (locked says `needs: 16`, close keeps `{neck: bufanda}`); `garden_view` {seeds 8, outfit}. 5to now ends from the adult's corner (`adult_ended`); 1ro ends `completed`.
+  - Demo regressions against 8811: `tools/check-primer.mjs` (37 ok) and `tools/check-3ro.mjs` (8 ok), no console errors.
+  - Screenshots (`tools/shots-piloto.mjs`, 55 scenarios × 2 sizes = 110 ok, no console errors; new `pp-fp-*`, `pp-wardrobe-*`, `pp-bye-garden`) at 1366×768 and 1280×800, reviewed: menus of 1ro, 3ro, 5to; each activity as opened (sheet, doors, recess, guardas, editor, 3ro rules and sheet, 5to editor); the time-over cheer; Mina's title ("…cuando aprieto una flecha, Mina se mueve"); the wardrobe with locks; the goodbye garden; the survey's favourites. Fixed after review: the menu was one short row in a mostly empty page (now 2×2 for four cards, sized by the screen height); the back-to-menu button first sat bottom-right over the doors page's next-page button, then bottom-left over the rule game's last palette block (now in each page's bar, before ✋, via a portal; bottom-left only on a page without a bar); the year's "Hoja 7 · taller" small print on non-level pages (hidden in free play); the goodbye garden showed a few plants lost in the meadow (now huddled round the first bed with the character beside it and framed close); the wardrobe thresholds were out of the hooks' order (now 0, 0, 4, 7, 10, 13, 16 in the year's order); a setState during render in the free-play mount.
+
+  Decisions and deviations:
+  - `corkboard` is not a separate activity: the corkboard lives inside the workshop card (`editor`); its pages log `page: 'card'`, the author's test page `page: 'test'`.
+  - The 1ro sheet is 6 (doors + boss, the staircase, a critter boss: the fox). 2do gets sheet 8, 3ro sheet 13, 4to/5to the limited workshop (sheet 15). The rule game ends with a new free page `pp-reglas` (every key and move, eight seeds).
+  - Voluntary extras = extra and boss pages solved (`activity_end.extras`); every page played is a level_start/level_end with `page`/`door`, so opened-but-not-solved extras are countable too.
+  - A door choice is logged when the child opens a page behind another door than the page before (doors page or bar).
+  - Budget: 12 min, `?libre=<min>` (1–30) in the URL; never cuts a level; a non-level page gets 2 minutes' grace. The adult's skip still works (`activity_end.reason: left`).
+  - Seeds: every page solved plants a seed once per page id (the year's `solve`); a page replayed (a ladder item met again in a sheet) plants none; gold challenges plant none (as in the year). The workshop's test page plants one in the playtest.
+  - Thresholds for the wardrobe: everyone gets the scarf and the mushroom hat (0 seeds); the locks are the year's silhouettes with the seed count tag (no separate padlock drawing).
+  - The character in the wardrobe can still be changed; it logs `wardrobe` {character} and a `choice` with `where: 'wardrobe'`.
+  - The menu cards' board thumbnails always draw Brote (the year's `PageThumb`).
+
+  For T6 (typing, "Teclas del bosque"):
+  - Plug a component into `STEP_VIEWS.typing` (`steps.tsx`); read `usePlaytest()`.
+  - Seeds: plant one per round or word caught with `progress.update((p) => solve(p, 'typing-<n>'))` (unique ids; `solve` gives one seed per new id); they show in the pouch, the wardrobe unlocks and the goodbye garden. Log `level_start`/`level_end` with `activity: 'typing'` if rounds are levels (then `v_activity_time` counts them by pages), otherwise log an `activity_end`-like summary and extend the view (only free-play ids use `activity_end` now).
+  - Watch out: dev mode toggles on typing "d-e-v" or the backtick (`ui/devMode.ts`): in the playtest that would open doors and more; guard it in the typing step (or globally in the playtest).
+  - Spoken lines go through the speech filter (the character's name is put in for "Brote").
+
+  For T7/T8 (the probes):
+  - Register the component in `src/playtest/probes.ts` (`PROBES.game_maker = GameMaker`, `PROBES.text_probe = TextProbe`); the card then shows on the 4to/5to menu (`freePlay.ts` MENU; art in `menuArt.tsx` `GameMakerCard`/`TextProbeCard`, change freely).
+  - The component gets `ProbeProps`: `activity`, `levelEnded(end)` (pass PlaytestLevel's `onEnd` result: free play counts it and its time budget ends only between pages), `done()` (back to the menu). Play pages with `<PlaytestLevel activity={activity} …/>`; any other events via `usePlaytest().log`. Free play logs the pick, the back button (in the page's bar), `activity_end`, and the seeds of pages solved.
+
+  Open: the free rule page `pp-reglas` and the 4to/5to editor were only seen in screenshots, not played through by the check; T9's tours should play one of each. Engram mirror still pending.
+
 ## Next step
 
-T5 (free-play menu, wardrobe, session garden).
+T6 (typing minigame "Teclas del bosque").
