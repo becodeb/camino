@@ -878,7 +878,11 @@ their `events`, once at boot and every 24h after.
 remove): `DELETE /api/admin/sessions/:id` (Bearer `ADMIN_TOKEN`) removes the
 session row and, by `ON DELETE CASCADE`, all its events (200 `{ok, deleted}`,
 404 unknown id, 400 malformed id). The `/admin` page has a "Borrar" button per
-row that asks for confirmation first.
+row that asks for confirmation first. `node tools/delete-sessions.mjs
+<id,id,…>` does the same for a list (it reads `ADMIN_TOKEN` and
+`PLAYTEST_URL` from `~/.credentials/camino-prueba.env`, never printed): the
+way to remove the sessions a scripted check made (`tools/check-session.mjs`
+prints them as `SESSION_IDS=…`).
 
 **To delete everything immediately** (e.g. end of pilot, or a request to
 wipe the data early):
@@ -900,3 +904,7 @@ wipe the data early):
   fetches all three exports and writes them to `exports/` (gitignored) as
   `playtest-<YYYY-MM-DD-HHMM>.json` / `.sessions.csv` / `.events.csv`. Run
   it with `node tools/export-playtest.mjs`.
+- `tools/check-session-data.mjs <exports/playtest-…> <SESSION_IDS>` — checks
+  the scripted check sessions in an export (rows, seq without gaps, event
+  types, survey and adult form, both CSVs); with `PSQL` set, the SQL views
+  too. Reads only the exported files.
