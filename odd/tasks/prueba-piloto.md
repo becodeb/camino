@@ -63,7 +63,7 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 - [x] T3 (P0) First deploy: push, create the Coolify app, env vars, domain, verify `running:healthy` and a sync + export against the live URL.
 - [x] T4 (P1) Tool check and placement ladder: two tiny tool levels; fixed item bank by concept with grade entry points and the step-up / floor rules; `ladder_step` events.
 - [x] T5 (P2) Free-play menu (existing activities by grade), wardrobe step with compressed thresholds, session garden.
-- [ ] T6 (P2) Typing minigame "Teclas del bosque" (new art).
+- [x] T6 (P2) Typing minigame "Teclas del bosque" (new art); dev mode guarded in playtest builds; no sheet stake in the goodbye garden.
 - [ ] T7 (P3) 4to probe "Hacé tu juego" (rule engine extended: objects, score, lives, win/lose, avisar; Scratch equivalents; predict a Scratch script).
 - [ ] T8 (P3) 5to probe "Del bloque al texto" (blocks and Python-like text side by side; predict, change a number, fix a typo).
 - [ ] T9 Verification and final deploy: screenshot tours (1ro, 3ro, 5to at both sizes), scripted full 1ro and 5to sessions with an offline stretch confirming DB rows and export, locally and live.
@@ -209,6 +209,40 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 
   Open: the free rule page `pp-reglas` and the 4to/5to editor were only seen in screenshots, not played through by the check; T9's tours should play one of each. Engram mirror still pending.
 
+- 2026-09-30: T6 done (route: delegated direct, one writer; 2+ non-trivial files), three work-unit commits on `feat/prueba-piloto` (not pushed), plus this record:
+  - `2fada65` dev mode stays off in a `VITE_PLAYTEST=1` build without `?debug` (the keys, `?dev` and a stored state); the drawer's key listener moved to `ui/devMode.ts` (`devKeyListener`, `devAllowed`) and unit-tested (`devMode.test.ts`, including the store in a stubbed playtest build).
+  - `d599433` the goodbye garden leaves out the year's markers: no sheet-number stake by a finished sheet's tree (`SheetPlant stake={false}`), no dotted "next seeds" spots in the beds.
+  - `ca59978` "Teclas del bosque": `typing.ts` (pure rules), `typingArt.tsx` (new art), `TypingStep.tsx` (the step), `003_typing.sql` (`v_typing_by_grade` extended, `v_activity_time` counts `typing_end`), dictionary, API test, `check-piloto.mjs` and `shots-piloto.mjs` extended; the placeholder step removed.
+
+  Letter and word sets (`src/playtest/typing.ts`; also in the dictionary):
+
+  | Grade | Mode | Items |
+  |---|---|---|
+  | 1ro | letters (`vowels`, `letters`) | a e i o u first (shuffled), then those and m s l p t n mixed; never twice in a row. One seed at a time, two from speed 3. |
+  | 2do | words (`words`) | sol mar pan oso while slow (speed ≤ 2), then sapo pato casa luna mesa nube rana taza lupa mapa |
+  | 3ro–5to | words (`commands`) | si ir mover girar parar sumar tocar (speed 1), + saltar pintar (2), + repetir avanzar esperar (3+) |
+
+  Speed (1–6, top 4 for 1ro, 5 for 2do): starts at 1; three quick right keys in a row → faster (a first letter within 2 s of the item's appearance, a next letter within 1.2 s of the key before); two wrong keys, a slow right key (5 s / 3.5 s) or an item reaching the ground → slower. A letter falls in 11 s (speed 1) to 4.4 s (6); a word in 3.5 s + 3 s to 1.2 s per letter. A seed for the garden every 5 letters or 2 words (at most 8 per game). About 4 minutes (`?teclas=<min>`, 0.25–10), "listo" after 1 minute; never cut mid-word.
+
+  Evidence:
+  - `npm run typecheck` clean; `npm test` 29 files, 883 tests (new: `typing.test.ts` 19 — sets by grade, every item typeable on the drawn keyboard and named aloud, 1ro's vowels first and no repeats, word length by speed and no recent repeats, seeded replay, `keyOf` (case, accents, ñ, non-characters), word scoring in order with wrong keys losing nothing, the adaptive speed (streak up, middling key, two misses / slow key / landed down, floor 1, grade caps, fall times, items at once), seeds and `?teclas`; `devMode.test.ts` 6); `npm run build` ok (also `VITE_PLAYTEST=1`); `npm run test:api` 23/23 on a disposable Postgres (54340, own `apitest` database), incl. `v_typing_by_grade` (accuracy, medians, sessions, touch keys, liked yes/mid/no, the survey's own `liked` not counted) and `v_activity_time` typing from `typing_end`.
+  - The dev guard in a real `VITE_PLAYTEST=1` build (served statically): `?dev#/demo` + d-e-v + ` → no stored dev state, no drawer; `?debug#/demo` → the drawer opens and folds.
+  - `tools/check-piloto.mjs` (vite 8811 → API 8810 → Postgres 54340): all checks passed. 1ro (`?teclas=0.5`): the intro's ghost hand gives way to the game, five letters caught with the real keyboard (the first five are the vowels), a wrong key, d-e-v and ` pressed in the game (dev mode stays off, the d is a wrong `typing` key), ✋ (the key glows harder; a `help` step 1), 🔊 (`speak`), the time ends it (`typing_end` reason `time`, caught 5, seeds 1), "¿Te gustó?" yes, the survey offers the typing picture, the goodbye garden grows the typing seed (9). 5to (`?tactil&teclas=1`): 27 drawn keys are buttons of 57×59 px, a command word ("mover") typed with its first letter tapped, a wrong key, the rest on the keyboard (`input` touch and physical, `typing_end.input` mixed), "listo" ends it (`done`), "¿Te gustó?" more or less. DB: `typing` rows = the game's key count with the full shape, `typing_end`, `typing_liked` answers, `v_typing_by_grade` equal to the rows counted directly for 1ro and 5to, `v_activity_time` typing = `typing_end.time_ms`.
+  - Demo regressions against 8811: `tools/check-primer.mjs` and `tools/check-3ro.mjs` all ok, no console errors.
+  - Screenshots (`tools/shots-piloto.mjs`, new `pp-tk-*`) at 1366×768 and 1280×800, reviewed: 1ro intro (the ghost hand on the drawn A), falling, a catch (the seed flying into the basket), a wrong key (pink P wobbling, E still circled), ✋ (the key bigger with a thick ring), two seeds at speed 3, a seed flying off with the character cheering and the basket filling, 2do/3ro/5to words half typed (typed letters in blue pen, underlined; the next one on a yellow mark), a word landed, the touch keyboard, "listo", "¿Te gustó?", the cheer, the survey's favourites with the typing picture (`pp-tk-survey`); `pp-bye-garden` without the "6" stake. The whole tour (`pp-`, 69 scenarios × 2 sizes = 138; `pp-tk-survey` added and shot after it) ran with no console errors. Fixed after review: the seeds were small and the uppercase letter floated beside them in blue (now 1.3× and a little drawn key tied to the seed with a string, printed like the keyboard's), word letters spaced like separate letters (44 → 34 units), the character and basket small in the scene, the canopy low (less fall to see), the right lane's seed on the trunk, keys a bit big for the scene's height, the survey's typing picture (a generic keyboard; now the game's seed with its letter falling to a key).
+
+  Decisions and deviations:
+  - 1ro's seeds show the lowercase letter big and, beside it, the letter as the keyboard prints it (uppercase) on a little drawn key; words show lowercase only (the keyboard highlights the key, printed uppercase). 2do+ never get letters alone.
+  - Liking: `survey_answer` {question: `typing_liked`, answer yes/mid/no}, asked right after the game with the survey's three faces; not mirrored onto `sessions.survey` (the survey step owns that field). `v_typing_by_grade` gains `liked_yes/mid/no` plus `sessions`, `median_correct_latency_ms`, `touch_attempts` (original columns first, unchanged).
+  - No `level_start`/`level_end` for the game (an outcome win/fail would pollute `levels_won`): one `typing_end` summary instead, and `v_activity_time` counts its `time_ms` (migration 003). Its `help`/`speak`/`ghost_demo` carry `level_id: 'typing'`; the adult's help during it marks `typing_end.adult_helped`.
+  - `typing` payload extended: `speed_level`, `input`, `item`, `set`, `pos`. Only printable keys are logged (not Shift/arrows/space/a dead key alone, not a held key's repeats, not a key while nothing falls). On 1ro's two seeds a key matching either catches it.
+  - Keys: while the game is on screen (intro and play) a capture listener takes printable keys, the space and the backtick (preventDefault + stopPropagation), so no find-as-you-type, no dev shortcut, no other screen's keys; Ctrl/Alt/Meta shortcuts are left alone. The liking question has no key handling.
+  - Touch: on a touch screen (`maxTouchPoints > 0` or a coarse pointer; `?tactil` forces it) the drawn keys are buttons (pointerdown) and the spoken intro says "Tocala en el teclado del dibujo"; without touch they are drawings (the real keyboard types).
+  - ✋: 1 = the letter is said and the key glows harder; 2–3 = the ghost hand also points at the key (`ghost_demo` hint); a fourth press or a held ✋ raises the hand. 🔊 says the intro and the current item.
+  - Sound: the xylophone of sheet 9 (`ringNote`), a note per right letter, "sol" for a word caught; wrong keys make no sound.
+
+  Open: never tried with real children, real speech voices, a real touch Chromebook or a Spanish physical keyboard (Playwright sends `ñ` directly; a real Ñ key and a dead-key á are handled by `keyOf` but were not pressed on hardware). Engram mirror still pending.
+
 ## Next step
 
-T6 (typing minigame "Teclas del bosque").
+T7 (4to probe "Hacé tu juego").
