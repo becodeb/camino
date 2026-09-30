@@ -87,9 +87,20 @@ Opens any level (ladder item, free-play activity, probe). **RQ 4, 5.**
 ```
 { level_id: string, activity?: string, format?: 'solve'|'complete'|'fix'|'predict'|'save_blocks' }
 ```
-`activity` names the free-play menu entry (e.g. `'sheet'`, `'recess'`,
-`'guardas'`, `'editor'`, `'corkboard'`, `'rule_game'`, `'game_maker'`,
-`'text_probe'`); `v_activity_time` groups by it.
+`activity` is the step or the free-play menu entry: `'tool_check'`,
+`'ladder'`, and in free play `'sheet'`, `'recess'`, `'guardas'`, `'editor'`
+(the workshop: its test page and the corkboard's cards too), `'rule_game'`,
+`'game_maker'`, `'text_probe'` (see "Free play" below); `v_activity_time`
+groups by it. A free-play page also carries where it is (in `level_start`
+and `level_end`):
+```
+{ …, sheet?: number,            // the 1ro sheet the page belongs to
+  page?: 'core' | 'extra' | 'boss' | 'test' | 'card' | 'core_gold' | 'extra_gold' | 'boss_gold'  // sheets; the rule game: 'core' | 'free'
+  door?: 'easy' | 'medium' | 'hard' }   // an extra page: the door it is behind
+```
+`test` is the workshop's page where the author plays the level being made,
+`card` a corkboard level played; voluntary extras are the `extra` and `boss`
+pages.
 
 ### `run`
 One press of ▶ inside a level (T2 logs it for walking, song, guarda and
@@ -232,12 +243,17 @@ logged. **RQ 1.**
 ### `choice`
 A free-choice made by the child. **RQ 5, 6.**
 ```
-{ activity?: string, door?: 'easy' | 'medium' | 'hard', character?: 'brote'|'mina'|'pliegue'|'ovillo', outfit_id?: string, seed_id?: string }
+{ activity?: string, visit?: number, door?: 'easy' | 'medium' | 'hard', sheet?: number, character?: 'brote'|'mina'|'pliegue'|'ovillo', where?: 'wardrobe' }
 ```
-One event type covers the character pick (sheet 1), the free-play menu, the
-door difficulty and wardrobe/seed choices; only the relevant fields are set.
-The character step logs `{activity: 'character', character}` on every pick
-(a child may change their mind; the last one counts).
+One event type covers the character pick (sheet 1), the free-play menu and
+the door difficulty; only the relevant fields are set. The character step
+logs `{activity: 'character', character}` on every pick (a child may change
+their mind; the last one counts); a character changed in the wardrobe logs
+the same with `where: 'wardrobe'`. A free-play pick is `{activity, visit}`
+(`visit`: 1, 2, 3… the activities picked so far, the same number as its
+`activity_end`); a door chosen is `{activity: 'sheet', door, sheet}` (logged
+when the child opens a page behind another door than the page before: from
+the doors page or the bar). Wardrobe pieces are in `wardrobe` events.
 
 ### `ladder_step`
 One item of the fixed placement-ladder item bank (`src/playtest/ladder.ts`),
@@ -323,6 +339,27 @@ One keystroke in "Teclas del bosque". **RQ 7.**
 { key: string, expected: string, correct: boolean, latency_ms: number }
 ```
 
+### `activity_end`
+The child left a free-play activity (see "Free play" below). One per
+`choice` of the menu, logged once the activity is off screen (after its
+last page's `level_end`). **RQ 5.**
+```
+{
+  activity: string,     // the menu entry
+  visit: number,        // its choice's `visit`
+  time_ms: number,      // from the pick to leaving it (every page in it, and the pages that are not levels: doors, editor, corkboard)
+  levels: number,       // level pages ended in it (any outcome)
+  wins: number,         // of them, solved
+  extras: number,       // of them, voluntary extras solved (pages behind a door, the boss)
+  reason: 'menu' | 'done' | 'budget' | 'left'
+}
+```
+`menu`: the child pressed "volver al menú"; `done`: the activity ended by
+itself (the boss's or the doors page's page to turn, the rule game's last
+page won, a probe done); `budget`: free play's time ran out on a page that
+is not a level; `left`: the flow moved on (the adult skipped the step or
+ended the session; the open page's `level_end` may then come after it).
+
 ### `wardrobe`
 Time/choices in the wardrobe step. **RQ 6.**
 ```
@@ -335,6 +372,38 @@ the seeds grown this session; logged when it closes). **RQ 6.**
 ```
 { duration_ms?: number, seeds?: number }
 ```
+
+### Free play
+
+Step `free_play` (`src/playtest/FreePlay.tsx`, menus in `freePlay.ts`). A
+drawn menu of 3–4 picture cards by grade; each card's name is said when the
+menu opens and when the card is held (a tap picks it). **RQ 5.**
+
+| Grade | Menu (in order) |
+|---|---|
+| 1ro | `sheet` (sheet 6 "La escalera", its doors and boss), `recess` (sheet 9, the music recess), `guardas` (sheet 14), `editor` (sheet 7's workshop and corkboard) |
+| 2do | `sheet` (sheet 8 "Zigzag"), `recess`, `guardas`, `editor` (sheet 7) |
+| 3ro | `rule_game`, `sheet` (sheet 13 "Antes y después"), `recess`, `editor` (sheet 7) |
+| 4to | `rule_game`, `editor` (sheet 15, the workshop with few lines), `recess`, `game_maker` (T7's probe, once registered) |
+| 5to | `rule_game`, `editor` (sheet 15), `recess`, `text_probe` (T8's probe, once registered) |
+
+`rule_game` plays `3ro-1`, `3ro-2` (a page already solved is skipped) and
+then `pp-reglas`: the child's own game (every key, move and the point, no
+rules to start with, eight seeds to catch). The activities are the year's
+own screens with the session's progress: the doors open after the sheet's
+pages with a red ribbon, the boss after the core pages, a boss won sends its
+critter or plant to the goodbye garden. Per pick: `choice` {activity,
+visit}, the pages' events with `activity` (and `sheet`, `page`, `door`), a
+door's `choice`, and `activity_end`.
+
+Time: `FREE_PLAY_BUDGET_MS` = 12 minutes for every grade (`?libre=<minutes>`
+in the URL sets another, 1–30). A level is never cut: when the time is over,
+free play moves on from the menu at once, after the level on screen ends
+(the child turns it, or moves to another page), or, on a page that is not a
+level (the doors, the editor, the corkboard), at the next page or after two
+minutes. Then the character cheers "¡Ahora vamos a otro juego!" and the next
+step comes. The adult's corner menu can skip the step at any time (the open
+activity's `activity_end` says `left`).
 
 ### `survey_answer`
 One spoken survey question answered with drawn faces/pictures. **RQ 9.**
@@ -412,7 +481,7 @@ for a session therefore mean a 400-dropped batch, never a network failure.
 
 ## SQL views
 
-Defined in `server/migrations/001_init.sql`, always available for ad hoc
+Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`), always available for ad hoc
 analysis (`psql`, or any tool that can read Postgres directly).
 
 - **`v_ladder_ceiling`** — one row per `(session_id, concept)`: the highest
@@ -423,12 +492,16 @@ analysis (`psql`, or any tool that can read Postgres directly).
   session's overall `ladder_ceiling_rung` (max across concepts). A fast
   per-session overview.
 - **`v_activity_time`** — one row per `(session_id, activity)`: seconds
-  spent, computed by pairing each `level_end` with the nearest preceding
-  `level_start` in the same session (grouped by a running count of
-  `level_start` events, since Postgres does not support `FILTER` on a
-  non-aggregate window function like `lag()`). This is an approximation: a
-  child is assumed to never have two levels open at once, which holds for
-  this app. Feeds RQ 5 (engagement, time per activity).
+  spent. A free-play activity counts its visits whole: the sum of its
+  `activity_end.time_ms` (the doors page, the editor and the corkboard are
+  not level pages, so its pages alone would miss them). Any other activity
+  (the tool check, the ladder, the typing minigame) counts its level pages,
+  each `level_end` paired with the nearest preceding `level_start` in the
+  same session (grouped by a running count of `level_start` events, since
+  Postgres does not support `FILTER` on a non-aggregate window function like
+  `lag()`; a child never has two levels open at once). Redefined in
+  `server/migrations/002_activity_time.sql`. Feeds RQ 5 (engagement, time
+  per activity).
 - **`v_typing_by_grade`** — one row per grade: attempt count, `accuracy_pct`,
   and `median_latency_ms` from `typing` events. Feeds RQ 7.
 

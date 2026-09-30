@@ -218,3 +218,58 @@
 .pp-cheer-stage { width: min(600px, 100%); aspect-ratio: 600 / 250; }
 .pp-cheer-say { font-size: 56px; }
 .pp-cheer-next { position: absolute; right: 18px; bottom: 16px; animation-delay: 1.2s; }
+
+/* ------------------------------------------------ free play: the menu */
+.level.pp-menu {
+  height: 100dvh;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "bar" "stage";
+}
+.pp-menu-task { display: block; width: 52px; height: 46px; }
+.pp-menu-task .pp-menu-back-art { width: 100%; height: 100%; }
+.pp-menu-stage { grid-area: stage; min-height: 0; display: grid; place-items: center; }
+/* the pictures as big as the screen lets them: four cards two by two, three in a row */
+.pp-menu-sheet { --art-h: clamp(140px, calc((100dvh - 318px) / 2), 250px); max-width: 100%; padding: 26px 30px 24px; }
+.pp-menu-sheet.n3 { --art-h: clamp(150px, calc(100dvh - 400px), 250px); }
+.pp-fp-cards {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(2, auto); justify-content: center; gap: 18px 30px;
+}
+.pp-menu-sheet.n3 .pp-fp-cards { grid-template-columns: repeat(3, auto); }
+.pp-menu-sheet.n1 .pp-fp-cards, .pp-menu-sheet.n2 .pp-fp-cards { grid-template-columns: repeat(2, auto); }
+.pp-fp-cards > li { rotate: var(--tilt, 0deg); }
+.pp-fp-card {
+  --r-cut: 16px 12px 18px 11px / 12px 17px 11px 16px;
+  --fill: #fdfaf2;
+  min-height: 48px;
+  display: grid; justify-items: center; gap: 2px;
+  padding: 12px 16px 8px;
+  touch-action: manipulation;
+  transition: transform 0.16s ease-out;
+}
+.pp-fp-card:hover { transform: translateY(-5px); }
+.pp-fp-card:active { transform: translate(2px, 3px); }
+.pp-fp-card.is-lit { --fill: #fff4cf; transform: translateY(-7px) rotate(-1deg); }
+.pp-fp-card.is-lit::before { border-color: var(--blue-ink); }
+.pp-fp-art { display: block; height: var(--art-h); width: auto; max-width: calc((100vw - 190px) / 3); aspect-ratio: 260 / 190; overflow: visible; }
+.pp-fp-caption { font: 400 24px/1.1 var(--hand); color: var(--ink-2); text-align: center; }
+.pp-activity-card { display: block; }
+.pp-activity-card .pp-fp-art { height: 100%; width: 100%; max-width: none; }
+
+/* ------------------------------------------------ free play: an activity */
+/* the way back to the menu, drawn: in the page's bar just before ✋ (a page without a bar: the bottom-left corner) */
+.pp-menu-back {
+  --r-cut: 14px 11px 15px 10px / 11px 15px 10px 14px;
+  --fill: #fdfaf2;
+  position: fixed; left: 12px; bottom: 10px; z-index: 60;
+  width: 70px; height: 60px;
+  display: grid; place-items: center;
+  padding: 4px;
+}
+.pp-menu-back .pp-menu-back-art { width: 58px; height: 50px; overflow: visible; }
+.pp-menu-back:hover { transform: translateY(-3px); }
+.pp-menu-back.in-bar { position: relative; left: auto; bottom: auto; z-index: auto; flex: none; order: 2; margin: 0 4px 0 6px; }
+.pp-fp-activity .level-bar .help { order: 3; }
+/* the year's pages that are not levels (the doors, the editor, the corkboard) print "Hoja 7 · taller" for the teacher: the playtest keeps only their title */
+.pp-fp-activity .adult-title b { display: none; }

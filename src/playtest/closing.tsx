@@ -32,7 +32,7 @@ const ACTIVITY_WORD: Record<string, string> = {
   editor: 'Hacer un nivel', corkboard: 'La cartelera', rule_game: 'El juego de reglas', game_maker: 'Hacer tu juego', text_probe: 'Bloques y texto',
 };
 
-export function surveyQuestions(activities: readonly string[]): Question[] {
+export function surveyQuestions(activities: readonly string[], grade = 1): Question[] {
   const qs: Question[] = [
     {
       id: 'liked',
@@ -60,7 +60,7 @@ export function surveyQuestions(activities: readonly string[]): Question[] {
       id: 'favorite_activity',
       say: '¿Qué te gustó más? Tocá el dibujo.',
       adult: '¿Qué te gustó más?',
-      options: activities.map((a) => ({ value: a, word: ACTIVITY_WORD[a] ?? '', art: <ActivityPicture activity={a} /> })),
+      options: activities.map((a) => ({ value: a, word: ACTIVITY_WORD[a] ?? '', art: <ActivityPicture activity={a} grade={grade} /> })),
     });
   }
   qs.push({
@@ -77,7 +77,7 @@ export function surveyQuestions(activities: readonly string[]): Question[] {
 
 export function Survey() {
   const api = usePlaytest();
-  const [questions] = useState(() => surveyQuestions(api.flow.activities));
+  const [questions] = useState(() => surveyQuestions(api.flow.activities, api.session?.grade));
   const [i, setI] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const answers = useRef<Record<string, string>>({});

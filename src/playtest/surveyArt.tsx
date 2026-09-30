@@ -8,6 +8,8 @@ import { blob } from '../ink/ink.js';
 import { GuardaIcon, JarIcon, PageIcon, SeedIcon, SongIcon } from '../ui/art';
 import { WardrobeIcon } from '../ui/wardrobeArt';
 import { PlayerFace } from '../screens/player';
+import { activityFor, type ActivityId } from './freePlay';
+import { ActivityArt } from './menuArt';
 
 const INK = '#2b2622';
 const PEN = '#3d6ea5';
@@ -119,7 +121,10 @@ function ToolPicture() {
 }
 
 /** The picture of an activity (flow activity ids; free-play entries by their `activity`). */
-export function ActivityPicture({ activity }: { activity: string }) {
+export function ActivityPicture({ activity, grade = 1 }: { activity: string; grade?: number }) {
+  // a free-play entry: the menu's own picture
+  const free = activityFor(activity as ActivityId, grade);
+  if (free) return <span className="pp-activity-art pp-activity-card"><ActivityArt a={free} /></span>;
   switch (activity) {
     case 'character': return <PlayerFace className="pp-activity-art" />;
     case 'ladder': case 'sheet': return <BoardPicture />;

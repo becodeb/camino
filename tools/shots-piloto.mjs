@@ -86,6 +86,35 @@ async function toLevel(p) {
   await p.waitForTimeout(900);
 }
 
+/** Free play's menu for a grade (the character picked, the steps before skipped). */
+async function toFreePlay(p, grade = '1ro', who = 'pliegue', query = '') {
+  if (query) await p.goto(`${base}?debug&${query}#/piloto`);
+  await setup(p, grade);
+  await p.getByRole('button', { name: 'Empezar' }).click();
+  await p.waitForSelector('.choice-row');
+  await p.waitForTimeout(500);
+  await p.locator(`[data-choice-char="${who}"]`).click();
+  await p.waitForTimeout(400);
+  await jump(p, 'free_play');
+  await p.waitForSelector('.pp-menu');
+  await p.waitForTimeout(900);
+}
+/** Picks a free-play card (a real tap) and waits for its first page. */
+async function pickCard(p, id, wait = 'main') {
+  await p.locator(`.pp-fp-card[data-activity="${id}"]`).click();
+  await p.waitForSelector(`.pp-fp-activity[data-activity="${id}"] ${wait}`);
+  await p.waitForTimeout(1600);
+}
+/** Solves the level page on screen with its reference solution and turns it. */
+async function solveTurn(p) {
+  await p.waitForTimeout(600);
+  await pil(p, () => { window.__camino.setProgram(window.__camino.level.solution); });
+  await p.waitForTimeout(250);
+  await pil(p, () => window.__camino.run());
+  await p.locator('.next-page').click({ force: true, timeout: 30_000 });
+  await p.waitForTimeout(700);
+}
+
 const SCENARIOS = [
   { name: 'pp-setup', run: async (p) => { await p.waitForSelector('.pp-setup'); } },
   {
@@ -240,6 +269,39 @@ const SCENARIOS = [
       await p.waitForTimeout(2200);
     },
   },
+  // ---------------------------------------------------------------- T5: free play
+  { name: 'pp-fp-menu-1ro', run: async (p) => { await toFreePlay(p, '1ro'); } },
+  { name: 'pp-fp-menu-3ro', run: async (p) => { await toFreePlay(p, '3ro'); } },
+  { name: 'pp-fp-menu-5to', run: async (p) => { await toFreePlay(p, '5to'); } },
+  { name: 'pp-fp-1ro-sheet', run: async (p) => { await toFreePlay(p); await pickCard(p, 'sheet', 'main.level[data-level]'); } },
+  {
+    name: 'pp-fp-1ro-doors',
+    run: async (p) => {
+      await toFreePlay(p);
+      await pickCard(p, 'sheet', 'main.level[data-level]');
+      // the sheet's core pages, solved one after the other, lead to the doors
+      for (let i = 0; i < 8 && !(await p.locator('.mode-doors').count()); i++) await solveTurn(p);
+      await p.waitForSelector('.mode-doors');
+      await p.waitForTimeout(1500);
+    },
+  },
+  { name: 'pp-fp-1ro-recess', run: async (p) => { await toFreePlay(p); await pickCard(p, 'recess', 'main.level[data-level]'); } },
+  { name: 'pp-fp-1ro-guardas', run: async (p) => { await toFreePlay(p); await pickCard(p, 'guardas', 'main.level[data-level]'); } },
+  { name: 'pp-fp-1ro-editor', run: async (p) => { await toFreePlay(p); await pickCard(p, 'editor', 'main'); await p.waitForTimeout(3000); } },
+  { name: 'pp-fp-3ro-rules', run: async (p) => { await toFreePlay(p, '3ro', 'pliegue', 'nointro'); await pickCard(p, 'rule_game', 'main.level[data-level]'); } },
+  { name: 'pp-fp-3ro-sheet', run: async (p) => { await toFreePlay(p, '3ro'); await pickCard(p, 'sheet', 'main.level[data-level]'); } },
+  { name: 'pp-fp-5to-editor', run: async (p) => { await toFreePlay(p, '5to'); await pickCard(p, 'editor', 'main'); await p.waitForTimeout(3000); } },
+  {
+    name: 'pp-fp-over',
+    run: async (p) => {
+      await toFreePlay(p);
+      await pil(p, () => window.__freePlay.budget(0));
+      await p.waitForSelector('[data-interlude="cheer"]', { timeout: 15_000 });
+      await p.waitForTimeout(2200);
+    },
+  },
+  // the spoken-name check: Mina chosen, a page whose title says the character's name
+  { name: 'pp-fp-name-mina', run: async (p) => { await toFreePlay(p, '3ro', 'mina', 'nointro'); await pickCard(p, 'rule_game', 'main.level[data-level]'); } },
 ];
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox', '--disable-gpu'] });

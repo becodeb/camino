@@ -131,6 +131,38 @@ dbDescribe('API against Postgres', () => {
     ]);
   });
 
+  it('v_activity_time counts a free-play visit whole (activity_end) and the other activities by their pages', async () => {
+    const app = createApp(pool, { distDir });
+    const session = newSession();
+    const at = (s: number) => new Date(Date.UTC(2026, 8, 30, 10, 0, s)).toISOString();
+    const events = [
+      // the ladder: one page, 40 s
+      event(0, { client_t: at(0), type: 'level_start', payload: { level_id: '1ro-h1-2', activity: 'ladder' } }),
+      event(1, { client_t: at(40), type: 'level_end', payload: { level_id: '1ro-h1-2', activity: 'ladder', outcome: 'win' } }),
+      // free play: the sheet, picked at 50 s; a page of 30 s inside it; left at 170 s (visit: 120 s)
+      event(2, { client_t: at(50), type: 'choice', payload: { activity: 'sheet', visit: 1 } }),
+      event(3, { client_t: at(60), type: 'level_start', payload: { level_id: '1ro-h6-1', activity: 'sheet' } }),
+      event(4, { client_t: at(90), type: 'level_end', payload: { level_id: '1ro-h6-1', activity: 'sheet', outcome: 'win' } }),
+      event(5, { client_t: at(170), type: 'activity_end', payload: { activity: 'sheet', visit: 1, time_ms: 120_000, reason: 'menu' } }),
+      // the editor: no level page at all, 45 s
+      event(6, { client_t: at(215), type: 'activity_end', payload: { activity: 'editor', visit: 2, time_ms: 45_000, reason: 'menu' } }),
+      // the sheet again: 15 s more
+      event(7, { client_t: at(240), type: 'activity_end', payload: { activity: 'sheet', visit: 3, time_ms: 15_000, reason: 'budget' } }),
+    ];
+    const res = await app.request('/api/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session, events }),
+    });
+    expect(res.status).toBe(200);
+    const { rows } = await pool.query('SELECT activity, seconds::float AS seconds FROM v_activity_time WHERE session_id = $1 ORDER BY activity', [session.id]);
+    expect(rows).toEqual([
+      { activity: 'editor', seconds: 45 },
+      { activity: 'ladder', seconds: 40 },
+      { activity: 'sheet', seconds: 135 },
+    ]);
+  });
+
   it('retrying the exact same batch is idempotent: one row per seq, all acked again', async () => {
     const app = createApp(pool, { distDir });
     const session = newSession();

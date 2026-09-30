@@ -15,13 +15,19 @@
 // `watch` also runs every few seconds (a time limit); `listen` sees every
 // event the page logs (the tool check's gestures); `autoNextMs` turns a
 // solved page by itself if the child does not.
+//
+// `Instrumented` is the same instrumentation around a page someone else
+// hosts (free play's sheets, workshop and corkboard pages): it reads the
+// page's own LevelNav (`base`) and keeps what it does (its pages, seed,
+// doors, next page), adding the events on top. Every page solved in the
+// playtest plants a seed (the progress's `solve`, once per page).
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { progress, solve } from '../curriculum/progress';
 import { formatOf } from '../game/formats';
 import type { LevelDef } from '../game/levels';
 import { LevelScreen } from '../screens/LevelScreen';
-import { LevelNavContext, type LevelNav, type RunReport } from '../screens/levelKit';
+import { LevelNavContext, LevelWrapContext, useLevelNav, type LevelNav, type RunReport } from '../screens/levelKit';
 import { glowTargets } from '../ui/ghost';
 import { speak } from '../ui/speech';
 import { HAND_HOLD_HELP_MS, useHold } from './AdultControls';
@@ -69,7 +75,7 @@ const LINES = {
 /** How often `watch` also runs with no run or help (for a time limit). */
 const WATCH_TICK_MS = 5000;
 
-export function PlaytestLevel({ level, activity, extra, onEnd, watch, listen, autoNextMs }: {
+export interface InstrumentProps {
   level: LevelDef;
   activity: string;
   /** Merged into level_start and level_end (the ladder's concept, rung and item). */
@@ -81,7 +87,26 @@ export function PlaytestLevel({ level, activity, extra, onEnd, watch, listen, au
   listen?(type: string, payload: Record<string, unknown>): void;
   /** Once solved, the page turns by itself after this long. */
   autoNextMs?: number;
-}) {
+}
+
+/** A level page of the playtest's own (the tool check, the ladder, the rule game), instrumented. */
+export function PlaytestLevel(props: InstrumentProps) {
+  return (
+    <LevelWrapContext.Provider value={null}>
+      <Instrumented {...props} base={null}>
+        <LevelScreen key={props.level.id} level={props.level} />
+      </Instrumented>
+    </LevelWrapContext.Provider>
+  );
+}
+
+/** A level page hosted by another screen (its LevelNav is `base`), instrumented. */
+export function InstrumentedPage(props: InstrumentProps & { children: ReactNode }) {
+  const base = useLevelNav();
+  return <Instrumented {...props} base={base} />;
+}
+
+function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs, base, children }: InstrumentProps & { base: LevelNav | null; children: ReactNode }) {
   const api = usePlaytest();
   const apiRef = useRef(api);
   apiRef.current = api;
@@ -152,17 +177,24 @@ export function PlaytestLevel({ level, activity, extra, onEnd, watch, listen, au
   useHold(HAND_HOLD_HELP_MS, (e) => !!(e.target as Element | null)?.closest?.('.level-bar .help'), () => apiRef.current.raiseHand('help_held'));
 
   const nav = useMemo<LevelNav>(() => ({
-    pages: () => null,
+    ...base,
+    pages: base ? base.pages : () => null,
     // a child may read it: the page's own title, never an id, with the chosen character's name
     title: (l) => withName(l.title, progress.get().character),
-    won: (l) => {
+    won: (l, program) => {
       stats.current.won = true;
       stats.current.wins++;
-      progress.update((p) => solve(p, l.id));
+      const line = base?.won(l, program);
+      // every page solved plants a seed (a gold challenge's page was stamped by its own nav: no seed, as in the year)
+      if (!base?.className?.includes('is-gold')) progress.update((p) => solve(p, l.id));
       if (autoNextMs != null) setTimeout(() => end('win'), autoNextMs);
+      return line;
     },
-    next: () => end(stats.current.won ? 'win' : 'skipped'),
-    quit: '#/piloto',
+    next: (l) => {
+      end(stats.current.won ? 'win' : 'skipped');
+      base?.next(l);
+    },
+    quit: base?.quit ?? '#/piloto',
     onRunReport: (r: RunReport) => {
       const s = stats.current;
       s.runs++;
@@ -216,14 +248,10 @@ export function PlaytestLevel({ level, activity, extra, onEnd, watch, listen, au
       }
       check();
     },
-    className: 'pp-level',
+    className: [base?.className, 'pp-level'].filter(Boolean).join(' '),
   // one nav per level
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [level]);
+  }), [level, base]);
 
-  return (
-    <LevelNavContext.Provider value={nav}>
-      <LevelScreen key={level.id} level={level} />
-    </LevelNavContext.Provider>
-  );
+  return <LevelNavContext.Provider value={nav}>{children}</LevelNavContext.Provider>;
 }

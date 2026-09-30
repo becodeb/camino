@@ -14,7 +14,7 @@
 // the cell where Brote will end; a gold challenge is a plain page with fewer
 // lines, offered by the gold seal once the page is solved.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { BoardView } from '../ui/board/BoardView';
 import { GuardaView } from '../ui/board/GuardaView';
 import { MusicView } from '../ui/board/MusicView';
@@ -34,7 +34,7 @@ import { Lockstep } from '../game/lockstep';
 import { type LevelDef } from '../game/levels';
 import { cardCount, initialState, sameCell, type Cell, type Dir, type Program, type RobotState, type TraceStep } from '../game/model';
 import { usePlayer } from './player';
-import { NextPage, RestartButton, Sheet, Shell, frameFor, useBoard, useDebugHooks, useGhost, useInstruction, useLevelNav, useRedress } from './levelKit';
+import { NextPage, RestartButton, Sheet, Shell, frameFor, useBoard, useDebugHooks, useGhost, useInstruction, useLevelNav, useRedress, LevelWrapContext } from './levelKit';
 import { RealtimeLevel } from './RealtimeLevel';
 
 /** Short spoken lines (es-AR). The board says the rest. */
@@ -727,5 +727,11 @@ export function LevelScreen({ level }: { level: LevelDef }) {
     () => (level.mode === 'direct' ? DirectLevel : level.mode === 'realtime' ? RealtimeLevel : formatOf(level) === 'predict' ? PredictLevel : ProgramLevel),
     [level],
   );
-  return <Mode level={level} />;
+  const Wrap = useContext(LevelWrapContext);
+  if (!Wrap) return <Mode level={level} />;
+  return (
+    <LevelWrapContext.Provider value={null}>
+      <Wrap level={level}><Mode level={level} /></Wrap>
+    </LevelWrapContext.Provider>
+  );
 }

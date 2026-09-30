@@ -19,6 +19,7 @@ import { levelById } from './game/levels';
 import { parseRoute, type Route } from './curriculum/route';
 import { PlaytestScreen } from './playtest/PlaytestScreen';
 import { PLAYTEST_BUILD, routeFor } from './playtest/mode';
+import { holdingHash } from './playtest/hashHold';
 import { DEBUG } from './screens/levelKit';
 import './ui/runtime';
 
@@ -48,7 +49,8 @@ function Screen({ route, hash }: { route: Route; hash: string }) {
 
 export function App() {
   const hash = useHash();
-  const route = routeFor(hash, parseRoute);
+  // the playtest on screen holds the hash (its activities move by it): it stays on screen
+  const route: Route = holdingHash() ? { screen: 'piloto' } : routeFor(hash, parseRoute);
   useEffect(() => { window.scrollTo(0, 0); }, [hash]);
   return (
     <>

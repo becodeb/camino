@@ -5,8 +5,10 @@
 //   the ladder from rung 1: pass 1, pass 2, then rung 3 (the fix page) with
 //   an offline stretch: the three helps, 🔊, a fourth ✋ raises the hand, the
 //   adult answers, a failed run ends the item (fail) and the ladder stops
-//   (ceiling 2); the cheer; the adult ends the session from the corner; the
-//   survey, the goodbye, the adult form.
+//   (ceiling 2); the cheer; free play: the menu, sheet 6 (three core pages,
+//   the easy door and its first extra), back to the menu, the music recess
+//   (one song), back, the time runs out on the menu (the cheer); the adult
+//   ends the session from the corner; the survey, the goodbye, the adult form.
 // 5to — enters at rung 9 (fog): two failed runs (fail), the floor check on
 //   rung 8 passes, the ladder stops (floor, ceiling 8).
 // 3ro — the rule game (rung 11, opened with the ?debug ladder hook): a game
@@ -15,18 +17,19 @@
 //
 // Then: every event in Postgres with seq 0..n-1 and no gaps, the tool_check
 // and ladder_step rows, the ladder's ceiling agreeing with v_ladder_ceiling
-// and v_session_summary, the rule game's runs, the demo's progress key untouched.
+// and v_session_summary, the rule game's runs, free play's choices, pages,
+// activity_end rows and v_activity_time, the demo's progress key untouched.
 //
 // PW=<dir with playwright> node tools/check-piloto.mjs [base]
 //   base: the app with /api (vite dev on 8811 proxying to the API, or the API serving dist/), default http://127.0.0.1:8811/
 //   PSQL: the command that runs psql against the API's database, default
-//         "docker exec -i camino-prueba-t4db psql -U postgres -tA"
+//         "docker exec -i camino-prueba-t5db psql -U postgres -tA"
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 
 const { chromium } = createRequire(`${process.env.PW ?? '/tmp/pw'}/`)('playwright');
 const [base = 'http://127.0.0.1:8811/'] = process.argv.slice(2);
-const PSQL = process.env.PSQL ?? 'docker exec -i camino-prueba-t4db psql -U postgres -tA';
+const PSQL = process.env.PSQL ?? 'docker exec -i camino-prueba-t5db psql -U postgres -tA';
 const sql = (q) => execSync(PSQL, { input: q }).toString().trim();
 const json = (q) => sql(`select coalesce(json_agg(_r), '[]') from (${q}) _r;`);
 
@@ -162,7 +165,41 @@ ok(offline.pending > 5 && offline.failures > 0, `offline: ${offline.pending} eve
 await one.ctx.setOffline(false);
 await p.locator('.pp-cheer-next').click({ force: true });
 
-// free play (still a placeholder): the adult ends the session from the corner
+// free play: the menu, the sheet (three core pages, a door, its extra), back to the menu, the music recess (one song), back
+await p.waitForSelector('.pp-menu');
+const cards = await p.locator('.pp-fp-card').evaluateAll((els) => els.map((e) => e.dataset.activity));
+ok(cards.join(',') === 'sheet,recess,guardas,editor', `1ro menu: ${cards.join(',')}`);
+await p.waitForTimeout(800);
+await p.locator('.pp-fp-card[data-activity="sheet"]').click();
+await onLevel(p, '1ro-h6-1');
+ok((await p.locator('.level-bar .adult-title').innerText()).includes('Escalones'), 'the sheet page\'s own title in the bar');
+for (const id of ['1ro-h6-1', '1ro-h6-2', '1ro-h6-3']) { await onLevel(p, id); await solve(p); }
+await onLevel(p, '1ro-h6-4');
+await p.waitForTimeout(600);
+await p.locator('.level-bar .bar-door[data-door="easy"]').click();
+await onLevel(p, '1ro-h6-easy-1');
+ok(true, 'the easy door (a link in the bar) opened its first extra page');
+await solve(p);
+await p.waitForTimeout(800);
+await p.locator('.pp-menu-back').click();
+await p.waitForSelector('.pp-menu');
+ok(true, 'back to the menu');
+await p.waitForTimeout(600);
+await p.locator('.pp-fp-card[data-activity="recess"]').click();
+await onLevel(p, '1ro-h9-1');
+await solve(p);
+await onLevel(p, '1ro-h9-2');
+await p.waitForTimeout(500);
+await p.locator('.pp-menu-back').click();
+await p.waitForSelector('.pp-menu');
+const seedsFree = await p.evaluate(() => Number(document.querySelector('.seed-pouch')?.dataset.count));
+// the time runs out on the menu: the cheer, and the next step
+await p.evaluate(() => window.__freePlay.budget(0));
+await p.waitForSelector('[data-interlude="cheer"]', { timeout: 15_000 });
+ok(true, `free play's time is over on the menu: the cheer (${seedsFree} seeds in the pouch)`);
+await p.locator('.pp-cheer-next').click({ force: true });
+
+// the typing minigame (still a placeholder): the adult ends the session from the corner
 await p.waitForSelector('.pp-soon');
 await hold(p, 18, 18, 1700);
 await p.locator('[data-act="end"]').click();
@@ -256,9 +293,25 @@ for (const [name, s] of [['1ro', s1], ['5to', s5], ['3ro', s3b]]) {
   const rows = sql(`select seq from events where session_id = '${s.sid}' order by seq;`).split('\n').filter(Boolean).map(Number);
   ok(rows.length > 10 && rows.every((x, i) => x === i), `${name}: ${rows.length} events, seq 0..${rows.length - 1} with no gaps`);
 }
+// free play
+const picks = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'choice' and payload->>'activity' <> 'character' order by seq`)).map((x) => x.p);
+ok(picks.map((x) => x.door ? `door:${x.door}` : `${x.activity}#${x.visit}`).join(' ') === 'sheet#1 door:easy recess#2', `free-play choices: ${JSON.stringify(picks)}`);
+const fpEnds = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'activity_end' order by seq`)).map((x) => x.p);
+ok(fpEnds.length === 2 && fpEnds.every((x) => x.reason === 'menu' && x.time_ms > 0), `activity_end rows: ${JSON.stringify(fpEnds)}`);
+// 6-1, 6-2, 6-3 solved, 6-4 left by the door, the easy extra solved, the next extra left by the menu button
+ok(fpEnds[0]?.activity === 'sheet' && fpEnds[0]?.levels === 6 && fpEnds[0]?.wins === 4 && fpEnds[0]?.extras === 1, `the sheet visit counts its pages, wins and the extra solved: ${JSON.stringify(fpEnds[0])}`);
+const sheetEnds = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'level_end' and payload->>'activity' = 'sheet' order by seq`)).map((x) => x.p);
+ok(sheetEnds.some((x) => x.page === 'extra' && x.door === 'easy' && x.outcome === 'win' && x.sheet === 6), 'the door\'s extra page: level_end with page extra, door easy, won');
+ok(sheetEnds.filter((x) => x.page === 'core' && x.outcome === 'win').length === 3, 'three core pages won in the sheet');
+const recessStart = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'level_start' and payload->>'activity' = 'recess' order by seq`)).map((x) => x.p);
+ok(recessStart[0]?.level_id === '1ro-h9-1' && recessStart[0]?.sheet === 9, `the recess page's level_start: ${JSON.stringify(recessStart[0])}`);
+ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'run' and payload->>'level_id' = '1ro-h9-1';`)) >= 1, 'the song\'s run was logged');
+const times = Object.fromEntries(sql(`select activity || '=' || round(seconds) from v_activity_time where session_id = '${s1.sid}';`).split('\n').map((x) => x.split('=')));
+ok(Number(times.sheet) > 5 && Number(times.recess) > 1 && Number(times.ladder) > 1 && Number(times.tool_check) > 1, `v_activity_time: ${JSON.stringify(times)}`);
+ok(Math.abs(Number(times.sheet) - fpEnds[0].time_ms / 1000) <= 1, 'the sheet\'s time is its visit (activity_end), not only its pages');
 const types = sql(`select type || ':' || count(*) from events where session_id = '${s1.sid}' group by type order by type;`).split('\n');
 console.log(`     1ro: ${types.join(' ')}`);
-for (const t of ['step', 'choice', 'tool_check', 'level_start', 'run', 'level_end', 'help', 'ghost_demo', 'speak', 'tap_add', 'drag', 'call_adult', 'adult_help', 'ladder_step', 'ladder_end', 'survey_answer', 'garden_view']) {
+for (const t of ['step', 'choice', 'tool_check', 'level_start', 'run', 'level_end', 'help', 'ghost_demo', 'speak', 'tap_add', 'drag', 'call_adult', 'adult_help', 'ladder_step', 'ladder_end', 'activity_end', 'survey_answer', 'garden_view']) {
   ok(types.some((x) => x.startsWith(`${t}:`)), `1ro has ${t}`);
 }
 

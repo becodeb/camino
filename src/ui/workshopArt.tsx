@@ -75,7 +75,7 @@ export const EraserIcon = memo(function EraserIcon({ size = 56 }: { size?: numbe
 });
 
 /** A yellow school pencil (the lines setting's "one more line", the workshop's mark). */
-function Pencil({ x, y, rot, s = 1 }: { x: number; y: number; rot: number; s?: number }) {
+export function Pencil({ x, y, rot, s = 1 }: { x: number; y: number; rot: number; s?: number }) {
   return (
     <g transform={`translate(${x} ${y}) rotate(${rot}) scale(${s})`} stroke={INK} strokeLinejoin="round" strokeLinecap="round">
       <path d="M0,-5 L30,-5 L30,5 L0,5 Z" transform="translate(2 3)" fill={SHADOW} stroke="none" />

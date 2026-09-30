@@ -8,7 +8,7 @@
 // of 1ro's year (its pages, doors and boss, the seed, the next page of the
 // sheet). The level pages themselves do not know which.
 
-import { createContext, useCallback, useContext, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, type ComponentType, type CSSProperties, type ReactNode } from 'react';
 import { BoardView, aspectOf, frameOf, type Frame } from '../ui/board/BoardView';
 import { GUARDA_FRAME } from '../ui/board/GuardaView';
 import { MUSIC_FRAME } from '../ui/board/MusicView';
@@ -160,6 +160,15 @@ export const TRAMO_NAV: LevelNav = {
 
 export const LevelNavContext = createContext<LevelNav>(TRAMO_NAV);
 export const useLevelNav = () => useContext(LevelNavContext);
+
+/**
+ * Wraps every level page of a screen someone else hosts (the pilot
+ * playtest's free play instruments the sheets' pages this way: the wrap
+ * reads the page's own LevelNav and provides an instrumented one). Absent:
+ * nothing changes. LevelScreen clears it inside, so a page is wrapped once.
+ */
+export type LevelWrap = ComponentType<{ level: LevelDef; children: ReactNode }>;
+export const LevelWrapContext = createContext<LevelWrap | null>(null);
 
 /** Speaks the instruction when the page opens (after the first tap if the browser asks for one). */
 export function useInstruction(level: LevelDef) {

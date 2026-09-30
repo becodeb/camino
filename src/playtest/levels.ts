@@ -8,7 +8,28 @@ import { levelById, type LevelDef } from '../game/levels';
 import { isHole, type Program } from '../game/model';
 import type { Rule } from '../game/rules';
 
+/**
+ * Free play's last rule-game page: 3ro page 2's falling seeds with every
+ * key, every move and the point, no rules to start with and eight seeds to
+ * catch. The child makes the game their own way (any rules win it).
+ */
+const RULES_BASE = levelById('3ro-2')!;
+export const FREE_RULES: LevelDef = {
+  ...RULES_BASE,
+  id: 'pp-reglas',
+  page: 3,
+  title: 'Tu juego: armá las reglas que quieras',
+  say: 'Ahora el juego es tuyo. Armá las reglas que quieras con las flechas y juntá ocho semillas.',
+  blocks: ['key:left', 'key:right', 'key:up', 'key:down', 'touch:seed', 'left', 'right', 'up', 'down', 'score'],
+  worlds: [{ ...RULES_BASE.worlds[0], start: { c: 3, r: 3 }, seed: 163 }],
+  realtime: { ...RULES_BASE.realtime!, initial: [], win: { kind: 'score', n: 8 }, intro: undefined },
+};
+
+/** The rule game in free play: 3ro's two pages, then the child's own game. */
+export const RULE_GAME_PAGES = ['3ro-1', '3ro-2', FREE_RULES.id] as const;
+
 export function pilotLevel(id: string): LevelDef | null {
+  if (id === FREE_RULES.id) return FREE_RULES;
   const m = id.match(/^1ro-h(\d+)-(\d+)$/);
   if (m) return sheetByN(Number(m[1]))?.core[Number(m[2]) - 1]?.level ?? null;
   return levelById(id) ?? null;

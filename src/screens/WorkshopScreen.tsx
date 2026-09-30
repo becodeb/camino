@@ -62,6 +62,8 @@ const TOOL_LABEL: Record<Tool, string> = { start: 'Brote', seed: 'La semilla', g
 
 /** Drafts whose guided start already played in this visit. */
 const guided = new Set<number>();
+/** A new child on the same device (the pilot playtest): the guided start plays again. */
+export const forgetWorkshopGuides = () => guided.clear();
 /** The level just pinned from a test page: the corkboard pins it with a flourish. */
 export const justPinned: { id: string | null } = { id: null };
 

@@ -3,7 +3,8 @@
 // usePlaytest(): `next()` when it is done, `skip()` to leave it undone,
 // `did(activity)` for the survey, `log()` for its events. Later tasks plug
 // their step in here (T5: free_play and wardrobe; T6: typing) in place of
-// the placeholder. T4's tool check and ladder: ToolCheck.tsx, Ladder.tsx.
+// the placeholder. T4's tool check and ladder: ToolCheck.tsx, Ladder.tsx;
+// T5's free play: FreePlay.tsx.
 
 import { useState, type ComponentType } from 'react';
 import { ChoicePage } from '../screens/WardrobeScreen';
@@ -13,6 +14,7 @@ import { usePlaytest } from './context';
 import type { StepId } from './flow';
 import { GRADES, GRADE_LABEL, STEP_NAME } from './labels';
 import { AdultForm, Goodbye, Survey } from './closing';
+import { FreePlay } from './FreePlay';
 import { Ladder } from './Ladder';
 import { ToolCheck } from './ToolCheck';
 import type { StartInput } from './telemetry';
@@ -139,7 +141,7 @@ export const STEP_VIEWS: Record<StepId, ComponentType<StepViewProps>> = {
   character: Character,
   tool_check: ToolCheck,
   ladder: Ladder,
-  free_play: Placeholder,
+  free_play: FreePlay,
   typing: Placeholder,
   wardrobe: Placeholder,
   survey: Survey,
