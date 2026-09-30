@@ -273,6 +273,71 @@ dbDescribe('API against Postgres', () => {
     expect(Number(g.median_rule_edits)).toBe(3.5);
   });
 
+  it('v_probe_text sums up the text probe per session (an item left and solved later counts once); the by-grade view counts it for RQ 8', async () => {
+    const app = createApp(pool, { distDir });
+    const post = (session: Record<string, unknown>, events: unknown[]) => app.request('/api/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session, events }),
+    });
+    const ev = (seq: number, type: string, payload: Record<string, unknown>) => event(seq, { type, payload });
+    const item = (seq: number, id: string, kind: string, reason: string, correct: boolean, extra: Record<string, unknown> = {}) =>
+      ev(seq, 'text_item', { item: id, kind, reason, correct, attempts: 1, errors: [], time_ms: 30_000, help_levels: 0, adult_helped: false, ...extra });
+    const run = (seq: number, id: string, ok: boolean, result: string | null, error_kind: string | null = null, line: number | null = null) =>
+      ev(seq, 'text_run', { item: id, ok, result, error_kind, line, attempt: 1 });
+    // 5to: one child through every item, one who leaves in the tour; a 3ro opened by the adult
+    const a = newSession({ grade: 5 });
+    expect((await post(a, [
+      ev(0, 'choice', { activity: 'text_probe', visit: 1 }),
+      run(1, 'tour', true, 'win'),
+      ev(2, 'probe_phase', { probe: 'text', phase: 'intro', completed: true, time_ms: 40_000, runs: 1, links: 3, help_levels: 0 }),
+      item(3, 'predict_loop', 'predict', 'answered', true, { answer: 'end_2_0', position: 1 }),
+      item(4, 'predict_if', 'predict', 'answered', false, { answer: 'bump_1', position: 1 }),
+      run(5, 'number', true, 'short'),
+      // left without solving, then back: solved (counts once, as solved, not solo: it had help)
+      item(6, 'number', 'number', 'left', false, { text: 'derecha()', attempts: 1 }),
+      run(7, 'number', true, 'win'),
+      item(8, 'number', 'number', 'solved', true, { text: 'derecha()\nfor i in range(4):\n    arriba()\nderecha()', help_levels: 1 }),
+      run(9, 'typo_name', false, null, 'unknown_name', 3),
+      run(10, 'typo_name', true, 'win'),
+      item(11, 'typo_name', 'typo', 'solved', true, { errors: ['unknown_name'], attempts: 2 }),
+      run(12, 'typo_colon', false, null, 'missing_colon', 1),
+      run(13, 'typo_colon', false, null, 'missing_colon', 1),
+      // the ghost wrote the fix: solved, not correct
+      run(14, 'typo_colon', true, 'win'),
+      item(15, 'typo_colon', 'typo', 'solved', false, { ghost_fixed: true, help_levels: 3 }),
+      item(16, 'blocks_loop', 'blocks_to_text', 'answered', true, { answer: 'same', position: 2 }),
+      item(17, 'blocks_until', 'blocks_to_text', 'answered', false, { answer: 'inside_if', position: 0 }),
+      run(18, 'write_if', false, null, 'empty_block', 2),
+      ev(19, 'probe_phase', { probe: 'text', phase: 'items', completed: true, time_ms: 400_000, runs: 7, picks: 4, items_tried: 7, items_correct: 5, help_levels: 3 }),
+      ev(20, 'survey_answer', { question: 'text_probe_liked', answer: 'mid' }),
+      ev(21, 'probe_end', { probe: 'text', reason: 'done', time_ms: 480_000 }),
+    ])).status).toBe(200);
+    const b = newSession({ grade: 5 });
+    expect((await post(b, [
+      ev(0, 'choice', { activity: 'text_probe', visit: 1 }),
+      ev(1, 'probe_end', { probe: 'text', reason: 'left', time_ms: 20_000 }),
+    ])).status).toBe(200);
+
+    const r = (await pool.query('SELECT * FROM v_probe_text WHERE session_id = $1', [a.id])).rows[0];
+    expect([r.tour_done, Number(r.tour_runs), Number(r.tour_links)]).toEqual([true, 1, 3]);
+    expect([Number(r.items_tried), Number(r.items_correct), Number(r.items_solo), Number(r.items_ghost_fixed)]).toEqual([7, 4, 3, 1]);
+    expect([Number(r.predict_tried), Number(r.predict_correct), Number(r.number_tried), Number(r.number_correct)]).toEqual([2, 1, 1, 1]);
+    expect([Number(r.typo_tried), Number(r.typo_correct), Number(r.blocks_tried), Number(r.blocks_correct), Number(r.write_tried), Number(r.write_correct)]).toEqual([2, 1, 2, 1, 0, 0]);
+    expect([Number(r.runs), Number(r.runs_parsed), Number(r.runs_won), Number(r.parse_errors)]).toEqual([8, 4, 3, 4]);
+    expect(r.error_kinds).toBe('empty_block,missing_colon,unknown_name');
+    expect(r.answers).toBe('blocks_loop:same,blocks_until:inside_if,predict_if:bump_1,predict_loop:end_2_0');
+    expect([r.liked, r.end_reason, Number(r.probe_seconds)]).toEqual(['mid', 'done', 480]);
+
+    const left = (await pool.query('SELECT * FROM v_probe_text WHERE session_id = $1', [b.id])).rows[0];
+    expect([left.tour_done, Number(left.items_tried), Number(left.runs), left.liked, left.end_reason]).toEqual([false, 0, 0, null, 'left']);
+
+    const g = (await pool.query('SELECT * FROM v_probe_text_by_grade WHERE grade = 5')).rows[0];
+    expect([Number(g.sessions), Number(g.tour_done), Number(g.items_correct), Number(g.items_tried), Number(g.parse_errors), Number(g.liked_mid)]).toEqual([2, 1, 4, 7, 4, 1]);
+    expect([Number(g.typo_correct), Number(g.typo_tried), Number(g.blocks_correct), Number(g.blocks_tried)]).toEqual([1, 2, 1, 2]);
+    expect(Number(g.median_items_correct)).toBe(2);
+  });
+
   it('retrying the exact same batch is idempotent: one row per seq, all acked again', async () => {
     const app = createApp(pool, { distDir });
     const session = newSession();
