@@ -36,7 +36,7 @@ Design the flow and the data so each question can be answered per grade:
 
 1. **Tool skills:** can each grade drag and drop without help? How much do they use tap-to-add instead? How often does a failure come from the tool (drag, not hearing the instruction, not seeing the goal) rather than the concept?
 2. **Prior knowledge:** how far does each child get on the concept ladder (sequence, long sequence, fix/predict, repeat, repeat with a pattern, steps before/after a repeat, "si" in fog, one program for three worlds, events, rules with a score)? This calibrates next year's starting points and the "express sheets".
-3. **Help:** which help level do they reach; does the ghost-hand demo lead to success on the next try; how often do they replay the spoken instruction (🔊)?
+3. **Help:** which help level do they reach; does the ghost-hand demo lead to success on the next try; how often do they replay the spoken instruction (🔊); how often do they call the adult, for what (instruction, tool, goal, concept), and did each success come alone or after the adult's help?
 4. **Formats:** success and time for solve, complete, fix, predict and save-blocks, by grade.
 5. **Engagement:** what they choose when free to choose, time per activity, retries, voluntary extras, the door difficulty they pick, idle periods, when attention drops within 20–40 minutes.
 6. **Motivators:** character chosen, time and choices in the wardrobe, interest in seeds, rewards and the garden.
@@ -48,7 +48,7 @@ Design the flow and the data so each question can be answered per grade:
 
 A new app mode reachable at the root of the playtest deploy (keep the existing demo intact in the code base).
 
-0. **Adult setup (one screen, fast):** grade (1ro–5to), optional division letter, a checkbox "La escuela y las familias están informadas" (required to start). The app creates an anonymous **session code** (an animal and a number, e.g. "Zorro 27"), shows it large so the adult can write it on paper next to the child's name, and hands over. Never ask for or store names.
+0. **Adult setup (one screen, fast):** grade (1ro–5to) and optional division letter, nothing else. The app creates an anonymous **session code** (an animal and a number, e.g. "Zorro 27") and shows it large so the adult can match it with their own observation notes, then hands over. Never ask for or store names: the data is anonymous by design. If the teacher wants to follow individual children, the names stay on the teacher's paper, never in the app.
 1. **Character choice** (Brote, Mina, Pliegue, Ovillo) — the existing sheet-1 choice.
 2. **Tool check (1–2 min):** tap, drag, ▶, ↺ and ✋ on two tiny levels; record drag attempts, successes and taps.
 3. **Placement ladder (8–12 min):** a FIXED item bank (the same items for every child, so data is comparable; never random extras here), built from existing content: 1ro's sheets (sequence, fix, predict, complete, repeat, pattern, before/after), the demo's 2do levels (fog "si", three worlds) and 3ro levels (key rules, touch rule with score). Entry point by grade (1ro: short sequence; 2do: long sequence; 3ro: repeat; 4to: repeat pattern; 5to: fog "si"). Step up after a success without the solution hint; after two failures or the solution hint, try one easier item to confirm the floor, then stop the ladder. At most about 10 items or 12 minutes. Record per item: concept, format, attempts, runs with each program as run, help levels used, time, result.
@@ -60,6 +60,14 @@ A new app mode reachable at the root of the playtest deploy (keep the existing d
 
 The adult can end the session at any time with a hidden control (long-press on a corner); that jumps to the survey. After the child leaves, a short adult form: engagement (3 levels), help needed (none / some / a lot), free comment.
 
+### Help from the adult
+
+Children will ask the adult for help when they don't understand something or can't do it, and the data must tell a solo success from an assisted one.
+
+- ✋ first gives the automatic help (its three steps). After the last step, or when the child keeps ✋ pressed, their character raises a big hand on screen, visible from across the room, so in class the teacher sees who is waiting and in what order. Log `call_adult`.
+- The adult resolves it with a hidden gesture (long-press on the raised hand) and taps what they did: explained the instruction, showed how to use the tool (drag, ▶), gave a hint, or solved it together. Log `adult_help` with that kind and its duration. The adult can also log help that happened without a call (long-press on a corner).
+- Every level result records whether adult help happened during it.
+
 ### New probes for 4to and 5to
 
 - **4to, "Hacé tu juego":** extend 3ro's rule engine into a tiny game maker: two or three objects with their own rules, score and lives, a win/lose condition, and "avisar" (one object sends a message, another reacts: Scratch's broadcast). A guided start (play a ready game, change one rule, then make your own variant). Show the equivalent Scratch blocks next to their rules (the "Traductora" idea) and ask them to predict what a Scratch script does.
@@ -67,11 +75,11 @@ The adult can end the session at any time with a hidden control (long-press on a
 
 ## Data
 
-- **Pseudonymous only:** session code, grade, division letter, device info. No names, no photos, no audio, no free text from children.
+- **Anonymous by design:** session code, grade, division letter, device info. No names, no photos, no audio, no free text from children. Under Argentina's Ley 25.326 (art. 2), data that cannot be tied to a determined or determinable person is not personal data: keep it that way.
 - Tables (PostgreSQL 16):
   - `sessions`: id (uuid), code, grade, division, consent, started_at, ended_at, end_reason, app_version, device (user agent, screen size, touch capable), survey (jsonb), adult_form (jsonb).
   - `events`: session_id, seq (per session), client_t, server_t, type, payload (jsonb); unique (session_id, seq) so retries are idempotent.
-  - Event types at least: tool_check, level_start, run (the program as run, its result: win, bump, short, wrong note, smudge…), level_end (outcome, time, attempts, help levels, blocks vs optimal), help, ghost_demo, speak (🔊), drag (start, drop, success), tap_add, choice (activity, door), ladder_step (concept, item, result, next), typing (key, expected, correct, latency), wardrobe, garden_view, survey_answer, idle (no input for 30 s), visibility (tab hidden or shown), error (client JS errors).
+  - Event types at least: tool_check, level_start, run (the program as run, its result: win, bump, short, wrong note, smudge…), level_end (outcome, time, attempts, help levels, blocks vs optimal), help, ghost_demo, call_adult, adult_help (kind, duration), speak (🔊), drag (start, drop, success), tap_add, choice (activity, door), ladder_step (concept, item, result, next), typing (key, expected, correct, latency), wardrobe, garden_view, survey_answer, idle (no input for 30 s), visibility (tab hidden or shown), error (client JS errors).
 - **Offline queue:** events are stored locally first and sent in batches with retries, so a dropped connection loses nothing; the session still works fully offline and syncs later.
 - **Admin page** (protected by `ADMIN_TOKEN`): live list of sessions (grade, duration, where each child is), counts per grade, and CSV/JSON export.
 - **Export for analysis:** `GET /api/export?format=json|csv` protected by `EXPORT_TOKEN`, plus `tools/export-playtest.mjs` that reads the token from `~/.credentials/camino-prueba.env` and writes a dated file. A later session will analyze the data with it.
@@ -102,4 +110,4 @@ The adult can end the session at any time with a hidden control (long-press on a
 
 ## Final report to the user (in Spanish, short)
 
-The playtest URL; how to run a session step by step (for one child with an adult, and for several fast finishers in class); the admin page and where the tokens are; what was verified; what was not; and the reminder that the school and the families must be informed before collecting data.
+The playtest URL; how to run a session step by step (for one child with an adult, and for several fast finishers in class); the admin page and where the tokens are; what was verified; what was not; and that the data is anonymous by design (if the teacher follows individual children, the names stay on paper in the school).

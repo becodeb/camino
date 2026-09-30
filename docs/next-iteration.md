@@ -7,6 +7,7 @@ Status: **not implemented.** Requirements the user gave between 2026-09-27 and 2
 - A **division** (e.g. "1ro A") has about 25 students. From 1ro to 4to the division is split in two halves that alternate weeks: half A has programming one week, half B the next. Both halves are **one group**: same roster, same year plan, same teacher view. Students move between halves (and occasionally between divisions) without losing anything.
 - 1ro–4to: one hour every two weeks per student, in groups of about 15 (a half). 5to, 6to and 1er año: the whole division, one hour per week. Sala de 4 and 5: schedule unknown (open question).
 - School year: March to mid-December, about 39 teaching weeks without the winter break. For a student in 1ro–4to that is about 19 possible classes, about 17 real ones, about 14 effective hours.
+- **Timetable and calendar:** an admin or teacher loads each division's timetable (per half: weekday, start time, duration) and the school calendar (holidays, school events, short days). With them the platform knows which half is expected today, sets the class duration, the timer and the wardrobe's last 5 minutes on its own, notices a class that did not happen, and counts the classes left for the year plan.
 - Progress is **per student**, never per half. A class **session** belongs to the division and to whoever logs in; the "sheet opened by the teacher" is a property of the session, so half B can be a week behind half A without any special case.
 
 ## 2. Accounts and roles
@@ -27,6 +28,7 @@ Status: **not implemented.** Requirements the user gave between 2026-09-27 and 2
 - **Start class:** pick the sheet (defaults to the next one) and the **real duration** (60 min by default, shorter when needed). A **timer** shows how much class is left.
 - **Live view:** who is on which page, who finished the core, soft "needs help" flags (see §6). No public rankings.
 - **Lock screens** ("miren al frente"): every student screen shows a calm full-screen drawing (the character looking at the board) until the teacher unlocks. Also **send everyone to a page** for a group moment.
+- **Raised hands:** students will ask the teacher for help when they don't understand something or can't do it. After the automatic help (its three steps), a student can call the teacher: their character raises a big hand on screen, visible from across the room, and the teacher's view lists the raised hands in order, with the page, the help already used and the likely cause (tool, instruction, goal or concept). The teacher marks "ayudado" and what they did; the report counts that work as assisted.
 - **Wardrobe ritual:** the wardrobe opens automatically in the **last 5 minutes** (computed from the declared duration). Students may keep solving levels or dress their character. The teacher can open or close it by hand.
 - **Class tree:** projected at the close, fed by everyone's seeds.
 - **End class:** closes the session; unsolved essentials become each student's bridge for next class.
@@ -36,7 +38,7 @@ Status: **not implemented.** Requirements the user gave between 2026-09-27 and 2
 The teacher decides; the platform suggests and never changes the plan silently.
 
 - **Suspended class** (holiday, event, strike): nothing is lost for students. At the next session the platform notices the missed date (if the school calendar is loaded) or the teacher marks it, and proposes a re-plan: "quedan N clases y faltan M hojas: sugiero juntar la 8 con la 6, o saltear la 14". Each sheet carries a priority: *essential* (never skipped), *standard*, *recortable* (can be merged or skipped: e.g. 1ro's Zigzag, Guardas, the recess). The comodín sheet absorbs the first suspension.
-- **Shorter class:** the teacher sets the real duration at the start and the class structure adapts.
+- **Shorter class:** the teacher sets the real duration at the start (or it comes from a short day loaded in the calendar) and the class structure adapts.
   - Under ~25 minutes: do **not** introduce a new concept. Run a review or a recess activity and keep the new sheet for next class.
   - 25–45 minutes: the new sheet with its **essential pages only**; whoever does not finish gets the bridge next class.
   - Over 45 minutes: the normal class.
@@ -52,7 +54,7 @@ The teacher decides; the platform suggests and never changes the plan silently.
 
 ## 6. Assessment and help detection
 
-- **Automatic report** per student per sheet and per term, built from: essentials solved, help used and at which level, strong and weak formats (fix, predict, complete), autonomy (asks for help vs. stays stuck). Output: a short paragraph ("Resuelve repeticiones con patrón de dos bloques sin ayuda; todavía necesita apoyo para contar vueltas") and a **suggested** grade the teacher confirms or changes. Never final on its own. The school's grading scale for 1ro is an open question (conceptual vs. numeric).
+- **Automatic report** per student per sheet and per term, built from: essentials solved, help used and at which level, strong and weak formats (fix, predict, complete), autonomy (solved alone, with the automatic help, or with the teacher's help). Output: a short paragraph ("Resuelve repeticiones con patrón de dos bloques sin ayuda; todavía necesita apoyo para contar vueltas") and a **suggested** grade the teacher confirms or changes. Never final on its own. The school's grading scale for 1ro is an open question (conceptual vs. numeric).
 - **Help detection, not instant:** at class start, a "para acercarte hoy" list of 3–5 students with the reason (e.g. "cuenta pasos en vez de vueltas", "le quedaron imprescindibles después del puente", "usa mucho la solución en transparente"). During class, only a soft alert when someone is stuck on the same page for a long time. Reuse habilidades' failure-cause disambiguation: "didn't hear the instruction", "didn't understand the goal", "doesn't know how to drag" are tool problems, not concept problems, and are answered differently.
 
 ## 7. Motivation system
@@ -112,5 +114,5 @@ Public rankings, punishing countdowns, attendance streaks (being absent is not t
 - The school's grading scale for 1ro (conceptual "Muy bien / Bien / Regular" or numeric).
 - Sala de 4 and 5: how often and how long.
 - Devices per grade (tablets, PCs, touch Chromebooks) and classroom internet reliability.
-- School and family consent policy for collecting data.
+- Personal data in the real platform: the pilot is anonymous by design (not personal data under Ley 25.326, art. 2), but named accounts will hold personal data of minors on becode's servers; the school decides how that is covered, as when it adopts any platform.
 - Whether 4to replaces Scratch with Camino's own game maker; decide after the pilot's 4to/5to probes.

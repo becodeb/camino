@@ -83,5 +83,5 @@ Code, comments, docs and commits in English. Kid-facing copy and speech in Riopl
 - The school's grading scale for 1ro (conceptual or numeric), for the automatic report.
 - Sala de 4 and 5: how often and how long.
 - Devices per grade and classroom internet reliability.
-- Consent policy for collecting data (matters for the pilot).
+- How the school covers personal data once there are named accounts (the pilot is anonymous by design).
 - Whether 4to replaces Scratch with Camino's own game maker.
