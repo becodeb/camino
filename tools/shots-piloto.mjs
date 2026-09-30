@@ -56,6 +56,38 @@ const SCENARIOS = [
     run: async (p) => { await toCharacter(p); await p.waitForTimeout(700); await p.locator('.choice-btn').nth(1).click(); await p.waitForTimeout(1200); },
   },
   { name: 'pp-adult-menu', run: async (p) => { await toCharacter(p); await hold(p, 20, 20, 1700); await p.waitForTimeout(300); } },
+  { name: 'pp-level', run: async (p) => { await toLevel(p); } },
+  { name: 'pp-help1', run: async (p) => { await toLevel(p); await p.click('.level-bar .help'); await p.waitForTimeout(700); } },
+  {
+    name: 'pp-help3',
+    run: async (p) => {
+      await toLevel(p);
+      for (let i = 0; i < 2; i++) { await p.click('.level-bar .help'); await p.waitForTimeout(3200); }
+      await p.click('.level-bar .help');
+      await p.waitForTimeout(1900);
+    },
+  },
+  {
+    name: 'pp-hand',
+    run: async (p) => {
+      await toLevel(p);
+      const b = await p.locator('.level-bar .help').boundingBox();
+      await hold(p, b.x + b.width / 2, b.y + b.height / 2, 1300);
+      await p.waitForTimeout(900);
+    },
+  },
+  {
+    name: 'pp-hand-panel',
+    run: async (p) => {
+      await toLevel(p);
+      const b = await p.locator('.level-bar .help').boundingBox();
+      await hold(p, b.x + b.width / 2, b.y + b.height / 2, 1300);
+      await p.waitForTimeout(800);
+      const h = await p.locator('.pp-hand').boundingBox();
+      await hold(p, h.x + h.width / 2, h.y + h.height / 2, 1500);
+      await p.waitForTimeout(300);
+    },
+  },
   { name: 'pp-soon', run: async (p) => { await toCharacter(p); await jump(p, 'tool_check'); await p.waitForTimeout(500); } },
 ];
 

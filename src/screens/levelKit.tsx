@@ -102,6 +102,37 @@ export interface LevelNav {
   className?: string;
   /** After the pages in the bar (the seed pouch). */
   aside?: ReactNode;
+  // ---------------------------------------------------------------- instrumentation (the pilot playtest); absent: nothing changes
+  /** Every ▶, with the program as run and what came of it (also an empty or incomplete notebook, which does not run). */
+  onRunReport?(r: RunReport): void;
+  /** 🔊 was pressed. */
+  onSpeak?(level: LevelDef): void;
+  /** ✋ was pressed: the nav decides what to show (`show`: the page's own next-step hint with the ghost hand). */
+  help?(level: LevelDef, show: () => void): void;
+  /** A block went into the notebook by a tap on the palette. */
+  onTapAdd?(level: LevelDef): void;
+  /** A drag in the notebook began, or ended (`success`: the program changed; `outcome`: add, move, remove, cancel, rejected…). */
+  onDrag?(phase: 'start' | 'drop', info?: { success: boolean; outcome: string; from: 'palette' | 'program' }): void;
+  /** The ghost hand's concept demo played by itself (a new idea, after a full notebook or a failed run). */
+  onIntro?(level: LevelDef): void;
+}
+
+/**
+ * One press of ▶, for the playtest's `run` event. `result`: 'win', 'bump',
+ * 'short', 'wrong_note' (a song), 'smudge' (a guarda), 'wrong_guess' (a
+ * predict page); or, without a run, 'empty', 'incomplete' (a complete page
+ * with a line or a count missing), 'no_guess' (predict, ▶ before a guess).
+ */
+export interface RunReport {
+  result: string;
+  program: Program;
+  /** Per world, when there are several ('win' | 'crash' | 'short'). */
+  worlds?: string[];
+  /** The block that tripped (its ref key in the notebook). */
+  culprit?: string;
+  /** Predict: the cell guessed and where the character ended. */
+  guess?: { c: number; r: number };
+  final?: { c: number; r: number };
 }
 
 function LiveTramoPages({ current }: { current: string }) {
@@ -224,7 +255,11 @@ export function Shell({ level, mode, rootRef, onSpeak, onHelp, busy, children, n
         '--notebook-w': `${notebookW ?? notebookWidth(notebookBlocks(level), level.blockLabel)}px`,
       } as CSSProperties}
     >
-      <LevelBar level={level} title={nav.title(level)} pages={nav.pages(level)} aside={nav.aside} onSpeak={onSpeak} onHelp={onHelp} />
+      <LevelBar
+        level={level} title={nav.title(level)} pages={nav.pages(level)} aside={nav.aside}
+        onSpeak={nav.onSpeak ? () => { nav.onSpeak!(level); onSpeak(); } : onSpeak}
+        onHelp={nav.help ? () => nav.help!(level, onHelp) : onHelp}
+      />
       {children}
       <Quit href={nav.quit} />
     </main>

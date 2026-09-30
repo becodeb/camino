@@ -265,6 +265,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     const target = intro.program[0];
     if (target?.t !== 'loop') return;
     introShown.current = true;
+    nav.onIntro?.(level);
     const steps: DemoStep[] = [];
     if (programRef.current.length) steps.push({ do: 'tap', at: '.btn-restart', apply: restart });
     steps.push({
@@ -314,6 +315,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
       const to = holes.find((r) => refKey(r) === marks.activeHole) ?? holes[0];
       if (!to) { full(block, el); return; }
       edited(writeLine(program, to, block.cmd));
+      nav.onTapAdd?.(level);
       views.current[0]?.cardAdded(block.cmd);
       glance(el);
       return;
@@ -325,6 +327,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     }
     // a repeat added by a tap takes the next taps inside it (as in habilidades)
     edited(insertAt(program, slot, block), block.t === 'loop' ? { activeTape: slot.at } : {});
+    nav.onTapAdd?.(level);
     if (block.t === 'cmd') views.current[0]?.cardAdded(block.cmd);
     glance(el);
   };
@@ -343,6 +346,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
   };
 
   const onDrop = (res: DropResult, src: DragSource) => {
+    nav.onDrag?.('drop', { success: !!res.program, outcome: res.outcome, from: src.from });
     if (res.outcome === 'rejected' && res.reason === 'full') full(null, null);
     if (!res.program) return;
     edited(res.program, fixedLines && res.outcome === 'remove' && src.from === 'program' ? { activeHole: refKey(src.ref) } : {});
@@ -359,12 +363,14 @@ function ProgramLevel({ level }: { level: LevelDef }) {
       // something still missing: nothing runs, the empty line or the number calls
       const counts = program.findIndex((it) => it.t === 'loop' && it.count === 0);
       if (holesOf(program).length || counts >= 0) {
+        nav.onRunReport?.({ result: 'incomplete', program });
         speak(LINES.missing);
         setMarks(holesOf(program).length ? { hintHole: true } : { hintCount: counts });
         return;
       }
     }
     if (!cardCount(program)) {
+      nav.onRunReport?.({ result: 'empty', program });
       speak(level.music ? LINES.emptyNotes : LINES.empty);
       setMarks((m) => ({ ...m, hintSlot: true }));
       document.querySelectorAll<HTMLElement>('.block-palette .pblk').forEach((b, i) => b.animate?.([{ translate: '0 0' }, { translate: '0 -12px' }, { translate: '0 0' }], { duration: 320, delay: i * 70, easing: 'ease-out' }));
@@ -408,6 +414,15 @@ function ProgramLevel({ level }: { level: LevelDef }) {
       return;
     }
     nav.onResult?.(results.every((r) => r === 'win') ? 'win' : results.includes('crash') ? 'crash' : 'short');
+    if (nav.onRunReport) {
+      const crash = traces.find((t) => t.outcome === 'crash');
+      nav.onRunReport({
+        result: results.every((r) => r === 'win') ? 'win' : results.includes('crash') ? (level.music ? 'wrong_note' : level.guarda ? 'smudge' : 'bump') : 'short',
+        program,
+        ...(multi ? { worlds: results.map(String) } : {}),
+        ...(crash ? { culprit: refKey(crash.steps[crash.crashAt!].ref) } : {}),
+      });
+    }
     if (results.every((r) => r === 'win')) {
       setMarks({});
       if (multi) await Promise.all(vs.map((v) => v.celebrate()));
@@ -542,6 +557,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     },
     onTapeActivate: (i) => setMarks((m) => ({ ...m, activeTape: i })),
     onTapHole: (ref) => setMarks((m) => ({ ...m, activeHole: refKey(ref), hintHole: false })),
+    onDragStart: nav.onDrag ? () => nav.onDrag!('start') : undefined,
     onDrop,
   });
 
@@ -631,7 +647,7 @@ function PredictLevel({ level }: { level: LevelDef }) {
     const v = views.current[0];
     if (!v || runningRef.current || wonRef.current) return;
     const g = guessRef.current;
-    if (!g) { speak(LINES.guessFirst); v.askPick(); return; }
+    if (!g) { nav.onRunReport?.({ result: 'no_guess', program }); speak(LINES.guessFirst); v.askPick(); return; }
     runningRef.current = true;
     setRunning(true);
     setMarks({});
@@ -653,6 +669,7 @@ function PredictLevel({ level }: { level: LevelDef }) {
     if (res === 'aborted') { runningRef.current = false; setRunning(false); return; }
     setMarks({ iteration });
     nav.onResult?.(sameCell(t.final, g) ? 'win' : 'short');
+    nav.onRunReport?.({ result: sameCell(t.final, g) ? 'win' : 'wrong_guess', program, guess: { c: g.c, r: g.r }, final: { c: t.final.c, r: t.final.r } });
     if (sameCell(t.final, g)) {
       await v.celebrate();
       const line = nav.won(level, program);

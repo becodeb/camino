@@ -72,12 +72,28 @@ Opens any level (ladder item, free-play activity, probe). **RQ 4, 5.**
 `'text_probe'`); `v_activity_time` groups by it.
 
 ### `run`
-One program run inside a level. **RQ 2, 4.**
+One press of ▶ inside a level (T2 logs it for walking, song, guarda and
+predict pages through the level's LevelNav). **RQ 2, 4.**
 ```
-{ level_id: string, result: 'win'|'bump'|'short'|'wrong_note'|'smudge'|string, blocks_used: number, attempt: number }
+{
+  level_id: string,
+  result: 'win'|'bump'|'short'|'wrong_note'|'smudge'|'wrong_guess'|'empty'|'incomplete'|'no_guess'|string,
+  blocks_used: number,           // cards in the notebook (a repeat counts itself and its body; empty lines do not)
+  attempt: number,               // 1, 2, 3… presses of ▶ on this level
+  program: string,               // the program as run, one line: `right right rep3(up) _` (`_` an empty line, `repgoal(…)`, `rep?(…)` a missing count)
+  after_ghost: boolean,          // a ghost-hand demo (help 2 or 3, or the concept intro) played since the previous run
+  help_step: number,             // automatic help step reached so far on this level (0–3)
+  worlds?: string[],             // several worlds: each one's 'win' | 'crash' | 'short'
+  culprit?: string,              // the block that tripped (its ref key in the notebook, e.g. '2' or '1:0')
+  guess?: {c, r}, final?: {c, r} // predict pages: the cell tapped and where the character ended
+}
 ```
-`result` is whatever the judge for that page kind returns (walk, song,
-guarda, rule game); the set above are the common ones, not exhaustive.
+`result`: `bump` a walk that crashed (rock, edge, closed pot), `short` it
+ended before the goal, `wrong_note` a song that played a wrong beat,
+`smudge` a guarda that left the guide, `wrong_guess` a predict page whose
+character ended elsewhere; `empty`, `incomplete` (a complete page with a
+line or count still missing) and `no_guess` are presses of ▶ that ran
+nothing. The 3ro rule game (realtime pages) does not log `run` yet (T4).
 
 ### `level_end`
 Closes a level. **RQ 2, 4, 5.**
@@ -94,35 +110,58 @@ Closes a level. **RQ 2, 4, 5.**
   adult_helped: boolean          // true if an adult_help happened during this level
 }
 ```
-`v_session_summary.levels_won` counts `outcome = 'win'`.
+`v_session_summary.levels_won` counts `outcome = 'win'`. `help_levels` is the
+highest automatic help step shown (0–3); `blocks_used` the last run's
+cards; `blocks_optimal` the page's reference solution's cards. `outcome` is
+`skipped` when the flow moved on without the page being solved (the
+adult's end-session or skip); T4's ladder sets `fail` by its floor rule. A
+level_end also carries whatever the step merges in (`extra`: the ladder's
+`concept`, `rung`, `item`; T2's stand-in ladder `item`, `sample: true`).
 
 ### `help`
 The child pressed ✋ (any of its three automatic steps). **RQ 3.**
 ```
 { level_id: string, step: 1 | 2 | 3 }
 ```
+Step 1 says the instruction again and makes the goal glow; step 2 is the
+next-step hint with the ghost hand; step 3 is the solution hint (the way the
+page's solution walks, drawn as footprints on the board; on songs, guardas
+and the rule game it falls back to the next-step hint). A fourth press
+raises the character's hand (`call_adult`).
 
 ### `ghost_demo`
-The ghost hand demo played (✋'s last step or held). **RQ 3.**
+A demonstration played on the page. **RQ 3.**
 ```
-{ level_id: string, next_attempt_success?: boolean }
+{ level_id: string, kind: 'hint' | 'footprints' | 'intro' }
 ```
-`next_attempt_success` is filled in by the client once the next `run` on
-the same level resolves, to measure "does the demo lead to success."
+`hint`: ✋ step 2 (or step 3's fallback), the ghost hand shows the next
+thing to do; `footprints`: ✋ step 3, the solution's way on the board;
+`intro`: the concept demo the page plays by itself (a new idea, after a full
+notebook or a failed run). Events are append-only, so "does the demo lead
+to success" is read from the next `run` on the same level, which carries
+`after_ghost: true`.
 
 ### `call_adult`
-The character raised its hand. **RQ 3.**
+The child called the adult: the character raises its hand on screen. **RQ 3.**
 ```
-{ level_id?: string, reason?: 'help_held' | 'help_step_3' }
+{ level_id?: string, reason: 'help_held' | 'help_step_3', help_step: number, hand_up: boolean }
 ```
+`help_held`: ✋ kept pressed ~1 s; `help_step_3`: ✋ pressed again after
+the third automatic help. `help_step` is the automatic help reached on the
+level (0–3). Several calls in a row keep one hand up (`hand_up: true` on
+the repeats).
 
 ### `adult_help`
-The adult resolved a call, or logged unprompted help (corner long-press).
-**RQ 3.**
+The adult resolved a call (long press on the raised hand, which lowers
+it), or logged help given without a call (long press on the top-left
+corner → "Registrar ayuda"). **RQ 3.**
 ```
-{ level_id?: string, kind: 'instruction' | 'tool' | 'hint' | 'solved_together', duration_ms: number, prompted: boolean }
+{ level_id?: string, kind: 'instruction' | 'tool' | 'hint' | 'solved_together', prompted: boolean, duration_ms?: number }
 ```
-`prompted` is `false` for help logged without a `call_adult`.
+`prompted` is `false` for help logged without a `call_adult`;
+`duration_ms` (only when prompted) is the time from the call that raised
+the hand to the adult's answer. The level open at the time gets
+`adult_helped: true` on its `level_end`.
 
 ### `speak`
 The child replayed the spoken instruction (🔊). **RQ 3.**
@@ -131,15 +170,18 @@ The child replayed the spoken instruction (🔊). **RQ 3.**
 ```
 
 ### `drag`
-One drag gesture on the board. **RQ 1.**
+One drag gesture of a block (palette ↔ notebook). **RQ 1.**
 ```
-{ level_id: string, phase: 'start' | 'drop', success?: boolean }
+{ level_id: string, phase: 'start' | 'drop', success?: boolean, outcome?: string, from?: 'palette' | 'program' }
 ```
-`success` is present on `phase: 'drop'`.
+`success`, `outcome` (the editor's: `add`, `move`, `remove`, `cancel`,
+`rejected`, `noop`…) and `from` are present on `phase: 'drop'`; `success`
+means the program changed.
 
 ### `tap_add`
-A block added by tapping instead of dragging (counts toward RQ 1's
-"tap-to-add instead of drag"). **RQ 1.**
+A block added by tapping the palette instead of dragging (counts toward
+RQ 1's "tap-to-add instead of drag"); a tap on a full notebook is not
+logged. **RQ 1.**
 ```
 { level_id: string }
 ```
@@ -151,6 +193,8 @@ A free-choice made by the child. **RQ 5, 6.**
 ```
 One event type covers the character pick (sheet 1), the free-play menu, the
 door difficulty and wardrobe/seed choices; only the relevant fields are set.
+The character step logs `{activity: 'character', character}` on every pick
+(a child may change their mind; the last one counts).
 
 ### `ladder_step`
 One item of the fixed placement-ladder item bank. **RQ 2.**

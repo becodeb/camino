@@ -17,6 +17,8 @@ import { RaisedHand } from './RaisedHand';
 export const CORNER_PX = 64;
 export const CORNER_HOLD_MS = 1500;
 export const HAND_HOLD_MS = 1200;
+/** The child keeps ✋ pressed this long: the hand goes up at once. */
+export const HAND_HOLD_HELP_MS = 1000;
 const SLOP_PX = 14;
 
 export const HELP_KINDS: { kind: AdultHelpKind; label: string }[] = [
@@ -101,7 +103,7 @@ export function AdultControls() {
 
   return (
     <>
-      {api.hand && <RaisedHand onAdult={() => { setMenu(false); setPanel(true); }} />}
+      {api.hand && <RaisedHand hand={api.hand} holdMs={HAND_HOLD_MS} onAdult={() => { setMenu(false); setPanel(true); }} />}
       {panel && api.hand && (
         <AdultSheet title="¿Qué hiciste?" onClose={() => setPanel(false)}>
           <p className="pp-adult-note">Tocá lo que hiciste y la mano baja.</p>
