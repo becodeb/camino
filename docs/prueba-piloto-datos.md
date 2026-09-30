@@ -30,12 +30,12 @@ One row per playtest session (one child, one sitting).
 | `consent` | boolean | Adult confirmed the session at setup. | — |
 | `started_at` | timestamptz | When the session began. | 5 (duration, idle) |
 | `ended_at` | timestamptz, nullable | When the session ended (set on goodbye or an adult end-session gesture). | 5 |
-| `end_reason` | text, nullable | `'completed'`, `'adult_ended'`, `'abandoned'`. | 5 |
+| `end_reason` | text, nullable | `'completed'` (the child reached the goodbye), `'adult_ended'` (the adult's hidden "end the session"; the survey still follows), `'abandoned'` (set by the client when a new session starts on the device while this one never ended, e.g. a reload mid-session; `ended_at` is then its last event's time). | 5 |
 | `app_version` | text, nullable | Front-end build version at the time of the session. | — |
-| `device` | jsonb | `{ua, w, h, touch, ...}` as reported by the client. | 1 (device capability vs. tool failures) |
+| `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language. | 1 (device capability vs. tool failures) |
 | `survey` | jsonb, nullable | See "survey_answer" below; the final answers, keyed by question. | 9 |
 | `adult_form` | jsonb, nullable | The adult's post-session form: `{engagement: 'low'|'mid'|'high', help_needed: 'none'|'some'|'a_lot', comment?: string}`. | 3, 5 |
-| `current_step` | text, nullable | Last known flow step (`'setup'`, `'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`), for the admin page's live "where is each child" view. | 5 |
+| `current_step` | text, nullable | Last known flow step (`'setup'`, `'code'`, `'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, `'adult_form'`), for the admin page's live "where is each child" view. | 5 |
 | `created_at` | timestamptz | First time this session row was written. | — |
 | `last_seen_at` | timestamptz | Updated on every sync; drives the admin page's "active now" indicator. | 5 |
 
@@ -193,9 +193,11 @@ full set of answers is also mirrored onto `sessions.survey` (keyed by
 without scanning events.
 
 ### `idle`
-No input for 30s. **RQ 5.**
+No pointer or key input for 30 s. One event per idle stretch, logged when
+input resumes (or when the tab is hidden); time with the tab hidden does not
+count. **RQ 5.**
 ```
-{ step: string }
+{ step: string, duration_ms: number }
 ```
 
 ### `visibility`
@@ -206,10 +208,46 @@ The browser tab was hidden or shown (proxy for attention/offline stretches).
 ```
 
 ### `error`
-A client JS error, for debugging the pilot itself (not a research signal).
+A client JS error (`window.onerror` or an unhandled promise rejection), for
+debugging the pilot itself (not a research signal). Only the message (≤ 300
+characters) and the script's file name and position, never a URL with its
+host or query. Deduplicated (the same error within 30 s is logged once) and
+capped at 20 per page load.
 ```
-{ message: string, stack?: string }
+{ message: string, source?: string, line?: number, col?: number }
 ```
+
+### `step`
+The session moved to another flow step (the same change also updates
+`sessions.current_step`). **RQ 5.**
+```
+{
+  from: string | null,          // the step left (null for the first one)
+  to: string,                   // one of the current_step values above
+  reason: 'start' | 'next' | 'skip' | 'end_now',
+  time_ms?: number,             // time spent on `from`
+  budget_ms?: number,           // `from`'s planned time (recorded, not enforced)
+  over_budget?: boolean
+}
+```
+`skip` is the adult skipping a step (or a step with nothing to show);
+`end_now` is the adult's "end the session" gesture (straight to the survey).
+
+## How the client sends (offline queue)
+
+`src/playtest/telemetry.ts`. Every event is stored first in the browser
+(`localStorage` key `camino.piloto.queue.v1`, or memory when storage is
+blocked) with its per-session `seq` (0, 1, 2…) and `client_t`. A sender posts
+`POST /api/sync` with the session record and up to 100 of its events every
+5 s, or at once when 25 are waiting; the `acked` seqs leave the queue. A
+network error, a 429 or a 5xx is retried with exponential backoff (1 s,
+2 s, 4 s … capped at 60 s, with jitter) and never drops anything; only a 400
+drops the batch (with a console warning), a 413 halves the batch size. When
+the page is hidden or closed the queue is flushed with `fetch(…, {keepalive:
+true})` (≤ 60 KB per request). Sessions left in the queue by an earlier page
+load sync on the next load. Session changes (`current_step`, `ended_at`,
+`end_reason`, `survey`, `adult_form`) travel in the same posts. Gaps in `seq`
+for a session therefore mean a 400-dropped batch, never a network failure.
 
 ## SQL views
 
