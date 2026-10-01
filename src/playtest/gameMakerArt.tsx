@@ -3,8 +3,7 @@
 // trophy that stands for the whole game), the glyphs of the new blocks (the
 // green flag of "al empezar", the loop of "siempre", the envelope of
 // "avisar", a speech bubble, the U-turn, back to the top, an eye), the
-// board's score jar and hearts, the phase steps of the bar and the drawn
-// outcomes of the prediction task. Ink boiled by #rough, flat colours with
+// board's score jar and hearts, and a small picture of each step's goal. Ink boiled by #rough, flat colours with
 // one darker facet, blue pen for marks: the notebook's style.
 
 import { memo, type ReactNode } from 'react';
@@ -13,7 +12,7 @@ import { Arrow, KeyCap } from '../blocks/blocks';
 import { PlayerFace, ScenePlayer } from '../screens/player';
 import type { Dir } from '../game/model';
 import type { MsgId, ObjId } from '../game/gameMaker';
-import type { GmPhase, OutcomeId } from './gameMakerProbe';
+import type { GmStep } from './gameMakerProbe';
 
 export const INK = '#2b2622';
 const PEN = '#3d6ea5';
@@ -247,36 +246,60 @@ export function FlyingEnvelope({ msg }: { msg: MsgId }) {
   );
 }
 
-// ------------------------------------------------------------------ the phase steps in the bar
+// ------------------------------------------------------------------ the steps: a small picture of each step's goal
 
-/** Three small pages: ▶ play, ✎ change a rule, ★ your own game; the one on screen circled, the ones done stamped. */
-export function PhaseSteps({ phase }: { phase: GmPhase | 'predict' }) {
-  const order: (GmPhase | 'predict')[] = ['play', 'change', 'make', 'predict'];
-  const at = order.indexOf(phase);
-  const glyph = (p: GmPhase | 'predict') => {
-    switch (p) {
-      case 'play': return <path d="M-5,-7 L7,0 L-5,7 Z" fill="#de8a56" stroke={INK} strokeWidth={2} strokeLinejoin="round" />;
-      case 'change': return <g><path d="M-7,7 L-6,2 L4,-8 L8,-4 L-2,6 Z" fill="#f0d27a" stroke={INK} strokeWidth={1.8} strokeLinejoin="round" /><path d="M-7,7 L-4,6" stroke={INK} strokeWidth={1.6} /></g>;
-      case 'make': return <StarArt r={9} />;
-      case 'predict': return <text x={0} y={6} textAnchor="middle" className="gm-steps-q">?</text>;
-    }
-  };
-  return (
-    <span className="gm-steps" aria-hidden="true">
-      {order.map((p, i) => (
-        <svg key={p} className={`gm-step is-${i < at ? 'done' : i === at ? 'here' : 'todo'}`} viewBox="-16 -19 32 38" width={32} height={38} overflow="visible">
-          <g filter="url(#rough)">
-            <path d={wobblyPoly([[-12, -15], [12, -15], [12, 15], [-12, 15]], { wob: 0.4, seed: i + 3 })} transform="translate(2 3)" fill={SHADOW} />
-            <path d={wobblyPoly([[-12, -15], [12, -15], [12, 15], [-12, 15]], { wob: 0.4, seed: i + 3 })} fill={i < at ? '#efe6d2' : PAPER} stroke={INK} strokeWidth={2} />
-            {glyph(p)}
+const penArrow = (d: string, head: string) => (
+  <g fill="none" stroke={PEN} strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round"><path d={d} strokeDasharray="1 6" /><path d={head} /></g>
+);
+
+/** What a step asks for, drawn (the bar, the note on the notebook, the step path). */
+export const StepIcon = memo(function StepIcon({ step, size = 64 }: { step: GmStep; size?: number }) {
+  const art = (() => {
+    switch (step) {
+      case 'move':
+        return <>
+          <ScenePlayer x={0} y={22} w={40} className="gm-step-me" />
+          {penArrow('M-14,4 L-34,4', 'M-28,-2 L-35,4 L-28,10')}
+          {penArrow('M14,4 L34,4', 'M28,-2 L35,4 L28,10')}
+        </>;
+      case 'stone':
+        return <>
+          <g filter="url(#rough)" transform="translate(-8 -10) scale(0.72)"><StoneArt /></g>
+          {penArrow('M14,-16 L14,18', 'M8,12 L14,19 L20,12')}
+        </>;
+      case 'seed_read':
+        return <>
+          <g filter="url(#rough)" transform="translate(-10 0) scale(0.8)"><SeedArt /></g>
+          <g transform="translate(18 -6)" stroke={INK} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M-12,0 Q0,-11 12,0 Q0,11 -12,0 Z" fill={PAPER} strokeWidth={2.4} />
+            <circle cx={0} cy={0} r={4} fill={INK} stroke="none" />
           </g>
-          {i === at && <path className="gm-step-ring" d="M-3,-20 C14,-21 21,-8 19,6 C17,20 -4,24 -15,15 C-24,6 -20,-16 -1,-19" fill="none" stroke={PEN} strokeWidth={2.4} strokeLinecap="round" />}
-          {i < at && <path d="M-7,1 L-2,7 L9,-8" fill="none" stroke={PEN} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />}
-        </svg>
-      ))}
-    </span>
+        </>;
+      case 'touch_rules':
+        return <>
+          <g filter="url(#rough)" transform="translate(-24 -8) scale(0.55)"><StoneArt /></g>
+          <g transform="translate(-24 14)"><path d="M0,7 C-9,1 -8,-7 -3,-7 C-1,-7 0,-5 0,-4 C0,-5 1,-7 3,-7 C8,-7 9,1 0,7 Z" fill={PAPER} stroke={INK} strokeWidth={2} strokeDasharray="2 3" /></g>
+          <g filter="url(#rough)" transform="translate(16 -4) scale(0.55)"><SeedArt /></g>
+          <text x={18} y={22} textAnchor="middle" className="gm-step-plus">+1</text>
+        </>;
+      case 'win':
+        return <g filter="url(#rough)" transform="scale(0.95)"><TrophyArt /></g>;
+      case 'free':
+        return <>
+          <g filter="url(#rough)" transform="translate(-10 0)"><StarArt r={16} /></g>
+          <g transform="translate(16 2) rotate(35)" stroke={INK} strokeWidth={2} strokeLinejoin="round">
+            <path d="M-4,-16 L4,-16 L4,10 L0,17 L-4,10 Z" fill="#f0d27a" />
+            <path d="M-4,10 L4,10" />
+          </g>
+        </>;
+    }
+  })();
+  return (
+    <svg className={`gm-step-icon is-${step}`} viewBox="-40 -25 80 50" width={size} height={size * 50 / 80} aria-hidden="true" overflow="visible">
+      {art}
+    </svg>
   );
-}
+});
 
 // ------------------------------------------------------------------ the end of a game
 
@@ -299,67 +322,4 @@ export function HeartsAgain() {
       {[0, 1, 2].map((i) => <span key={i} style={{ animationDelay: `${300 + i * 260}ms` }}><HeartGlyph size={38} /></span>)}
     </span>
   );
-}
-
-// ------------------------------------------------------------------ the prediction task's outcomes
-
-/** A tiny board (3 × 2 cells of 60) as the page where an outcome is drawn. */
-function MiniBoard({ children }: { children: ReactNode }) {
-  const d = wobblyPoly([[0, 0], [180, 0], [180, 120], [0, 120]], { wob: 0.5, bow: 0.8, seed: 7 });
-  return (
-    <svg className="gm-outcome" viewBox="-10 -40 200 170" aria-hidden="true" overflow="visible">
-      <g filter="url(#rough)">
-        <path d={d} fill="#f6efdf" stroke={INK} strokeWidth={2.6} />
-        <path d={`${wobblyLine(60, 2, 60, 118, { seed: 2 })} ${wobblyLine(120, 2, 120, 118, { seed: 3 })} ${wobblyLine(2, 60, 178, 60, { seed: 4 })}`} stroke={INK} strokeWidth={1.6} opacity={0.35} fill="none" />
-      </g>
-      {children}
-    </svg>
-  );
-}
-const Dash = ({ d }: { d: string }) => <path d={d} fill="none" stroke={PEN} strokeWidth={3} strokeLinecap="round" strokeDasharray="1 7" />;
-const Head = ({ d }: { d: string }) => <path d={d} fill="none" stroke={PEN} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />;
-const at = (x: number, y: number, s: number, node: ReactNode) => <g transform={`translate(${x} ${y}) scale(${s})`}>{node}</g>;
-
-/** What an answer of the prediction task looks like. */
-export function Outcome({ id }: { id: OutcomeId }) {
-  switch (id) {
-    case 'right':
-      return <MiniBoard><ScenePlayer x={30} y={112} w={62} className="gm-mini-me" /><Dash d="M62,86 Q100,70 140,86" /><Head d="M130,78 L141,87 L129,94" /><g opacity={0.35}><ScenePlayer x={150} y={112} w={62} className="gm-mini-me" /></g></MiniBoard>;
-    case 'up':
-      return <MiniBoard><ScenePlayer x={90} y={112} w={62} className="gm-mini-me" /><Dash d="M130,100 L130,30" /><Head d="M122,40 L130,28 L138,40" /></MiniBoard>;
-    case 'say_hola':
-      return <MiniBoard><ScenePlayer x={90} y={112} w={62} className="gm-mini-me" /><SayBubble text="¡Hola!" x={96} y={48} /></MiniBoard>;
-    case 'star_points':
-      return (
-        <MiniBoard>
-          <ScenePlayer x={50} y={112} w={62} className="gm-mini-me" />
-          <g opacity={0.3} filter="url(#rough)">{at(96, 76, 0.9, <StarArt />)}</g>
-          <path d="M80,56 L112,96 M112,56 L80,96" stroke={PEN} strokeWidth={2.4} strokeLinecap="round" opacity={0.7} />
-          <g filter="url(#rough)">{at(150, 60, 0.55, <ScoreJar n={1} bump={0} />)}</g>
-          <text x={150} y={20} textAnchor="middle" className="gm-plus">+1</text>
-        </MiniBoard>
-      );
-    case 'star_says':
-      return <MiniBoard><ScenePlayer x={50} y={112} w={62} className="gm-mini-me" /><g filter="url(#rough)">{at(120, 86, 0.9, <StarArt />)}</g><SayBubble text="¡Hola!" x={124} y={62} /></MiniBoard>;
-    case 'life_lost':
-      return (
-        <MiniBoard>
-          <ScenePlayer x={60} y={112} w={62} className="gm-mini-me" />
-          <foreignObject x={104} y={20} width={70} height={40}><span className="gm-mini-hearts"><HeartGlyph size={20} /><HeartGlyph size={20} /><HeartGlyph size={20} empty /></span></foreignObject>
-          <text x={140} y={88} textAnchor="middle" className="gm-plus is-minus">−1</text>
-        </MiniBoard>
-      );
-    case 'bird_says':
-    case 'stone_says':
-    case 'nobody':
-      return (
-        <MiniBoard>
-          <ScenePlayer x={40} y={112} w={62} className="gm-mini-me" />
-          <g filter="url(#rough)">{at(62, 78, 0.8, <StoneArt />)}{at(142, 34, 0.9, <BirdArt dir="left" />)}</g>
-          {id === 'bird_says' && <SayBubble text="¡Cuidado!" x={138} y={20} />}
-          {id === 'stone_says' && <SayBubble text="¡ay!" x={66} y={62} />}
-          {id === 'nobody' && <text x={146} y={4} textAnchor="middle" className="gm-dots">…</text>}
-        </MiniBoard>
-      );
-  }
 }

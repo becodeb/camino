@@ -1,33 +1,39 @@
-// "Hacé tu juego" (4to, about 10 minutes; T7 of the pilot playtest): can a
-// child of 4to build a small game with rules, points, lives and messages,
-// and do they like it? A probe of free play (probes.ts): the free-play menu
-// shows its card on 4to's menu; the adult can open it for any grade.
+// "Hacé tu juego" (4to, about 10 minutes; T7 of the pilot playtest, rebuilt
+// step by step in T15): can a child of 4to build a small game with rules,
+// points and lives, understanding what each rule does, and do they like it?
+// A probe of free play (probes.ts): the free-play menu shows its card on
+// 4to's menu; the adult can open it for any grade.
 //
-// Three guided phases on one screen (palette | the notebook of rule cards
-// with La Traductora beside it | the board): 1 play a ready-made game (catch
-// the seeds with the arrows, a stone takes a life), 2 change one rule (a
-// seed worth 2 points…) and play again, 3 make your own variant (rules, the
-// bird, "avisar", how to win) and play it. Then three small Scratch scripts
-// to predict ("¿Qué pasa…?", three drawn answers), and "¿Te gustó hacer tu
-// juego?" with three faces.
+// The game is built in six short steps, playing after each one (the steps,
+// their blocks and when each counts as done live in gameMakerProbe.ts):
+// move with the arrows, make the stone fall, read the seed that already
+// falls, a life lost and a point won by touching, when you win, then free.
+// One screen: the palette (only the step's blocks) | the notebook (the
+// step's goal on a note, one object's cards at a time) | the board, big,
+// with ▶ and the arrow keys above it. Each step's goal is said, captioned
+// and drawn; the step path (six stones) is in the bar. ✋ has three steps
+// (the goal again with its target wiggling; the ghost hand shows where the
+// next block goes; the ghost builds the step's rules, logged as ghost), and
+// after 90 s of trying a "seguir" in the bar lets the child move on (the
+// step's rules are left built, so the next step works).
 //
 // The board runs on the pure engine of game/gameMaker.ts, stepped by a
 // timer; the objects are drawn here (gameMakerArt.tsx), the child's
 // character is its living self (StageView). Rules are read live: a card
 // added while the game runs applies at once.
 //
-// Logged (docs/prueba-piloto-datos.md): `probe_phase`, `rule_edit`,
-// `game_run`, `scratch_predict`, `survey_answer` {question:
-// 'game_maker_liked'}, and `help`, `speak`, `ghost_demo` with level_id
-// 'game_maker'; the raised hand as everywhere.
+// Logged (docs/prueba-piloto-datos.md): `probe_phase` per step, `rule_edit`,
+// `game_run`, `probe_end`, `survey_answer` {question: 'game_maker_liked'},
+// and `help`, `speak`, `ghost_demo` with level_id 'game_maker'; the raised
+// hand as everywhere.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { penLoop } from '../ink/ink.js';
 import { CHARACTER_NAME, type CharacterId } from '../curriculum/motivation';
 import {
-  GM_COLS, GM_ROWS, READY, SAY_WORD, addAction, addObject, addRule, broadcasts, changeChip, chaser, cloneGame, compact,
-  endings, gmInit, gmStep, isGmHat, keysOf, objectOf, paletteFor, presentOf, removeBlock, ruleCount, scratchOf, TICK_MS,
+  GM_COLS, GM_ROWS, SAY_WORD, addAction, addObject, addRule, broadcasts, changeChip, cloneGame, compact,
+  endings, gmInit, gmStep, isGmHat, keysOf, objectOf, presentOf, removeBlock, ruleCount, TICK_MS,
   type EditResult, type GmEvent, type GmGame, type GmState, type MsgId, type ObjId, type SpriteId,
 } from '../game/gameMaker';
 import { DIRS, type Dir } from '../game/model';
@@ -44,34 +50,50 @@ import { usePlaytest } from './context';
 import { Cheer } from './interlude';
 import type { ProbeProps } from './probes';
 import { Face } from './surveyArt';
+import { BarProgressContext, BarProgressView } from './barProgress';
+import { useBar } from './Captions';
+import { GoOnArt } from './round2Art';
 import {
-  GM_LINES, GM_SAY, OUTCOME_SAY, PHASE_NAME, newTrack, phaseCompleted, phaseReady, predictItems, trackEdit, trackRunEnd, trackRunStart,
-  type GmPhase, type OutcomeId, type PhaseTrack,
+  GM_SAY, START_GAME, STEPS, STEP_DEFS, STEP_NAME, applyMissing, doneLine, editableIn, enterStep, missingEdits, noFlags, observe,
+  prepared, stepDone, stepGoal, stepLine, stepPalette, timesFrom, type GmStep, type MissingEdit, type StepFlags,
 } from './gameMakerProbe';
 import {
-  BirdArt, FlyingEnvelope, HeartGlyph, HeartsAgain, ObjIcon, Outcome, PhaseSteps, SayBubble, ScoreJar, SeedArt, StoneArt, TrophyArt, WinBurst,
+  BirdArt, FlyingEnvelope, HeartGlyph, HeartsAgain, ObjIcon, SayBubble, ScoreJar, SeedArt, StepIcon, StoneArt, TrophyArt, WinBurst,
 } from './gameMakerArt';
-import { ACT_H, ACT_W, GmBlockArt, HAT_H, HAT_W, ScratchScript } from './gameMakerBlocks';
+import { ACT_H, ACT_W, GmBlockArt, HAT_H, HAT_W } from './gameMakerBlocks';
 import '../blocks/blocks.css';
 import './gameMaker.css';
 
 const LEVEL_ID = 'game_maker';
 const PROBE = 'game_maker';
-type Stage = GmPhase | 'predict' | 'liked' | 'cheer';
+type Stage = GmStep | 'liked' | 'cheer';
 
 const OBJ_NAME: Record<Exclude<ObjId, 'me'>, string> = { seed: 'semilla', stone: 'piedra', bird: 'pájaro', game: 'juego' };
-const RULES_OF: Partial<Record<ObjId, string>> = { seed: 'Reglas de la semilla', stone: 'Reglas de la piedra', bird: 'Reglas del pájaro', game: 'Reglas del juego' };
+
+/** How a step ended, for `probe_phase`. */
+interface StepResult {
+  completed: boolean;
+  skipped: boolean;
+  time_ms: number;
+  help_levels: number;
+  ghost_built: boolean;
+  runs: number;
+  edits: number;
+  /** The free step: cards and actions the child added there, and whether "avisar" was placed. */
+  free?: { adds: number; cards_added: number; used_send: boolean };
+}
 
 export function GameMaker({ activity, levelEnded, done }: ProbeProps) {
   const api = usePlaytest();
   const apiRef = useRef(api);
   apiRef.current = api;
-  const [stage, setStage] = useState<Stage>('play');
-  const [game, setGameState] = useState<GmGame>(() => cloneGame(READY));
+  const [stage, setStage] = useState<Stage>('move');
+  const [game, setGameState] = useState<GmGame>(() => enterStep(START_GAME, 'move'));
   const gameRef = useRef(game);
   const setGame = (g: GmGame) => { gameRef.current = g; setGameState(g); };
   const mountAt = useRef(Date.now());
-  const totals = useRef({ runs: 0, edits: 0, helps: 0, makeDone: false, closed: false });
+  const [results, setResults] = useState<Partial<Record<GmStep, StepResult>>>({});
+  const totals = useRef({ runs: 0, edits: 0, helps: 0, closed: false });
 
   const log = (type: string, payload: Record<string, unknown>) => apiRef.current.log(type, payload);
 
@@ -79,29 +101,35 @@ export function GameMaker({ activity, levelEnded, done }: ProbeProps) {
     apiRef.current.did(activity);
     return () => {
       stopSpeaking();
-      if (!totals.current.closed) log('probe_end', { probe: PROBE, reason: 'left', time_ms: Date.now() - mountAt.current });
+      if (!totals.current.closed) log('probe_end', { probe: PROBE, reason: 'left', time_ms: Date.now() - mountAt.current, rules: compact(gameRef.current) });
       apiRef.current.level.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const phaseDone = (phase: GmPhase, t: PhaseTrack, helps: number) => {
-    const completed = phaseCompleted(phase, t);
-    totals.current.runs += t.runs;
-    totals.current.edits += t.edits;
-    totals.current.helps = Math.max(totals.current.helps, helps);
-    if (phase === 'make') totals.current.makeDone = completed;
-    log('probe_phase', { probe: PROBE, phase, completed, time_ms: Date.now() - t.startedAt, runs: t.runs, edits: t.edits, help_levels: helps });
-    setStage(phase === 'play' ? 'change' : phase === 'change' ? 'make' : 'predict');
+  const stepEnded = (step: GmStep, r: StepResult) => {
+    totals.current.runs += r.runs;
+    totals.current.edits += r.edits;
+    totals.current.helps = Math.max(totals.current.helps, r.help_levels);
+    log('probe_phase', {
+      probe: PROBE, phase: step, completed: r.completed, skipped: r.skipped, time_ms: r.time_ms, help_levels: r.help_levels,
+      ghost_built: r.ghost_built, runs: r.runs, edits: r.edits, ...(r.free ?? {}),
+    });
+    setResults((x) => ({ ...x, [step]: r }));
+    if (step === 'free') { setStage('liked'); return; }
+    const next = STEPS[STEPS.indexOf(step) + 1];
+    setGame(enterStep(gameRef.current, next));
+    setStage(next);
   };
 
   const finish = () => {
     const c = totals.current;
     c.closed = true;
-    log('probe_end', { probe: PROBE, reason: 'done', time_ms: Date.now() - mountAt.current, runs: c.runs, edits: c.edits, rules: compact(gameRef.current) });
+    const built = STEPS.filter((s) => s !== 'free' && results[s]?.completed).length;
+    log('probe_end', { probe: PROBE, reason: 'done', time_ms: Date.now() - mountAt.current, steps_completed: built, runs: c.runs, edits: c.edits, rules: compact(gameRef.current) });
     const lv = apiRef.current.level.current;
     levelEnded({
-      level_id: LEVEL_ID, activity, outcome: c.makeDone ? 'win' : 'fail', time_ms: Date.now() - mountAt.current,
+      level_id: LEVEL_ID, activity, outcome: built >= 5 ? 'win' : 'fail', time_ms: Date.now() - mountAt.current,
       attempts: c.runs, help_levels: c.helps, blocks_optimal: 0, adult_helped: !!lv?.adultHelped,
     });
     done();
@@ -112,16 +140,17 @@ export function GameMaker({ activity, levelEnded, done }: ProbeProps) {
     if (!DEBUG) return;
     (window as unknown as { __gm: unknown }).__gm = {
       stage: () => stage,
-      go: (s: Stage) => setStage(s),
+      results: () => results,
+      /** A step with every step before it built the canonical way (or the liking question). */
+      go: (s: Stage) => { if ((STEPS as readonly string[]).includes(s)) setGame(prepared(s as GmStep)); setStage(s); },
       game: () => gameRef.current,
       setGame: (g: GmGame) => setGame(cloneGame(g)),
     };
   });
 
-  if (stage === 'predict') return <Predict done={() => setStage('liked')} />;
   if (stage === 'liked') return <Liked done={() => setStage('cheer')} />;
   if (stage === 'cheer') return <Cheer line="¡Muy bien!" say={GM_SAY.cheer} done={finish} />;
-  return <Workshop key={stage} phase={stage} game={game} gameRef={gameRef} setGame={setGame} onDone={phaseDone} />;
+  return <Workshop key={stage} step={stage} game={game} gameRef={gameRef} setGame={setGame} onDone={stepEnded} passed={STEPS.map((s) => !!results[s])} />;
 }
 
 // ================================================================== the workshop: palette | notebook | board
@@ -135,55 +164,104 @@ interface BoardCtl {
   running(): boolean;
   state(): GmState;
   addSprite(id: SpriteId): void;
+  cheer(): void;
 }
 
-function Workshop({ phase, game, gameRef, setGame, onDone }: {
-  phase: GmPhase; game: GmGame; gameRef: MutableRefObject<GmGame>; setGame(g: GmGame): void;
-  onDone(phase: GmPhase, t: PhaseTrack, helps: number): void;
+function Workshop({ step, game, gameRef, setGame, onDone, passed }: {
+  step: GmStep; game: GmGame; gameRef: MutableRefObject<GmGame>; setGame(g: GmGame): void;
+  onDone(step: GmStep, r: StepResult): void;
+  /** The steps already behind (the bar's stones). */
+  passed: boolean[];
 }) {
   const api = usePlaytest();
   const apiRef = useRef(api);
   apiRef.current = api;
   const player = usePlayer();
   const meName = CHARACTER_NAME[player.def.id as CharacterId] ?? 'Brote';
+  const def = STEP_DEFS[step];
+  const times = useMemo(() => timesFrom(window.location.search), []);
   const rootRef = useRef<HTMLElement>(null);
   const board = useRef<BoardCtl | null>(null);
-  const [sel, setSel] = useState<ObjId>(phase === 'change' ? 'seed' : 'me');
-  const [active, setActive] = useState<number | null>(phase === 'change' ? 1 : null);
+  // the seed's step opens on the stone's cards (the child's own): the seed's are seen by tapping it
+  const [sel, setSelState] = useState<ObjId>(step === 'seed_read' ? 'stone' : def.obj);
+  const selRef = useRef(sel);
+  const setSel = (o: ObjId) => { selRef.current = o; setSelState(o); };
+  const [active, setActive] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [doneNow, setDoneNow] = useState(false);
+  const [canSkip, setCanSkip] = useState(false);
+  const [canFinish, setCanFinish] = useState(false);
   const [demoing, setDemoing] = useState(false);
+  const [pulsePlay, setPulsePlay] = useState(0);
   const demoRef = useRef(false);
-  const track = useRef<PhaseTrack>(newTrack(Date.now()));
-  const helpStep = useRef(0);
+  const flags = useRef<StepFlags>(noFlags());
+  const doneRef = useRef(false);
+  const said = useRef({ oneWay: false, stuck: false, noRule: false });
+  const track = useRef({ startedAt: Date.now(), runs: 0, edits: 0, helps: 0, ghostBuilt: false, adds: 0, cardsAdded: 0, usedSend: false, skipped: false });
   const ghostRun = useRef<GhostRun | null>(null);
+  const turned = useRef(false);
   const [shake, setShake] = useState<{ key: string; n: number } | null>(null);
-  const editable = phase !== 'play';
+  const editable = editableIn(step, sel);
 
   const log = (type: string, payload: Record<string, unknown>) => apiRef.current.log(type, payload);
-  const check = () => { if (phaseReady(phase, track.current, Date.now())) setReady(true); };
 
-  // entry: the phase's line, the adult's level record
+  /** The page turns: the step's record goes up (once). */
+  const turn = () => {
+    if (turned.current) return;
+    turned.current = true;
+    board.current?.stop();
+    const t = track.current;
+    onDone(step, {
+      completed: doneRef.current, skipped: t.skipped, time_ms: Date.now() - t.startedAt, help_levels: t.helps, ghost_built: t.ghostBuilt,
+      runs: t.runs, edits: t.edits, ...(step === 'free' ? { free: { adds: t.adds, cards_added: t.cardsAdded, used_send: t.usedSend } } : {}),
+    });
+  };
+  const turnRef = useRef(turn);
+  turnRef.current = turn;
+
+  const succeed = () => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setDoneNow(true);
+    setCanSkip(false);
+    board.current?.cheer();
+    // the win step: "¡Ganaste!" first, then the step's line
+    window.setTimeout(() => speak(doneLine(step, meName, flags.current)), step === 'win' ? 1500 : 250);
+    window.setTimeout(() => turnRef.current(), times.autoTurnMs + (step === 'win' ? 1500 : 0));
+    apiRef.current.lowerHand('self');
+  };
+
+  // entry: the step's line, the adult's level record, the timers
   useEffect(() => {
     apiRef.current.level.current = { id: LEVEL_ID, helpStep: 0, adultHelped: apiRef.current.level.current?.adultHelped ?? false };
-    const off = speakWhenAllowed(GM_LINES[phase]);
-    const t = window.setInterval(check, 1000);
-    // phase 2: the ghost hand shows where the number is (the idea, not the answer)
-    const g = phase === 'change' ? window.setTimeout(() => {
-      if (!rootRef.current || demoRef.current) return;
-      ghostRun.current = playGhost(rootRef.current, [{ do: 'point', at: ['.gm-card[data-card="seed:1"] [data-chip="seed:1:0"]'] }, { do: 'wait', ms: 600 }]);
-      log('ghost_demo', { level_id: LEVEL_ID, kind: 'intro', phase });
-    }, 5200) : 0;
-    // the next phase: a hand nobody answered goes down (the child moved on)
-    return () => { off(); clearInterval(t); clearTimeout(g); ghostRun.current?.cancel(); board.current?.stop(); apiRef.current.lowerHand('moved_on'); };
-    // once per phase
+    const off = speakWhenAllowed(stepLine(step, meName));
+    const timers: number[] = [];
+    if (step === 'free') {
+      timers.push(window.setTimeout(() => setCanFinish(true), times.freeNextMs));
+      timers.push(window.setTimeout(() => turnRef.current(), times.freeMaxMs));
+    } else {
+      timers.push(window.setTimeout(() => { if (!doneRef.current) setCanSkip(true); }, times.skipMs));
+    }
+    // the seed falls on its own: the board plays by itself
+    if (step === 'seed_read') timers.push(window.setTimeout(() => board.current?.start(), 700));
+    // the first time, the ghost hand shows the gesture once if nothing happens (not a help: nothing is built)
+    const intro = (ms: number, steps: DemoStep[], idle: () => boolean) => timers.push(window.setTimeout(() => {
+      if (!idle() || demoRef.current || track.current.helps > 0 || !rootRef.current) return;
+      ghostRun.current = playGhost(rootRef.current, steps);
+      log('ghost_demo', { level_id: LEVEL_ID, kind: 'intro', phase: step });
+    }, ms));
+    if (step === 'move') intro(9000, [{ do: 'drag', from: '.gm-palette [data-block="key:right"]', to: '.gm-notebook .gm-sheet' }], () => track.current.edits === 0);
+    if (step === 'seed_read') intro(6500, [{ do: 'point', at: ['.gm-tab[data-obj="seed"]'] }, { do: 'wait', ms: 700 }], () => !flags.current.read);
+    // the next step: a hand nobody answered goes down (the child moved on)
+    return () => { off(); timers.forEach(clearTimeout); ghostRun.current?.cancel(); board.current?.stop(); apiRef.current.lowerHand('moved_on'); };
+    // once per step
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---------------------------------------------------------------- editing
   const flash = (key: string) => setShake((s) => ({ key, n: (s?.n ?? 0) + 1 }));
 
-  const apply = (res: EditResult, obj: ObjId): boolean => {
+  const apply = (res: EditResult, obj: ObjId, o: { filled?: boolean } = {}): boolean => {
     if ('refused' in res) {
       if (res.rule != null && res.rule >= 0) flash(`${obj}:${res.rule}`);
       else flash(`tab:${obj}`);
@@ -191,67 +269,97 @@ function Workshop({ phase, game, gameRef, setGame, onDone }: {
     }
     setGame(res.game);
     const e = res.edit;
-    // the ghost hand's own edits (help's third step) are logged apart and never complete a phase
-    const ghost = demoRef.current;
+    // the ghost hand's own edits (help's third step, a skipped step) are logged apart and never count as the child's
+    const ghost = demoRef.current || !!o.filled;
     log('rule_edit', {
-      probe: PROBE, phase, object: e.object, hat: e.hat || null, action: e.action, op: e.op,
+      probe: PROBE, phase: step, object: e.object, hat: e.hat || null, action: e.action, op: e.op,
       ...(e.from ? { from: e.from, to: e.to } : {}), rules: ruleCount(res.game), running: board.current?.running() ?? false,
-      ...(ghost ? { ghost: true } : {}),
+      ...(ghost ? { ghost: true } : {}), ...(o.filled ? { filled: true } : {}),
     });
-    if (!ghost) track.current = trackEdit(track.current, Date.now());
+    if (!ghost) {
+      const t = track.current;
+      t.edits++;
+      if (e.op === 'add') { t.adds++; if (e.action == null && e.hat) t.cardsAdded++; }
+      if ((e.op === 'add' || e.op === 'change') && e.action?.startsWith('send:')) t.usedSend = true;
+      if (!board.current?.running()) setPulsePlay((n) => n + 1);
+    }
     if (res.rule >= 0) setActive(res.rule);
-    check();
     return true;
   };
 
   const tapPalette = (id: string) => {
     if (!editable || demoRef.current) return;
     const g = gameRef.current;
-    if (isGmHat(id)) { apply(addRule(g, sel, id), sel); return; }
-    const o = objectOf(g, sel);
+    const obj = selRef.current;
+    if (isGmHat(id)) { apply(addRule(g, obj, id), obj); return; }
+    const o = objectOf(g, obj);
     const n = o?.rules.length ?? 0;
     const target = active != null && active < n ? active : n - 1;
     if (target < 0) { speak(GM_SAY.orphan); flash('hats'); return; }
-    apply(addAction(g, sel, target, id), sel);
+    apply(addAction(g, obj, target, id), obj);
   };
   const dropOn = (id: string, card: number | null, overNotebook: boolean) => {
     if (!editable || !overNotebook) return;
     const g = gameRef.current;
-    if (isGmHat(id)) { apply(addRule(g, sel, id), sel); return; }
-    if (card == null) { speak(GM_SAY.orphan); flash('hats'); return; }
-    apply(addAction(g, sel, card, id), sel);
+    const obj = selRef.current;
+    if (isGmHat(id)) { apply(addRule(g, obj, id), obj); return; }
+    if (card == null) {
+      // dropped on the notebook but not on a card: the active (or the only) card takes it
+      const n = objectOf(g, obj)?.rules.length ?? 0;
+      const target = active != null && active < n ? active : n === 1 ? 0 : -1;
+      if (target < 0) { speak(GM_SAY.orphan); flash('hats'); return; }
+      apply(addAction(g, obj, target, id), obj);
+      return;
+    }
+    apply(addAction(g, obj, card, id), obj);
   };
   const removeAt = (rule: number, action: number | null) => {
     if (!editable || demoRef.current) return;
-    if (apply(removeBlock(gameRef.current, sel, rule, action), sel) && action == null) setActive(null);
+    if (apply(removeBlock(gameRef.current, selRef.current, rule, action), selRef.current) && action == null) setActive(null);
   };
   const chip = (rule: number, action: number | null) => {
     if (!editable || demoRef.current) return;
-    apply(changeChip(gameRef.current, sel, rule, action), sel);
+    apply(changeChip(gameRef.current, selRef.current, rule, action), selRef.current);
   };
   /** `byGhost`: the help's own step (the ghost hand is working, which otherwise blocks the child's taps). */
   const addBird = (byGhost = false) => {
-    if (!editable || (demoRef.current && !byGhost)) return;
+    if (step !== 'free' || (demoRef.current && !byGhost)) return;
     if (apply(addObject(gameRef.current, 'bird'), 'bird')) {
       setSel('bird');
       setActive(null);
       board.current?.addSprite('bird');
     }
   };
-  const select = (id: ObjId) => { setSel(id); setActive(null); };
+  const select = (id: ObjId) => {
+    setSel(id);
+    setActive(null);
+    if (step === 'seed_read' && id === 'seed' && !flags.current.read) {
+      flags.current = { ...flags.current, read: true };
+      succeed();
+    }
+  };
 
   // ---------------------------------------------------------------- the game
-  const onRunStart = () => { track.current = trackRunStart(track.current, Date.now()); };
+  const onRunStart = () => { track.current.runs++; };
   const onRunEnd = (r: RunSummary) => {
     const g = gameRef.current;
     const end = endings(g);
     log('game_run', {
-      probe: PROBE, phase, result: r.result, duration_ms: r.duration_ms, score: r.score, lives: r.lives, keys: r.keys,
+      probe: PROBE, phase: step, result: r.result, duration_ms: r.duration_ms, score: r.score, lives: r.lives, keys: r.keys,
       rules: compact(g), rule_count: ruleCount(g), objects: presentOf(g), broadcasts: broadcasts(g), messages_heard: r.heard,
       win_points: end.win_points, lose_lives: end.lose_lives,
     });
-    track.current = trackRunEnd(track.current, r);
-    check();
+  };
+  const onTick = (prev: GmState, events: GmEvent[]) => {
+    const f = observe(step, flags.current, prev, events, gameRef.current);
+    flags.current = f;
+    if (doneRef.current) return;
+    if (stepDone(step, f)) { succeed(); return; }
+    if (step === 'move' && f.movedLeft !== f.movedRight && !said.current.oneWay) { said.current.oneWay = true; speak(GM_SAY.oneWay); }
+    if (step === 'stone' && f.stoneStuck && !said.current.stuck) { said.current.stuck = true; speak(GM_SAY.stuck); }
+  };
+  const onShrug = () => {
+    if (step === 'move' && !said.current.noRule && !doneRef.current) { said.current.noRule = true; speak(GM_SAY.noRule(meName)); }
   };
   const onFire = (obj: ObjId, rule: number) => {
     if (obj !== selRef.current || REDUCED) return;
@@ -259,13 +367,12 @@ function Workshop({ phase, game, gameRef, setGame, onDone }: {
     card?.querySelector('.gm-card-ring')?.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: 700, easing: 'ease-out' });
     card?.querySelector('.hat-ear')?.animate([{ rotate: '0deg' }, { rotate: '-16deg', offset: 0.2 }, { rotate: '12deg', offset: 0.45 }, { rotate: '0deg' }], { duration: 500, easing: 'ease-out' });
   };
-  const selRef = useRef(sel);
-  selRef.current = sel;
 
   // ---------------------------------------------------------------- 🔊 and ✋
+  const line = stepLine(step, meName);
   const onSpeak = () => {
-    apiRef.current.log('speak', { level_id: LEVEL_ID, phase });
-    speak(GM_LINES[phase]);
+    apiRef.current.log('speak', { level_id: LEVEL_ID, phase: step });
+    speak(line);
   };
 
   const demo = (steps: DemoStep[], kind: string, pace?: number) => {
@@ -275,77 +382,97 @@ function Workshop({ phase, game, gameRef, setGame, onDone }: {
     demoRef.current = true;
     setDemoing(true);
     ghostRun.current = playGhost(root, steps, { pace });
-    log('ghost_demo', { level_id: LEVEL_ID, kind, phase });
-    void ghostRun.current.done.then(() => { demoRef.current = false; setDemoing(false); });
+    log('ghost_demo', { level_id: LEVEL_ID, kind, phase: step });
+    const run = ghostRun.current;
+    void run.done.then(() => { demoRef.current = false; setDemoing(false); });
+    return run;
   };
 
-  /** Help's third step: a working rule, built for real by the ghost hand. */
-  const showRule = () => {
-    const g = gameRef.current;
-    if (phase === 'play') {
+  const blockAt = (id: string) => `.gm-palette [data-block="${id}"]`;
+  /** Where the next missing block goes: its card, or the notebook for a new card. */
+  const dropAt = (e: MissingEdit) => {
+    if (e.kind === 'hat') return '.gm-notebook .gm-sheet';
+    const i = objectOf(gameRef.current, e.obj)?.rules.findIndex((r) => r.hat === e.hat) ?? -1;
+    return i >= 0 ? `.gm-card[data-card="${e.obj}:${i}"]` : '.gm-notebook .gm-sheet';
+  };
+  const firstMissing = () => missingEdits(gameRef.current, step)[0] ?? null;
+
+  /** Help's third step: the step's rules, built for real by the ghost hand (logged as ghost). */
+  const build = () => {
+    if (step === 'seed_read') { demo([{ do: 'tap', at: '.gm-tab[data-obj="seed"]', apply: () => select('seed') }], 'rule'); track.current.ghostBuilt = true; return; }
+    if (step === 'free') {
       const steps: DemoStep[] = [];
-      if (!board.current?.running()) steps.push({ do: 'tap', at: '.gm-root .btn-play', apply: () => board.current?.start() });
-      for (let i = 0; i < 3; i++) steps.push({ do: 'wait', ms: 400 }, { do: 'tap', at: '.gm-keypad', apply: () => { const d = board.current && chaser(board.current.state()); if (d) board.current?.press(d); } });
-      demo(steps, 'rule', 0.8);
+      if (!objectOf(gameRef.current, 'bird')) steps.push({ do: 'tap', at: '.gm-tab[data-obj="add-bird"]', apply: () => addBird(true) });
+      else steps.push({ do: 'tap', at: '.gm-tab[data-obj="bird"]', apply: () => select('bird') });
+      const add = (hat: string, action: string) => {
+        steps.push({ do: 'tap', at: blockAt(hat), apply: () => { apply(addRule(gameRef.current, 'bird', hat), 'bird'); } });
+        steps.push({ do: 'tap', at: blockAt(action), apply: () => {
+          const i = objectOf(gameRef.current, 'bird')?.rules.findIndex((r) => r.hat === hat) ?? -1;
+          if (i >= 0) apply(addAction(gameRef.current, 'bird', i, action), 'bird');
+        } });
+      };
+      if (!objectOf(gameRef.current, 'bird')?.rules.some((r) => r.hat === 'tick')) add('tick', 'move:right');
+      track.current.ghostBuilt = true;
+      demo(steps, 'rule', 0.9);
       return;
     }
-    if (phase === 'change') {
-      const at = objectOf(g, 'seed')?.rules.findIndex((r) => r.hat === 'touch:me') ?? -1;
-      if (at < 0) { demo([{ do: 'point', at: ['.gm-tab[data-obj="seed"]'] }], 'hint'); return; }
-      const j = objectOf(g, 'seed')!.rules[at].actions.findIndex((a) => a.startsWith('score:'));
-      setSel('seed');
-      if (j < 0) {
-        demo([{ do: 'tap', at: '.gm-palette [data-block="score:1"]', apply: () => { selRef.current = 'seed'; setActive(at); apply(addAction(gameRef.current, 'seed', at, 'score:1'), 'seed'); } }], 'rule');
-        return;
-      }
-      demo([{ do: 'wait', ms: 300 }, { do: 'tap', at: `[data-chip="seed:${at}:${j}"]`, apply: () => apply(changeChip(gameRef.current, 'seed', at, j), 'seed') }], 'rule');
+    const todo = missingEdits(gameRef.current, step);
+    if (!todo.length) {
+      // the rules are there: show how to try them
+      demo([{ do: 'tap', at: '.gm-root .btn-play', apply: () => { if (!board.current?.running()) board.current?.start(); } }, { do: 'point', at: ['.gm-keypad'] }], 'hint');
+      speak(GM_SAY.tryIt);
       return;
     }
-    // make: the seed avisa ¡ñam! when it is caught, the bird answers ¡Pío!
-    const steps: DemoStep[] = [];
-    if (!objectOf(g, 'bird')) steps.push({ do: 'tap', at: '.gm-tab[data-obj="add-bird"]', apply: () => addBird(true) });
-    else steps.push({ do: 'tap', at: '.gm-tab[data-obj="bird"]', apply: () => select('bird') });
-    const birdHas = objectOf(g, 'bird')?.rules.some((r) => r.hat === 'recv:yum');
-    if (!birdHas) {
-      steps.push({ do: 'tap', at: '.gm-palette [data-block="recv:yum"]', apply: () => { const r = addRule(gameRef.current, 'bird', 'recv:yum'); apply(r, 'bird'); } });
-      const card = () => objectOf(gameRef.current, 'bird')!.rules.findIndex((r) => r.hat === 'recv:yum');
-      steps.push({ do: 'tap', at: '.gm-palette [data-block="say:mia"]', apply: () => { apply(addAction(gameRef.current, 'bird', card(), 'say:mia'), 'bird'); } });
-      // "¡Mía!" → "¡Ay!" → "¡Pío!": the chip, twice
-      for (let k = 0; k < 2; k++) {
-        steps.push({ do: 'wait', ms: 200 }, { do: 'tap', at: '.gm-card[data-card^="bird:"] [data-chip$=":0"]', apply: () => { apply(changeChip(gameRef.current, 'bird', card(), 0), 'bird'); } });
-      }
+    if (selRef.current !== def.obj) select(def.obj);
+    track.current.ghostBuilt = true;
+    const steps: DemoStep[] = [{ do: 'wait', ms: 250 }];
+    for (const e of todo) {
+      steps.push({ do: 'tap', at: blockAt(e.kind === 'hat' ? e.hat : e.action), apply: () => { apply(applyMissing(gameRef.current, e), e.obj); } });
+      steps.push({ do: 'wait', ms: 250 });
     }
-    steps.push({ do: 'tap', at: '.gm-tab[data-obj="seed"]', apply: () => select('seed') });
-    const seedCard = objectOf(g, 'seed')?.rules.findIndex((r) => r.hat === 'touch:me') ?? -1;
-    if (seedCard >= 0 && !objectOf(g, 'seed')!.rules[seedCard].actions.includes('send:yum')) {
-      steps.push({ do: 'tap', at: '.gm-palette [data-block="send:yum"]', apply: () => { setActive(seedCard); apply(addAction(gameRef.current, 'seed', seedCard, 'send:yum'), 'seed'); } });
-    }
-    demo(steps, 'rule', 0.9);
+    // built: now the child tries it
+    void demo(steps, 'rule', 0.9)?.done.then(() => { if (!doneRef.current && !turned.current) speak(step === 'move' ? GM_SAY.tryKeys : GM_SAY.tryIt); });
   };
 
   const onHelp = () => {
     const a = apiRef.current;
     if (demoRef.current) return;
-    if (helpStep.current >= 3) { a.raiseHand('help_step_3'); return; }
-    const step = ++helpStep.current;
-    if (a.level.current) a.level.current.helpStep = step;
-    a.log('help', { level_id: LEVEL_ID, step, phase });
-    if (step === 1) {
-      speak(GM_LINES[phase]);
-      const at = phase === 'play' ? '.gm-root .btn-play' : phase === 'change' ? '.gm-tab[data-obj="seed"]' : '.gm-palette';
-      rootRef.current?.querySelector(at)?.animate([{ scale: '1' }, { scale: '1.08' }, { scale: '1' }, { scale: '1.08' }, { scale: '1' }], { duration: 1100 });
+    if (track.current.helps >= 3) { a.raiseHand('help_step_3'); return; }
+    const n = ++track.current.helps;
+    if (a.level.current) a.level.current.helpStep = n;
+    a.log('help', { level_id: LEVEL_ID, step: n, phase: step });
+    const miss = firstMissing();
+    if (n === 1) {
+      speak(line);
+      const at = step === 'seed_read' ? '.gm-tab[data-obj="seed"]' : step === 'free' ? '.gm-palette' : miss ? blockAt(miss.kind === 'hat' ? miss.hat : miss.action) : '.gm-root .btn-play';
+      if (selRef.current !== def.obj && step !== 'free') select(def.obj);
+      window.setTimeout(() => rootRef.current?.querySelector(at)?.animate([{ scale: '1' }, { scale: '1.1' }, { scale: '1' }, { scale: '1.1' }, { scale: '1' }], { duration: 1100 }), 80);
       return;
     }
-    if (step === 2) {
-      if (phase === 'play') demo([{ do: 'point', at: ['.gm-root .btn-play'] }, { do: 'point', at: ['.gm-keypad'] }], 'hint');
-      else if (phase === 'change') { setSel('seed'); demo([{ do: 'wait', ms: 250 }, { do: 'point', at: ['[data-chip^="seed:1:"]'] }], 'hint'); }
-      else demo([{ do: 'drag', from: '.gm-palette [data-block="send:yum"]', to: '.gm-notebook' }], 'hint');
+    if (n === 2) {
+      if (step === 'seed_read') demo([{ do: 'point', at: ['.gm-tab[data-obj="seed"]', '.gm-sprite[data-sprite="seed"]'] }], 'hint');
+      else if (step === 'free') demo([{ do: 'point', at: ['.gm-tab[data-obj="add-bird"]', '.gm-palette'] }], 'hint');
+      else if (miss) {
+        if (selRef.current !== def.obj) select(def.obj);
+        demo([{ do: 'wait', ms: 250 }, { do: 'drag', from: blockAt(miss.kind === 'hat' ? miss.hat : miss.action), to: dropAt(miss) }], 'hint');
+      } else demo([{ do: 'point', at: ['.gm-root .btn-play', '.gm-keypad'] }], 'hint');
       return;
     }
-    showRule();
+    build();
   };
 
-  // keys: the arrows play the game
+  /** "Seguir" after a while: the step's rules are left built (so the next step works), the page turns. */
+  const skip = () => {
+    if (turned.current || doneRef.current) return;
+    ghostRun.current?.cancel();
+    demoRef.current = false;
+    track.current.skipped = true;
+    for (const e of missingEdits(gameRef.current, step)) apply(applyMissing(gameRef.current, e), e.obj, { filled: true });
+    speak(GM_SAY.skip);
+    window.setTimeout(() => turnRef.current(), 900);
+  };
+
+  // keys: the arrows play the game (a press while stopped starts it)
   useEffect(() => {
     const map: Record<string, Dir> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
     const on = (e: KeyboardEvent) => {
@@ -360,67 +487,80 @@ function Workshop({ phase, game, gameRef, setGame, onDone }: {
   }, []);
   const pressKey = (d: Dir) => {
     rootRef.current?.querySelector(`.key-btn[data-dir="${d}"]`)?.animate([{ translate: '0 0' }, { translate: '0 4px' }, { translate: '0 0' }], { duration: 160 });
-    if (!board.current?.running()) {
-      rootRef.current?.querySelector('.gm-root .btn-play')?.animate([{ rotate: '0deg' }, { rotate: '-4deg', scale: '1.06' }, { rotate: '3deg' }, { rotate: '0deg', scale: '1' }], { duration: 480 });
-      return;
-    }
+    if (!board.current) return;
+    if (!board.current.running()) board.current.start();
     board.current.press(d);
   };
 
   useEffect(() => {
     if (!DEBUG) return;
     (window as unknown as { __gmw: unknown }).__gmw = {
-      phase, select, tapPalette, chip, removeAt, addBird, help: onHelp, ready: () => setReady(true),
+      step, select, tapPalette, chip, removeAt, addBird, help: onHelp, skip, turn,
       start: () => board.current?.start(), stop: () => board.current?.stop(), press: pressKey, state: () => board.current?.state(),
-      track: () => track.current,
+      flags: () => flags.current, done: () => doneRef.current, track: () => track.current,
     };
   });
 
   const keys = useMemo(() => { const k = keysOf(game); return DIRS.filter((d) => k.includes(d) || d === 'left' || d === 'right'); }, [game]);
+  const at = STEPS.indexOf(step);
+  const hud = { points: at >= STEPS.indexOf('touch_rules'), trophy: !!objectOf(game, 'game') };
+
+  const progress = { kind: 'dots' as const, done: STEPS.map((s, i) => passed[i] || (s === step && doneNow)), here: at };
 
   return (
-    <main ref={rootRef} className={`level mode-realtime mode-gm gm-root is-${phase}${editable ? '' : ' is-readonly'}${demoing ? ' is-demo' : ''}`} data-phase={phase}>
+    <BarProgressContext.Provider value={progress}>
+    <main ref={rootRef} className={`level mode-realtime mode-gm gm-root is-${step}${editable ? '' : ' is-readonly'}${demoing ? ' is-demo' : ''}${doneNow ? ' is-done' : ''}`} data-phase={step}>
       <Bar
-        instruction={<span className="drawn-task" aria-hidden="true"><PhaseSteps phase={phase} /></span>}
-        title={<><b>Hacé tu juego</b>Hacé tu juego · {PHASE_NAME[phase]}</>}
-        pages={null}
+        instruction={<span className="drawn-task" aria-hidden="true"><StepIcon step={step} size={70} /></span>}
+        title={<><b>Hacé tu juego</b>Hacé tu juego · {STEP_NAME[step]}</>}
+        pages={<BarProgressView />}
         onSpeak={onSpeak}
         onHelp={onHelp}
       />
-      <Palette obj={sel} enabled={editable} onTap={tapPalette} onDrop={dropOn} shake={shake} />
+      {canSkip && !doneNow && <GoOn onClick={skip} />}
+      <Palette step={step} obj={sel} enabled={editable} onTap={tapPalette} onDrop={dropOn} shake={shake} back={editable || def.palette == null ? null : def.obj} onBack={() => select(def.obj)} />
       <Notebook
-        game={game} sel={sel} active={active} editable={editable} meName={meName} shake={shake}
+        step={step} done={doneNow} game={game} sel={sel} active={active} editable={editable} meName={meName} shake={shake} cue={step === 'seed_read' && !doneNow ? 'seed' : null}
         onSelect={select} onAddBird={() => addBird()} onTapHat={(i) => setActive((a) => (a === i ? null : i))}
         onRemove={removeAt} onChip={chip}
       />
       <section className="level-stage gm-stage" aria-label="Tablero">
         <div className="controls">
-          <button type="button" className={`btn btn-play cut${running ? ' is-running' : ''}`} onClick={() => (board.current?.running() ? board.current.stop() : board.current?.start())} aria-label={running ? 'Parar' : 'Probar'}>
+          <button
+            key={pulsePlay} type="button" className={`btn btn-play cut${running ? ' is-running' : ''}${pulsePlay && !running ? ' is-nudge' : ''}`}
+            onClick={() => (board.current?.running() ? board.current.stop() : board.current?.start())} aria-label={running ? 'Parar' : 'Probar'}
+          >
             {running ? <><StopIcon /><span>Parar</span></> : <><PlayIcon /><span>Probar</span></>}
           </button>
           <RestartButton onClick={() => board.current?.stop()} />
-          {ready && (
-            <button type="button" className="next-page cut pop-in gm-next" aria-label="Seguir" onClick={() => { board.current?.stop(); onDone(phase, track.current, helpStep.current); }}>
-              <NextPageArt />
-            </button>
-          )}
-        </div>
-        <GmBoard
-          ctl={board} gameRef={gameRef} game={game} sel={sel} onSelect={select}
-          onRunning={setRunning} onRunStart={onRunStart} onRunEnd={onRunEnd} onFire={onFire}
-        />
-        <div className="gm-keys">
-          <div className="keypad gm-keypad" aria-label="Flechas del teclado">
+          <div className="keypad gm-keypad" aria-label="Flechas del teclado" data-n={keys.length}>
             {keys.map((d) => (
               <button key={d} type="button" className={`key-btn key-${d}`} data-dir={d} aria-label={`Flecha ${d}`} onPointerDown={(e) => { e.preventDefault(); pressKey(d); }}>
                 <KeyCap dir={d} size={50} />
               </button>
             ))}
           </div>
+          {(doneNow || canFinish) && (
+            <button type="button" className="next-page cut pop-in gm-next" aria-label="Seguir" onClick={() => turnRef.current()}>
+              <NextPageArt />
+            </button>
+          )}
         </div>
+        <GmBoard
+          ctl={board} gameRef={gameRef} game={game} sel={sel} hud={hud} onSelect={select}
+          onRunning={setRunning} onRunStart={onRunStart} onRunEnd={onRunEnd} onFire={onFire} onTick={onTick} onShrug={onShrug}
+        />
       </section>
     </main>
+    </BarProgressContext.Provider>
   );
+}
+
+/** "Seguir" in the bar before ✋ (never over the board): the step is left for later. */
+function GoOn({ onClick }: { onClick: () => void }) {
+  const bar = useBar();
+  if (!bar) return null;
+  return createPortal(<button type="button" className="pp-go-on cut pop-in gm-skip" aria-label="Seguir" onClick={onClick}><GoOnArt /></button>, bar);
 }
 
 // ================================================================== the palette
@@ -480,8 +620,11 @@ function DragGhost({ d }: { d: DragState }) {
   );
 }
 
-function Palette({ obj, enabled, onTap, onDrop, shake }: { obj: ObjId; enabled: boolean; onTap(id: string): void; onDrop(id: string, card: number | null, over: boolean): void; shake: { key: string; n: number } | null }) {
-  const { hats, actions } = paletteFor(obj);
+function Palette({ step, obj, enabled, onTap, onDrop, shake, back, onBack }: {
+  step: GmStep; obj: ObjId; enabled: boolean; onTap(id: string): void; onDrop(id: string, card: number | null, over: boolean): void;
+  shake: { key: string; n: number } | null; back: ObjId | null; onBack(): void;
+}) {
+  const { hats, actions } = stepPalette(step, obj);
   const ref = useRef<HTMLElement>(null);
   const { drag, down } = useDrag(
     (d, x, y) => { const t = dropTarget(x, y); onDrop(d.id, t.card, t.over); },
@@ -501,22 +644,30 @@ function Palette({ obj, enabled, onTap, onDrop, shake }: { obj: ObjId; enabled: 
       <GmBlockArt id={id} hat={hat} />
     </button>
   );
+  const few = hats.length + actions.length <= 4;
   return (
-    <section ref={ref} className="zone zone-palette gm-palette" data-zone="palette" data-obj={obj} aria-label="Bloques">
+    <section ref={ref} className={`zone zone-palette gm-palette${few ? ' is-few' : ''}`} data-zone="palette" data-obj={obj} aria-label="Bloques">
       <div className="gm-palette-in">
         {hats.map((h) => item(h, true))}
-        <span className="palette-rule" aria-hidden="true" />
+        {hats.length > 0 && actions.length > 0 && <span className="palette-rule" aria-hidden="true" />}
         {actions.map((a) => item(a, false))}
+        {/* looking at another object's cards in a step: its blocks are elsewhere; this goes back to the step's object */}
+        {back && (
+          <button type="button" className="gm-back cut" data-back={back} aria-label="Volver" onClick={onBack}>
+            <ObjIcon id={back} size={52} />
+            <svg className="gm-back-arrow" viewBox="0 0 40 24" aria-hidden="true"><path d="M36,12 L6,12 M14,4 L5,12 L14,20" fill="none" stroke="#3d6ea5" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+        )}
       </div>
       {drag?.on && <DragGhost d={drag} />}
     </section>
   );
 }
 
-// ================================================================== the notebook: tabs, cards, La Traductora
+// ================================================================== the notebook: the step's note, the tabs, one object's cards
 
-function Notebook({ game, sel, active, editable, meName, shake, onSelect, onAddBird, onTapHat, onRemove, onChip }: {
-  game: GmGame; sel: ObjId; active: number | null; editable: boolean; meName: string; shake: { key: string; n: number } | null;
+function Notebook({ step, done, game, sel, active, editable, meName, shake, cue, onSelect, onAddBird, onTapHat, onRemove, onChip }: {
+  step: GmStep; done: boolean; game: GmGame; sel: ObjId; active: number | null; editable: boolean; meName: string; shake: { key: string; n: number } | null; cue: ObjId | null;
   onSelect(id: ObjId): void; onAddBird(): void; onTapHat(i: number): void; onRemove(rule: number, action: number | null): void; onChip(rule: number, action: number | null): void;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -541,18 +692,33 @@ function Notebook({ game, sel, active, editable, meName, shake, onSelect, onAddB
   const hasBird = !!objectOf(game, 'bird');
   const name = (id: ObjId) => (id === 'me' ? meName : OBJ_NAME[id]);
   const lifted = drag?.on && drag.from !== 'palette' ? drag.from : null;
+  const goal = stepGoal(step, meName);
+  // a card the step still needs: a dashed hat where it goes
+  const needsCard = editable && step !== 'free' && missingEdits(game, step).some((e) => e.kind === 'hat');
+  // the card being filled stays in view (the notebook scrolls)
+  useEffect(() => {
+    if (active == null) return;
+    ref.current?.querySelector(`.gm-card[data-card="${sel}:${active}"]`)?.scrollIntoView({ block: 'nearest', behavior: REDUCED ? 'auto' : 'smooth' });
+  }, [active, sel, obj.rules.length]);
 
   return (
     <section ref={ref} className="zone zone-program gm-notebook" data-zone="program" aria-label="Tus reglas">
+      <div className={`gm-goal sheet${done ? ' is-done' : ''}`} data-step={step}>
+        <span className="tape tape-l" aria-hidden="true" />
+        <span className="gm-goal-n" aria-hidden="true">{STEPS.indexOf(step) + 1}</span>
+        <StepIcon step={step} size={58} />
+        <p className="gm-goal-t">{goal.map((l, i) => <span key={i}>{l}</span>)}</p>
+        {done && <svg className="gm-goal-check" viewBox="0 0 40 34" aria-hidden="true"><path d="M5,18 L15,28 L36,4" fill="none" stroke="#3d6ea5" strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" /></svg>}
+      </div>
       <div className="gm-tabs" role="tablist">
         {game.map((o) => (
-          <button key={o.id} type="button" role="tab" aria-selected={o.id === sel} className={`gm-tab cut${o.id === sel ? ' is-on' : ''}`} data-obj={o.id} onClick={() => onSelect(o.id)}>
+          <button key={o.id} type="button" role="tab" aria-selected={o.id === sel} className={`gm-tab cut${o.id === sel ? ' is-on' : ''}${cue === o.id ? ' is-cue' : ''}`} data-obj={o.id} onClick={() => onSelect(o.id)}>
             <ObjIcon id={o.id} size={34} />
             <span className="gm-tab-name">{name(o.id)}</span>
             {o.id === sel && <PenRing seed={o.id.length + 2} />}
           </button>
         ))}
-        {!hasBird && editable && (
+        {!hasBird && step === 'free' && (
           <button type="button" className="gm-tab gm-tab-add cut" data-obj="add-bird" aria-label="Sumar el pájaro" onClick={onAddBird}>
             <span className="gm-add-plus" aria-hidden="true">+</span>
             <ObjIcon id="bird" size={30} />
@@ -561,37 +727,35 @@ function Notebook({ game, sel, active, editable, meName, shake, onSelect, onAddB
         )}
       </div>
       <div className="gm-sheet">
-        <div className="gm-heads" aria-hidden="true"><span>{RULES_OF[sel] ?? `Reglas de ${meName}`}</span><span>En Scratch</span></div>
-        {obj.rules.length === 0 && (
-          <p className="gm-empty">{editable ? <>Poné un <b>cuando…</b> para empezar una regla.</> : null}</p>
+        {obj.rules.length === 0 && editable && (
+          <div className="gm-slot is-hat" aria-hidden="true" style={{ width: HAT_W, height: HAT_H }} />
         )}
         {obj.rules.map((r, i) => (
-          <div key={`${r.hat}#${i}`} className="gm-row">
-            <div className={`gm-card${active === i ? ' is-active' : ''}${lifted && lifted.rule === i && lifted.action == null ? ' is-lifted' : ''}`} data-card={`${sel}:${i}`}>
-              <svg className="gm-card-ring" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d={penLoop(50, 50, 47, 46, { seed: i + 3 })} vectorEffect="non-scaling-stroke" /></svg>
-              <div
-                className="gm-blk gm-hat is-hat" role="button" tabIndex={0} style={{ width: HAT_W, height: HAT_H }}
-                onPointerDown={editable ? down(r.hat, { rule: i, action: null }) : undefined}
-                aria-label={`Regla ${r.hat}`}
-              >
-                <GmBlockArt id={r.hat} hat chip={editable ? { at: `${sel}:${i}:h`, onChip: () => onChip(i, null) } : {}} />
-              </div>
-              {r.actions.map((a, j) => (
-                <div
-                  key={`${a}#${j}`} className={`gm-blk gm-act${lifted && lifted.rule === i && lifted.action === j ? ' is-lifted' : ''}`} role="button" tabIndex={0}
-                  style={{ width: ACT_W, height: ACT_H }}
-                  onPointerDown={editable ? down(a, { rule: i, action: j }) : undefined}
-                  aria-label={`Bloque ${a}`}
-                >
-                  <GmBlockArt id={a} hat={false} chip={editable ? { at: `${sel}:${i}:${j}`, onChip: () => onChip(i, j) } : {}} />
-                </div>
-              ))}
-              {editable && active === i && r.actions.length < 4 && <div className="gm-slot" aria-hidden="true" />}
+          <div key={`${r.hat}#${i}`} className={`gm-card${active === i && editable ? ' is-active' : ''}${lifted && lifted.rule === i && lifted.action == null ? ' is-lifted' : ''}`} data-card={`${sel}:${i}`}>
+            <svg className="gm-card-ring" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d={penLoop(50, 50, 47, 46, { seed: i + 3 })} vectorEffect="non-scaling-stroke" /></svg>
+            <div
+              className="gm-blk gm-hat is-hat" role="button" tabIndex={0} style={{ width: HAT_W, height: HAT_H }}
+              onPointerDown={editable ? down(r.hat, { rule: i, action: null }) : undefined}
+              aria-label={`Regla ${r.hat}`}
+            >
+              <GmBlockArt id={r.hat} hat chip={editable ? { at: `${sel}:${i}:h`, onChip: () => onChip(i, null) } : {}} />
             </div>
-            <svg className="gm-eq" viewBox="0 0 30 20" aria-hidden="true"><path d="M3,10 Q14,4 24,10" fill="none" stroke="#3d6ea5" strokeWidth={2.4} strokeDasharray="1 5" strokeLinecap="round" /><path d="M19,5 L25,10 L19,15" fill="none" stroke="#3d6ea5" strokeWidth={2.4} strokeLinecap="round" /></svg>
-            <ScratchScript blocks={scratchOf(r, meName)} className="gm-tr" />
+            {r.actions.map((a, j) => (
+              <div
+                key={`${a}#${j}`} className={`gm-blk gm-act${lifted && lifted.rule === i && lifted.action === j ? ' is-lifted' : ''}`} role="button" tabIndex={0}
+                style={{ width: ACT_W, height: ACT_H }}
+                onPointerDown={editable ? down(a, { rule: i, action: j }) : undefined}
+                aria-label={`Bloque ${a}`}
+              >
+                <GmBlockArt id={a} hat={false} chip={editable ? { at: `${sel}:${i}:${j}`, onChip: () => onChip(i, j) } : {}} />
+              </div>
+            ))}
+            {editable && (active === i || r.actions.length === 0) && r.actions.length < 4 && <div className="gm-slot" aria-hidden="true" />}
           </div>
         ))}
+        {needsCard && obj.rules.length > 0 && (
+          <div className="gm-slot is-hat is-next" aria-hidden="true" style={{ width: HAT_W, height: HAT_H }} />
+        )}
       </div>
       {drag?.on && drag.from !== 'palette' && <DragGhost d={drag} />}
     </section>
@@ -610,10 +774,12 @@ const TROPHY_AT = { x: HUD_X, y: BY + 36 };
 const ME_BOX = { x: -58, y: -118, w: 116, h: 128 };
 
 interface Flight { id: number; msg: MsgId; from: { x: number; y: number }; to: { x: number; y: number } }
+interface Pop { id: number; x: number; y: number; text: string; bad: boolean }
 
-function GmBoard({ ctl, gameRef, game, sel, onSelect, onRunning, onRunStart, onRunEnd, onFire }: {
-  ctl: MutableRefObject<BoardCtl | null>; gameRef: MutableRefObject<GmGame>; game: GmGame; sel: ObjId; onSelect(id: ObjId): void;
+function GmBoard({ ctl, gameRef, game, sel, hud, onSelect, onRunning, onRunStart, onRunEnd, onFire, onTick, onShrug }: {
+  ctl: MutableRefObject<BoardCtl | null>; gameRef: MutableRefObject<GmGame>; game: GmGame; sel: ObjId; hud: { points: boolean; trophy: boolean }; onSelect(id: ObjId): void;
   onRunning(on: boolean): void; onRunStart(): void; onRunEnd(r: RunSummary): void; onFire(obj: ObjId, rule: number): void;
+  onTick(prev: GmState, events: GmEvent[]): void; onShrug(): void;
 }) {
   const player = usePlayer();
   const { ref: meRef, view } = useStage(player, ME_BOX, { shadow: true });
@@ -623,14 +789,16 @@ function GmBoard({ ctl, gameRef, game, sel, onSelect, onRunning, onRunStart, onR
   const runningRef = useRef(false);
   const [over, setOver] = useState<'win' | 'lose' | null>(null);
   const [flights, setFlights] = useState<Flight[]>([]);
+  const [pops, setPops] = useState<Pop[]>([]);
   const [bumps, setBumps] = useState({ score: 0, lives: 0 });
+  const [shrugs, setShrugs] = useState(0);
   const pressed = useRef<Dir[]>([]);
   const run = useRef<{ at: number; keys: number } | null>(null);
   const senders = useRef<Partial<Record<MsgId, { x: number; y: number }>>>({});
-  const nextFlight = useRef(1);
+  const nextId = useRef(1);
   const prevPos = useRef<Record<string, { c: number; r: number }>>({});
-  const cb = useRef({ onRunning, onRunStart, onRunEnd, onFire });
-  cb.current = { onRunning, onRunStart, onRunEnd, onFire };
+  const cb = useRef({ onRunning, onRunStart, onRunEnd, onFire, onTick, onShrug });
+  cb.current = { onRunning, onRunStart, onRunEnd, onFire, onTick, onShrug };
 
   const posOf = (s: GmState, obj: ObjId) => {
     if (obj === 'game') return TROPHY_AT;
@@ -653,20 +821,34 @@ function GmBoard({ ctl, gameRef, game, sel, onSelect, onRunning, onRunStart, onR
     simRef.current = s;
     setSim(s);
     setFlights([]);
+    setPops([]);
+  };
+
+  const pop = (s: GmState, text: string, bad: boolean) => {
+    const me = s.sprites.me;
+    if (!me) return;
+    const id = nextId.current++;
+    const { x, y } = cellCenter(me.c, me.r);
+    setPops((p) => [...p, { id, x, y: y - 70, text, bad }]);
+    window.setTimeout(() => setPops((p) => p.filter((q) => q.id !== id)), 900);
   };
 
   const onEvent = (e: GmEvent, s: GmState) => {
     switch (e.t) {
       case 'fire': cb.current.onFire(e.obj, e.rule); break;
-      case 'score': setBumps((b) => ({ ...b, score: b.score + 1 })); break;
+      case 'shrug': setShrugs((n) => n + 1); cb.current.onShrug(); break;
+      case 'score':
+        setBumps((b) => ({ ...b, score: b.score + 1 }));
+        if (e.delta) pop(s, e.delta > 0 ? `+${e.delta}` : `${e.delta}`, e.delta < 0);
+        break;
       case 'lives':
         setBumps((b) => ({ ...b, lives: b.lives + 1 }));
-        if (e.delta < 0) void view.current?.wince();
+        if (e.delta < 0) { void view.current?.wince(); pop(s, '−1', true); }
         break;
       case 'send': senders.current[e.msg] = posOf(s, e.obj); break;
       case 'recv': {
         const from = senders.current[e.msg] ?? TROPHY_AT;
-        const id = nextFlight.current++;
+        const id = nextId.current++;
         setFlights((f) => [...f, { id, msg: e.msg, from, to: posOf(s, e.obj) }]);
         window.setTimeout(() => setFlights((f) => f.filter((x) => x.id !== id)), 1100);
         break;
@@ -687,10 +869,12 @@ function GmBoard({ ctl, gameRef, game, sel, onSelect, onRunning, onRunStart, onR
     if (!running) return;
     const id = window.setInterval(() => {
       if (!runningRef.current) return;
-      const { state, events } = gmStep(gameRef.current, simRef.current, pressed.current.splice(0));
+      const prev = simRef.current;
+      const { state, events } = gmStep(gameRef.current, prev, pressed.current.splice(0));
       simRef.current = state;
       setSim(state);
       for (const e of events) onEvent(e, state);
+      cb.current.onTick(prev, events);
     }, TICK_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -704,6 +888,7 @@ function GmBoard({ ctl, gameRef, game, sel, onSelect, onRunning, onRunStart, onR
       setSim(s);
       setOver(null);
       setFlights([]);
+      setPops([]);
       pressed.current = [];
       senders.current = {};
       run.current = { at: Date.now(), keys: 0 };
@@ -731,9 +916,10 @@ function GmBoard({ ctl, gameRef, game, sel, onSelect, onRunning, onRunStart, onR
         setSim(s);
       } else window.setTimeout(reset, 0);
     },
+    cheer() { void view.current?.cheer(false); },
   };
 
-  // the game changed while stopped (a sprite added, the game reset): the board shows its start
+  // the game changed while stopped (an object added, the game reset): the board shows its start
   useEffect(() => { if (!runningRef.current && !over) reset(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [game.length]);
 
   // unmount: a game still running ends as stopped
@@ -761,8 +947,8 @@ function GmBoard({ ctl, gameRef, game, sel, onSelect, onRunning, onRunStart, onR
               {sel === sp.id && <ellipse className="gm-sel-ring" cx={0} cy={26} rx={28} ry={7} />}
               <rect x={-30} y={-30} width={60} height={60} fill="transparent" />
               {sp.id === 'me'
-                ? <svg ref={meRef} x={-46} y={-78} width={92} height={92 * 128 / 116} overflow="visible" />
-                : <g filter="url(#rough)">{sp.id === 'seed' ? <SeedArt /> : sp.id === 'stone' ? <StoneArt /> : <BirdArt dir={sp.dir === 'left' ? 'left' : 'right'} />}</g>}
+                ? <g key={`shrug-${shrugs}`} className={shrugs ? 'gm-shrug' : undefined}><svg ref={meRef} x={-46} y={-78} width={92} height={92 * 128 / 116} overflow="visible" /></g>
+                : <g className="gm-pop-in" filter="url(#rough)">{sp.id === 'seed' ? <SeedArt /> : sp.id === 'stone' ? <StoneArt /> : <BirdArt dir={sp.dir === 'left' ? 'left' : 'right'} />}</g>}
             </g>
           );
         })}
@@ -770,18 +956,23 @@ function GmBoard({ ctl, gameRef, game, sel, onSelect, onRunning, onRunStart, onR
           const { x, y } = cellCenter(sp.c, sp.r);
           return <SayBubble key={`say-${sp.id}`} text={SAY_WORD[sp.say!]} x={Math.min(BX + BW - 40, Math.max(BX + 40, x))} y={y - (sp.id === 'me' ? 34 : 14)} />;
         })}
-        {/* the HUD: the whole game (its trophy), the points, the lives */}
-        <g className={`gm-trophy${sel === 'game' ? ' is-sel' : ''}`} transform={`translate(${TROPHY_AT.x} ${TROPHY_AT.y})`} onClick={() => onSelect('game')}>
-          {sel === 'game' && <ellipse className="gm-sel-ring" cx={0} cy={28} rx={26} ry={6} />}
-          <rect x={-30} y={-30} width={60} height={62} fill="transparent" />
-          <g filter="url(#rough)"><TrophyArt /></g>
-        </g>
-        <g transform={`translate(${HUD_X} ${BY + 140})`} filter="url(#rough)"><ScoreJar n={sim.score} bump={bumps.score} /></g>
-        <foreignObject x={HUD_X - 44} y={BY + 196} width={88} height={130}>
-          <div className="gm-lives" data-lives={lives}>
-            {Array.from({ length: Math.max(3, lives) }, (_, i) => <span key={`${i}-${i >= lives ? bumps.lives : 0}`} className={i >= lives ? 'is-gone' : ''}><HeartGlyph size={24} empty={i >= lives} /></span>)}
-          </div>
-        </foreignObject>
+        {pops.map((p) => <text key={p.id} className={`gm-pop${p.bad ? ' is-bad' : ''}`} x={p.x} y={p.y} textAnchor="middle">{p.text}</text>)}
+        {/* the HUD: the whole game (its trophy), the points, the lives (from the step that brings them) */}
+        {hud.trophy && (
+          <g className={`gm-trophy gm-hud-in${sel === 'game' ? ' is-sel' : ''}`} transform={`translate(${TROPHY_AT.x} ${TROPHY_AT.y})`} onClick={() => onSelect('game')}>
+            {sel === 'game' && <ellipse className="gm-sel-ring" cx={0} cy={28} rx={26} ry={6} />}
+            <rect x={-30} y={-30} width={60} height={62} fill="transparent" />
+            <g filter="url(#rough)"><TrophyArt /></g>
+          </g>
+        )}
+        {hud.points && <>
+          <g className="gm-hud-in" transform={`translate(${HUD_X} ${BY + 140})`} filter="url(#rough)"><ScoreJar n={sim.score} bump={bumps.score} /></g>
+          <foreignObject x={HUD_X - 44} y={BY + 196} width={88} height={130}>
+            <div className="gm-lives" data-lives={lives}>
+              {Array.from({ length: Math.max(3, lives) }, (_, i) => <span key={`${i}-${i >= lives ? bumps.lives : 0}`} className={i >= lives ? 'is-gone' : ''}><HeartGlyph size={24} empty={i >= lives} /></span>)}
+            </div>
+          </foreignObject>
+        </>}
         {flights.map((f) => <EnvelopeFlight key={f.id} f={f} />)}
       </svg>
       {over && <EndCard result={over} again={() => ctl.current?.start()} />}
@@ -840,70 +1031,6 @@ function EndCard({ result, again }: { result: 'win' | 'lose'; again(): void }) {
   );
 }
 
-// ================================================================== predict a Scratch script
-
-function Predict({ done }: { done(): void }) {
-  const api = usePlaytest();
-  const player = usePlayer();
-  const me = CHARACTER_NAME[player.def.id as CharacterId] ?? 'Brote';
-  const items = useMemo(() => predictItems(me), [me]);
-  const [i, setI] = useState(0);
-  const [picked, setPicked] = useState<OutcomeId | null>(null);
-  const shownAt = useRef(Date.now());
-  const item = items[i];
-
-  useEffect(() => {
-    shownAt.current = Date.now();
-    setPicked(null);
-    let off = () => {};
-    const t = window.setTimeout(() => { off = speakWhenAllowed(i === 0 ? `${GM_SAY.predictIntro} ${item.say}` : item.say); }, 400);
-    return () => { clearTimeout(t); off(); };
-  }, [i, item.say]);
-
-  const answer = (o: OutcomeId, pos: number) => {
-    if (picked) return;
-    setPicked(o);
-    speak(OUTCOME_SAY[o]);
-    api.log('scratch_predict', { item: item.id, answer: o, correct: o === item.answer, position: pos, time_ms: Date.now() - shownAt.current });
-    window.setTimeout(() => { if (i + 1 < items.length) setI(i + 1); else done(); }, 1600);
-  };
-
-  const spriteName = (s: 'me' | 'star' | 'stone' | 'bird') => (s === 'me' ? me : s === 'star' ? 'Estrella' : s === 'stone' ? 'Piedra' : 'Pájaro');
-  return (
-    <main className="pp-page gm-predict" data-item={item.id}>
-      <Bar
-        instruction={<span className="drawn-task" aria-hidden="true"><PhaseSteps phase="predict" /></span>}
-        title={<><b>Hacé tu juego</b>Hacé tu juego · 4 · ¿qué hace este programa de Scratch? ({i + 1} de {items.length})</>}
-        pages={null}
-        onSpeak={() => { api.log('speak', { level_id: LEVEL_ID, phase: 'predict' }); speak(item.say); }}
-        onHelp={() => { api.log('help', { level_id: LEVEL_ID, step: 1, phase: 'predict' }); speak(item.say); }}
-      />
-      <section className="gm-predict-body">
-        <div className="sheet gm-predict-code" aria-label="Programa de Scratch">
-          <span className="tape tape-l" aria-hidden="true" />
-          {item.scripts.map((s, k) => (
-            <div key={k} className="gm-predict-script">
-              <p className="gm-predict-who"><ObjIcon id={s.sprite} size={40} /><span>{spriteName(s.sprite)}</span></p>
-              <ScratchScript blocks={s.blocks} />
-            </div>
-          ))}
-        </div>
-        <div className="gm-predict-q">
-          <p className="gm-predict-say">{item.say}</p>
-          <div className="gm-predict-options">
-            {item.options.map((o, k) => (
-              <button key={o} type="button" className={`pp-option cut gm-option${picked === o ? ' is-picked' : ''}${picked && picked !== o ? ' is-other' : ''}`} data-answer={o} aria-label={OUTCOME_SAY[o]} onClick={() => answer(o, k)}>
-                <Outcome id={o} />
-                {picked === o && <PenRing seed={k + 4} />}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-}
-
 // ================================================================== did you like it?
 
 const LIKED: { value: 'yes' | 'mid' | 'no'; word: string; mood: 'happy' | 'mid' | 'sad' }[] = [
@@ -947,4 +1074,3 @@ function Liked({ done }: { done(): void }) {
     </main>
   );
 }
-

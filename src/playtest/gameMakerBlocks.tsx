@@ -1,16 +1,13 @@
-// The blocks of "Hacé tu juego", twice. Our own: paper cutouts like 3ro's
-// rule cards (a yellow hat with its ear, the actions under it, coloured by
-// what they do: moving blue, points and lives orange, looks lilac, avisar
-// pale yellow, win and lose green), with words (4to reads) and a chip where
-// Scratch has a dropdown: a tap cycles it. And La Traductora: the same rule
-// as the Scratch script that does it, in Scratch's shapes and colours (hats,
-// stacks, C-blocks, round and boolean inputs, the green flag) drawn with the
-// notebook's ink edge.
+// The blocks of "Hacé tu juego": paper cutouts like 3ro's rule cards (a
+// yellow hat with its ear, the actions under it, coloured by what they do:
+// moving blue, points and lives orange, looks lilac, avisar pale yellow, win
+// and lose green), with a few words (4to reads) and a chip where a value can
+// change: a tap cycles it.
 
 import { memo, type ReactNode } from 'react';
 import { DIMS } from '../game/editor';
 import { HatEar, Paper, cardPath, startPath } from '../blocks/blocks';
-import { MSG_WORD, SAY_WORD, kindOf, paramOf, type MsgId, type ObjId, type SBlock, type SPart, type SayId } from '../game/gameMaker';
+import { MSG_WORD, SAY_WORD, kindOf, paramOf, type MsgId, type ObjId, type SayId } from '../game/gameMaker';
 import type { Dir } from '../game/model';
 import {
   AheadGlyph, ArrowGlyph, BubbleGlyph, EnvelopeGlyph, EyeGlyph, FlagGlyph, HeartGlyph, JarGlyphSmall, KeyGlyph, LoopGlyph, ObjIcon, StarGlyph, TopGlyph, UTurnGlyph,
@@ -41,6 +38,9 @@ function ChipFace({ id }: { id: string }) {
     case 'move': return p === 'ahead' ? <><AheadGlyph size={22} /><span className="gm-chip-w">adelante</span></> : <ArrowGlyph dir={p as Dir} size={24} />;
     case 'say': return <span className="gm-chip-w">{SAY_WORD[p as SayId]}</span>;
     case 'vis': return <><EyeGlyph shut={p === 'hide'} size={20} /><span className="gm-chip-w">{p === 'hide' ? 'esconderse' : 'mostrarse'}</span></>;
+    // points and lives: the word says up or down ("sumar" / "restar", "perder" / "ganar"), the chip the amount
+    case 'score':
+    case 'lives': return <span className="gm-chip-n">{Math.abs(Number(p))}</span>;
     default: return <span className="gm-chip-n">{p}</span>;
   }
 }
@@ -83,8 +83,8 @@ function Face({ id, chip }: { id: string; chip: ChipProps }) {
     case 'move': return <><W>mover</W>{c}</>;
     case 'turn': return <><W>dar la vuelta</W><UTurnGlyph size={22} /></>;
     case 'top': return <><W>volver arriba</W><TopGlyph size={22} /></>;
-    case 'score': return <><W>sumar</W>{c}<W>{Math.abs(Number(p)) === 1 ? 'punto' : 'puntos'}</W><JarGlyphSmall size={22} /></>;
-    case 'lives': return <><W>sumar</W>{c}<W>vida</W><HeartGlyph size={20} /></>;
+    case 'score': return <><W>{Number(p) < 0 ? 'restar' : 'sumar'}</W>{c}<W>{Math.abs(Number(p)) === 1 ? 'punto' : 'puntos'}</W><JarGlyphSmall size={22} /></>;
+    case 'lives': return <><W>{Number(p) < 0 ? 'perder' : 'ganar'}</W>{c}<W>vida</W><HeartGlyph size={20} empty={Number(p) < 0} /></>;
     case 'say': return <><W>decir</W>{c}<BubbleGlyph size={20} /></>;
     case 'send': return <><W>avisar</W>{c}</>;
     case 'vis': return <>{c}</>;
@@ -105,32 +105,4 @@ export const GmBlockArt = memo(function GmBlockArt({ id, hat, chip = {} }: { id:
       {hat && <HatEar />}
     </>
   );
-});
-
-// ------------------------------------------------------------------ La Traductora: Scratch blocks
-
-function Part({ p }: { p: SPart }) {
-  if (typeof p === 'string') return <span className="sb-t">{p}</span>;
-  if (p.kind === 'flag') return <span className="sb-flag"><FlagGlyph size={20} /></span>;
-  const cls = p.kind === 'num' || p.kind === 'text' ? 'sb-round' : p.kind === 'bool' ? `sb-bool sb-${p.cat ?? 'sensing'}` : p.kind === 'op' ? 'sb-op sb-operators' : 'sb-drop';
-  return <span className={`sb-in ${cls}`}>{p.in}{p.kind === 'drop' && <span className="sb-v" aria-hidden="true">▾</span>}</span>;
-}
-
-function Sb({ b }: { b: SBlock }) {
-  const line = <span className="sb-line">{b.parts.map((p, i) => <Part key={i} p={p} />)}</span>;
-  if (b.shape === 'c') {
-    return (
-      <div className={`sb-c sb-${b.cat}`}>
-        <div className="sb sb-c-top">{line}</div>
-        <div className="sb-c-body">{b.body?.length ? b.body.map((x, i) => <Sb key={i} b={x} />) : <div className="sb-c-empty" />}</div>
-        <div className="sb sb-c-foot" />
-      </div>
-    );
-  }
-  return <div className={`sb sb-${b.shape} sb-${b.cat}`}>{line}</div>;
-}
-
-/** A Scratch script, top to bottom. */
-export const ScratchScript = memo(function ScratchScript({ blocks, className }: { blocks: SBlock[]; className?: string }) {
-  return <div className={`sb-script${className ? ` ${className}` : ''}`}>{blocks.map((b, i) => <Sb key={i} b={b} />)}</div>;
 });

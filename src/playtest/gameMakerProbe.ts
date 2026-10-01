@@ -1,164 +1,267 @@
 // "Hacé tu juego" (the 4to probe) as data and rules, apart from its screen
-// (GameMaker.tsx): the guided phases and when each one counts as done, what
-// is said, the Scratch scripts of the prediction task and their answers.
+// (GameMaker.tsx). Round 2 (T15): the game is built step by step, playing
+// after each step, so the child knows what each rule does because they put
+// it there:
 //
-// Phases: 1 `play` a ready-made game (catch the seeds, a stone takes a
-// life); 2 `change` one rule (a seed worth 2 points, say) and play again; 3
-// `make` your own variant (rules, the bird, "avisar", how to win) and play
-// it; then `predict` (three small Scratch scripts: what happens?) and the
-// liking question. The next page shows up once the phase's goal is met, or
-// after a while anyway (nobody gets stuck); `completed` says which.
+//   1 `move`        an empty stage, the character standing still: "make it
+//                   move with the arrows" (cuando aprieto ← / → + mover).
+//   2 `stone`       a stone appears: "make it fall" (siempre + mover abajo,
+//                   cuando toco el suelo + volver arriba).
+//   3 `seed_read`   a seed that already falls on its own: "tap it to see how
+//                   it is programmed" (an example to read, the same rules).
+//   4 `touch_rules` "if the stone touches you, you lose a life; if you catch
+//                   the seed, a point" (cuando toco a + perder / sumar).
+//   5 `win`         "when do you win?": one rule on the game's card.
+//   6 `free`        every block: change whatever you like.
+//
+// Each step names its object (whose cards are on screen), the few blocks of
+// its palette, the canonical rules it asks for (what the help's ghost hand
+// builds and what a skipped step leaves built) and what the engine must show
+// for the step to count as done. Pure: no DOM, no timers.
 
-import type { SBlock } from '../game/gameMaker';
+import {
+  addAction, addObject, addRule, cloneGame, endings, objectOf, paletteFor,
+  type EditResult, type GmEvent, type GmGame, type GmRule, type GmState, type ObjId,
+} from '../game/gameMaker';
 
-export type GmPhase = 'play' | 'change' | 'make';
-export const PHASES: readonly GmPhase[] = ['play', 'change', 'make'];
+export type GmStep = 'move' | 'stone' | 'seed_read' | 'touch_rules' | 'win' | 'free';
+export const STEPS: readonly GmStep[] = ['move', 'stone', 'seed_read', 'touch_rules', 'win', 'free'];
 
-/** What a phase has seen so far. */
-export interface PhaseTrack {
-  startedAt: number;
-  /** Games played (▶ to their end: won, lost, stopped). */
-  runs: number;
-  /** Games in which the child pressed at least one arrow. */
-  played: number;
-  /** A game ended by winning or losing. */
-  ended: number;
-  firstRunAt: number | null;
-  /** Edits of the rules in this phase (add, remove, change). */
-  edits: number;
-  firstEditAt: number | null;
-  /** Games started after the phase's first edit. */
-  runsAfterEdit: number;
+/** The seed's rules, ready made (step 3 shows them): the same two rules the child gave the stone. */
+export const SEED_RULES: GmRule[] = [
+  { hat: 'tick', actions: ['move:down'] },
+  { hat: 'touch:ground', actions: ['top'] },
+];
+/** The game's card when it first shows (step 5): losing is already there, winning is the child's. */
+export const GAME_RULES: GmRule[] = [{ hat: 'lives0', actions: ['lose'] }];
+
+export interface StepDef {
+  id: GmStep;
+  /** Whose cards the step is about (selected when it opens). */
+  obj: ObjId;
+  /** The palette: the step's few blocks (null: none, the step only reads; `all`: every block of the object). */
+  palette: { hats: string[]; actions: string[] } | null | 'all';
+  /** The rules the step asks for, on `obj`: the ghost's third help builds them, a skip leaves them built. */
+  target: GmRule[];
 }
 
-export const newTrack = (now: number): PhaseTrack => ({ startedAt: now, runs: 0, played: 0, ended: 0, firstRunAt: null, edits: 0, firstEditAt: null, runsAfterEdit: 0 });
-
-/** Phase 1 is played for about a minute: the page may turn after a game ends, or this long after the first ▶. */
-export const PLAY_MS = 45_000;
-/** Whatever happens, the next page shows up after this long in the phase. */
-export const PHASE_FALLBACK_MS: Record<GmPhase, number> = { play: 90_000, change: 180_000, make: 240_000 };
-
-/** The phase did what it asks for. */
-export function phaseCompleted(phase: GmPhase, t: PhaseTrack): boolean {
-  if (phase === 'play') return t.played > 0;
-  return t.edits > 0 && t.runsAfterEdit > 0;
-}
-
-/** The next page can show: the goal is met (phase 1: a game ended, or a minute of play), or the fallback time passed. */
-export function phaseReady(phase: GmPhase, t: PhaseTrack, now: number): boolean {
-  if (now - t.startedAt >= PHASE_FALLBACK_MS[phase]) return true;
-  if (phase === 'play') return t.played > 0 && (t.ended > 0 || (t.firstRunAt != null && now - t.firstRunAt >= PLAY_MS));
-  return phaseCompleted(phase, t);
-}
-
-/** A game started: counts for "played again after the change". */
-export function trackRunStart(t: PhaseTrack, now: number): PhaseTrack {
-  return { ...t, firstRunAt: t.firstRunAt ?? now, runsAfterEdit: t.runsAfterEdit + (t.firstEditAt != null ? 1 : 0) };
-}
-export function trackRunEnd(t: PhaseTrack, r: { keys: number; result: 'win' | 'lose' | 'stopped' }): PhaseTrack {
-  return { ...t, runs: t.runs + 1, played: t.played + (r.keys > 0 ? 1 : 0), ended: t.ended + (r.result === 'stopped' ? 0 : 1) };
-}
-export function trackEdit(t: PhaseTrack, now: number): PhaseTrack {
-  return { ...t, edits: t.edits + 1, firstEditAt: t.firstEditAt ?? now };
-}
-
-// ------------------------------------------------------------------ what is said (es-AR; "Brote" becomes the child's character)
-
-export const GM_LINES: Record<GmPhase, string> = {
-  play: 'Este juego está hecho con reglas. Tocá Probar y atrapá las semillas con las flechas. ¡Ojo con las piedras!',
-  change: 'Ahora cambiá una regla. Por ejemplo, que cada semilla valga 2 puntos: tocá el número de la regla. Después jugá otra vez.',
-  make: '¡Ahora es tu juego! Agregá reglas, cambiá cosas o sumá al pájaro. Probá avisar: una cosa avisa y otra contesta. Después jugalo.',
+export const STEP_DEFS: Record<GmStep, StepDef> = {
+  move: {
+    id: 'move', obj: 'me',
+    palette: { hats: ['key:right', 'key:left'], actions: ['move:right', 'move:left'] },
+    target: [{ hat: 'key:right', actions: ['move:right'] }, { hat: 'key:left', actions: ['move:left'] }],
+  },
+  stone: {
+    id: 'stone', obj: 'stone',
+    palette: { hats: ['tick', 'touch:ground'], actions: ['move:down', 'top'] },
+    target: [{ hat: 'tick', actions: ['move:down'] }, { hat: 'touch:ground', actions: ['top'] }],
+  },
+  seed_read: { id: 'seed_read', obj: 'seed', palette: null, target: [] },
+  touch_rules: {
+    id: 'touch_rules', obj: 'me',
+    palette: { hats: ['touch:stone', 'touch:seed'], actions: ['lives:-1', 'score:1'] },
+    target: [{ hat: 'touch:stone', actions: ['lives:-1'] }, { hat: 'touch:seed', actions: ['score:1'] }],
+  },
+  win: {
+    id: 'win', obj: 'game',
+    palette: { hats: ['points:5'], actions: ['win'] },
+    target: [{ hat: 'points:5', actions: ['win'] }],
+  },
+  free: { id: 'free', obj: 'me', palette: 'all', target: [] },
 };
+
+/** The palette of `obj` during `step`: the step's blocks on its own object, none on the others (they can be looked at); all in the free step. */
+export function stepPalette(step: GmStep, obj: ObjId): { hats: string[]; actions: string[] } {
+  const d = STEP_DEFS[step];
+  if (d.palette === 'all') return paletteFor(obj);
+  if (!d.palette || obj !== d.obj) return { hats: [], actions: [] };
+  return d.palette;
+}
+
+/** Can the child edit `obj`'s cards during `step`? */
+export const editableIn = (step: GmStep, obj: ObjId) => STEP_DEFS[step].palette === 'all' || (STEP_DEFS[step].palette != null && obj === STEP_DEFS[step].obj);
+
+// ------------------------------------------------------------------ the game as each step opens
+
+/** The game the probe starts with: the child's character alone, no rules. */
+export const START_GAME: GmGame = [{ id: 'me', rules: [] }];
+
+/** The objects a step brings onto the board (the stone, the ready seed, the game's card). */
+export function enterStep(g: GmGame, step: GmStep): GmGame {
+  let next = cloneGame(g);
+  const sprite = (id: 'stone' | 'seed', rules: GmRule[] = []) => {
+    if (objectOf(next, id)) return;
+    const r = addObject(next, id);
+    if ('game' in r) next = r.game;
+    const o = objectOf(next, id);
+    if (o) o.rules = rules.map((x) => ({ hat: x.hat, actions: [...x.actions] }));
+  };
+  const at = STEPS.indexOf(step);
+  if (at >= STEPS.indexOf('stone')) sprite('stone');
+  if (at >= STEPS.indexOf('seed_read')) sprite('seed', SEED_RULES);
+  if (at >= STEPS.indexOf('win') && !objectOf(next, 'game')) next.push({ id: 'game', rules: GAME_RULES.map((x) => ({ hat: x.hat, actions: [...x.actions] })) });
+  // the board's order: the character, the seed, the stone (the bird when added), the game
+  const order: ObjId[] = ['me', 'seed', 'stone', 'bird', 'game'];
+  return next.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+}
+
+// ------------------------------------------------------------------ what is missing (the help and the skip)
+
+export type MissingEdit = { kind: 'hat'; obj: ObjId; hat: string } | { kind: 'action'; obj: ObjId; hat: string; action: string };
+
+/** The edits that would complete the step's canonical rules, in order (a card, then its actions). */
+export function missingEdits(g: GmGame, step: GmStep): MissingEdit[] {
+  const d = STEP_DEFS[step];
+  const o = objectOf(g, d.obj);
+  const out: MissingEdit[] = [];
+  for (const t of d.target) {
+    const card = o?.rules.find((r) => r.hat === t.hat);
+    if (!card) out.push({ kind: 'hat', obj: d.obj, hat: t.hat });
+    for (const a of t.actions) if (!card?.actions.includes(a)) out.push({ kind: 'action', obj: d.obj, hat: t.hat, action: a });
+  }
+  return out;
+}
+
+/** One missing edit applied (the action goes into the card with its hat). */
+export function applyMissing(g: GmGame, e: MissingEdit): EditResult {
+  if (e.kind === 'hat') return addRule(g, e.obj, e.hat);
+  const i = objectOf(g, e.obj)?.rules.findIndex((r) => r.hat === e.hat) ?? -1;
+  if (i < 0) return { refused: 'no-card' };
+  return addAction(g, e.obj, i, e.action);
+}
+
+/** The game with every step before `step` done the canonical way (the debug jump; the skip fills one step the same way). */
+export function prepared(step: GmStep, g: GmGame = START_GAME): GmGame {
+  let next = cloneGame(g);
+  for (const s of STEPS) {
+    next = enterStep(next, s);
+    if (s === step) break;
+    for (const e of missingEdits(next, s)) {
+      const r = applyMissing(next, e);
+      if ('game' in r) next = r.game;
+    }
+  }
+  return next;
+}
+
+// ------------------------------------------------------------------ when a step is done (seen on the board)
+
+export interface StepFlags {
+  movedLeft: boolean;
+  movedRight: boolean;
+  stoneFell: boolean;
+  /** The stone reached the ground and stayed there (no "volver arriba" yet). */
+  stoneStuck: boolean;
+  stoneBack: boolean;
+  read: boolean;
+  lostLife: boolean;
+  scored: boolean;
+  /** A game ended (won or lost) with a way to win in its rules. */
+  ended: 'win' | 'lose' | null;
+}
+export const noFlags = (): StepFlags => ({ movedLeft: false, movedRight: false, stoneFell: false, stoneStuck: false, stoneBack: false, read: false, lostLife: false, scored: false, ended: null });
+
+/** What one tick of the game showed, for the step on screen. `prev` is the state before the tick. */
+export function observe(step: GmStep, f: StepFlags, prev: GmState, events: readonly GmEvent[], g: GmGame): StepFlags {
+  const n = { ...f };
+  for (const e of events) {
+    if (e.t === 'move' && e.obj === 'me') {
+      const was = prev.sprites.me;
+      if (was && e.c < was.c) n.movedLeft = true;
+      if (was && e.c > was.c) n.movedRight = true;
+    }
+    if (e.t === 'move' && e.obj === 'stone' && e.r > (prev.sprites.stone?.r ?? 0)) n.stoneFell = true;
+    if (e.t === 'bump' && e.obj === 'stone' && e.edge === 'ground' && n.stoneFell) n.stoneStuck = true;
+    if (e.t === 'top' && e.obj === 'stone' && n.stoneFell) n.stoneBack = true;
+    if (e.t === 'lives' && e.delta < 0) n.lostLife = true;
+    if (e.t === 'score' && e.delta > 0) n.scored = true;
+    if (e.t === 'end' && step === 'win' && endings(g).win_points != null) n.ended = e.result;
+  }
+  return n;
+}
+
+export function stepDone(step: GmStep, f: StepFlags): boolean {
+  switch (step) {
+    case 'move': return f.movedLeft && f.movedRight;
+    case 'stone': return f.stoneFell && f.stoneBack;
+    case 'seed_read': return f.read;
+    case 'touch_rules': return f.lostLife && f.scored;
+    case 'win': return f.ended != null;
+    case 'free': return false;
+  }
+}
+
+// ------------------------------------------------------------------ times
+
+export interface StepTimes {
+  /** "Seguir" shows after this long trying a step that is not done (nobody gets stuck). */
+  skipMs: number;
+  /** A done step turns by itself after this long. */
+  autoTurnMs: number;
+  /** The free step: the arrow to finish shows after this long; the probe ends at `freeMaxMs`. */
+  freeNextMs: number;
+  freeMaxMs: number;
+}
+export const TIMES: StepTimes = { skipMs: 90_000, autoTurnMs: 10_000, freeNextMs: 45_000, freeMaxMs: 300_000 };
+/** `?caps=fast` (the scripted checks, as the ladder's): the same rules in seconds. */
+export const FAST_TIMES: StepTimes = { skipMs: 8_000, autoTurnMs: 10_000, freeNextMs: 4_000, freeMaxMs: 40_000 };
+export const timesFrom = (search: string): StepTimes => (/[?&]caps=fast\b/.test(search) ? FAST_TIMES : TIMES);
+
+// ------------------------------------------------------------------ what is said and written (es-AR; `me` is the character's name)
+
+/** The step's goal, said when it opens, said again by 🔊 and ✋. */
+export function stepLine(step: GmStep, me: string): string {
+  switch (step) {
+    case 'move': return `Hacé que ${me} se mueva con las flechas. Arrastrá los bloques al cuaderno.`;
+    case 'stone': return 'Ahora hacé que caiga la piedra.';
+    case 'seed_read': return 'Mirá: la semilla ya cae sola. Tocá la semilla para ver cómo está programada.';
+    case 'touch_rules': return 'Si la piedra te toca, perdés una vida. Si agarrás la semilla, sumás un punto.';
+    case 'win': return '¿Cuándo se gana? Poné en el juego: si los puntos llegan a 5, ganás. Después jugá.';
+    case 'free': return 'Ahora cambiá lo que quieras: que la piedra caiga más rápido, que la semilla valga más, o sumá un pájaro.';
+  }
+}
+
+/** The goal as the note on the notebook writes it (short). */
+export function stepGoal(step: GmStep, me: string): string[] {
+  switch (step) {
+    case 'move': return [`Que ${me} se mueva`, 'con las flechas'];
+    case 'stone': return ['Que caiga la piedra'];
+    case 'seed_read': return ['Mirá cómo está', 'hecha la semilla'];
+    case 'touch_rules': return ['Piedra: −1 vida', 'Semilla: +1 punto'];
+    case 'win': return ['¿Cuándo se gana?'];
+    case 'free': return ['¡Tu juego!', 'Cambiá lo que quieras'];
+  }
+}
+
 export const GM_SAY = {
   orphan: 'Esto va debajo de un cuando.',
+  noRule: (me: string) => `${me} no sabe qué hacer con esa flecha. Ponele una regla.`,
+  oneWay: '¡Bien! Ahora hacé que vaya también para el otro lado.',
+  stuck: '¡Cae! Pero se queda abajo. Hacé que vuelva arriba cuando toca el suelo.',
+  readDone: 'Tiene las mismas reglas que tu piedra: siempre baja, y cuando toca el suelo vuelve arriba.',
+  tryIt: 'Probalo: tocá Probar.',
+  tryKeys: 'Listo. Ahora probalo: apretá las flechas.',
+  skip: 'Te lo dejo armado. Sigamos.',
   won: '¡Ganaste!',
   lost: '¡Se acabaron las vidas! ¿Otra vez?',
-  predictIntro: 'Ahora, un poco de Scratch. Mirá el programa y adiviná qué pasa. Tocá un dibujo.',
   liked: '¿Te gustó hacer tu juego? Tocá una carita: mucho, más o menos, o no.',
   cheer: '¡Qué buen juego hiciste!',
+  lastGame: 'Ya casi terminamos. Cuando quieras, tocá la flecha.',
 };
 
-/** The phase as the adult's small print says it. */
-export const PHASE_NAME: Record<GmPhase, string> = { play: '1 · jugar el juego', change: '2 · cambiar una regla', make: '3 · hacer tu juego' };
-
-// ------------------------------------------------------------------ predict a Scratch script
-
-/** What an answer shows: a drawn outcome on a tiny board. */
-export type OutcomeId = 'right' | 'up' | 'say_hola' | 'star_points' | 'star_says' | 'life_lost' | 'bird_says' | 'stone_says' | 'nobody';
-
-export interface PredictItem {
-  id: 'key' | 'star' | 'broadcast';
-  /** The question, said and written (with the character's name). */
-  say: string;
-  /** Each sprite's script: `sprite` names whose it is (drawn beside it). */
-  scripts: { sprite: 'me' | 'star' | 'stone' | 'bird'; blocks: SBlock[] }[];
-  options: readonly OutcomeId[];
-  answer: OutcomeId;
+/** Said when the step is done. */
+export function doneLine(step: GmStep, me: string, f?: StepFlags): string {
+  switch (step) {
+    case 'move': return `¡${me} se mueve! Muy bien.`;
+    case 'stone': return '¡La piedra cae y vuelve a caer!';
+    case 'seed_read': return GM_SAY.readDone;
+    case 'touch_rules': return '¡Ya es un juego: puntos y vidas!';
+    case 'win': return f?.ended === 'lose' ? 'Perdiste esta vez, pero tu juego ya tiene un final.' : '¡Tu juego ya tiene un final!';
+    case 'free': return GM_SAY.cheer;
+  }
 }
 
-const hat = (parts: SBlock['parts']): SBlock => ({ cat: 'events', shape: 'hat', parts });
-const flag = (): SBlock => hat(['al hacer clic en', { in: '', kind: 'flag' }]);
-
-/** The three fixed items (the same for every child), the right answer at a different place each time. */
-export function predictItems(me: string): PredictItem[] {
-  return [
-    {
-      id: 'key',
-      say: '¿Qué pasa cuando apretás la flecha derecha?',
-      scripts: [{ sprite: 'me', blocks: [
-        hat(['al presionar tecla', { in: 'flecha derecha', kind: 'drop' }]),
-        { cat: 'motion', shape: 'stack', parts: ['cambiar x en', { in: '40', kind: 'num' }] },
-      ] }],
-      options: ['up', 'right', 'say_hola'],
-      answer: 'right',
-    },
-    {
-      id: 'star',
-      say: `¿Qué pasa cuando ${me} toca la estrella?`,
-      scripts: [{ sprite: 'star', blocks: [
-        flag(),
-        { cat: 'control', shape: 'c', parts: ['por siempre'], body: [
-          { cat: 'control', shape: 'c', parts: ['si', { in: `¿tocando ${me}?`, kind: 'bool', cat: 'sensing' }, 'entonces'], body: [
-            { cat: 'variables', shape: 'stack', parts: ['sumar', { in: '1', kind: 'num' }, 'a', { in: 'puntos', kind: 'drop' }] },
-            { cat: 'looks', shape: 'stack', parts: ['esconder'] },
-          ] },
-        ] },
-      ] }],
-      options: ['star_points', 'star_says', 'life_lost'],
-      answer: 'star_points',
-    },
-    {
-      id: 'broadcast',
-      say: `Cuando la piedra toca a ${me}, ¿quién habla?`,
-      scripts: [
-        { sprite: 'stone', blocks: [
-          flag(),
-          { cat: 'control', shape: 'c', parts: ['por siempre'], body: [
-            { cat: 'control', shape: 'c', parts: ['si', { in: `¿tocando ${me}?`, kind: 'bool', cat: 'sensing' }, 'entonces'], body: [
-              { cat: 'events', shape: 'stack', parts: ['enviar', { in: '¡ay!', kind: 'drop' }] },
-            ] },
-          ] },
-        ] },
-        { sprite: 'bird', blocks: [
-          hat(['al recibir', { in: '¡ay!', kind: 'drop' }]),
-          { cat: 'looks', shape: 'stack', parts: ['decir', { in: '¡Cuidado!', kind: 'text' }, 'por', { in: '2', kind: 'num' }, 'segundos'] },
-        ] },
-      ],
-      options: ['stone_says', 'nobody', 'bird_says'],
-      answer: 'bird_says',
-    },
-  ];
-}
-
-/** Said when an answer is tapped (never right or wrong: the answer is only logged). */
-export const OUTCOME_SAY: Record<OutcomeId, string> = {
-  right: 'Brote se mueve a la derecha.',
-  up: 'Brote sube.',
-  say_hola: 'Brote dice hola.',
-  star_points: 'Suma un punto y la estrella se esconde.',
-  star_says: 'La estrella dice hola.',
-  life_lost: 'Brote pierde una vida.',
-  bird_says: 'El pájaro dice: ¡cuidado!',
-  stone_says: 'La piedra dice: ¡ay!',
-  nobody: 'Nadie habla.',
+/** The step as the adult's small print in the bar says it. */
+export const STEP_NAME: Record<GmStep, string> = {
+  move: '1 · moverse', stone: '2 · la piedra', seed_read: '3 · mirar la semilla', touch_rules: '4 · vidas y puntos', win: '5 · cuándo se gana', free: '6 · libre',
 };
