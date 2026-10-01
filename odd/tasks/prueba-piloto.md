@@ -73,6 +73,11 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 - [x] T12 Round-2 typing game: a visible goal and progress (how long, how much is left, that you are earning), rounds that get harder on purpose instead of speed tied to typing speed, more fun.
 - [x] T13 Round-2 verification and redeploy (production emptied again after the user's next try if asked).
 
+- [ ] T14 Classroom round (user approval 2026-10-01): the ladder capped at 6 items / 6 min; the typing game's "seguir" only after half of round 2; no division on setup; ✋ hold (~1.5 s) opens the adult "¿en qué lo ayudaste?" question (the child's hold-to-raise is removed; the hand still rises after the help steps); a green "terminó" flag visible from across the room once the core route is done, with endless free play afterwards and the survey done with the adult; class control from `/admin` ("quedan 5 minutos": every device finishes its item and goes to wardrobe + survey; "terminar la clase": "Actividad terminada", save, close in 10 s; commands travel in the `/api/sync` response), `/admin` behind a password (`ADMIN_PASSWORD` env var, never in git) with a list of who finished; a discreet demo mode (sessions flagged demo, excluded from export and admin, deleted after 24 h) with a clearly labelled demo bar (fast forward, skip level, solve level, go to step, end).
+- [ ] T15 "Hacé tu juego" built step by step: empty stage; move with the arrows; the stone falls; the seed already falls on its own as an example; lose a life when the stone touches you, a point for the seed; choose when you win; then free. No Scratch column and no Scratch predictions.
+- [ ] T16 "Del bloque al texto" from zero for 5to (never saw code): a gentle introduction of each idea before using it (a move as text, then `for`, then `if`), no `while`, never surprising them; keep measuring how well they understand.
+- [ ] T17 Verification and redeploy.
+
 ## Progress
 
 - 2026-09-30: worktree and branch created from `feat/primer-grado` (fe6a277); code mapped; this document created before the first source write.
@@ -474,4 +479,4 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 
 ## Next step
 
-The user tries round 2; then the real pilot with children.
+T14.
