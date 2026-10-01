@@ -410,7 +410,8 @@ function TypingGame({ grade, end }: { grade: number; end(): void }) {
   /** Something new falls when there is room (one at a time; a round of two at once starts the second when the first is half-way down). */
   function fill() {
     const s = g.current;
-    if (s.phase !== 'play') return;
+    // the bed is full (its last seed still flying): nothing new until the next round
+    if (s.phase !== 'play' || roundDone(s.prog)) return;
     const now = Date.now();
     const f = falling();
     if (f.length >= roundDef().atOnce) return;
@@ -518,6 +519,7 @@ function TypingGame({ grade, end }: { grade: number; end(): void }) {
     logEnd(reason);
     apiRef.current.lowerHand('moved_on', LEVEL_ID);
     setBloom(true);
+    setLamps(0);
     chime(['sol', 'mi', 'do', 'mi', 'sol'], 140);
     later(() => void view.current?.cheer(true), 300);
     later(() => void view.current?.cheer(false), 2100);
@@ -561,6 +563,8 @@ function TypingGame({ grade, end }: { grade: number; end(): void }) {
     if (s.phase === 'finale' || s.phase === 'intro' || s.phase === 'stopping') return;
     s.stopReason = reason;
     if (s.phase === 'between') { toFinale(reason); return; }
+    // the last hole was just filled (its seed still flying): the round ends as full, then the finale
+    if (roundDone(s.prog)) { s.phase = 'stopping'; setPhase('stopping'); return; }
     const begun = falling().filter((it) => it.pos > 0);
     if (!begun.length) { toFinale(reason); return; }
     s.phase = 'stopping';

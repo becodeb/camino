@@ -35,7 +35,7 @@ const allSessions = data.sessions ?? [];
 const allEvents = data.events ?? [];
 ok(Array.isArray(data.sessions) && Array.isArray(data.events), `the export has sessions (${allSessions.length}) and events (${allEvents.length})`);
 
-const COMMON = ['step', 'choice', 'tool_check', 'tap_add', 'drag', 'help', 'level_start', 'run', 'level_end', 'ladder_step', 'ladder_end', 'activity_end', 'typing', 'typing_end', 'wardrobe', 'survey_answer', 'garden_view', 'adult_form'];
+const COMMON = ['step', 'choice', 'tool_check', 'tap_add', 'drag', 'help', 'level_start', 'run', 'level_end', 'ladder_step', 'ladder_end', 'activity_end', 'typing', 'typing_round', 'typing_end', 'wardrobe', 'survey_answer', 'garden_view', 'adult_form'];
 const BY_GRADE = {
   1: ['ghost_demo', 'speak', 'call_adult', 'call_adult_end', 'adult_help', 'resume'],
   3: [],
@@ -68,6 +68,14 @@ for (const id of ids) {
   const ladderEnds = of('level_end').filter((x) => x.activity === 'ladder');
   ok(ladderEnds.filter((x) => x.outcome === 'fail').every((x) => REASONS.includes(x.end_reason)), `${tag}: every failed ladder page's level_end has its end_reason`);
   ok(of('survey_answer').some((x) => x.question === 'typing_liked') && of('typing_end').length === 1, `${tag}: the typing game ended and was rated`);
+  {
+    const te = of('typing_end')[0] ?? {};
+    const tr = of('typing_round');
+    const keysByRound = (n) => of('typing').filter((x) => x.round === n).length;
+    ok(of('typing').every((x) => [1, 2, 3].includes(x.round)) && tr.length >= 1 && tr.every((r, i) => r.round === i + 1 && r.keys === keysByRound(r.round))
+      && te.rounds_done === tr.filter((r) => r.completed).length && ['rounds', 'time', 'done'].includes(te.reason),
+      `${tag}: typing rounds ${tr.map((r) => `${r.round}:${r.set}:${r.caught}/${r.goal}:${r.reason}`).join(' ')}, typing_end ${te.reason} (${te.rounds_done} done)`);
+  }
   ok(of('wardrobe').some((x) => x.action === 'close'), `${tag}: the wardrobe closed with an outfit`);
   if (s.grade === 1) {
     const r = of('resume')[0];
@@ -114,6 +122,9 @@ if (process.env.PSQL && ids.length) {
   console.log(`     v_typing_by_grade: ${JSON.stringify(typing)}`);
   const gradesHere = [...new Set(allSessions.filter((s) => ids.includes(s.id)).map((s) => s.grade))];
   ok(gradesHere.every((g) => typing.some((r) => r.grade === g && r.attempts > 0)), `v_typing_by_grade: rows for grades ${gradesHere.join(',')}`);
+  const rounds = rows('select grade, round, sessions, completed, attempts from v_typing_rounds_by_grade order by grade, round');
+  console.log(`     v_typing_rounds_by_grade: ${JSON.stringify(rounds)}`);
+  ok(gradesHere.every((g) => rounds.some((r) => r.grade === g && r.round === 1 && r.sessions > 0)), `v_typing_rounds_by_grade: round 1 for grades ${gradesHere.join(',')}`);
   const five = allSessions.filter((s) => ids.includes(s.id) && s.grade === 5).map((s) => s.id);
   if (five.length) {
     const gm = rows(`select grade, rule_edits, games_run, predictions, predictions_correct, liked, end_reason from v_probe_game_maker where session_id = '${five[0]}'`);

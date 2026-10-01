@@ -153,13 +153,19 @@ async function toTyping(p, grade = '1ro', query = '', play = true) {
   await p.waitForSelector('.pp-typing');
   if (play) await p.waitForFunction(() => window.__typing?.state().phase === 'play', null, { timeout: 20_000 });
 }
+/** Ends the round on screen at once (its bed counts as full); `play`: wait for the next round to start. */
+async function skipRound(p, play = true) {
+  const r = await pil(p, () => window.__typing.state().round);
+  await pil(p, () => window.__typing.skipRound());
+  if (play) await p.waitForFunction((n) => window.__typing.state().phase === 'play' && window.__typing.state().round === n + 1, r, { timeout: 20_000 });
+}
 /** Waits for something to fall, then presses its keys (all, or `n` of them). */
 async function typeTarget(p, n = 99) {
   await p.waitForFunction(() => window.__typing.expected(), null, { timeout: 15_000 });
   for (let i = 0; i < n; i++) {
     const k = await pil(p, () => window.__typing.expected());
     if (!k) break;
-    await p.keyboard.press(k === 'ñ' ? 'ñ' : k);
+    await p.keyboard.press(k === ' ' ? 'Space' : k);
     await p.waitForTimeout(260);
   }
 }
@@ -411,32 +417,28 @@ const SCENARIOS = [
     },
   },
   { name: 'pp-tk-1ro-help', run: async (p) => { await toTyping(p, '1ro'); await p.waitForTimeout(1500); await p.click('.level-bar .help'); await p.waitForTimeout(600); } },
-  { name: 'pp-tk-1ro-two', run: async (p) => { await toTyping(p, '1ro'); await pil(p, () => window.__typing.speed(3)); await p.waitForTimeout(6500); } },
+  // T12: the rounds. pp-tk-<grade>-half: the bed half full; -golden: three early catches; -roundend: the
+  // bloom and the critter; -card: the next round's card; -r3: round 3; -finale: the sign
+  { name: 'pp-tk-1ro-two', run: async (p) => { await toTyping(p, '1ro'); await skipRound(p); await p.waitForTimeout(6500); } },
   {
-    name: 'pp-tk-1ro-seed',
+    name: 'pp-tk-1ro-golden',
     run: async (p) => {
       await toTyping(p, '1ro');
-      for (let i = 0; i < 5; i++) { await typeTarget(p, 1); await p.waitForTimeout(800); }
-      await p.waitForTimeout(250);
+      for (let i = 0; i < 3; i++) { await typeTarget(p, 1); if (i < 2) await p.waitForTimeout(700); }
+      await p.waitForTimeout(450);
     },
   },
-  { name: 'pp-tk-2do-word', run: async (p) => { await toTyping(p, '2do'); await p.waitForTimeout(1200); await typeTarget(p, 2); await p.waitForTimeout(300); } },
-  {
-    name: 'pp-tk-3ro-word',
-    run: async (p) => {
-      await toTyping(p, '3ro'); await pil(p, () => window.__typing.speed(3));
-      // a word of five letters or more, half typed
-      for (let i = 0; i < 6; i++) {
-        await p.waitForFunction(() => window.__typing.expected(), null, { timeout: 30_000 });
-        const w = await pil(p, () => window.__typing.state().items.find((x) => x.state === 'fall')?.text ?? '');
-        if (w.length >= 5) { await typeTarget(p, 3); break; }
-        await typeTarget(p); await p.waitForTimeout(900);
-      }
-      await p.waitForTimeout(300);
-    },
-  },
-  { name: 'pp-tk-5to-word', run: async (p) => { await toTyping(p, '5to'); await pil(p, () => window.__typing.speed(3)); await p.waitForTimeout(1200); await typeTarget(p, 1); await p.waitForTimeout(300); } },
-  { name: 'pp-tk-5to-landed', run: async (p) => { await toTyping(p, '5to', 'teclas=2'); await pil(p, () => window.__typing.speed(6)); await p.waitForFunction(() => window.__typing.state().items.some((x) => x.state === 'landed'), null, { timeout: 40_000 }); await p.waitForTimeout(300); } },
+  { name: 'pp-tk-1ro-roundend', run: async (p) => { await toTyping(p, '1ro', 'metas=2'); await typeTarget(p, 1); await p.waitForTimeout(800); await typeTarget(p, 1); await p.waitForTimeout(1500); } },
+  { name: 'pp-tk-1ro-card', run: async (p) => { await toTyping(p, '1ro'); await skipRound(p, false); await p.waitForTimeout(3600); } },
+  { name: 'pp-tk-1ro-r3', run: async (p) => { await toTyping(p, '1ro'); await skipRound(p); await skipRound(p); await typeTarget(p, 1); await p.waitForTimeout(300); } },
+  { name: 'pp-tk-1ro-finale', run: async (p) => { await toTyping(p, '1ro', 'metas=1'); for (let i = 0; i < 60 && !(await p.locator('.tk-finale').count()); i++) { const k = await pil(p, () => window.__typing?.expected()); if (k) await p.keyboard.press(k); await p.waitForTimeout(500); } await p.waitForSelector('.tk-finale', { timeout: 10_000 }); await p.waitForTimeout(1500); } },
+  { name: 'pp-tk-2do-word', run: async (p) => { await toTyping(p, '2do'); await skipRound(p); await skipRound(p); await typeTarget(p, 2); await p.waitForTimeout(300); } },
+  { name: 'pp-tk-2do-half', run: async (p) => { await toTyping(p, '2do'); await pil(p, () => window.__typing.fill(4)); await p.waitForTimeout(1500); } },
+  { name: 'pp-tk-3ro-word', run: async (p) => { await toTyping(p, '3ro'); await skipRound(p); await typeTarget(p, 3); await p.waitForTimeout(300); } },
+  { name: 'pp-tk-3ro-phrase', run: async (p) => { await toTyping(p, '3ro'); await skipRound(p); await skipRound(p); await typeTarget(p, 6); await p.waitForTimeout(300); } },
+  { name: 'pp-tk-5to-word', run: async (p) => { await toTyping(p, '5to'); await p.waitForTimeout(1200); await typeTarget(p, 1); await p.waitForTimeout(300); } },
+  { name: 'pp-tk-5to-phrase', run: async (p) => { await toTyping(p, '5to'); await skipRound(p); await skipRound(p); await pil(p, () => window.__typing.fill(2)); await typeTarget(p, 7); await p.waitForTimeout(300); } },
+  { name: 'pp-tk-5to-landed', run: async (p) => { await toTyping(p, '5to', 'teclas=2'); await pil(p, () => window.__typing.pace(2)); await p.waitForFunction(() => window.__typing.state().items.some((x) => x.state === 'landed'), null, { timeout: 40_000 }); await p.waitForTimeout(300); } },
   {
     name: 'pp-tk-3ro-touch',
     run: async (p) => {
@@ -448,13 +450,14 @@ const SCENARIOS = [
       await p.waitForTimeout(400);
     },
   },
-  { name: 'pp-tk-listo', run: async (p) => { await toTyping(p, '3ro'); await pil(p, () => window.__typing.listo()); await p.waitForTimeout(900); } },
-  { name: 'pp-tk-liked', run: async (p) => { await toTyping(p, '1ro'); await pil(p, () => window.__typing.stop()); await p.waitForSelector('[data-question="typing_liked"]'); await p.waitForTimeout(800); } },
+  { name: 'pp-tk-listo', run: async (p) => { await toTyping(p, '3ro'); await skipRound(p); await p.waitForTimeout(900); } },
+  { name: 'pp-tk-liked', run: async (p) => { await toTyping(p, '1ro'); await skipRound(p); await pil(p, () => window.__typing.stop()); await p.click('.pp-tk-next', { force: true }); await p.waitForSelector('[data-question="typing_liked"]'); await p.waitForTimeout(800); } },
   // the survey's favourites after the typing game: its picture among them
   {
     name: 'pp-tk-survey',
     run: async (p) => {
-      await toTyping(p, '1ro'); await typeTarget(p, 1); await pil(p, () => window.__typing.stop());
+      await toTyping(p, '1ro'); await typeTarget(p, 1); await skipRound(p); await pil(p, () => window.__typing.stop());
+      await p.click('.pp-tk-next', { force: true });
       await p.click('[data-question="typing_liked"] [data-answer="yes"]');
       await p.waitForSelector('[data-interlude="cheer"]');
       await jump(p, 'survey');
@@ -466,7 +469,8 @@ const SCENARIOS = [
   {
     name: 'pp-tk-cheer',
     run: async (p) => {
-      await toTyping(p, '1ro'); await pil(p, () => window.__typing.stop());
+      await toTyping(p, '1ro'); await skipRound(p); await pil(p, () => window.__typing.stop());
+      await p.click('.pp-tk-next', { force: true });
       await p.click('[data-question="typing_liked"] [data-answer="yes"]');
       await p.waitForSelector('[data-interlude="cheer"]'); await p.waitForTimeout(2000);
     },

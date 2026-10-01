@@ -17,8 +17,8 @@
 //   app; the session carries on at the same item with its seeds); two
 //   failed runs end the item (ceiling 2); back online; free play: the menu
 //   (its thumbnails draw Pliegue), sheet 6 (two pages), the music recess
-//   (one song), the time runs out on the menu; the typing game (30 s): five
-//   letters, "¿Te gustó?" yes; the wardrobe (the scarf, "listo"); the
+//   (one song), the time runs out on the menu; the typing game (a 30 s cap):
+//   five letters (round 1), the cap ends it, "¿Te gustó?" yes; the wardrobe (the scarf, "listo"); the
 //   survey; the goodbye; the adult's comment; "jugar otra vez".
 // 5to — Mina; the tool check; the ladder from rung 9: the fog and the three
 //   worlds solved, the rule game (rung 11) stopped twice (ceiling 10); free
@@ -28,11 +28,13 @@
 //   question), a reload on the menu (free play carries on), the game maker
 //   from the adult's corner menu (a game, a rule changed, the three
 //   predictions, the liking question); back online; the time runs out; the
-//   typing game (15 s, words); the wardrobe; the survey; the adult's comment.
+//   typing game (one word a round: two words, then "listo"); the wardrobe;
+//   the survey; the adult's comment.
 // 3ro — Ovillo; the tool check; the ladder from rung 5: 5 and 6 solved, 7
 //   failed twice (ceiling 6); free play: the rule game's three pages (3ro-1,
 //   3ro-2 and the free page pp-reglas, each won with the arrows), back on
-//   the menu; the time runs out; the typing game; the wardrobe; the survey;
+//   the menu; the time runs out; the typing game (one word, "listo"); the
+//   wardrobe; the survey;
 //   the adult's comment.
 //
 // Before the sessions it opens the app without ?debug: the adult's setup, and
@@ -239,8 +241,11 @@ async function expectedKey(p) {
   return p.evaluate(() => window.__typing.expected());
 }
 
-/** The typing game: `n` letters or words caught with the keyboard (a wrong key among them), then the time ends it; the liking answer. */
-async function typing(p, n, liked) {
+/**
+ * The typing game (T12: rounds): `n` things caught with the keyboard (a wrong key among them); then
+ * `listo` (shown after round 1) or the cap ends it: the finale, then the liking answer.
+ */
+async function typing(p, n, liked, listo = false) {
   await p.waitForSelector('.pp-typing', { timeout: 30_000 });
   await shot(p, 'typing-intro', 1500);
   await p.waitForFunction(() => window.__typing?.state().phase === 'play', null, { timeout: 30_000 });
@@ -248,12 +253,19 @@ async function typing(p, n, liked) {
   for (let i = 0; i < 80 && (await p.evaluate(() => window.__typing.state().caught)) < n; i++) {
     const k = await expectedKey(p);
     if (i === 1) { await p.keyboard.press(k === 'q' ? 'w' : 'q'); await p.waitForTimeout(250); }
-    await p.keyboard.press(k);
+    await p.keyboard.press(k === ' ' ? 'Space' : k);
     await p.waitForTimeout(300);
   }
-  const caught = await p.evaluate(() => window.__typing.state().caught);
-  ok(caught >= n, `typing: ${caught} caught`);
-  await p.waitForSelector('[data-question="typing_liked"]', { timeout: 60_000 });
+  const st = await p.evaluate(() => window.__typing.state());
+  ok(st.caught >= n, `typing: ${st.caught} caught, round ${st.round}, ${st.roundsDone} round(s) done`);
+  if (listo) {
+    await p.locator('.pp-tk-listo').waitFor({ timeout: 20_000 });
+    await p.locator('.pp-tk-listo').click({ force: true });
+    ok(true, 'typing: "listo" after round 1');
+  }
+  await p.waitForSelector('.tk-finale', { timeout: 60_000 });
+  await shot(p, 'typing-finale', 1200);
+  await p.waitForSelector('[data-question="typing_liked"]', { timeout: 20_000 });
   await shot(p, 'typing-liked');
   await p.locator(`[data-question="typing_liked"] [data-answer="${liked}"]`).click();
   await cheerNext(p);
@@ -384,7 +396,7 @@ const SESSIONS = {
   },
 
   async '5to'(ctx, p) {
-    const { sid } = await newSession(p, '5to', 'mina', 'debug&nointro&teclas=0.25');
+    const { sid } = await newSession(p, '5to', 'mina', 'debug&nointro&teclas=1&metas=1');
     await serviceWorker(p);
     await toolCheck(p);
     await onLevel(p, 'pp-l9'); await solve(p, 'ladder-9-fog');
@@ -512,12 +524,12 @@ const SESSIONS = {
     await ctx.setOffline(false);
     await p.evaluate(() => window.__freePlay.budget(0));
     await cheerNext(p, 'fp-over');
-    await typing(p, 2, 'mid');
+    await typing(p, 2, 'mid', true);
     await closing(p, 'text_probe', { engagement: 'mid', help: 'none', comment: 'Chequeo automático: sesión completa de 5to.' });
   },
 
   async '3ro'(ctx, p) {
-    await newSession(p, '3ro', 'ovillo', 'debug&nointro&teclas=0.25');
+    await newSession(p, '3ro', 'ovillo', 'debug&nointro&teclas=1&metas=1');
     await serviceWorker(p);
     await toolCheck(p);
     await onLevel(p, 'pp-l5'); await solve(p, 'ladder-5-repeat');
@@ -552,7 +564,7 @@ const SESSIONS = {
     await p.waitForSelector('.pp-menu');
     await p.evaluate(() => window.__freePlay.budget(0));
     await cheerNext(p, 'fp-over');
-    await typing(p, 1, 'no');
+    await typing(p, 1, 'no', true);
     await closing(p, 'rule_game', { engagement: 'high', help: 'none', comment: 'Chequeo automático: sesión de 3ro.' });
   },
 };

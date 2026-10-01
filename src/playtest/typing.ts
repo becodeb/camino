@@ -34,7 +34,7 @@ export const WORDS = ['sol', 'mar', 'pan', 'oso', 'sapo', 'pato', 'casa', 'luna'
 /** The words of programming (the rule cards, the commands): short ones… */
 export const COMMANDS_SHORT = ['si', 'ir', 'mover', 'girar', 'parar', 'sumar', 'tocar'] as const;
 /** …and longer ones. */
-export const COMMANDS_LONG = ['saltar', 'pintar', 'repetir', 'avanzar', 'esperar', 'tocar', 'girar'] as const;
+export const COMMANDS_LONG = ['saltar', 'pintar', 'repetir', 'avanzar', 'esperar'] as const;
 /** A command with its number, as in a program line (the space is the long bar). */
 export const PHRASES3 = ['repetir 2', 'mover 3', 'sumar 1', 'saltar 2', 'girar 4'] as const;
 export const PHRASES4 = ['repetir 3', 'mover 2', 'avanzar 4', 'esperar 1', 'sumar 5', 'girar 2'] as const;

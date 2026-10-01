@@ -466,7 +466,7 @@ says what changes. After round 3 the finale ("¡Listo!" on a sign).
 | 1ro | `vowels` a e i o u, one at a time (shuffled first five), 10 s fall, goal 6 | `letters` vowels + m s l p t n, **two at once**, 8.5 s, goal 8 | `syllables` ma me mi mo pa pe pi sa so la lo lu ta te no na, goal 5 |
 | 2do | `letters` vowels + m s l p t n r d c b, two at once, 8 s, goal 8 | `syllables` ma pe lo su ta ni ra do ca be mi so lu fe ga ri, goal 6 | `words` sol mar pan oso sapo pato casa luna mesa nube rana taza lupa mapa, goal 5 |
 | 3ro | `words` (2do's list), goal 5 | `commands` si ir mover girar parar sumar tocar, goal 5 | `phrases` repetir 2, mover 3, sumar 1, saltar 2, girar 4 (the number row is drawn; the space is the long bar), goal 3 |
-| 4to–5to | `commands` si ir mover girar parar sumar tocar, goal 5 | `commands` saltar pintar repetir avanzar esperar tocar girar, goal 5 | `phrases` repetir 3, mover 2, avanzar 4, esperar 1, sumar 5, girar 2, goal 4 |
+| 4to–5to | `commands` si ir mover girar parar sumar tocar, goal 5 | `commands` saltar pintar repetir avanzar esperar, goal 5 | `phrases` repetir 3, mover 2, avanzar 4, esperar 1, sumar 5, girar 2, goal 4 |
 
 A letter falls in the round's time (above); a longer item in 3.5 s plus a
 while per character (1ro syllables 3 s, 2do 2.6 / 2.4 s, 3ro 2.1 / 2.0 /

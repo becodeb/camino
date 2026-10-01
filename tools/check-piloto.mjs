@@ -19,18 +19,23 @@
 //   in a bubble), the menu, sheet 6 (its four core pages, "¿Cómo seguís?":
 //   más fácil, its first extra, "¿Cómo seguís?" again: otro juego), the music recess
 //   (one song), back, the time runs out on the menu (the cheer); the typing
-//   minigame (?teclas=0.5: 30 s): the intro, five letters caught (a seed), a
-//   wrong key, d-e-v and the backtick go to the game (dev mode stays off),
-//   ✋ and 🔊, the time ends it, "¿Te gustó?" yes; the wardrobe (the scarf kept, the hat on and off, the
+//   minigame (T12: rounds; ?teclas=0.5: a 30 s cap; ?metas=4: four holes a
+//   round): the intro skipped by pressing its own key, round 1's four holes
+//   filled by three early catches (the golden seed fills two), the round's
+//   end (the medal, the critter, round 2's card), a wrong key, d-e-v and the
+//   backtick go to the game (dev mode stays off), ✋ and 🔊, the cap ends it
+//   in round 2 (the finale), "¿Te gustó?" yes; the wardrobe (the scarf kept, the hat on and off, the
 //   crown locked, "listo"); the survey, the goodbye garden with the session's
 //   seeds, the adult's comment from the corner menu, "jugar otra vez" (the setup).
 // 5to — captions on by default (the bubble in the bar); the tool check: the
 //   arrow never comes (the ghost at 8 s, on at 15 s), ▶, then "seguir" skips
 //   the rest; enters at rung 9 (fog): two failed runs (fail), the floor check on
 //   rung 8 passes, the ladder stops (floor, ceiling 8); the typing minigame
-//   on a touch keyboard (?tactil): a word command typed, its first letter
-//   tapped on the drawn keyboard, the rest on the real one, a wrong key;
-//   "listo"; "¿Te gustó?" more or less; the adult ends the session from the
+//   on a touch keyboard (?tactil, ?metas=1): round 1's word with its first
+//   letter tapped on the drawn keyboard, a wrong key, the rest on the real
+//   one; round 2's word; round 3's command with its number (the space tapped
+//   on the drawn bar, the number typed): the three rounds end it (the
+//   finale); "¿Te gustó?" more or less; the adult ends the session from the
 //   corner.
 // 3ro — on-screen text forced off at setup; the rule game (rung 11, opened
 //   with the ?debug ladder hook): a game stopped before any arrow (no_play),
@@ -146,7 +151,7 @@ async function page() {
 console.log('--- 1ro');
 const one = await page();
 let p = one.p;
-const s1 = await newSession(p, '1ro', 'debug&teclas=0.5');
+const s1 = await newSession(p, '1ro', 'debug&teclas=0.5&metas=4');
 ok(/^\p{Lu}\p{Ll}+ [1-9]\d$/u.test(s1.code), `the session keeps an internal code for the admin page ("${s1.code}")`);
 await p.locator('.doors-next').click({ force: true });
 
@@ -243,20 +248,39 @@ await p.waitForSelector('[data-interlude="cheer"]', { timeout: 15_000 });
 ok(true, `free play's time is over on the menu: the cheer (${seedsFree} seeds in the pouch)`);
 await p.locator('.pp-cheer-next').click({ force: true });
 
-// the typing minigame: the intro, then five letters caught with the real keyboard (a seed), a wrong key,
-// d-e-v and the backtick (the game takes them: dev mode stays off), ✋ and 🔊; the time (30 s) ends it
+// the typing minigame (T12): the intro skipped by its own key; round 1's four holes filled by three
+// early catches (the third plants a golden seed); the round's end; then in round 2 a wrong key,
+// d-e-v and the backtick (the game takes them: dev mode stays off), ✋ and 🔊; the cap (30 s) ends it
 await p.waitForSelector('.pp-typing');
 ok(await p.locator('.pp-kb [data-key="ñ"]').count() === 1 && await p.locator('.pp-kb button').count() === 0, 'the drawn keyboard has Ñ; without a touch screen its keys are not buttons');
-await p.waitForFunction(() => window.__typing?.state().phase === 'play', null, { timeout: 25_000 });
-ok(true, 'the typing intro (the ghost hand pressed the demo key) gave way to the game');
-for (let i = 0; i < 5; i++) {
+ok(await p.locator('.pp-kb [data-key="1"]').count() === 0, '1ro: no number row');
+ok(await p.locator('.tk-bed .tk-hole').count() === 4 && await p.locator('.tk-bed .tk-hole.is-next').count() === 1, 'the goal is drawn: a bed of four holes, the first one circled');
+ok(await p.locator('.tk-rounds .tk-medal.is-here').count() === 1, 'the bar shows the round medals, the first one circled');
+await p.waitForSelector('.tk-item[data-item="a"]', { timeout: 10_000 });
+await p.waitForTimeout(300);
+await p.keyboard.press('a');
+await p.waitForFunction(() => window.__typing?.state().phase === 'play', null, { timeout: 5_000 });
+ok(true, 'pressing the demo\'s own key skipped the intro');
+for (let i = 0; i < 3; i++) {
   const k = await expectedKey(p);
-  if (i === 1) { await p.keyboard.press(k === 'q' ? 'w' : 'q'); await p.waitForTimeout(300); }
   await p.keyboard.press(k);
-  await p.waitForTimeout(450);
+  await p.waitForTimeout(350);
 }
-ok((await p.evaluate(() => window.__typing.state().caught)) === 5, 'five letters caught');
-await expectedKey(p);
+await p.waitForTimeout(300);
+const tkAfter = await p.evaluate(() => window.__typing.state());
+ok(tkAfter.golden === 1, `three early catches in a row planted a golden seed (${JSON.stringify({ golden: tkAfter.golden, roundsDone: tkAfter.roundsDone })})`);
+await p.waitForFunction(() => window.__typing.state().roundsDone === 1, null, { timeout: 5_000 });
+ok(true, 'three catches and the golden seed filled the four holes: round 1 done');
+await p.waitForSelector('.tk-medal.is-done', { timeout: 3_000 });
+ok(await p.locator('.tk-critter').count() === 1, 'a critter came to see the full bed');
+await p.waitForSelector('.tk-round-card', { timeout: 6_000 });
+ok(await p.locator('.pp-tk-listo').count() === 1, 'round 2\'s card is up; "listo" is offered after round 1');
+await p.waitForFunction(() => window.__typing.state().phase === 'play' && window.__typing.state().round === 2, null, { timeout: 10_000 });
+{
+  const k = await expectedKey(p);
+  await p.keyboard.press(k === 'q' ? 'w' : 'q');
+  await p.waitForTimeout(300);
+}
 for (const k of ['d', 'e', 'v', 'Backquote']) { await p.keyboard.press(k); await p.waitForTimeout(120); }
 ok((await p.evaluate(() => sessionStorage.getItem('camino.dev.v1'))) === null && !(await p.locator('.dev-drawer').count()), 'd-e-v and ` in the game never turn dev mode on');
 await expectedKey(p);
@@ -264,9 +288,12 @@ await p.locator('.pp-typing .level-bar .help').click();
 await p.waitForTimeout(400);
 ok(await p.locator('.pp-kb.is-help .pp-key.is-expected').count() === 1, '✋: the expected key glows harder');
 await p.locator('.pp-typing .level-bar .speak').click();
+await p.waitForSelector('.tk-finale', { timeout: 40_000 });
 const tk1Keys = await p.evaluate(() => window.__typing.state().keys);
-await p.waitForSelector('[data-question="typing_liked"]', { timeout: 40_000 });
-ok(true, 'the time ended the game: "¿Te gustó este juego?"');
+ok(true, 'the cap ended the game in round 2: the finale sign');
+await p.locator('.pp-tk-next').click({ force: true });
+await p.waitForSelector('[data-question="typing_liked"]', { timeout: 10_000 });
+ok(true, 'the finale\'s arrow: "¿Te gustó este juego?"');
 await p.locator('[data-question="typing_liked"] [data-answer="yes"]').click();
 await p.waitForSelector('[data-interlude="cheer"]', { timeout: 10_000 });
 await p.locator('.pp-cheer-next').click({ force: true });
@@ -317,7 +344,7 @@ await one.ctx.close();
 console.log('--- 5to');
 const five = await page();
 p = five.p;
-const s5 = await newSession(p, '5to', 'debug&tactil&teclas=1');
+const s5 = await newSession(p, '5to', 'debug&tactil&metas=1');
 await p.locator('.doors-next').click({ force: true });
 // the tool check: the arrow never comes; the ghost shows it at 8 s, the check moves on at 15 s; ▶ on an empty notebook still counts; "seguir" skips the rest
 await onLevel(p, 'tool-1');
@@ -340,35 +367,49 @@ await onLevel(p, 'pp-l8');
 ok(true, 'two failed runs end the item; the floor check opens rung 8');
 await solve(p);
 await p.waitForSelector('[data-interlude="cheer"]', { timeout: 15_000 });
-// the typing game on a touch keyboard: a word command, its first letter tapped on the drawn keyboard, the rest typed, a wrong key
+// the typing game on a touch keyboard (?metas=1): round 1's word, its first letter tapped on the drawn keyboard,
+// a wrong key, the rest typed; round 2's word; round 3's command, its space tapped on the drawn bar
 await p.evaluate(() => window.__piloto.jump('typing'));
 await p.waitForSelector('.pp-typing.is-touch');
-ok(await p.locator('.pp-kb button.pp-key').count() === 27, 'a touch screen: the drawn keyboard\'s 27 keys are buttons');
+ok(await p.locator('.pp-kb button.pp-key').count() === 38, 'a touch screen: the drawn keyboard\'s 27 letters, 10 numbers and the space are buttons');
 const keyBox = await p.locator('.pp-kb [data-key="a"]').boundingBox();
 ok(keyBox.width >= 48 && keyBox.height >= 48, `the drawn keys are at least 48 px (${Math.round(keyBox.width)}×${Math.round(keyBox.height)})`);
 await p.waitForFunction(() => window.__typing?.state().phase === 'play', null, { timeout: 25_000 });
 {
-  let word = '';
-  for (let tries = 0; tries < 6 && word.length < 3; tries++) {
-    await expectedKey(p);
-    word = await p.evaluate(() => window.__typing.state().items.find((x) => x.state === 'fall')?.text ?? '');
-    if (word.length < 3) { for (const ch of word) { await p.keyboard.press(ch); await p.waitForTimeout(200); } await p.waitForTimeout(900); word = ''; }
-  }
   const first = await expectedKey(p);
+  const word = await p.evaluate(() => window.__typing.state().items.find((x) => x.state === 'fall')?.text ?? '');
   await p.locator(`.pp-kb [data-key="${first}"]`).click({ force: true });
   await p.waitForTimeout(300);
   const second = await expectedKey(p);
   await p.keyboard.press(second === 'z' ? 'x' : 'z');
   await p.waitForTimeout(300);
-  for (let i = 1; i < word.length; i++) { await p.keyboard.press(await expectedKey(p)); await p.waitForTimeout(250); }
-  ok(true, `5to typed "${word}": the first letter tapped, a wrong key, the rest on the keyboard`);
+  for (let i = 1; i < word.length; i++) { await p.keyboard.press(await expectedKey(p)); await p.waitForTimeout(200); }
+  ok(true, `5to round 1: "${word}", the first letter tapped, a wrong key, the rest on the keyboard`);
 }
-await p.waitForTimeout(600);
-ok((await p.evaluate(() => window.__typing.state().caught)) >= 1, 'the word was caught');
-await p.locator('.pp-tk-listo').waitFor({ timeout: 40_000 });
-await p.locator('.pp-tk-listo').click({ force: true });
-await p.waitForSelector('[data-question="typing_liked"]', { timeout: 30_000 });
-ok(true, '"listo" ended the game');
+await p.waitForFunction(() => window.__typing.state().phase === 'play' && window.__typing.state().round === 2, null, { timeout: 15_000 });
+{
+  const word = await p.evaluate(async () => { for (let i = 0; i < 50 && !window.__typing.expected(); i++) await new Promise((r) => setTimeout(r, 200)); return window.__typing.state().items.find((x) => x.state === 'fall')?.text ?? ''; });
+  for (let i = 0; i < word.length; i++) { await p.keyboard.press(await expectedKey(p)); await p.waitForTimeout(150); }
+  ok(true, `5to round 2: "${word}"`);
+}
+await p.waitForFunction(() => window.__typing.state().phase === 'play' && window.__typing.state().round === 3, null, { timeout: 15_000 });
+{
+  await expectedKey(p);
+  const phrase = await p.evaluate(() => window.__typing.state().items.find((x) => x.state === 'fall')?.text ?? '');
+  ok(/^[a-z]+ \d$/.test(phrase), `round 3 is a command with its number: "${phrase}"`);
+  for (let i = 0; i < phrase.length; i++) {
+    const k = await expectedKey(p);
+    if (k === ' ') {
+      ok(await p.locator('.pp-kb .pp-space.is-expected').count() === 1, 'the space bar glows when the command waits for its space');
+      await p.locator('.pp-kb [data-key=" "]').click({ force: true });
+    } else await p.keyboard.press(k);
+    await p.waitForTimeout(150);
+  }
+}
+await p.waitForSelector('.tk-finale', { timeout: 10_000 });
+ok((await p.evaluate(() => window.__typing.state().roundsDone)) === 3, 'the three rounds ended it: the finale');
+await p.waitForSelector('[data-question="typing_liked"]', { timeout: 15_000 });
+ok(true, 'the finale moved on by itself to "¿Te gustó?"');
 await p.locator('[data-question="typing_liked"] [data-answer="mid"]').click();
 await p.waitForSelector('[data-interlude="cheer"]', { timeout: 10_000 });
 await p.locator('.pp-cheer-next').click({ force: true });
@@ -462,14 +503,17 @@ for (const t of ['step', 'choice', 'tool_check', 'level_start', 'run', 'level_en
 
 // the typing minigame
 const ty1 = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'typing' order by seq`)).map((x) => x.p);
-ok(ty1.length === tk1Keys && ty1.length >= 7, `1ro: ${ty1.length} typing rows, as many as keys the game counted (${tk1Keys})`);
-ok(ty1.every((x) => typeof x.key === 'string' && typeof x.expected === 'string' && typeof x.correct === 'boolean' && x.latency_ms >= 0 && x.speed_level >= 1 && x.input === 'physical' && ['vowels', 'letters'].includes(x.set) && x.item.length === 1 && x.pos === 0), `1ro typing rows have their shape: ${JSON.stringify(ty1[0])}`);
+ok(ty1.length === tk1Keys && ty1.length >= 7, `1ro: ${ty1.length} typing rows, as many as keys the game counted (${tk1Keys}; the intro's key is not logged)`);
+ok(ty1.every((x) => typeof x.key === 'string' && typeof x.expected === 'string' && typeof x.correct === 'boolean' && x.latency_ms >= 0 && x.speed_level >= 1 && x.speed_level <= 3 && x.input === 'physical' && ['vowels', 'letters'].includes(x.set) && x.item.length === 1 && x.pos === 0 && [1, 2].includes(x.round)), `1ro typing rows have their shape: ${JSON.stringify(ty1[0])}`);
 const right1 = ty1.filter((x) => x.correct);
-ok(right1.length >= 5 && ty1.some((x) => !x.correct && x.key !== x.expected), `right and wrong keys: ${ty1.map((x) => `${x.key}${x.correct ? '✓' : '✗'}`).join(' ')}`);
-ok(right1.slice(0, 5).every((x) => x.set === 'vowels'), 'the first five letters are the vowels');
-ok(ty1.some((x) => x.key === 'd' && !x.correct), 'the d of d-e-v pressed in the game is a typing key (a wrong one)');
+ok(right1.length >= 3 && ty1.some((x) => !x.correct && x.key !== x.expected), `right and wrong keys: ${ty1.map((x) => `${x.key}${x.correct ? '✓' : '✗'}${x.round}`).join(' ')}`);
+ok(ty1.filter((x) => x.round === 1).every((x) => x.set === 'vowels' && x.correct), 'round 1: the vowels, three right keys');
+ok(ty1.some((x) => x.key === 'd' && !x.correct && x.round === 2), 'the d of d-e-v pressed in the game is a typing key (a wrong one, round 2)');
+const tr1 = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'typing_round' order by seq`)).map((x) => x.p);
+ok(tr1.length === 2 && tr1[0].round === 1 && tr1[0].completed && tr1[0].reason === 'goal' && tr1[0].goal === 4 && tr1[0].filled === 4 && tr1[0].caught === 3 && tr1[0].golden === 1 && tr1[0].set === 'vowels' && tr1[0].keys === 3 && tr1[0].time_ms > 0, `typing_round 1: ${JSON.stringify(tr1[0])}`);
+ok(tr1[1]?.round === 2 && !tr1[1].completed && tr1[1].reason === 'time' && tr1[1].set === 'letters' && tr1[1].keys >= 5, `typing_round 2 (cut by the cap): ${JSON.stringify(tr1[1])}`);
 const te1 = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'typing_end'`)).map((x) => x.p);
-ok(te1.length === 1 && te1[0].reason === 'time' && te1[0].keys === ty1.length && te1[0].caught >= 5 && te1[0].seeds >= 1 && te1[0].input === 'physical' && te1[0].help_levels === 1 && te1[0].mode === 'letters', `1ro typing_end: ${JSON.stringify(te1[0])}`);
+ok(te1.length === 1 && te1[0].reason === 'time' && te1[0].keys === ty1.length && te1[0].caught >= 3 && te1[0].rounds_done === 1 && te1[0].golden === 1 && te1[0].filled >= 4 && te1[0].seeds >= 1 && te1[0].input === 'physical' && te1[0].help_levels === 1 && te1[0].mode === 'letters', `1ro typing_end: ${JSON.stringify(te1[0])}`);
 ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'help' and payload->>'level_id' = 'typing' and (payload->>'step')::int = 1;`)) === 1, 'the typing game\'s ✋ is a help event (step 1)');
 ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'speak' and payload->>'level_id' = 'typing';`)) === 1, 'its 🔊 is a speak event');
 ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'ghost_demo' and payload->>'level_id' = 'typing' and payload->>'kind' = 'intro';`)) === 1, 'its intro is a ghost_demo (intro)');
@@ -477,11 +521,22 @@ ok(sql(`select payload->>'answer' from events where session_id = '${s1.sid}' and
 ok(Math.abs(Number(times.typing) - te1[0].time_ms / 1000) <= 1, `v_activity_time counts the typing game from typing_end (${times.typing} s)`);
 const ty5 = JSON.parse(json(`select payload p from events where session_id = '${s5.sid}' and type = 'typing' order by seq`)).map((x) => x.p);
 ok(ty5.some((x) => x.input === 'touch' && x.correct) && ty5.some((x) => x.input === 'physical'), `5to typed on the drawn keys and on the keyboard: ${ty5.map((x) => `${x.key}${x.correct ? '✓' : '✗'}(${x.input[0]})`).join(' ')}`);
-ok(ty5.every((x) => x.set === 'commands'), '5to types the words of programming');
+ok(ty5.filter((x) => x.round < 3).every((x) => x.set === 'commands') && ty5.filter((x) => x.round === 3).every((x) => x.set === 'phrases'), '5to types the words of programming, then a command with its number');
+ok(ty5.some((x) => x.key === ' ' && x.expected === ' ' && x.correct && x.input === 'touch'), 'the space was tapped on the drawn bar (key " ")');
+ok(ty5.some((x) => /\d/.test(x.key) && x.correct), 'the number was typed');
 ok(ty5.some((x) => x.pos > 0 && x.correct), 'a word\'s next letters are logged with their place');
+const tr5 = JSON.parse(json(`select payload p from events where session_id = '${s5.sid}' and type = 'typing_round' order by seq`)).map((x) => x.p);
+ok(tr5.map((x) => `${x.round}:${x.set}:${x.completed}:${x.reason}`).join(' ') === '1:commands:true:goal 2:commands:true:goal 3:phrases:true:goal', `5to typing_round: ${tr5.map((x) => `${x.round}:${x.set}:${x.completed}:${x.reason}`).join(' ')}`);
 const te5 = JSON.parse(json(`select payload p from events where session_id = '${s5.sid}' and type = 'typing_end'`))[0]?.p;
-ok(te5?.reason === 'done' && te5?.input === 'mixed' && te5?.caught >= 1 && te5?.mode === 'words', `5to typing_end: ${JSON.stringify(te5)}`);
+ok(te5?.reason === 'rounds' && te5?.rounds_done === 3 && te5?.input === 'mixed' && te5?.caught === 3 && te5?.mode === 'words', `5to typing_end: ${JSON.stringify(te5)}`);
 ok(sql(`select payload->>'answer' from events where session_id = '${s5.sid}' and type = 'survey_answer' and payload->>'question' = 'typing_liked';`) === 'mid', '5to: typing_liked mid');
+const vr = JSON.parse(json(`select round::int, sessions::int, completed::int, attempts::int, correct_count::int from v_typing_rounds_by_grade where grade = 5 order by round`));
+const vrDirect = [1, 2, 3].map((n) => ({
+  round: n,
+  rows: ty5.filter((x) => x.round === n).length,
+  right: ty5.filter((x) => x.round === n && x.correct).length,
+}));
+ok(vr.length === 3 && vr.every((r) => r.sessions >= 1 && r.completed >= 1) && vrDirect.every((d) => vr[d.round - 1].attempts >= d.rows && vr[d.round - 1].correct_count >= d.right), `v_typing_rounds_by_grade (5to): ${JSON.stringify(vr)}`);
 const vg = JSON.parse(json(`select grade, attempts::int, correct_count::int, touch_attempts::int, liked_yes::int, liked_mid::int, liked_no::int from v_typing_by_grade where grade in (1, 5) order by grade`));
 const direct = JSON.parse(json(`select s.grade,
   count(*) filter (where e.type = 'typing')::int attempts,
