@@ -71,7 +71,7 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 - [x] T10 Round-2 flow (user feedback 2026-10-01): no consent tick and no session code shown anywhere in the kid app; less dependence on the adult (grade chosen in one tap, the adult form optional from the corner menu, the goodbye restarts by itself); a fast, non-forcing tool check (any equivalent gesture counts, short waits, ✋ only shown); on-screen text for every spoken line (default on from 3ro, toggle on setup and in the bar); a simpler top bar in the playtest (no page icons, doors or boss frame); a clear spoken choice screen after a sheet's core instead of the doors; the wardrobe fits the viewport (also non-fullscreen, e.g. 1920×911, 1366×650).
 - [x] T11 Round-2 ladder: a varied fixed item bank (no two near-identical items; e.g. one staircase then a different one, steps before a repeat), per-item caps really enforced (the rule-game item ran 234 s with no attempt), a clearer rule-game item.
 - [x] T12 Round-2 typing game: a visible goal and progress (how long, how much is left, that you are earning), rounds that get harder on purpose instead of speed tied to typing speed, more fun.
-- [ ] T13 Round-2 verification and redeploy (production emptied again after the user's next try if asked).
+- [x] T13 Round-2 verification and redeploy (production emptied again after the user's next try if asked).
 
 ## Progress
 
@@ -470,6 +470,8 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 
   Open: never tried with children, real voices or a touch Chromebook; the round lengths and goals are estimates (the user's data point: a 1ro child caught 33 letters in 67 s, so a fast child may finish in ~1.5 min); word letters on the leaf keep fixed spacing ("repet i r" looks uneven with narrow letters, pre-existing); round contents for 4to–5to round 1 overlap 3ro round 2 by design. Engram mirror still pending.
 
+- 2026-10-01: T13 done by the parent (route: inline). Pushed `b13e3ec`, redeployed `camino-prueba` (finished, `running:healthy`). `tools/check-session.mjs https://camino-prueba.becode.com.ar/ 1ro 5to 3ro` passed end to end (offline stretches included); `check-session-data.mjs` on the export passed; the three check sessions were deleted. The export also held one of the user's round-1 sessions (`365cb1e8…`) that had been deleted earlier: a tab still open with queued events synced afterwards and the idempotent upsert re-created the session (3 events). Deleted again; production has 0 sessions. Lesson: before a real run, close old pilot tabs, or delete again after they sync.
+
 ## Next step
 
-T13 (round-2 verification and redeploy).
+The user tries round 2; then the real pilot with children.
