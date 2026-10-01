@@ -9,41 +9,29 @@
 
 .tx-root {
   --mono: ui-monospace, 'DejaVu Sans Mono', 'Cousine', 'Noto Sans Mono', 'Liberation Mono', monospace;
-  --code-w: 430px;
   height: 100dvh;
   padding-bottom: 30px;
   grid-template-rows: auto minmax(0, 1fr);
 }
-.tx-root.is-tour, .tx-root.is-edit-blocks {
-  grid-template-columns: var(--blocks-w) var(--code-w) minmax(0, 1fr);
+/* T16: one program at a time, the text big: blocks | text (wide) | board */
+.tx-root.is-teach, .tx-root.is-edit {
+  grid-template-columns: var(--blocks-w) minmax(0, 1.6fr) minmax(0, 1fr);
   grid-template-areas: "bar bar bar" "blocks code stage";
 }
-.tx-root.is-edit, .tx-root.is-predict {
-  --code-w: 470px;
-  grid-template-columns: var(--code-w) minmax(0, 1fr);
+.tx-root.is-predict {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   grid-template-areas: "bar bar" "code stage";
 }
-.tx-root.is-choice {
+.tx-root.is-pick {
   grid-template-columns: var(--blocks-w) minmax(0, 1fr);
   grid-template-areas: "bar bar" "blocks options";
 }
 .tx-root.is-demo .tx-input { pointer-events: none; }
 
-/* ------------------------------------------------ the bar: the item stamps */
+/* ------------------------------------------------ the bar: the step's drawing */
 .tx-task { gap: 0; }
-.tx-stamps { display: flex; align-items: center; gap: 0; }
-.tx-stamp {
-  position: relative;
-  display: grid; place-items: center;
-  width: 44px; min-height: 58px;
-  padding: 0; border: 0; background: none; cursor: pointer;
-}
-.tx-stamp svg { overflow: visible; }
-.tx-stamp.is-todo svg { opacity: 0.6; }
-.tx-stamp.is-here { transform: translateY(-2px) rotate(-3deg); }
-.tx-stamp:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset: 2px; border-radius: 8px; }
-.tx-stamp-q { font: 700 13px var(--body); fill: var(--blue-ink); }
-.tx-stamp-n { font: 700 17px var(--mono); fill: var(--blue-ink); }
+.tx-step-icon { overflow: visible; }
+.tx-icon-n { font: 700 13px var(--mono); fill: var(--blue-ink); }
 .tx-doodle { margin: 0 4px; }
 
 /* ------------------------------------------------ the zones */
@@ -64,6 +52,9 @@
 .tx-stage > .controls, .tx-stage .sheet { width: var(--sheet-w); }
 .tx-stage .controls { justify-content: flex-start; }
 .tx-next { margin-left: auto; }
+/* Probar asks to be pressed (a teaching screen not run yet, a text just edited) */
+.tx-nudge { animation: tx-nudge 1.6s ease-in-out 1.2s infinite; }
+@keyframes tx-nudge { 0%, 100% { transform: none; } 50% { transform: translateY(-3px) rotate(-1deg); } }
 .tx-stretch { margin: 4px 0 0; font: 400 22px var(--hand); color: var(--blue-ink); rotate: -2deg; }
 
 /* ------------------------------------------------ the code */
@@ -75,13 +66,11 @@
   padding: 18px 12px 18px 0;
   font: 400 26px/var(--lh) var(--mono);
 }
-.tx-code.is-small { position: relative; inset: auto; padding: 6px 8px 8px 0; font-size: clamp(15px, 1.38vw, 21px); grid-template-columns: 30px minmax(0, 1fr); }
 .tx-gutter {
   list-style: none; margin: 0; padding: var(--pad) 8px 0 0;
   font: 400 18px/var(--lh) var(--body); color: var(--ink-2); text-align: right;
   user-select: none; -webkit-user-select: none;
 }
-.is-small .tx-gutter { font-size: 14px; padding-right: 6px; }
 .tx-gutter li { position: relative; height: var(--lh); opacity: 0.6; }
 .tx-gutter li.is-lit { opacity: 1; font-weight: 700; color: var(--ink); }
 .tx-gutter li.is-error { opacity: 1; font-weight: 700; color: var(--blue-ink); }
@@ -138,6 +127,46 @@
 @keyframes tx-flash { 0% { background: rgba(114, 152, 193, 0.75); } 100% { background: rgba(114, 152, 193, 0.34); } }
 .tx-line.is-error { text-decoration: underline wavy var(--blue-ink); text-decoration-thickness: 2px; text-underline-offset: 7px; text-decoration-skip-ink: none; }
 
+/* the word to change: a yellow marker with a dashed blue pen line under it */
+.tx-mark {
+  position: absolute; pointer-events: none;
+  font-size: inherit; font-family: var(--mono);
+  background: rgba(240, 210, 122, 0.75);
+  border-bottom: 3px dashed var(--blue-ink);
+  border-radius: 7px 5px 8px 4px / 5px 8px 4px 7px;
+  animation: tx-mark 1.8s ease-in-out infinite;
+}
+@keyframes tx-mark { 0%, 100% { background: rgba(240, 210, 122, 0.75); } 50% { background: rgba(240, 210, 122, 0.4); } }
+
+/* what a line means, in blue pen to its right */
+.tx-gloss {
+  position: absolute; display: flex; align-items: center; white-space: nowrap; pointer-events: none;
+  font-family: var(--mono);
+  animation: tx-gloss 500ms ease-out 900ms both;
+}
+.tx-gloss span { font: 400 23px/1 var(--hand); color: var(--blue-ink); rotate: -1.5deg; }
+.tx-gloss span::before { content: "← "; font-family: var(--body); font-weight: 700; }
+@keyframes tx-gloss { from { opacity: 0; translate: -6px 0; } to { opacity: 1; translate: 0 0; } }
+
+/* under the program: the hint, the word bank */
+.tx-below { position: absolute; left: 14px; right: 8px; z-index: 3; pointer-events: none; }
+.tx-hint {
+  position: relative; isolation: isolate; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  margin-top: 10px; padding: 10px 16px 12px;
+  font: 700 21px/1.3 var(--body); color: var(--ink);
+}
+.tx-hint::before, .tx-bank::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 12px 8px 14px 9px / 9px 14px 8px 12px; background: #eef3f8; border: 2.4px dashed var(--blue-ink); filter: url(#rough); }
+.tx-keys { display: inline-flex; gap: 4px; }
+.tx-keys kbd {
+  --fill: var(--sheet);
+  display: inline-grid; place-items: center; min-width: 32px; height: 36px; padding: 0 4px;
+  font: 700 22px var(--mono); color: var(--ink);
+}
+.tx-bank { position: relative; isolation: isolate; display: inline-grid; grid-template-columns: repeat(2, auto); gap: 8px 22px; margin-top: 10px; padding: 12px 18px; }
+.tx-bank-row { display: inline-flex; align-items: center; gap: 10px; }
+.tx-bank-row code { font: 700 23px var(--mono); color: var(--ink); }
+.tx-mini-blk { --fill: #eeac7f; display: inline-grid; place-items: center; width: 44px; height: 38px; flex: none; }
+
 /* the note that says what to fix, under its line */
 .tx-note {
   position: absolute; left: 14px; right: 8px; z-index: 3;
@@ -155,39 +184,54 @@
 .tx-note p::after { z-index: -2; background: var(--shadow); transform: translate(3px, 4px); }
 .tx-note-arrow { flex: none; overflow: visible; margin-top: -8px; }
 
-/* ------------------------------------------------ predict: the board, then the three drawn answers */
-.tx-stage.tx-predict-stage { --board-h: calc((100dvh - 224px) * 0.46); gap: 10px; }
-.tx-stage.tx-predict-stage.is-wide { --board-h: calc((100dvh - 224px) * 0.32); }
-.tx-options { display: flex; justify-content: center; gap: 22px; width: 100%; }
-.tx-options.is-wide { flex-direction: column; align-items: center; gap: 12px; }
-.tx-option { width: min(31%, 240px); height: auto; aspect-ratio: 1.12; padding: 10px; }
-.tx-options.is-wide .tx-option { width: min(92%, 470px); aspect-ratio: auto; height: calc((100dvh - 224px) * 0.15); padding: 6px 16px; }
-.tx-endboard { width: 100%; height: 100%; overflow: visible; }
-.tx-endboard .tx-mini-me .bob { animation: none; }
-
-/* ------------------------------------------------ blocks → text: three texts to choose from */
-.tx-choices-zone { grid-area: options; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
-.tx-choice-controls { justify-content: space-between; min-height: 84px; }
-.tx-ask { margin: 0; font: 700 23px/1.2 var(--body); color: var(--ink); }
-.tx-predict-stage .tx-ask { margin: 2px 0 -2px; }
-.tx-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: start; }
-.tx-choice {
+/* ------------------------------------------------ predict: read the text, then the three drawn answers under it; the board to watch */
+.tx-root.is-predict .tx-code-zone { display: flex; flex-direction: column; }
+.tx-root.is-predict .tx-code { position: relative; inset: auto; flex: none; height: calc(var(--rows) * var(--lh) + 2 * var(--pad) + 36px); }
+.tx-root.is-predict .tx-ask { margin: 4px 0 8px 62px; font: 400 30px/1.1 var(--hand); color: var(--blue-ink); rotate: -1deg; }
+.tx-options { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 0 0 18px 58px; }
+.tx-option {
   --fill: var(--sheet);
-  --r-cut: 12px 9px 14px 10px / 10px 14px 9px 12px;
-  position: relative; display: block; min-width: 0;
-  padding: 10px 6px 10px 2px; text-align: left; cursor: pointer;
+  --r-cut: 14px 10px 16px 11px / 11px 15px 10px 14px;
+  position: relative; flex: 1 1 0; min-height: 0; max-height: 150px;
+  display: grid; place-items: center;
+  padding: 6px 12px 6px;
   animation: pop-in 360ms ease-out both;
 }
-.tx-choice:nth-child(2) { animation-delay: 90ms; }
-.tx-choice:nth-child(3) { animation-delay: 180ms; }
-.tx-choice .tx-code { pointer-events: none; }
-.tx-choice .pen-ring { position: absolute; inset: -12px; width: calc(100% + 24px); height: calc(100% + 24px); overflow: visible; pointer-events: none; }
-.tx-choice.is-picked { --fill: #e9efd8; }
-.tx-choice.is-other { opacity: 0.4; }
+.tx-option:nth-child(2) { animation-delay: 90ms; }
+.tx-option:nth-child(3) { animation-delay: 180ms; }
+.tx-option .pen-ring { position: absolute; inset: -10px; width: calc(100% + 20px); height: calc(100% + 20px); overflow: visible; pointer-events: none; }
+.tx-option.is-picked { --fill: #e9efd8; }
+.tx-option.is-other { opacity: 0.4; }
+.tx-endboard { display: block; height: 100%; width: auto; overflow: visible; }
+.tx-endboard .tx-mini-me .bob { animation: none; }
+
+/* ------------------------------------------------ pick: which of two lines is this block */
+.tx-pick-zone { grid-area: options; min-width: 0; display: flex; flex-direction: column; gap: 22px; padding-top: 6px; }
+.tx-pick-controls { min-height: 84px; }
+.tx-pick-ask { display: inline-flex; align-items: center; gap: 14px; font: 700 40px var(--body); color: var(--ink); }
+.tx-pick-ask .tx-mini-blk { width: 72px; height: 62px; }
+.tx-pick-ask .tx-mini-blk svg { width: 46px; height: 46px; }
+.tx-pick-q { color: var(--blue-ink); font-family: var(--hand); font-size: 52px; }
+.tx-pick { display: grid; grid-template-columns: repeat(2, minmax(0, min(380px * var(--k, 1), 42%))); gap: 44px; }
+.tx-pick-card {
+  --fill: var(--sheet);
+  position: relative; display: block; height: calc(128px * var(--k, 1)); min-width: 0;
+  padding: 0; text-align: left; cursor: pointer;
+  animation: pop-in 360ms ease-out both;
+}
+.tx-pick-card:nth-child(2) { animation-delay: 110ms; }
+.tx-pick-card .tx-code { pointer-events: none; padding-top: 12px; }
+.tx-pick-card .tx-window::before { display: none; }
+.tx-pick-card .tx-gutter { visibility: hidden; }
+.tx-pick-card .pen-ring { position: absolute; inset: -12px; width: calc(100% + 24px); height: calc(100% + 24px); overflow: visible; pointer-events: none; }
+.tx-pick-card.is-right { --fill: #e9efd8; }
+.tx-pick-card.is-other { opacity: 0.55; }
+.tx-pick-means { position: absolute; right: 16px; top: 50%; translate: 0 -50%; }
 
 /* ------------------------------------------------ the liking question */
 .tx-liked-icon { display: grid; place-items: center; }
 
 @media (prefers-reduced-motion: reduce) {
-  .tx-note, .tx-choice, .tx-band.is-flash { animation: none; }
+  .tx-note, .tx-option, .tx-pick-card, .tx-band.is-flash, .tx-mark, .tx-gloss, .tx-nudge { animation: none; }
 }
+.tx-root.is-predict .tx-stage { --board-h: calc(100dvh - 280px); }

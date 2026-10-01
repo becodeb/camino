@@ -1,86 +1,121 @@
 import { describe, expect, it } from 'vitest';
 import { simulate } from '../game/engine';
 import { fromProgram, parseText, runText, toProgram } from '../game/textCode';
-import { ITEMS, NEXT_AFTER_MS, TOUR, blocksOfText, nextOpen, predictEnd, textWins, type ChoiceItem, type EditItem, type PredictItem } from './textProbe';
+import {
+  CORE_STEPS, FAST_TIMES, STEPS, STEP_DEFS, TIMES, TX_SAY, blocksOfText, liveGlosses, markIntact, predictEnd, textWins, timesFrom,
+  type EditTask, type PickTask, type PredictTask,
+} from './textProbe';
 
-const predicts = ITEMS.filter((i): i is PredictItem => i.kind === 'predict');
-const edits = ITEMS.filter((i): i is EditItem => i.kind === 'number' || i.kind === 'typo' || i.kind === 'write');
-const choices = ITEMS.filter((i): i is ChoiceItem => i.kind === 'blocks_to_text');
+const defs = STEPS.map((s) => STEP_DEFS[s]);
+const edits = defs.map((d) => d.task).filter((t): t is EditTask => ['word', 'number', 'typo', 'write'].includes(t.kind));
+const teaches = defs.flatMap((d) => (d.teach ? [[d.id, d.teach] as const] : []));
 
-describe('the fixed items', () => {
-  it('are 8, with unique ids, every kind, in a fixed order', () => {
-    expect(ITEMS.map((i) => i.id)).toEqual(['predict_loop', 'predict_if', 'number', 'typo_name', 'typo_colon', 'blocks_loop', 'blocks_until', 'write_if']);
-    expect(new Set(ITEMS.map((i) => i.kind))).toEqual(new Set(['predict', 'number', 'typo', 'blocks_to_text', 'write']));
+describe('the steps', () => {
+  it('are six, one idea each, in a fixed order; the stretch is the last and optional', () => {
+    expect(STEPS).toEqual(['move', 'seq', 'repeat', 'typo', 'if', 'write']);
+    expect(CORE_STEPS).toEqual(STEPS.slice(0, 5));
+    expect(defs.map((d) => d.task.kind)).toEqual(['pick', 'word', 'number', 'typo', 'predict', 'write']);
+    expect(defs.filter((d) => d.optional).map((d) => d.id)).toEqual(['write']);
+    expect(new Set(defs.map((d) => d.task.id)).size).toBe(6);
   });
 
-  it('the tour runs to the seed and is the same program as blocks and as text', () => {
-    const p = parseText(TOUR.text);
-    expect(p.ok && runText(TOUR.board, p.code).trace.outcome).toBe('win');
-    expect(fromProgram(blocksOfText(TOUR.text)!)).toBe(TOUR.text);
-  });
-
-  it.each(predicts.map((i) => [i.id, i] as const))('%s: the right drawing is where the program really ends; the others are not', (_, it) => {
-    const real = predictEnd(it);
-    const right = it.options.find((o) => o.id === it.answer)!;
-    expect(right.end).toEqual(real.end);
-    expect(!!right.bump).toBe(real.bump);
-    for (const o of it.options.filter((x) => x.id !== it.answer)) expect([o.end.c, o.end.r, !!o.bump]).not.toEqual([real.end.c, real.end.r, real.bump]);
-    expect(new Set(it.options.map((o) => o.id)).size).toBe(3);
-    // the text has blocks too (its round trip is exact)
-    expect(fromProgram(blocksOfText(it.text)!)).toBe(it.text);
-    const parsed = parseText(it.text);
-    expect(parsed.ok && runText(it.board, parsed.code).trace).toEqual(simulate(it.board, blocksOfText(it.text)!));
-  });
-
-  it('answer positions are fixed: 2nd, 1st, then 3rd and 2nd for the blocks', () => {
-    const pos = [...predicts, ...choices].map((i) => i.options.findIndex((o) => o.id === i.answer));
-    expect(pos).toEqual([1, 0, 2, 1]);
-  });
-
-  it.each(edits.map((i) => [i.id, i] as const))('%s: the given text does not reach the seed, the fixed one does, and they differ on the focus line', (_, it) => {
-    expect(textWins(it, it.text)).toBe(false);
-    expect(textWins(it, it.fixed)).toBe(true);
-    const a = it.text.split('\n'), b = it.fixed.split('\n');
-    expect(a.length).toBe(b.length);
-    expect(a.map((l, k) => (l === b[k] ? null : k + 1)).filter(Boolean)).toEqual([it.focusLine]);
-    expect(it.caret.line).toBe(it.focusLine);
-    expect(it.caret.col).toBeLessThanOrEqual(a[it.caret.line - 1].length);
-    // round trip text ↔ Program of the fixed text
-    expect(fromProgram(blocksOfText(it.fixed)!)).toBe(it.fixed);
-  });
-
-  it('the number item parses and runs short; the typos show their error on the focus line; the empty line of the stretch too', () => {
-    const [num, name, colon, write] = edits;
-    const p = parseText(num.text);
-    expect(p.ok && runText(num.board, p.code).trace.outcome).toBe('short');
-    expect(parseText(name.text)).toMatchObject({ ok: false, error: { kind: 'unknown_name', line: 3, suggestion: 'derecha' } });
-    expect(parseText(colon.text)).toMatchObject({ ok: false, error: { kind: 'missing_colon', line: 1 } });
-    expect(parseText(write.text)).toMatchObject({ ok: false, error: { kind: 'empty_block', line: 2 } });
-    expect(num.blocks && write.blocks && !name.blocks && !colon.blocks).toBe(true);
-  });
-
-  it.each(choices.map((i) => [i.id, i] as const))('%s: exactly the answer is the same program as the blocks', (_, it) => {
-    for (const o of it.options) {
-      const p = parseText(o.text);
-      expect(p.ok).toBe(true);
-      const same = JSON.stringify(p.ok ? toProgram(p.code) : null) === JSON.stringify(it.program);
-      expect(same).toBe(o.id === it.answer);
+  it('never use while or else, and each idea is taught before a task uses it', () => {
+    const texts = defs.flatMap((d) => [d.teach?.text ?? '', 'text' in d.task ? d.task.text : '', 'fixed' in d.task ? d.task.fixed : '']);
+    for (const t of texts) expect(t).not.toMatch(/\bwhile\b|\belse\b/);
+    const taught = new Set<string>();
+    for (const d of defs) {
+      for (const w of ['for', 'if']) if (d.teach?.text.includes(`${w} `)) taught.add(w);
+      const t = 'text' in d.task ? d.task.text : '';
+      for (const w of ['for', 'if']) if (t.includes(`${w} `)) expect(taught.has(w), `${d.id} uses ${w} before teaching it`).toBe(true);
     }
-    expect(fromProgram(it.program)).toBe(it.options.find((o) => o.id === it.answer)!.text);
-  });
-});
-
-describe('moving through the items', () => {
-  it('goes to the next item not finished, wrapping, and to none when all are', () => {
-    expect(nextOpen(0, new Set())).toBe(1);
-    expect(nextOpen(7, new Set())).toBe(0);
-    expect(nextOpen(1, new Set(['number', 'typo_name']))).toBe(4);
-    expect(nextOpen(3, new Set(ITEMS.map((i) => i.id)))).toBeNull();
-    expect(nextOpen(2, new Set(ITEMS.filter((i) => i.id !== 'number').map((i) => i.id)))).toBe(2);
   });
 
-  it('shows the next page on a stuck item after a while, the stretch sooner, never before a pick', () => {
-    expect(NEXT_AFTER_MS.write).toBeLessThan(NEXT_AFTER_MS.typo);
-    expect(NEXT_AFTER_MS.predict).toBe(Infinity);
+  it.each(teaches)('%s: the teaching program reaches the seed and is the same as its blocks', (_, t) => {
+    const p = parseText(t.text);
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    const tr = runText(t.board, p.code).trace;
+    expect(tr.outcome).toBe('win');
+    const prog = toProgram(p.code)!;
+    expect(fromProgram(prog)).toBe(t.text);
+    expect(simulate(t.board, prog)).toEqual(tr);
+    for (const g of t.glosses) expect(g.line).toBeLessThanOrEqual(t.text.split('\n').length);
+  });
+
+  it.each(edits.map((t) => [t.id, t] as const))('%s: the given text does not reach the seed; the fix does, changing one line', (_, t) => {
+    expect(textWins(t.board, t.text)).toBe(false);
+    expect(textWins(t.board, t.fixed)).toBe(true);
+    const a = t.text.split('\n'), b = t.fixed.split('\n');
+    const changed = b.map((l, i) => (l !== (a[i] ?? '') ? i + 1 : 0)).filter(Boolean);
+    expect(changed).toEqual([t.focusLine]);
+    if (t.mark) {
+      expect(t.mark.line).toBe(t.focusLine);
+      expect(markIntact(t, t.text)).toBe(true);
+      expect(markIntact(t, t.fixed)).toBe(false);
+    }
+  });
+
+  it('the word task marks "derecha" and the number task the number', () => {
+    const w = STEP_DEFS.seq.task as EditTask, n = STEP_DEFS.repeat.task as EditTask;
+    const at = (t: EditTask) => t.text.split('\n')[t.mark!.line - 1].slice(t.mark!.from, t.mark!.to);
+    expect(at(w)).toBe('derecha');
+    expect(at(n)).toBe('2');
+    expect(w.hint?.keys).toBe('arriba');
+  });
+
+  it('the slip says "¿Será «derecha»?" on its line', () => {
+    const t = STEP_DEFS.typo.task as EditTask;
+    const p = parseText(t.text);
+    expect(p.ok).toBe(false);
+    if (p.ok) return;
+    expect(p.error).toMatchObject({ kind: 'unknown_name', line: t.focusLine, suggestion: 'derecha' });
+    expect(p.error.show).toContain('¿Será «derecha»?');
+  });
+
+  it('the pick: the right line is the block, the other is not', () => {
+    const t = STEP_DEFS.move.task as PickTask;
+    expect(t.options).toHaveLength(2);
+    for (const o of t.options) {
+      const prog = blocksOfText(o.text)!;
+      expect(prog).toHaveLength(1);
+      expect(prog[0].t === 'cmd' && prog[0].cmd === t.block).toBe(o.id === t.answer);
+    }
+    expect(t.options.find((o) => o.id !== t.answer)!.say.length).toBeGreaterThan(10);
+  });
+
+  it('the predict: the right drawing is where the program really ends (no rock: no jump); the others are not', () => {
+    const t = STEP_DEFS.if.task as PredictTask;
+    const real = predictEnd(t);
+    expect(t.options.find((o) => o.id === t.answer)!.end).toEqual(real.end);
+    expect(real.bump).toBe(false);
+    for (const o of t.options.filter((x) => x.id !== t.answer)) expect(o.end).not.toEqual(real.end);
+    expect(t.text).toBe(STEP_DEFS.if.teach!.text);
+    expect(t.board.obstacles).toHaveLength(0);
+    // the answer is not first (a child tapping the first drawing is not right by chance)
+    expect(t.options.findIndex((o) => o.id === t.answer)).toBe(1);
+  });
+
+  it('the live note of a for follows its number', () => {
+    expect(liveGlosses('for i in range(2):\n    derecha()')).toEqual([{ line: 1, text: 'repetí 2 veces' }]);
+    expect(liveGlosses('for i in range(1):\n    derecha()')).toEqual([{ line: 1, text: 'repetí 1 vez' }]);
+    expect(liveGlosses('for i in range(:\n    derecha()')).toEqual([]);
+  });
+
+  it('times: seguir after 90 s, in seconds with ?caps=fast', () => {
+    expect(TIMES.skipMs).toBe(90_000);
+    expect(timesFrom('?debug&caps=fast')).toBe(FAST_TIMES);
+    expect(timesFrom('?debug')).toBe(TIMES);
+  });
+
+  it('every line is short, encouraging, and never says "difícil" or "incorrecto"', () => {
+    const lines = [
+      ...Object.values(TX_SAY).flat(),
+      ...defs.flatMap((d) => [d.task.say, d.teach?.say ?? '', d.teach?.after ?? '', ...('right' in d.task ? [d.task.right] : []), ...('other' in d.task ? [d.task.other] : []),
+        ...(d.task.kind === 'pick' ? d.task.options.map((o) => o.say) : [])]),
+    ].filter(Boolean);
+    for (const l of lines) {
+      expect(l).not.toMatch(/dif[ií]cil|incorrect|mal\b|error/i);
+      expect(l.length).toBeLessThanOrEqual(150);
+    }
   });
 });

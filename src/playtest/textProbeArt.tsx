@@ -1,7 +1,6 @@
-// The drawings of "Del bloque al texto": the item stamps of the bar (one
-// small page per item, its kind drawn on it: an eye to read and guess, a
-// number, a patch for a slip, a block turning into lines, a pencil), the
-// bar's doodle (a block, a blue pen arrow, lines of text), and the drawn
+// The drawings of "Del bloque al texto": the step icons of the bar (T16:
+// the idea of each step drawn, never a word), the liking question's doodle
+// (a block, a blue pen arrow, lines of text), and the drawn
 // answers of a predict item (the item's own board, small, with the dotted
 // start and the character where it ends, a bump star if it bumped). Ink
 // boiled by #rough, flat colours, blue pen for marks.
@@ -10,83 +9,101 @@ import { memo } from 'react';
 import { blob, wobblyLine, wobblyPoly } from '../ink/ink.js';
 import type { Board, Cell } from '../game/model';
 import { ScenePlayer } from '../screens/player';
-import type { TextItem, TextItemKind } from './textProbe';
+import type { TxStep } from './textProbe';
 
 const INK = '#2b2622';
 const PEN = '#3d6ea5';
 const SHADOW = 'rgba(84, 62, 38, 0.2)';
-const PAPER = '#fbf7ee';
 
-/** What each kind of item draws on its stamp. */
-export function KindGlyph({ kind }: { kind: TextItemKind }) {
-  switch (kind) {
-    case 'predict':
-      return (
-        <g>
-          <path d="M-9,0 Q0,-8 9,0 Q0,8 -9,0 Z" fill={PAPER} stroke={INK} strokeWidth={1.8} strokeLinejoin="round" />
-          <circle cx={0} cy={0} r={3} fill={INK} />
-          <text x={8} y={-4} className="tx-stamp-q">?</text>
-        </g>
-      );
-    case 'number':
-      return <text x={0} y={7} textAnchor="middle" className="tx-stamp-n">3</text>;
-    case 'typo':
-      return (
-        <g transform="rotate(-24)">
-          <path d="M-10,-4 L10,-4 L10,4 L-10,4 Z" fill="#f2d98c" stroke={INK} strokeWidth={1.8} strokeLinejoin="round" />
-          <path d="M-3,-4 L-3,4 M3,-4 L3,4" stroke={INK} strokeWidth={1.2} opacity={0.6} />
-          <circle cx={-6.5} cy={0} r={0.9} fill={INK} /><circle cx={6.5} cy={0} r={0.9} fill={INK} />
-        </g>
-      );
-    case 'blocks_to_text':
-      return (
-        <g>
-          <path d="M-10,-9 L-2,-9 L-2,-1 L-10,-1 Z" fill="#eeac7f" stroke={INK} strokeWidth={1.6} strokeLinejoin="round" />
-          <path d="M-8,5 L-2,5 M-8,9 L-4,9" stroke={INK} strokeWidth={1.8} strokeLinecap="round" />
-          <path d="M1,-5 Q5,-7 7,-3" fill="none" stroke={PEN} strokeWidth={1.8} strokeLinecap="round" />
-          <path d="M3,4 L10,4 M5,8 L10,8" stroke={PEN} strokeWidth={2} strokeLinecap="round" />
-        </g>
-      );
-    case 'write':
-      return (
-        <g transform="rotate(38)">
-          <path d="M-3,-11 L3,-11 L3,6 L0,11 L-3,6 Z" fill="#f0d27a" stroke={INK} strokeWidth={1.6} strokeLinejoin="round" />
-          <path d="M-3,6 L3,6" stroke={INK} strokeWidth={1.2} />
-          <path d="M-3,-11 L3,-11 L3,-7 L-3,-7 Z" fill="#e7a3a0" stroke={INK} strokeWidth={1.4} strokeLinejoin="round" />
-        </g>
-      );
-  }
-}
-
-/**
- * The items as small pages in the bar: the one on screen circled in blue
- * pen, the ones finished ticked, the stretch one dashed (it is optional).
- * Each is a button (a big target round a small drawing): the child goes to
- * any item, in any order.
- */
-export function ItemStamps({ items, at, finished, onGo }: { items: readonly TextItem[]; at: number; finished: ReadonlySet<string>; onGo(i: number): void }) {
+/** A small arrow block, as in the notebook (its direction's colour). */
+function MiniBlock({ x, y, w = 22, fill, dir, seed }: { x: number; y: number; w?: number; fill: string; dir: 'right' | 'up' | 'down' | 'left'; seed: number }) {
+  const h = w * 0.82;
+  const d = wobblyPoly([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], { wob: 0.35, seed });
+  const cx = x + w / 2, cy = y + h / 2, a = w * 0.26;
+  const rot = { right: 0, down: 90, left: 180, up: -90 }[dir];
   return (
-    <span className="tx-stamps" role="list" aria-label="Desafíos">
-      {items.map((it, i) => {
-        const state = i === at ? 'here' : finished.has(it.id) ? 'done' : 'todo';
-        const d = wobblyPoly([[-12, -15], [12, -15], [12, 15], [-12, 15]], { wob: 0.4, seed: i + 7 });
-        return (
-          <button key={it.id} type="button" role="listitem" className={`tx-stamp is-${state}${it.kind === 'write' ? ' is-stretch' : ''}`} data-item={it.id} aria-label={`Desafío ${i + 1}`} onClick={() => onGo(i)}>
-            <svg viewBox="-16 -19 32 38" width={30} height={36} overflow="visible" aria-hidden="true">
-              <g filter="url(#rough)">
-                <path d={d} transform="translate(2 3)" fill={SHADOW} />
-                <path d={d} fill={state === 'done' ? '#efe6d2' : PAPER} stroke={INK} strokeWidth={2} strokeDasharray={it.kind === 'write' ? '4 3' : undefined} />
-                <KindGlyph kind={it.kind} />
-              </g>
-              {state === 'here' && <path d="M-3,-20 C14,-21 21,-8 19,6 C17,20 -4,24 -15,15 C-24,6 -20,-16 -1,-19" fill="none" stroke={PEN} strokeWidth={2.4} strokeLinecap="round" />}
-              {state === 'done' && <path d="M-6,9 L-1,14 L10,1" fill="none" stroke={PEN} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />}
-            </svg>
-          </button>
-        );
-      })}
-    </span>
+    <g>
+      <path d={d} transform="translate(1.5 2)" fill={SHADOW} />
+      <path d={d} fill={fill} stroke={INK} strokeWidth={1.8} strokeLinejoin="round" />
+      <g transform={`rotate(${rot} ${cx} ${cy})`} fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d={`M${cx - a},${cy} L${cx + a},${cy} M${cx + a * 0.3},${cy - a * 0.65} L${cx + a},${cy} L${cx + a * 0.3},${cy + a * 0.65}`} />
+      </g>
+    </g>
   );
 }
+
+/** A line of text, drawn: a short stroke in a call's colour. */
+const textLine = (x: number, y: number, w: number, color: string, seed: number) => (
+  <path d={wobblyLine(x, y, x + w, y, { bow: 0.4, seed })} stroke={color} strokeWidth={3.4} strokeLinecap="round" fill="none" />
+);
+
+/**
+ * The bar's drawing of each step (the idea of the step, never a word): a
+ * block and its line; three blocks and three lines; the repeat's loop with
+ * its 3 and an indented line; a patch on a line; a rock with a jump over it;
+ * a pencil writing a line.
+ */
+export const TxStepIcon = memo(function TxStepIcon({ step, size = 64 }: { step: TxStep; size?: number }) {
+  const pen = <path d={wobblyLine(-3, 0, 5, 0, { seed: 3 })} fill="none" stroke={PEN} strokeWidth={2.2} strokeDasharray="1 4" strokeLinecap="round" />;
+  const art = (() => {
+    switch (step) {
+      case 'move':
+        return <>
+          <MiniBlock x={-30} y={-9} fill="#eeac7f" dir="right" seed={11} />
+          <g transform="translate(-3 0)">{pen}<path d="M3,-4 L7,0 L3,4" fill="none" stroke={PEN} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" /></g>
+          {textLine(10, 0, 22, '#b85a22', 4)}
+        </>;
+      case 'seq':
+        return <>
+          <MiniBlock x={-30} y={-21} w={17} fill="#eeac7f" dir="right" seed={12} />
+          <MiniBlock x={-30} y={-6} w={17} fill="#eeac7f" dir="right" seed={13} />
+          <MiniBlock x={-30} y={9} w={17} fill="#a9c3de" dir="up" seed={14} />
+          {textLine(4, -14, 24, '#b85a22', 5)}
+          {textLine(4, 1, 24, '#b85a22', 6)}
+          {textLine(4, 16, 18, PEN, 7)}
+        </>;
+      case 'repeat':
+        return <>
+          <path d="M-14,-2 C-30,-4 -30,-22 -14,-22 C2,-22 4,-8 -6,-4" fill="none" stroke={PEN} strokeWidth={2.4} strokeLinecap="round" />
+          <path d="M-12,-9 L-5,-3 L-13,1" fill="none" stroke={PEN} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+          <text x={-15} y={-9} textAnchor="middle" className="tx-icon-n">3</text>
+          {textLine(6, -12, 26, INK, 8)}
+          {textLine(14, 6, 18, '#b85a22', 9)}
+          <path d="M6,1 L6,10" stroke={INK} strokeWidth={1.4} strokeDasharray="2 3" opacity={0.6} />
+        </>;
+      case 'typo':
+        return <>
+          {textLine(-30, -10, 52, '#b85a22', 10)}
+          <g transform="translate(2 6) rotate(-20)">
+            <path d="M-13,-5 L13,-5 L13,5 L-13,5 Z" fill="#f2d98c" stroke={INK} strokeWidth={1.8} strokeLinejoin="round" />
+            <path d="M-4,-5 L-4,5 M4,-5 L4,5" stroke={INK} strokeWidth={1.2} opacity={0.6} />
+            <circle cx={-8.5} cy={0} r={1} fill={INK} /><circle cx={8.5} cy={0} r={1} fill={INK} />
+          </g>
+        </>;
+      case 'if':
+        return <>
+          <path d={blob(2, 12, 11, 8, { wob: 0.1, n: 8, seed: 21 })} transform="translate(1.5 2)" fill={SHADOW} />
+          <path d={blob(2, 12, 11, 8, { wob: 0.1, n: 8, seed: 21 })} fill="#bdb09c" stroke={INK} strokeWidth={2} />
+          <path d="M-24,14 C-16,-22 18,-22 26,12" fill="none" stroke={PEN} strokeWidth={2.4} strokeDasharray="2 5" strokeLinecap="round" />
+          <path d="M20,7 L26,13 L30,5" fill="none" stroke={PEN} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+        </>;
+      case 'write':
+        return <>
+          {textLine(-30, 12, 30, PEN, 11)}
+          <g transform="translate(12 -2) rotate(38)">
+            <path d="M-4,-16 L4,-16 L4,9 L0,16 L-4,9 Z" fill="#f0d27a" stroke={INK} strokeWidth={1.8} strokeLinejoin="round" />
+            <path d="M-4,9 L4,9" stroke={INK} strokeWidth={1.2} />
+            <path d="M-4,-16 L4,-16 L4,-10 L-4,-10 Z" fill="#e7a3a0" stroke={INK} strokeWidth={1.6} strokeLinejoin="round" />
+          </g>
+        </>;
+    }
+  })();
+  return (
+    <svg className="tx-step-icon" viewBox="-36 -30 72 60" width={size} height={size * 0.83} overflow="visible" aria-hidden="true">
+      <g filter="url(#rough)" strokeLinejoin="round">{art}</g>
+    </svg>
+  );
+});
 
 /** The bar's doodle: a block, a blue pen arrow, and the same thing as lines of text. */
 export function BlockToTextDoodle() {

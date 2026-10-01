@@ -1,5 +1,6 @@
 // A tiny, strict Python-like text for Camino programs (the 5to probe "Del
-// bloque al texto" of the pilot playtest). Pure: parse, run on a board,
+// bloque al texto" of the pilot playtest; reduced in T16 to what the probe
+// teaches: no `while`, no `else`). Pure: parse, run on a board,
 // and map text <-> the engine's Program so the same program shows as blocks
 // and as text, line by line.
 //
@@ -12,14 +13,13 @@
 //   saltar()                                   a jump to the right (the "saltar"
 //                                              block; every Camino jump goes right)
 //   for i in range(3):                         "repetir 3" (any loop variable name)
-//   while not llegue():                        "repetir hasta llegar"
 //   if hay_piedra():                           "si hay piedra" (looks right)
-//   else:                                      only in text: blocks have no "si no"
 //
-// Nesting as the editor draws it: a loop holds calls and ifs; an if (and its
-// else) holds calls; a loop cannot hold a loop. `if hay_piedra():` holding
-// exactly `saltar()` and no else is the "si hay piedra [saltar]" block
-// (`ifrock:right`); any other if runs here but has no block.
+// Nesting as the editor draws it: a loop holds calls and ifs; an if holds
+// calls; a loop cannot hold a loop. `if hay_piedra():` holding exactly
+// `saltar()` is the "si hay piedra [saltar]" block (`ifrock:right`); any
+// other if runs here but has no block. `while` and `else` are not words of
+// this text (a child who has never seen code meets one idea at a time).
 //
 // Errors are for a child of 5to: one kind, one line, one short sentence in
 // Rioplatense Spanish (`show` on screen, `say` for the speech), never a
@@ -35,22 +35,21 @@ export const ACTION_CMD: Record<Action, string> = { derecha: 'right', izquierda:
 const CMD_ACTION: Record<string, Action> = Object.fromEntries(Object.entries(ACTION_CMD).map(([a, c]) => [c, a as Action]));
 const isAction = (w: string): w is Action => w in ACTION_CMD;
 
-export type IfStmt = { k: 'if'; line: number; then: Stmt[]; else: Stmt[] | null; elseLine?: number };
+export type IfStmt = { k: 'if'; line: number; then: Stmt[] };
 export type Stmt =
   | { k: 'call'; name: Action; line: number }
   | { k: 'for'; count: number; line: number; body: Stmt[] }
-  | { k: 'while'; line: number; body: Stmt[] }
   | IfStmt;
 
 export type TextErrorKind =
   | 'empty' | 'too_long' | 'bad_char' | 'unknown_name' | 'uppercase' | 'missing_paren' | 'extra_args' | 'missing_colon'
   | 'bad_number' | 'big_number' | 'same_line' | 'extra' | 'bad_line' | 'missing_indent' | 'unexpected_indent'
-  | 'bad_indent' | 'empty_block' | 'else_without_if' | 'nesting';
+  | 'bad_indent' | 'empty_block' | 'nesting';
 
 export const TEXT_ERROR_KINDS: readonly TextErrorKind[] = [
   'empty', 'too_long', 'bad_char', 'unknown_name', 'uppercase', 'missing_paren', 'extra_args', 'missing_colon',
   'bad_number', 'big_number', 'same_line', 'extra', 'bad_line', 'missing_indent', 'unexpected_indent',
-  'bad_indent', 'empty_block', 'else_without_if', 'nesting',
+  'bad_indent', 'empty_block', 'nesting',
 ];
 
 export interface TextError {
@@ -75,7 +74,7 @@ export const INDENT = '    ';
 
 // ------------------------------------------------------------------ words
 
-const KEYWORDS = ['for', 'in', 'range', 'while', 'not', 'llegue', 'if', 'hay_piedra', 'else'] as const;
+const KEYWORDS = ['for', 'in', 'range', 'if', 'hay_piedra'] as const;
 const KNOWN: readonly string[] = [...Object.keys(ACTION_CMD), ...KEYWORDS];
 
 function distance(a: string, b: string): number {
@@ -107,7 +106,7 @@ export function suggest(word: string, among: readonly string[] = KNOWN): string 
 
 // ------------------------------------------------------------------ errors
 
-const CTX_WORD: Record<'for' | 'while' | 'if' | 'else', string> = { for: 'for', while: 'while', if: 'if', else: 'else' };
+const CTX_WORD: Record<'for' | 'if', string> = { for: 'for', if: 'if' };
 
 function err(kind: TextErrorKind, line: number, o: { word?: string; suggestion?: string; ctx?: string; hint?: string } = {}): TextError {
   const n = line;
@@ -133,7 +132,6 @@ function err(kind: TextErrorKind, line: number, o: { word?: string; suggestion?:
       case 'unexpected_indent': return `La línea ${n} está corrida y no hace falta. Sacale los espacios de adelante.`;
       case 'bad_indent': return `La línea ${n} no está alineada con las de arriba.`;
       case 'empty_block': return `Después de la línea ${n} falta lo que va adentro del ${o.ctx}.`;
-      case 'else_without_if': return `En la línea ${n} hay un else sin su if arriba.`;
       case 'nesting': return `En la línea ${n} hay un ${w} adentro de un ${o.ctx}. Eso todavía no se puede.`;
     }
   })();
@@ -148,7 +146,7 @@ export function spoken(s: string): string {
 // ------------------------------------------------------------------ one line
 
 type Tok = { t: 'id'; v: string } | { t: 'num'; v: string } | { t: 'p'; v: '(' | ')' | ':' } | { t: 'bad'; v: string };
-type LineNode = { k: 'call'; name: Action } | { k: 'for'; count: number } | { k: 'while' } | { k: 'if' } | { k: 'else' };
+type LineNode = { k: 'call'; name: Action } | { k: 'for'; count: number } | { k: 'if' };
 
 function tokens(s: string): Tok[] {
   const out: Tok[] = [];
@@ -164,7 +162,7 @@ function tokens(s: string): Tok[] {
 }
 
 type Pat = string | '(' | ')' | ':' | { id: true } | { num: true };
-const HINT = { for: 'for i in range(3):', while: 'while not llegue():', if: 'if hay_piedra():', else: 'else:' };
+const HINT = { for: 'for i in range(3):', if: 'if hay_piedra():' };
 
 /**
  * Matches `ts` against a pattern and names the first thing wrong. `head`
@@ -209,8 +207,7 @@ function match(ts: Tok[], pat: Pat[], line: number, head: keyof typeof HINT | nu
   if (ts.length > pat.length) {
     const g = ts[pat.length];
     // `for i in range(3): derecha()`: Python allows it, the editor does not
-    if (head && head !== 'else' && pat[pat.length - 1] === ':') return err('same_line', line, { ctx: CTX_WORD[head] });
-    if (head === 'else') return err('same_line', line, { ctx: 'else' });
+    if (head && pat[pat.length - 1] === ':') return err('same_line', line, { ctx: CTX_WORD[head] });
     return err('extra', line, { word: g.v });
   }
   return null;
@@ -229,9 +226,7 @@ function parseLine(content: string, line: number): LineNode | TextError {
       const e = match(ts, ['for', { id: true }, 'in', 'range', '(', { num: true }, ')', ':'], line, 'for');
       return e ?? { k: 'for', count: Number((ts[5] as { v: string }).v) };
     }
-    case 'while': return match(ts, ['while', 'not', 'llegue', '(', ')', ':'], line, 'while') ?? { k: 'while' };
     case 'if': return match(ts, ['if', 'hay_piedra', '(', ')', ':'], line, 'if') ?? { k: 'if' };
-    case 'else': return match(ts, ['else', ':'], line, 'else') ?? { k: 'else' };
   }
   if (isAction(w)) return match(ts, [w, '(', ')'], line, null, w) ?? { k: 'call', name: w };
   const s = suggest(w);
@@ -260,7 +255,7 @@ export function parseText(text: string): Parsed {
 
   let i = 0;
   const isBlank = (line: number) => line - 1 < raw.length && !raw[line - 1].trim();
-  type Ctx = 'top' | 'for' | 'while' | 'if' | 'else';
+  type Ctx = 'top' | 'for' | 'if';
 
   const block = (indent: number, ctx: Ctx): Stmt[] => {
     const out: Stmt[] = [];
@@ -272,26 +267,17 @@ export function parseText(text: string): Parsed {
         throw err(last && last.k !== 'call' ? 'bad_indent' : 'unexpected_indent', e.line);
       }
       const n = e.node;
-      if (n.k === 'else') {
-        const prev = out[out.length - 1];
-        if (!prev || prev.k !== 'if' || prev.else) throw err('else_without_if', e.line);
-        i++;
-        prev.else = body(e, 'else');
-        prev.elseLine = e.line;
-        continue;
-      }
       if (n.k === 'call') { out.push({ k: 'call', name: n.name, line: e.line }); i++; continue; }
-      if (n.k === 'for' || n.k === 'while') {
-        if (ctx !== 'top') throw err('nesting', e.line, { word: n.k, ctx: ctx === 'else' ? 'else' : ctx });
+      if (n.k === 'for') {
+        if (ctx !== 'top') throw err('nesting', e.line, { word: 'for', ctx });
         i++;
-        const b = body(e, n.k);
-        out.push(n.k === 'for' ? { k: 'for', count: n.count, line: e.line, body: b } : { k: 'while', line: e.line, body: b });
+        out.push({ k: 'for', count: n.count, line: e.line, body: body(e, 'for') });
         continue;
       }
       // if
-      if (ctx === 'if' || ctx === 'else') throw err('nesting', e.line, { word: 'if', ctx });
+      if (ctx === 'if') throw err('nesting', e.line, { word: 'if', ctx });
       i++;
-      out.push({ k: 'if', line: e.line, then: body(e, 'if'), else: null });
+      out.push({ k: 'if', line: e.line, then: body(e, 'if') });
     }
     return out;
   };
@@ -320,7 +306,7 @@ export function parseText(text: string): Parsed {
 // ------------------------------------------------------------------ running
 
 /** An if that is the "si hay piedra [saltar]" block. */
-export const isRockJump = (s: IfStmt) => !s.else && s.then.length === 1 && s.then[0].k === 'call' && s.then[0].name === 'saltar';
+export const isRockJump = (s: IfStmt) => s.then.length === 1 && s.then[0].k === 'call' && s.then[0].name === 'saltar';
 
 export interface TextRun {
   trace: Trace;
@@ -332,8 +318,8 @@ export interface TextRun {
  * Runs a parsed program on a board, step by step like the engine's
  * `simulate` (for a program that has blocks the trace is the same, refs
  * included: the tests check it), and says which line each step comes from.
- * An if looks right: a rock there runs its body, otherwise its else; with
- * nothing to do the character only looks (a `look` step, as the block does).
+ * An if looks right: a rock there runs its body; with nothing to do the
+ * character only looks (a `look` step, as the block does).
  */
 export function runText(b: Board, code: Stmt[], opts: { from?: RobotState } = {}): TextRun {
   let s = opts.from ?? initialState(b);
@@ -351,7 +337,7 @@ export function runText(b: Board, code: Stmt[], opts: { from?: RobotState } = {}
     if (st.k !== 'if') throw new Error('a loop inside a loop');
     const rock = !!obstacleAt(b, s.c + 1, s.r);
     if (isRockJump(st)) return exec('ifrock:right', ref, rock ? st.then[0].line : st.line);
-    const branch = rock ? st.then : st.else;
+    const branch = rock ? st.then : null;
     if (!branch?.length) return exec('ifrock:right', ref, st.line); // nothing to do: a look (never a rock here)
     for (const c of branch) if (run(c, ref) === 'stop') return 'stop';
     return 'go';
@@ -364,22 +350,14 @@ export function runText(b: Board, code: Stmt[], opts: { from?: RobotState } = {}
     return { trace, lines };
   };
 
-  const stateKey = (r: RobotState) => `${r.c},${r.r},${r.mask}`;
   for (let item = 0; item < code.length; item++) {
     const st = code[item];
     if (st.k === 'call' || st.k === 'if') {
       if (run(st, { item }) === 'stop') return finish();
       continue;
     }
-    const passes = st.k === 'while' ? MAX_PASSES : st.count;
-    const starts = new Set<string>();
-    for (let iter = 0; iter < passes; iter++) {
-      if (st.k === 'while' && isWin(b, s)) break;
+    for (let iter = 0; iter < Math.min(st.count, MAX_PASSES); iter++) {
       if (!st.body.length) break;
-      if (st.k === 'while') {
-        if (starts.has(stateKey(s))) break;
-        starts.add(stateKey(s));
-      }
       for (let inner = 0; inner < st.body.length; inner++) {
         if (run(st.body[inner], { item, inner, iter }) === 'stop') return finish();
       }
@@ -397,14 +375,14 @@ function cmdOf(st: Stmt): string | null {
   return null;
 }
 
-/** The blocks of a parsed program, or null when it has no blocks (an else, another kind of if). */
+/** The blocks of a parsed program, or null when it has no blocks (an if with another body). */
 export function toProgram(code: Stmt[]): Program | null {
   const out: Program = [];
   for (const st of code) {
-    if (st.k === 'for' || st.k === 'while') {
+    if (st.k === 'for') {
       const body = st.body.map(cmdOf);
       if (body.some((c) => c == null)) return null;
-      out.push({ t: 'loop', count: st.k === 'while' ? 'goal' : st.count, body: body as string[] });
+      out.push({ t: 'loop', count: st.count, body: body as string[] });
       continue;
     }
     const c = cmdOf(st);
@@ -423,7 +401,7 @@ function linesOfCmd(cmd: string, pad: string): string[] | null {
 /**
  * The text of a block program, as the editor writes it (4 spaces, `i` as
  * the loop's name), or null when a block has no text: an empty line, a jump
- * or a "si" to another side, an empty repeat.
+ * or a "si" to another side, an empty repeat, a "repetir hasta llegar".
  */
 export function fromProgram(p: Program): string | null {
   const out: string[] = [];
@@ -435,8 +413,8 @@ export function fromProgram(p: Program): string | null {
       out.push(...l);
       continue;
     }
-    if (!it.body.length) return null;
-    out.push(it.count === 'goal' ? 'while not llegue():' : `for i in range(${it.count}):`);
+    if (!it.body.length || it.count === 'goal') return null;
+    out.push(`for i in range(${it.count}):`);
     for (const c of it.body) {
       if (isHole(c)) return null;
       const l = linesOfCmd(c, INDENT);
@@ -450,20 +428,16 @@ export function fromProgram(p: Program): string | null {
 /**
  * Which block each line is (its ref key in the notebook, BlockEditor's
  * `data-ref`): a top statement is block `item`, a statement in a loop is
- * `item:inner`; an if's header, body and else all belong to its block.
+ * `item:inner`; an if's header and body belong to its block.
  */
 export function lineKeys(code: Stmt[]): Map<number, string> {
   const m = new Map<number, string>();
   const mark = (st: Stmt, key: string) => {
     m.set(st.line, key);
-    if (st.k === 'if') {
-      st.then.forEach((c) => mark(c, key));
-      if (st.elseLine) m.set(st.elseLine, key);
-      st.else?.forEach((c) => mark(c, key));
-    }
+    if (st.k === 'if') st.then.forEach((c) => mark(c, key));
   };
   code.forEach((st, item) => {
-    if (st.k === 'for' || st.k === 'while') {
+    if (st.k === 'for') {
       m.set(st.line, `${item}`);
       st.body.forEach((c, inner) => mark(c, `${item}:${inner}`));
     } else mark(st, `${item}`);
@@ -502,8 +476,8 @@ export function colorLine(line: string): ColorToken[] {
     if (sp) out.push({ text: t, kind: 'space' });
     else if (id) {
       if (isAction(id)) out.push({ text: t, kind: 'act', action: id });
-      else if (id === 'hay_piedra' || id === 'llegue') out.push({ text: t, kind: 'cond' });
-      else if ((['for', 'in', 'while', 'not', 'if', 'else', 'range'] as string[]).includes(id)) out.push({ text: t, kind: 'kw' });
+      else if (id === 'hay_piedra') out.push({ text: t, kind: 'cond' });
+      else if ((['for', 'in', 'if', 'range'] as string[]).includes(id)) out.push({ text: t, kind: 'kw' });
       else out.push({ text: t, kind: 'name' });
     } else if (num) out.push({ text: t, kind: 'num' });
     else if (p) out.push({ text: t, kind: 'punct' });

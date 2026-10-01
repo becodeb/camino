@@ -31,16 +31,21 @@ describe('parseText: every valid form', () => {
     expect(code('for i in range(0):\n  arriba()')[0]).toMatchObject({ k: 'for', count: 0 });
   });
 
-  it('reads while not llegue(), an if with its else, and ifs inside loops', () => {
-    expect(code('while not llegue():\n    if hay_piedra():\n        saltar()\n    derecha()')).toEqual([{
-      k: 'while', line: 1, body: [
-        { k: 'if', line: 2, then: [{ k: 'call', name: 'saltar', line: 3 }], else: null },
+  it('reads an if, alone and inside a loop', () => {
+    expect(code('for i in range(4):\n    if hay_piedra():\n        saltar()\n    derecha()')).toEqual([{
+      k: 'for', count: 4, line: 1, body: [
+        { k: 'if', line: 2, then: [{ k: 'call', name: 'saltar', line: 3 }] },
         { k: 'call', name: 'derecha', line: 4 },
       ],
     }]);
-    expect(code('if hay_piedra():\n    saltar()\nelse:\n    derecha()')).toEqual([
-      { k: 'if', line: 1, then: [{ k: 'call', name: 'saltar', line: 2 }], else: [{ k: 'call', name: 'derecha', line: 4 }], elseLine: 3 },
+    expect(code('derecha()\nif hay_piedra():\n    saltar()\nderecha()')).toEqual([
+      { k: 'call', name: 'derecha', line: 1 }, { k: 'if', line: 2, then: [{ k: 'call', name: 'saltar', line: 3 }] }, { k: 'call', name: 'derecha', line: 4 },
     ]);
+  });
+
+  it('has no while and no else (T16: one idea at a time)', () => {
+    expect(error('while not llegue():\n    derecha()').kind).toBe('unknown_name');
+    expect(error('if hay_piedra():\n    saltar()\nelse:\n    derecha()')).toMatchObject({ kind: 'unknown_name', line: 3 });
   });
 
   it('skips empty lines, takes a tab as four spaces and ignores trailing spaces and \\r', () => {
@@ -72,9 +77,8 @@ describe('parseText: each error kind, with its line', () => {
     ['if hay_piedra:\n    saltar()', 'missing_paren', 1],
     ['derecha(2)', 'extra_args', 1],
     ['for i in range(2)\n    derecha()', 'missing_colon', 1],
-    ['arriba()\nwhile not llegue()\n    derecha()', 'missing_colon', 2],
+    ['arriba()\nfor i in range(2)\n    derecha()', 'missing_colon', 2],
     ['if hay_piedra()\n    saltar()', 'missing_colon', 1],
-    ['if hay_piedra():\n    saltar()\nelse\n    derecha()', 'missing_colon', 3],
     ['for i in range(x):\n    derecha()', 'bad_number', 1],
     ['for i in range(21):\n    derecha()', 'big_number', 1],
     ['for i in range(3): derecha()', 'same_line', 1],
@@ -87,8 +91,7 @@ describe('parseText: each error kind, with its line', () => {
     ['  derecha()', 'unexpected_indent', 1],
     ['for i in range(2):\n    arriba()\n  derecha()', 'bad_indent', 3],
     ['for i in range(2):', 'empty_block', 1],
-    ['while not llegue():\n    if hay_piedra():\n        \n    derecha()', 'empty_block', 2],
-    ['derecha()\nelse:\n    arriba()', 'else_without_if', 2],
+    ['for i in range(3):\n    if hay_piedra():\n        \n    derecha()', 'empty_block', 2],
     ['for i in range(2):\n    for j in range(2):\n        derecha()', 'nesting', 2],
     ['if hay_piedra():\n    if hay_piedra():\n        saltar()', 'nesting', 2],
     ['if hay_piedra():\n    for i in range(2):\n        saltar()', 'nesting', 2],
@@ -110,8 +113,8 @@ describe('parseText: each error kind, with its line', () => {
     expect(e).toMatchObject({ word: 'drecha', suggestion: 'derecha' });
     expect(e.show).toBe('En la línea 2 dice «drecha» y esa palabra no la conozco. ¿Será «derecha»?');
     expect(error('if hay_piedr():\n    saltar()')).toMatchObject({ kind: 'unknown_name', suggestion: 'hay_piedra' });
-    expect(error('whlie not llegue():\n    derecha()')).toMatchObject({ kind: 'unknown_name', suggestion: 'while' });
-    expect(error('while not llegué():\n    derecha()')).toMatchObject({ kind: 'unknown_name', suggestion: 'llegue' });
+    expect(error('fro i in range(2):\n    derecha()')).toMatchObject({ kind: 'unknown_name', suggestion: 'for' });
+    expect(error('for i in rnage(2):\n    derecha()')).toMatchObject({ kind: 'unknown_name', suggestion: 'range' });
     expect(error('avansar()').suggestion).toBeUndefined();
     expect(error('for i in range(2):').show).toBe('Después de la línea 1 falta lo que va adentro del for.');
   });
@@ -141,17 +144,13 @@ describe('runText', () => {
   });
 
   it('lights the if while it looks and the saltar() while it jumps', () => {
-    const r = runText(row, code('while not llegue():\n    if hay_piedra():\n        saltar()\n    derecha()'));
+    const r = runText(row, code('for i in range(6):\n    if hay_piedra():\n        saltar()\n    derecha()'));
     expect(r.trace.outcome).toBe('win');
     expect(r.trace.steps.map((s) => s.kind)).toEqual(['look', 'move', 'jump', 'move', 'jump', 'move', 'look', 'move']);
     expect(r.lines).toEqual([2, 4, 3, 4, 3, 4, 2, 4]);
   });
 
-  it('runs an else (text only) and an if with another body', () => {
-    const r = runText(row, code('for i in range(6):\n    if hay_piedra():\n        saltar()\n    else:\n        derecha()'));
-    expect(r.trace.steps.map((s) => s.cmd)).toEqual(['right', 'jump:right', 'right', 'jump:right', 'right', 'right']);
-    expect(r.lines).toEqual([5, 3, 5, 3, 5, 5]);
-    expect(r.trace.outcome).toBe('win');
+  it('runs an if with another body', () => {
     const bump = runText(row, code('derecha()\nif hay_piedra():\n    derecha()'));
     expect(bump.trace.outcome).toBe('crash');
     expect(bump.lines).toEqual([1, 3]);
@@ -160,18 +159,18 @@ describe('runText', () => {
     expect(look.lines).toEqual([1]);
   });
 
-  it('stops at a bump, at the seed, and gives up an endless while', () => {
+  it('stops at a bump and at the seed, and says short otherwise', () => {
     expect(runText(row, code('derecha()\nderecha()\nderecha()')).trace).toMatchObject({ outcome: 'crash', crashAt: 1 });
-    expect(runText(grid, code('while not llegue():\n    izquierda()')).trace.outcome).toBe('crash');
-    const stuck = runText(row, code('while not llegue():\n    if hay_piedra():\n        derecha()'));
-    expect(stuck.trace.outcome).toBe('short');
+    expect(runText(grid, code('for i in range(3):\n    izquierda()')).trace.outcome).toBe('crash');
+    expect(runText(grid, code('for i in range(20):\n    arriba()\n    derecha()')).trace.outcome).toBe('win');
+    expect(runText(row, code('derecha()')).trace.outcome).toBe('short');
   });
 
   const programs: string[] = [
     'derecha()\nfor i in range(3):\n    arriba()\nderecha()',
     'for i in range(4):\n    if hay_piedra():\n        saltar()\n    derecha()',
-    'while not llegue():\n    if hay_piedra():\n        saltar()\n    derecha()',
-    'while not llegue():\n    derecha()',
+    'derecha()\nif hay_piedra():\n    saltar()\nderecha()',
+    'for i in range(3):\n    derecha()',
     'saltar()\nsaltar()\nfor i in range(2):\n    derecha()',
     'arriba()\nfor i in range(0):\n    derecha()\nabajo()',
     'if hay_piedra():\n    saltar()\nderecha()\nif hay_piedra():\n    saltar()',
@@ -189,7 +188,7 @@ describe('runText', () => {
 describe('text ↔ blocks', () => {
   const programs: Program[] = [
     [{ t: 'cmd', cmd: 'right' }, { t: 'loop', count: 3, body: ['up', 'right'] }],
-    [{ t: 'loop', count: 'goal', body: ['ifrock:right', 'right'] }],
+    [{ t: 'loop', count: 4, body: ['ifrock:right', 'right'] }],
     [{ t: 'cmd', cmd: 'jump:right' }, { t: 'cmd', cmd: 'ifrock:right' }, { t: 'cmd', cmd: 'left' }, { t: 'cmd', cmd: 'down' }],
     [{ t: 'loop', count: 7, body: ['up'] }, { t: 'loop', count: 2, body: ['ifrock:right', 'jump:right'] }],
   ];
@@ -201,7 +200,7 @@ describe('text ↔ blocks', () => {
   });
 
   it('writes the editor\'s own layout', () => {
-    expect(fromProgram(programs[1])).toBe('while not llegue():\n    if hay_piedra():\n        saltar()\n    derecha()');
+    expect(fromProgram(programs[1])).toBe('for i in range(4):\n    if hay_piedra():\n        saltar()\n    derecha()');
   });
 
   it('has no text for blocks the subset does not have, and no blocks for text-only forms', () => {
@@ -209,13 +208,13 @@ describe('text ↔ blocks', () => {
     expect(fromProgram([{ t: 'cmd', cmd: 'ifrock:up' }])).toBeNull();
     expect(fromProgram([{ t: 'cmd', cmd: '' }])).toBeNull();
     expect(fromProgram([{ t: 'loop', count: 2, body: [] }])).toBeNull();
-    expect(toProgram(code('if hay_piedra():\n    saltar()\nelse:\n    derecha()'))).toBeNull();
+    expect(fromProgram([{ t: 'loop', count: 'goal', body: ['right'] }])).toBeNull();
     expect(toProgram(code('if hay_piedra():\n    derecha()'))).toBeNull();
     expect(toProgram(code('for i in range(2):\n    if hay_piedra():\n        saltar()\n        derecha()'))).toBeNull();
   });
 
   it('maps each line to its block and back', () => {
-    const c = code('derecha()\nwhile not llegue():\n    if hay_piedra():\n        saltar()\n    derecha()\n\narriba()');
+    const c = code('derecha()\nfor i in range(5):\n    if hay_piedra():\n        saltar()\n    derecha()\n\narriba()');
     expect([...lineKeys(c)].sort((a, b) => a[0] - b[0])).toEqual([[1, '0'], [2, '1'], [3, '1:0'], [4, '1:0'], [5, '1:1'], [7, '2']]);
     expect(keyLines(c, '1:0')).toEqual([3, 4]);
     expect(keyLines(c, '9')).toEqual([]);
