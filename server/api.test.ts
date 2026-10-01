@@ -178,28 +178,33 @@ dbDescribe('API against Postgres', () => {
     ]);
   });
 
-  it('v_typing_by_grade reads the typing keys and the liking answer; v_activity_time counts the typing game whole', async () => {
+  it('v_typing_by_grade reads the typing keys, the liking answer and the rounds; v_typing_rounds_by_grade by round; v_activity_time counts the typing game whole', async () => {
     const app = createApp(pool, { distDir });
     const post = (session: Record<string, unknown>, events: unknown[]) => app.request('/api/sync', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ session, events }),
     });
-    const key = (seq: number, correct: boolean, latency_ms: number, input = 'physical') =>
-      event(seq, { type: 'typing', payload: { key: correct ? 'a' : 'p', expected: 'a', correct, latency_ms, speed_level: 1, input, item: 'a', set: 'vowels', pos: 0 } });
+    const key = (seq: number, correct: boolean, latency_ms: number, input = 'physical', round = 1) =>
+      event(seq, { type: 'typing', payload: { key: correct ? 'a' : 'p', expected: 'a', correct, latency_ms, speed_level: 1, input, item: 'a', set: 'vowels', pos: 0, round } });
+    const round = (seq: number, n: number, completed: boolean, time_ms: number, caught: number, golden: number) =>
+      event(seq, { type: 'typing_round', payload: { round: n, set: 'commands', goal: 5, filled: completed ? 5 : 2, caught, golden, completed, reason: completed ? 'goal' : 'done', time_ms, keys: 9, correct: 8, landed: 0, pace_end: 1 } });
     // 5to (no other test writes grade 5): two sessions
     const a = newSession({ grade: 5 });
     expect((await post(a, [
-      key(0, true, 1000), key(1, false, 3000), key(2, true, 2000), key(3, true, 4000, 'touch'),
-      event(4, { type: 'typing_end', payload: { reason: 'time', time_ms: 245_000, keys: 4, correct: 3 } }),
-      event(5, { type: 'survey_answer', payload: { question: 'typing_liked', answer: 'yes' } }),
+      key(0, true, 1000), key(1, false, 3000), key(2, true, 2000, 'physical', 2), key(3, true, 4000, 'touch', 3),
+      round(4, 1, true, 40_000, 4, 1), round(5, 2, true, 50_000, 5, 0), round(6, 3, true, 70_000, 3, 1),
+      event(7, { type: 'typing_end', payload: { reason: 'rounds', time_ms: 245_000, keys: 4, correct: 3, rounds_done: 3, golden: 2 } }),
+      event(8, { type: 'survey_answer', payload: { question: 'typing_liked', answer: 'yes' } }),
       // the final survey's own "liked" is not the game's
-      event(6, { type: 'survey_answer', payload: { question: 'liked', answer: 'no' } }),
+      event(9, { type: 'survey_answer', payload: { question: 'liked', answer: 'no' } }),
     ])).status).toBe(200);
     const b = newSession({ grade: 5 });
     expect((await post(b, [
       key(0, false, 500),
-      event(1, { type: 'survey_answer', payload: { question: 'typing_liked', answer: 'mid' } }),
+      round(1, 1, false, 30_000, 2, 0),
+      event(2, { type: 'typing_end', payload: { reason: 'done', time_ms: 40_000, keys: 1, correct: 0, rounds_done: 0, golden: 0 } }),
+      event(3, { type: 'survey_answer', payload: { question: 'typing_liked', answer: 'mid' } }),
     ])).status).toBe(200);
 
     const { rows } = await pool.query('SELECT * FROM v_typing_by_grade WHERE grade = 5');
@@ -213,6 +218,24 @@ dbDescribe('API against Postgres', () => {
     expect(Number(r.median_correct_latency_ms)).toBe(2000);
     expect(Number(r.touch_attempts)).toBe(1);
     expect([Number(r.liked_yes), Number(r.liked_mid), Number(r.liked_no)]).toEqual([1, 1, 0]);
+    // the rounds (T12)
+    expect(Number(r.rounds_sessions)).toBe(2);
+    expect(Number(r.all_rounds_sessions)).toBe(1);
+    expect(Number(r.median_rounds_done)).toBe(1.5);
+    expect(Number(r.golden_total)).toBe(2);
+    const byRound = (await pool.query('SELECT * FROM v_typing_rounds_by_grade WHERE grade = 5 ORDER BY round')).rows;
+    expect(byRound.map((x) => Number(x.round))).toEqual([1, 2, 3]);
+    expect(byRound.map((x) => Number(x.sessions))).toEqual([2, 1, 1]);
+    expect(byRound.map((x) => Number(x.completed))).toEqual([1, 1, 1]);
+    expect(Number(byRound[0].median_time_ms)).toBe(35_000);
+    expect(Number(byRound[0].median_completed_time_ms)).toBe(40_000);
+    expect(Number(byRound[0].median_caught)).toBe(3);
+    expect(byRound.map((x) => Number(x.golden))).toEqual([1, 0, 1]);
+    // keys by round: round 1 has a's 1000 ✓ and 3000 ✗ and b's 500 ✗; round 2 one ✓; round 3 one ✓ (touch)
+    expect(byRound.map((x) => Number(x.attempts))).toEqual([3, 1, 1]);
+    expect(byRound.map((x) => Number(x.correct_count))).toEqual([1, 1, 1]);
+    expect(Number(byRound[0].accuracy_pct)).toBe(33.3);
+    expect(Number(byRound[2].median_correct_latency_ms)).toBe(4000);
 
     const t = await pool.query("SELECT seconds::float AS seconds FROM v_activity_time WHERE session_id = $1 AND activity = 'typing'", [a.id]);
     expect(t.rows).toEqual([{ seconds: 245 }]);

@@ -402,16 +402,57 @@
 .tk-item.is-caught .tk-sway { animation-play-state: paused; }
 .tk-item.is-landed .tk-sway { animation: none; }
 .tk-item.is-landed .tk-pop { animation: tk-land 1.6s ease-out forwards; transform-origin: 0px 58px; }
+.tk-item.is-gone .tk-pop { animation: tk-gone 600ms ease-in forwards; }
+@keyframes tk-gone { to { opacity: 0; translate: 0 -40px; scale: 0.7; } }
 .tk-flight { animation: tk-flight 1.7s ease-in forwards; }
 @keyframes tk-pop { 0% { scale: 0.3; opacity: 0; } 70% { scale: 1.08; opacity: 1; } 100% { scale: 1; } }
 @keyframes tk-sway { from { rotate: -6deg; } to { rotate: 6deg; } }
 @keyframes tk-sway-word { from { rotate: -2.5deg; } to { rotate: 2.5deg; } }
 @keyframes tk-land { 0% { scale: 1.1 0.86; } 18% { scale: 1; } 65% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes tk-flight {
-  0% { transform: translate(322px, 320px) scale(0.5); opacity: 0; }
-  15% { transform: translate(322px, 240px) scale(1.4); opacity: 1; }
-  100% { transform: translate(1130px, 20px) scale(0.8); opacity: 0; }
+  0% { transform: translate(720px, 420px) scale(0.5); opacity: 0; }
+  15% { transform: translate(720px, 330px) scale(1.4); opacity: 1; }
+  100% { transform: translate(1190px, -20px) scale(0.8); opacity: 0; }
 }
+/* the bar: the three round medals and the pouch */
+.tk-rounds .tk-medals { display: block; width: 168px; height: 56px; overflow: visible; }
+.tk-banner { animation: tk-finale 600ms cubic-bezier(.3,1.5,.5,1) both; }
+.pp-typing .tk-pouch { margin: 0 6px; }
+.tk-medal.is-done { animation: tk-medal 700ms ease-out both; transform-box: fill-box; transform-origin: center; }
+@keyframes tk-medal { 0% { scale: 0.5; } 60% { scale: 1.25; } 100% { scale: 1; } }
+/* the garden bed: the next hole calls, a new sprout pops, a full bed blooms */
+.tk-hole-ring { animation: pp-cue 0.9s ease-in-out infinite alternate; }
+.tk-hole-plant { animation: tk-plant 520ms ease-out both; transform-box: fill-box; transform-origin: 50% 100%; }
+@keyframes tk-plant { 0% { scale: 0.2; } 65% { scale: 1.15; } 100% { scale: 1; } }
+.tk-bed.is-bloom .tk-hole-sprout { animation: tk-bloom 900ms ease-out both; transform-box: fill-box; transform-origin: 50% 100%; }
+.tk-bed.is-bloom .tk-hole:nth-child(odd) .tk-hole-sprout { animation-delay: 120ms; }
+@keyframes tk-bloom { 0% { scale: 0.7; } 55% { scale: 1.2; } 100% { scale: 1; } }
+/* the garland's star lamps (the golden streak) */
+.tk-lamp-star { fill: #fbf7ee; transition: fill 160ms ease-out; }
+.tk-lamp.is-lit .tk-lamp-star { fill: #f7c948; }
+.tk-lamp.is-lit { animation: tk-lamp 420ms ease-out both; transform-box: fill-box; transform-origin: 50% 0%; }
+@keyframes tk-lamp { 0% { scale: 0.6; } 60% { scale: 1.35; } 100% { scale: 1; } }
+.tk-garland.is-flash .tk-lamp { animation: tk-lamp-flash 0.35s ease-in-out 2 alternate; transform-box: fill-box; transform-origin: 50% 0%; }
+@keyframes tk-lamp-flash { from { scale: 1; rotate: -8deg; } to { scale: 1.5; rotate: 8deg; } }
+/* what still shines above the garland; the burst of a golden seed */
+.tk-glint { animation: tk-twinkle 0.8s ease-in-out infinite alternate; }
+@keyframes tk-twinkle { from { opacity: 0.55; } to { opacity: 1; } }
+.tk-sparkle { animation: tk-sparkle 1s ease-out forwards; transform-box: fill-box; transform-origin: center; }
+@keyframes tk-sparkle { 0% { scale: 0.3; opacity: 0; } 25% { scale: 1.1; opacity: 1; } 100% { scale: 1.5; opacity: 0; } }
+/* the butterfly: it flutters side to side, its wings flap */
+.tk-item.is-butterfly.is-fall .tk-flutter { animation: tk-flutter 2.2s ease-in-out infinite alternate; }
+@keyframes tk-flutter { 0% { translate: -40px 0; } 50% { translate: 10px -12px; } 100% { translate: 40px 0; } }
+.tk-wing { transform-box: fill-box; animation: tk-flap 0.32s ease-in-out infinite alternate; }
+.tk-wing-l { transform-origin: 100% 40%; }
+.tk-wing-r { transform-origin: 0% 40%; }
+@keyframes tk-flap { from { scale: 1 1; } to { scale: 0.35 1; } }
+/* the critters come to see a full bed (and stay) */
+.tk-critter { animation: tk-peek 900ms cubic-bezier(.3,1.4,.5,1) both; }
+@keyframes tk-peek { 0% { translate: 0 70px; opacity: 0; } 30% { opacity: 1; } 100% { translate: 0 0; } }
+/* the finale's sign */
+.tk-finale { animation: tk-finale 800ms cubic-bezier(.3,1.5,.5,1) both; }
+@keyframes tk-finale { 0% { translate: 0 120px; opacity: 0; } 100% { translate: 0 0; opacity: 1; } }
+.tk-listo-text { font: 400 80px var(--hand); fill: var(--ink); }
 
 .pp-tk-keys { position: relative; display: flex; justify-content: center; align-items: flex-end; min-height: 0; }
 .pp-tk-listo { position: absolute; right: 6px; bottom: 4px; }
@@ -428,6 +469,9 @@
 .pp-kb-row.r1 { margin-left: calc(var(--k) * 0.3); }
 .pp-kb-row.r2 { margin-left: calc(var(--k) * 0.85); }
 .pp-kb-space { margin-left: calc(var(--k) * 2.6); }
+.pp-kb-row.r-digits { margin-left: 0; }
+.pp-kb.has-digits { --k: clamp(44px, min(4.4vw, 6.4dvh), 60px); }
+.pp-key.pp-space { width: calc(var(--k) * 5.4); height: calc(var(--k) * 0.6); }
 .tk-space { display: block; width: calc(var(--k) * 5.4); height: calc(var(--k) * 0.6); overflow: visible; }
 .pp-key { position: relative; display: block; width: var(--k); height: calc(var(--k) * 62 / 60); padding: 0; border: 0; background: none; color: inherit; font: inherit; }
 button.pp-key { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
@@ -455,7 +499,8 @@ button.pp-key:focus-visible { outline: 3px dashed var(--blue-ink); outline-offse
 @keyframes tk-wrong { 0% { rotate: 0deg; } 14% { rotate: -10deg; } 32% { rotate: 9deg; } 50% { rotate: -6deg; } 68% { rotate: 3deg; opacity: 1; } 100% { rotate: 0deg; opacity: 0; } }
 .pp-tk-liked-icon { display: flex; flex: none; }
 @media (prefers-reduced-motion: reduce) {
-  .tk-sway, .tk-pop, .pp-key.is-expected, .tk-ring, .pp-kb.is-help .pp-key.is-expected { animation: none; }
+  .tk-sway, .tk-pop, .pp-key.is-expected, .tk-ring, .pp-kb.is-help .pp-key.is-expected, .tk-hole-ring, .tk-glint, .tk-wing,
+  .tk-item.is-butterfly.is-fall .tk-flutter, .tk-garland.is-flash .tk-lamp { animation: none; }
 }
 
 /* ------------------------------------------------ the wardrobe fits the window (round 2: at 1920×911 the mirror ran off the bottom) */

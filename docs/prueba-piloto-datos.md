@@ -434,71 +434,111 @@ One key pressed in "Teclas del bosque" (step `typing`, `src/playtest/TypingStep.
 rules in `typing.ts`). **RQ 7.**
 ```
 {
-  key: string,            // the key pressed: one character, lowercased, accents off (a dead key's á is an a), ñ kept
-  expected: string,       // the letter that was expected
+  key: string,            // the key pressed: one character, lowercased, accents off (a dead key's á is an a), ñ kept; ' ' for the space bar (only when a command waits for its space)
+  expected: string,       // the character that was expected
   correct: boolean,
-  latency_ms: number,     // a letter, or a word's first letter: from the item's appearance; a word's next letters: from the key before (right or wrong)
-  speed_level: number,    // 1–6, the speed the item fell at (adaptive, see below)
+  latency_ms: number,     // a letter, or an item's first character: from the item's appearance; the next ones: from the key before (right or wrong)
+  speed_level: number,    // 1–3 since round 2 of the pilot (the gentle pace step inside the round the item fell at); 1–6 in round-1 sessions
   input: 'physical' | 'touch',  // a real keyboard, or a tap on the drawn keyboard (touch screens)
-  item: string,           // the letter or word falling
-  set: 'vowels' | 'letters' | 'words' | 'commands',
-  pos: number             // the expected letter's place in the word (0 for a letter)
+  item: string,           // the letter, syllable, word or command falling
+  set: 'vowels' | 'letters' | 'syllables' | 'words' | 'commands' | 'phrases',
+  pos: number,            // the expected character's place in the item (0 for a letter)
+  round: 1 | 2 | 3        // the game's round (absent in round-1 sessions of the pilot, before T12)
 }
 ```
-Only printable keys count (Shift, arrows, Enter, the space and a dead key alone
-are not logged); a held key's repeats are not logged; a key pressed while
-nothing is falling is not logged. On 1ro's two seeds at once, a key that
-matches either catches it (`expected` is that seed's letter); otherwise
-`expected` is the lowest seed's.
+Only printable keys count (Shift, arrows, Enter, a dead key alone are not
+logged; the space only when the item waits for one); a held key's repeats are
+not logged; a key pressed while nothing is falling is not logged; keys during
+the intro are not logged (the demo's own key skips the intro). On two seeds
+at once, a key that matches either catches it (`expected` is that seed's
+letter); otherwise `expected` is the lowest item's.
 
-What falls, by grade (the same lists for every child; the order is random):
+**The game since round 2 of the pilot (T12): three rounds.** Each round has
+a goal drawn in the scene: a garden bed of N holes in front of the meadow.
+Each catch fills the next hole (a sprout pops; the next hole is circled in
+pen). Each round is harder on purpose (the content, or two things at once);
+the speed inside a round adapts only gently. A full bed blooms, a critter
+comes to see, the round's medal in the bar turns gold, and the next round
+says what changes. After round 3 the finale ("¡Listo!" on a sign).
 
-| Grade | Set | Items |
-|---|---|---|
-| 1ro | `vowels`, then `vowels` and `letters` mixed | a e i o u first (shuffled), then those and m s l p t n; never the same letter twice in a row. The seed shows the letter lowercase and big, and a small drawn key with it as the keyboard prints it (uppercase). |
-| 2do | `words` | sol mar pan oso (three letters while slow), sapo pato casa luna mesa nube rana taza lupa mapa (from speed 3) |
-| 3ro–5to | `commands` | si ir mover girar parar sumar tocar (up to five letters at speed 1), saltar pintar (speed 2), repetir avanzar esperar (speed 3+) |
+| Grade | Round 1 | Round 2 | Round 3 |
+|---|---|---|---|
+| 1ro | `vowels` a e i o u, one at a time (shuffled first five), 10 s fall, goal 6 | `letters` vowels + m s l p t n, **two at once**, 8.5 s, goal 8 | `syllables` ma me mi mo pa pe pi sa so la lo lu ta te no na, goal 5 |
+| 2do | `letters` vowels + m s l p t n r d c b, two at once, 8 s, goal 8 | `syllables` ma pe lo su ta ni ra do ca be mi so lu fe ga ri, goal 6 | `words` sol mar pan oso sapo pato casa luna mesa nube rana taza lupa mapa, goal 5 |
+| 3ro | `words` (2do's list), goal 5 | `commands` si ir mover girar parar sumar tocar, goal 5 | `phrases` repetir 2, mover 3, sumar 1, saltar 2, girar 4 (the number row is drawn; the space is the long bar), goal 3 |
+| 4to–5to | `commands` si ir mover girar parar sumar tocar, goal 5 | `commands` saltar pintar repetir avanzar esperar tocar girar, goal 5 | `phrases` repetir 3, mover 2, avanzar 4, esperar 1, sumar 5, girar 2, goal 4 |
 
-A word is typed letter by letter, in order; a wrong key changes nothing. The
-speed starts at 1: three quick right keys in a row (a first letter within 2 s
-of the appearance, a next letter within 1.2 s of the key before) → one level
-faster; two wrong keys, a slow right key (5 s / 3.5 s) or an item that reached
-the ground → one level slower. Top speed: 1ro 4, 2do 5, 3ro+ 6. A letter falls
-in 11 s at speed 1 down to 4.4 s at 6; a word in 3.5 s plus 3 s (speed 1) to
-1.2 s (speed 6) per letter. One thing falls at a time; 1ro's letters two at
-once from speed 3. An item that reaches the ground rests a moment and the next
-one falls: no misses counted, no lives, no countdown. A seed for the session's
-garden every 5 letters or 2 words caught (at most 8 per game).
+A letter falls in the round's time (above); a longer item in 3.5 s plus a
+while per character (1ro syllables 3 s, 2do 2.6 / 2.4 s, 3ro 2.1 / 2.0 /
+1.9 s, 4to–5to 1.8 / 1.7 / 1.6 s). Nothing of the last two items again.
+From round 2 a butterfly carries one item of the round (it flutters; it
+falls 25 % slower).
+
+The pace inside a round: three steps (×1, ×0.86, ×0.74 of the fall time),
+starting calm each round; three early catches in a row → one step livelier;
+an item that reached the ground → one step calmer. Wrong keys never change
+it. **Early** = caught before the middle of the fall (the item still shines
+above the garland across the scene). **Golden streak:** three early catches
+in a row light the garland's three star lamps and plant a golden seed that
+fills the next hole too (never past the goal; the streak starts again). A
+late catch or an item on the ground only starts the streak again: nothing is
+taken away. An item that reaches the ground rests a moment and **comes back
+two items later**: no misses counted, no lives, no countdown. A seed for the
+session's garden (the pouch in the bar) every three holes filled over the
+game (at most 8; about 6 in 1ro).
+
+### `typing_round`
+One round of the typing game ended (T12). **RQ 7.**
+```
+{
+  round: 1 | 2 | 3,
+  set: 'vowels' | 'letters' | 'syllables' | 'words' | 'commands' | 'phrases',  // the round's set
+  goal: number,           // holes in the bed (?metas=<n> sets every goal to n: checks only)
+  filled: number,         // holes filled (a golden catch fills two)
+  caught: number,         // items caught
+  golden: number,         // golden seeds (holes filled for free)
+  completed: boolean,     // the bed was filled
+  reason: 'goal' | 'time' | 'done' | 'left',   // filled; the cap; "listo"; the flow moved on
+  time_ms: number,        // from the round's start (after the intro or its line) to its end
+  keys: number, correct: number,   // the round's `typing` rows, and the right ones
+  landed: number,         // items that reached the ground (they come back)
+  pace_end: number        // 1–3
+}
+```
 
 ### `typing_end`
 The typing game ended (once per session that reached it). **RQ 7, 5.**
 ```
 {
-  reason: 'time' | 'done' | 'left',  // about four minutes passed; the child pressed "listo" (shown after one minute); the adult moved on
-  mode: 'letters' | 'words',
-  set: 'letters' | 'words' | 'commands',
-  time_ms: number,        // from the step's first screen (the intro included) to the end
+  reason: 'rounds' | 'time' | 'done' | 'left',  // the three rounds; the cap (five minutes); "listo" (shown after round 1); the adult moved on. Round-1 sessions: 'time' was four minutes, no 'rounds'
+  mode: 'letters' | 'words',   // the grade's kind of game (1ro letters, 2do+ words), as in round 1
+  set: 'letters' | 'words' | 'commands',  // the grade's family (1ro, 2do, 3ro+), as in round 1
+  rounds_done: number,    // beds filled (0–3)
+  time_ms: number,        // from the step's first screen (the intro included) to the end (the finale starts)
   play_ms: number,        // from the end of the intro (0 if it never ended)
   keys: number, correct: number,    // keys logged as `typing`, and the right ones
   caught: number, landed: number,   // items caught; items that reached the ground
-  speed_end: number, speed_max: number,
+  filled: number, golden: number,   // holes filled over the game; golden seeds
+  speed_end: number, speed_max: number,   // the pace step (1–3) at the end, and the highest
   input: 'physical' | 'touch' | 'mixed' | 'none',
-  seeds: number,          // seeds planted by the game
+  seeds: number,          // seeds planted in the session's garden by the game
   help_levels: number,    // ✋ presses (0–3)
   adult_helped: boolean
 }
 ```
-The game is never cut in the middle of a word: at the time or "listo" a word
-already begun is finished (or reaches the ground) first. `?teclas=<minutes>`
-in the URL sets another length (0.25–10; "listo" then shows at half of it, at
-most one minute). The typing game logs no `level_start`/`level_end`;
-`v_activity_time` counts it from `typing_end.time_ms`. Its `help`, `speak` and
-`ghost_demo` events carry `level_id: 'typing'` (✋ 1: the key glows harder and
-the letter is said; ✋ 2 and 3: the ghost hand points at the key too; a fourth
-press or a held ✋ raises the hand; the intro's ghost hand is `kind: 'intro'`),
-and an adult's help during the game marks `typing_end.adult_helped`. Right
-after the game the child is asked "¿Te gustó este juego?" with three drawn
-faces: `survey_answer` {question: 'typing_liked'}.
+The game is never cut in the middle of a word: at the cap or "listo" a word
+already begun is finished (or reaches the ground) first; then the finale
+(the sign, every critter met, a dance) and "¿Te gustó?". `?teclas=<minutes>`
+in the URL sets another cap (0.25–10). The typing game logs no
+`level_start`/`level_end`; `v_activity_time` counts it from
+`typing_end.time_ms`. Its `help`, `speak` and `ghost_demo` events carry
+`level_id: 'typing'` (✋ 1: the key glows harder and the letter is said; ✋ 2
+and 3: the ghost hand points at the key too; a fourth press or a held ✋
+raises the hand, lowered as `moved_on` when the round ends; the intro's ghost
+hand is `kind: 'intro'`), and an adult's help during the game marks
+`typing_end.adult_helped`. Right after the game the child is asked "¿Te
+gustó este juego?" with three drawn faces: `survey_answer` {question:
+'typing_liked'}.
 
 ### `activity_end`
 The child left a free-play activity (see "Free play" below). One per
@@ -932,7 +972,7 @@ for a session therefore mean a 400-dropped batch, never a network failure.
 
 ## SQL views
 
-Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`, `004_game_maker.sql`, `005_text_probe.sql`), always available for ad hoc
+Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`, `004_game_maker.sql`, `005_text_probe.sql`, `007_typing_rounds.sql`), always available for ad hoc
 analysis (`psql`, or any tool that can read Postgres directly).
 
 - **`v_ladder_ceiling`** — one row per `(session_id, concept)`: the highest
@@ -958,8 +998,17 @@ analysis (`psql`, or any tool that can read Postgres directly).
   `accuracy_pct` and `median_latency_ms` from `typing` events, then
   `sessions` (sessions that typed), `median_correct_latency_ms` (right keys
   only), `touch_attempts` (keys tapped on the drawn keyboard) and `liked_yes`,
-  `liked_mid`, `liked_no` (the `typing_liked` answers). Redefined in
-  `server/migrations/003_typing.sql`. Feeds RQ 7.
+  `liked_mid`, `liked_no` (the `typing_liked` answers); since T12 also
+  `rounds_sessions` (sessions that logged rounds), `all_rounds_sessions`
+  (`typing_end.rounds_done` = 3), `median_rounds_done` and `golden_total`.
+  Redefined in `server/migrations/003_typing.sql` and
+  `007_typing_rounds.sql` (the older columns unchanged and first). Feeds RQ 7.
+- **`v_typing_rounds_by_grade`** — one row per grade and round (T12): from
+  `typing_round`, `sessions`, `completed`, `median_time_ms`,
+  `median_completed_time_ms`, `median_caught`, `golden`; from the round's
+  `typing` keys, `attempts`, `correct_count`, `accuracy_pct`,
+  `median_correct_latency_ms`. Round-1 sessions of the pilot (no rounds) are
+  not in it. `server/migrations/007_typing_rounds.sql`. Feeds RQ 7.
 - **`v_probe_game_maker`** — one row per session that opened "Hacé tu
   juego": `phases_reached`, `phases_completed`, `play_done`, `change_done`,
   `make_done`, `make_seconds`; the child's own `rule_edits` (`adds`,

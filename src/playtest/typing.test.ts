@@ -1,59 +1,139 @@
 import { describe, expect, it } from 'vitest';
 import {
-  COMMANDS, COMMON, KEY_ROWS, LETTER_NAME, MAX_TYPING_SEEDS, SPEED_START, TYPING_LISTO_MS, TYPING_MS, VOWELS, WORDS,
-  adapt, createPicker, fallMs, keyOf, maxItems, maxLevel, modeOf, pressOn, seedsFor, typingTimes, wordSetOf, type Speed,
+  COMMANDS, COMMON, DIGIT_ROW, KEY_ROWS, LETTER_NAME, MAX_TYPING_SEEDS, PACE, PACE_START, PHRASES3, PHRASES4, ROUNDS, STREAK,
+  SYLLABLES1, SYLLABLES2, TYPING_CAP_MS, VOWELS, WORDS, addCatch, adaptPace, createRoundPicker, demoOf, fallMs, goalOverride, isEarly,
+  keyFor, keyOf, landedOn, modeOf, needsDigits, pressOn, roundDone, roundsFor, seedsFor, setOf, startRound, typingCap, wordSetOf,
+  type Pace, type PaceEvent,
 } from './typing';
 
-describe('what falls, by grade', () => {
-  it('1ro plays letters, 2do short words, 3ro and up the words of programming', () => {
-    expect([1, 2, 3, 4, 5].map(modeOf)).toEqual(['letters', 'words', 'words', 'words', 'words']);
-    expect([1, 2, 3, 4, 5].map(wordSetOf)).toEqual(['letters', 'words', 'commands', 'commands', 'commands']);
-  });
+const GRADES = [1, 2, 3, 4, 5];
 
-  it('every letter and word can be typed on the drawn keyboard, and is said aloud', () => {
-    const keys = KEY_ROWS.join('');
-    for (const w of [...VOWELS, ...COMMON, ...WORDS, ...COMMANDS]) for (const ch of w) expect(keys).toContain(ch);
-    for (const ch of keys) expect(LETTER_NAME[ch]).toBeTruthy();
-    expect(keys).toContain('ñ');
-  });
-
-  it('the word lists are short, lowercase and without accents', () => {
-    for (const w of [...WORDS, ...COMMANDS]) {
-      expect(w).toMatch(/^[a-zñ]{2,7}$/);
+describe('the rounds, by grade', () => {
+  it('every grade plays three rounds with a goal of a few things each', () => {
+    for (const g of GRADES) {
+      const rounds = roundsFor(g);
+      expect(rounds.map((r) => r.n)).toEqual([1, 2, 3]);
+      expect(rounds).toHaveLength(ROUNDS);
+      for (const r of rounds) {
+        expect(r.goal).toBeGreaterThanOrEqual(3);
+        expect(r.goal).toBeLessThanOrEqual(8);
+        expect(r.pool.length).toBeGreaterThanOrEqual(5);
+      }
     }
-    expect(COMMANDS).toEqual(expect.arrayContaining(['si', 'repetir', 'mover', 'saltar', 'avanzar']));
-    expect(WORDS).toEqual(expect.arrayContaining(['sol', 'mar', 'pato']));
   });
 
-  it('1ro: the five vowels first, then vowels and common letters, never twice in a row', () => {
-    const next = createPicker(1, 7);
-    const picks = Array.from({ length: 60 }, () => next(1));
-    expect(picks.slice(0, 5).map((p) => p.text).sort()).toEqual([...VOWELS].sort());
-    expect(picks.slice(0, 5).every((p) => p.set === 'vowels')).toBe(true);
-    const later = picks.slice(5);
-    expect(later.some((p) => p.set === 'letters')).toBe(true);
-    expect(later.some((p) => p.set === 'vowels')).toBe(true);
-    for (const p of later) expect([...VOWELS, ...COMMON]).toContain(p.text);
+  it('1ro: vowels, then common letters two at once, then syllables', () => {
+    const [a, b, c] = roundsFor(1);
+    expect(a.set).toBe('vowels');
+    expect([...a.pool].sort()).toEqual([...VOWELS].sort());
+    expect(a.atOnce).toBe(1);
+    expect(b.set).toBe('letters');
+    expect(b.pool).toEqual(expect.arrayContaining([...COMMON]));
+    expect(b.atOnce).toBe(2);
+    expect(c.set).toBe('syllables');
+    expect(c.pool.every((s) => s.length === 2)).toBe(true);
+  });
+
+  it('2do: letters, syllables, short words; 3ro: words, programming words, a command with its number', () => {
+    expect(roundsFor(2).map((r) => r.set)).toEqual(['letters', 'syllables', 'words']);
+    expect(roundsFor(3).map((r) => r.set)).toEqual(['words', 'commands', 'phrases']);
+    expect(roundsFor(3)[2].pool).toEqual(PHRASES3);
+    for (const g of [4, 5]) {
+      expect(roundsFor(g).map((r) => r.set)).toEqual(['commands', 'commands', 'phrases']);
+      expect(roundsFor(g)[2].pool).toEqual(PHRASES4);
+    }
+  });
+
+  it('each round is harder on purpose: longer things to type, or two at once', () => {
+    for (const g of GRADES) {
+      const rounds = roundsFor(g);
+      const longest = rounds.map((r) => Math.max(...r.pool.map((t) => t.length)));
+      for (let i = 1; i < rounds.length; i++) {
+        const harder = longest[i] > longest[i - 1] || rounds[i].atOnce > rounds[i - 1].atOnce;
+        expect(harder, `grade ${g} round ${i + 1}`).toBe(true);
+      }
+    }
+    // 4to–5to's second round: longer words, a bit quicker per letter
+    const [a, b] = roundsFor(5);
+    expect(b.perCharMs).toBeLessThan(a.perCharMs);
+  });
+
+  it('only round 1 starts without a line of its own (the intro says it); a butterfly from round 2', () => {
+    for (const g of GRADES) {
+      const [a, b, c] = roundsFor(g);
+      expect(a.say).toBe('');
+      expect(b.say.length).toBeGreaterThan(10);
+      expect(c.say.length).toBeGreaterThan(10);
+      expect(b.say.length).toBeLessThanOrEqual(95);
+      expect(c.say.length).toBeLessThanOrEqual(95);
+      expect([a.butterfly, b.butterfly, c.butterfly]).toEqual([false, true, true]);
+    }
+  });
+
+  it('the number row is drawn only where a command carries a number', () => {
+    expect(needsDigits(roundsFor(1))).toBe(false);
+    expect(needsDigits(roundsFor(2))).toBe(false);
+    for (const g of [3, 4, 5]) expect(needsDigits(roundsFor(g))).toBe(true);
+  });
+
+  it('every item can be typed on the drawn keyboard and is said aloud; lowercase, no accents', () => {
+    const keys = KEY_ROWS.join('') + DIGIT_ROW + ' ';
+    for (const g of GRADES) {
+      for (const r of roundsFor(g)) {
+        for (const t of r.pool) {
+          expect(t).toMatch(/^[a-zñ]+( [1-9])?$/);
+          for (const ch of t) { expect(keys).toContain(ch); expect(LETTER_NAME[ch]).toBeTruthy(); }
+        }
+      }
+    }
+    for (const w of [...WORDS, ...COMMANDS, ...SYLLABLES1, ...SYLLABLES2]) expect(w).toMatch(/^[a-zñ]{2,7}$/);
+  });
+
+  it('the intro\'s demo is round 1\'s kind of thing; the grade\'s mode and set keep round 1\'s names', () => {
+    expect(GRADES.map(demoOf)).toEqual(['a', 'a', 'sol', 'si', 'si']);
+    expect(GRADES.map(modeOf)).toEqual(['letters', 'words', 'words', 'words', 'words']);
+    expect(GRADES.map(wordSetOf)).toEqual(['letters', 'words', 'commands', 'commands', 'commands']);
+  });
+
+  it('a vowel inside a round of letters is logged as a vowel', () => {
+    const r2 = roundsFor(1)[1];
+    expect(setOf('a', r2)).toBe('vowels');
+    expect(setOf('m', r2)).toBe('letters');
+    expect(setOf('ma', roundsFor(1)[2])).toBe('syllables');
+  });
+});
+
+describe('what falls in a round', () => {
+  it('1ro round 1: the five vowels first, then vowels again; never twice in a row', () => {
+    const p = createRoundPicker(roundsFor(1)[0], 7);
+    const picks = Array.from({ length: 30 }, () => p.next());
+    expect(picks.slice(0, 5).map((x) => x.text).sort()).toEqual([...VOWELS].sort());
+    for (const x of picks) expect(x.set).toBe('vowels');
     for (let i = 1; i < picks.length; i++) expect(picks[i].text).not.toBe(picks[i - 1].text);
   });
 
-  it('words: short ones while it is slow, longer ones as it speeds up, none of the last three again', () => {
-    const two = createPicker(2, 3);
-    const slow = Array.from({ length: 30 }, () => two(1));
-    expect(slow.every((p) => p.text.length === 3 && p.set === 'words')).toBe(true);
-    const fast = Array.from({ length: 40 }, () => two(4));
-    expect(fast.some((p) => p.text.length === 4)).toBe(true);
-    const three = createPicker(3, 5);
-    const s3 = Array.from({ length: 30 }, () => three(1));
-    expect(s3.every((p) => p.text.length <= 5 && p.set === 'commands')).toBe(true);
-    const f3 = Array.from({ length: 60 }, () => three(3)).map((p) => p.text);
-    expect(f3).toContain('repetir');
-    for (let i = 3; i < f3.length; i++) expect(f3.slice(i - 3, i)).not.toContain(f3[i]);
+  it('nothing of the last two again', () => {
+    for (const g of GRADES) {
+      for (const r of roundsFor(g)) {
+        const p = createRoundPicker(r, g * 13 + r.n);
+        const t = Array.from({ length: 40 }, () => p.next().text);
+        for (let i = 2; i < t.length; i++) expect(t.slice(i - 2, i)).not.toContain(t[i]);
+      }
+    }
   });
 
-  it('is seeded: the same seed replays the same game', () => {
-    const a = createPicker(1, 11), b = createPicker(1, 11);
-    expect(Array.from({ length: 20 }, () => a(2).text)).toEqual(Array.from({ length: 20 }, () => b(2).text));
+  it('something that reached the ground comes back two items later', () => {
+    const p = createRoundPicker(roundsFor(3)[0], 5);
+    const a = p.next().text;
+    p.again(a);
+    const next = [p.next().text, p.next().text, p.next().text];
+    expect(next[1]).toBe(a);
+  });
+
+  it('is seeded: the same seed replays the same round', () => {
+    const r = roundsFor(2)[1];
+    const a = createRoundPicker(r, 11), b = createRoundPicker(r, 11);
+    expect(Array.from({ length: 20 }, () => a.next().text)).toEqual(Array.from({ length: 20 }, () => b.next().text));
   });
 });
 
@@ -62,107 +142,146 @@ describe('a key press', () => {
     expect(keyOf('a')).toBe('a');
     expect(keyOf('A')).toBe('a');
     expect(keyOf('Ñ')).toBe('ñ');
-    expect(keyOf('ñ')).toBe('ñ');
     expect(keyOf('á')).toBe('a');
-    expect(keyOf('7')).toBe('7');
+    expect(keyOf('3')).toBe('3');
     for (const k of ['Shift', 'Enter', 'ArrowLeft', 'Dead', ' ', 'Backspace', '']) expect(keyOf(k)).toBeNull();
   });
 
-  it('types a word in order: the right letter moves on, a wrong one loses nothing', () => {
-    let t = { text: 'sol', pos: 0 };
-    let r = pressOn(t, 's');
-    expect(r).toEqual({ correct: true, expected: 's', pos: 1, done: false });
-    t = { ...t, pos: r.pos };
-    r = pressOn(t, 'l');
-    expect(r).toEqual({ correct: false, expected: 'o', pos: 1, done: false });
-    r = pressOn(t, 'o');
-    t = { ...t, pos: r.pos };
-    r = pressOn(t, 'l');
-    expect(r).toEqual({ correct: true, expected: 'l', pos: 3, done: true });
+  it('the space bar is a key only when a command waits for its space', () => {
+    expect(keyFor(' ', ' ')).toBe(' ');
+    expect(keyFor(' ', 'r')).toBeNull();
+    expect(keyFor(' ', null)).toBeNull();
+    expect(keyFor('R', ' ')).toBe('r');
   });
 
-  it('catches a letter with its one key', () => {
-    expect(pressOn({ text: 'm', pos: 0 }, 'm')).toEqual({ correct: true, expected: 'm', pos: 1, done: true });
-    expect(pressOn({ text: 'm', pos: 0 }, 'n').done).toBe(false);
+  it('types an item in order: the right letter moves on, a wrong one loses nothing', () => {
+    let t = { text: 'mover 3', pos: 0 };
+    for (const ch of 'mover') t = { ...t, pos: pressOn(t, ch).pos };
+    expect(pressOn(t, '3')).toEqual({ correct: false, expected: ' ', pos: 5, done: false });
+    t = { ...t, pos: pressOn(t, ' ').pos };
+    expect(pressOn(t, '3')).toEqual({ correct: true, expected: '3', pos: 7, done: true });
+    expect(pressOn({ text: 'm', pos: 0 }, 'm').done).toBe(true);
   });
 });
 
-describe('the speed adapts', () => {
-  const quick = { kind: 'press' as const, correct: true, latency_ms: 900, first: true };
-  const wrong = { kind: 'press' as const, correct: false, latency_ms: 900, first: true };
-  const run = (grade: number, evs: Parameters<typeof adapt>[1][], s: Speed = SPEED_START) => evs.reduce((acc, e) => adapt(acc, e, grade), s);
+describe('the goal, the progress and the golden streak', () => {
+  const catches = (goal: number, early: boolean[]) => {
+    let p = startRound(goal);
+    const golden: boolean[] = [];
+    for (const e of early) { const r = addCatch(p, e); golden.push(r.goldenNow); p = r; }
+    return { p, golden };
+  };
 
-  it('starts slow and speeds up after three quick right keys in a row', () => {
-    expect(SPEED_START.level).toBe(1);
-    expect(run(3, [quick, quick]).level).toBe(1);
-    expect(run(3, [quick, quick, quick]).level).toBe(2);
-    expect(run(3, Array(6).fill(quick)).level).toBe(3);
+  it('each catch fills a hole; the round is done when the bed is full', () => {
+    const { p } = catches(6, [false, false, false, false, false]);
+    expect(p.filled).toBe(5);
+    expect(p.caught).toBe(5);
+    expect(roundDone(p)).toBe(false);
+    expect(roundDone(addCatch(p, false))).toBe(true);
   });
 
-  it('a middling right key breaks the streak without slowing down', () => {
-    const mid = { ...quick, latency_ms: 3000 };
-    expect(run(3, [quick, quick, mid, quick]).level).toBe(1);
-    expect(run(3, [quick, quick, mid, quick, quick, quick]).level).toBe(2);
+  it('three early catches in a row make a golden seed that fills one more hole', () => {
+    const { p, golden } = catches(8, [true, true, true]);
+    expect(golden).toEqual([false, false, true]);
+    expect(p.filled).toBe(4);
+    expect(p.golden).toBe(1);
+    expect(p.streak).toBe(0);
+    expect(STREAK).toBe(3);
   });
 
-  it('slows down after two wrong keys, after a slow key and after an item that reached the ground; never below 1', () => {
-    const at3: Speed = { level: 3, streak: 0, misses: 0 };
-    expect(run(3, [wrong], at3).level).toBe(3);
-    expect(run(3, [wrong, wrong], at3).level).toBe(2);
-    expect(run(3, [{ ...quick, latency_ms: 6000 }], at3).level).toBe(2);
-    expect(run(3, [{ kind: 'press', correct: true, latency_ms: 4000, first: false }], at3).level).toBe(2);
-    expect(run(3, [{ kind: 'landed' }], at3).level).toBe(2);
-    expect(run(3, [{ kind: 'landed' }, { kind: 'landed' }, { kind: 'landed' }, wrong, wrong], at3).level).toBe(1);
+  it('a late catch or a landed item only starts the streak again; nothing is taken away', () => {
+    const { p } = catches(8, [true, true, false, true, true]);
+    expect(p.golden).toBe(0);
+    expect(p.filled).toBe(5);
+    const landed = landedOn(p);
+    expect(landed.filled).toBe(5);
+    expect(landed.streak).toBe(0);
+    expect(addCatch(landed, true).goldenNow).toBe(false);
   });
 
-  it('a quick right key clears the misses: one wrong key now and then does not slow it down', () => {
-    expect(run(3, [wrong, quick, wrong, quick, wrong], { level: 2, streak: 0, misses: 0 }).level).toBe(2);
+  it('the golden seed never fills past the goal; the last hole is an ordinary catch', () => {
+    const { p, golden } = catches(3, [true, true, true]);
+    expect(golden).toEqual([false, false, false]);
+    expect(p.filled).toBe(3);
+    const big = catches(4, [true, true, true]);
+    expect(big.p.filled).toBe(4);
+    expect(roundDone(big.p)).toBe(true);
   });
 
-  it('the next letters of a word count as quick sooner than a first letter', () => {
-    const next = { kind: 'press' as const, correct: true, latency_ms: 1500, first: false };
-    expect(run(3, [next, next, next]).level).toBe(1);
-    expect(run(3, [quick, quick, quick]).level).toBe(2);
+  it('early means before the middle of the fall', () => {
+    expect(isEarly(0.2)).toBe(true);
+    expect(isEarly(0.49)).toBe(true);
+    expect(isEarly(0.5)).toBe(false);
+    expect(isEarly(0.9)).toBe(false);
+  });
+});
+
+describe('the pace adapts only gently', () => {
+  const early: PaceEvent = { kind: 'caught', early: true };
+  const late: PaceEvent = { kind: 'caught', early: false };
+  const run = (evs: PaceEvent[], p: Pace = PACE_START) => evs.reduce(adaptPace, p);
+
+  it('starts calm; three early catches in a row → one step livelier; never past the third step', () => {
+    expect(PACE_START.step).toBe(0);
+    expect(run([early, early]).step).toBe(0);
+    expect(run([early, early, early]).step).toBe(1);
+    expect(run(Array(30).fill(early)).step).toBe(2);
+    expect(PACE).toHaveLength(3);
   });
 
-  it('never goes over the grade\'s top speed (1ro stays gentle)', () => {
-    expect(run(1, Array(30).fill(quick)).level).toBe(maxLevel(1));
-    expect(maxLevel(1)).toBeLessThan(maxLevel(3));
-    expect(run(5, Array(60).fill(quick)).level).toBe(6);
+  it('a late catch breaks the streak without slowing; something on the ground → one step calmer, never below calm', () => {
+    expect(run([early, early, late, early]).step).toBe(0);
+    expect(run([{ kind: 'landed' }], { step: 2, quick: 2 })).toEqual({ step: 1, quick: 0 });
+    expect(run([{ kind: 'landed' }, { kind: 'landed' }, { kind: 'landed' }], { step: 2, quick: 0 }).step).toBe(0);
   });
 
-  it('falls faster as the level grows; a word gets time for each letter', () => {
-    for (let l = 1; l < 6; l++) {
-      expect(fallMs('letters', 'a', l + 1)).toBeLessThan(fallMs('letters', 'a', l));
-      expect(fallMs('words', 'sol', l + 1)).toBeLessThan(fallMs('words', 'sol', l));
+  it('the steps are small: the livelier pace is still three quarters of the calm one', () => {
+    for (let i = 1; i < PACE.length; i++) {
+      expect(PACE[i]).toBeLessThan(PACE[i - 1]);
+      expect(PACE[i - 1] - PACE[i]).toBeLessThanOrEqual(0.15);
     }
-    expect(fallMs('words', 'repetir', 1)).toBeGreaterThan(fallMs('words', 'si', 1));
-    expect(fallMs('letters', 'a', 1)).toBeGreaterThanOrEqual(10_000);
+    expect(PACE[PACE.length - 1]).toBeGreaterThanOrEqual(0.7);
   });
 
-  it('one thing falls at a time; 1ro\'s letters two at most, only when it is faster', () => {
-    expect(maxItems('letters', 1)).toBe(1);
-    expect(maxItems('letters', 2)).toBe(1);
-    expect(maxItems('letters', 3)).toBe(2);
-    expect(maxItems('letters', 4)).toBe(2);
-    for (let l = 1; l <= 6; l++) expect(maxItems('words', l)).toBe(1);
+  it('falls: a letter in seconds, a longer item gets time per letter, a butterfly slower, a livelier step quicker', () => {
+    const [r1, , r3] = roundsFor(1);
+    expect(fallMs('a', r1, 0)).toBe(10_000);
+    expect(fallMs('a', r1, 2)).toBeLessThan(fallMs('a', r1, 0));
+    expect(fallMs('ma', r3, 0)).toBeGreaterThan(fallMs('a', r1, 0) * 0.9);
+    expect(fallMs('a', r1, 0, true)).toBeGreaterThan(fallMs('a', r1, 0));
+    const p = roundsFor(5)[2];
+    expect(fallMs('repetir 3', p, 0)).toBeGreaterThan(fallMs('mover 2', p, 0));
+    expect(fallMs('a', r1, 9)).toBe(fallMs('a', r1, 2));
   });
 });
 
 describe('seeds and time', () => {
-  it('plants a seed every five letters or two words, a few at most', () => {
-    expect(seedsFor(4, 'letters')).toBe(0);
-    expect(seedsFor(5, 'letters')).toBe(1);
-    expect(seedsFor(12, 'letters')).toBe(2);
-    expect(seedsFor(3, 'words')).toBe(1);
-    expect(seedsFor(200, 'words')).toBe(MAX_TYPING_SEEDS);
+  it('a seed to the garden every three holes, a few at most', () => {
+    expect(seedsFor(2)).toBe(0);
+    expect(seedsFor(3)).toBe(1);
+    expect(seedsFor(19)).toBe(6);
+    expect(seedsFor(200)).toBe(MAX_TYPING_SEEDS);
   });
 
-  it('lasts four minutes with "listo" after one; ?teclas sets another length', () => {
-    expect(typingTimes('')).toEqual({ total: TYPING_MS, listo: TYPING_LISTO_MS });
-    expect(typingTimes('?debug&teclas=2')).toEqual({ total: 120_000, listo: 60_000 });
-    expect(typingTimes('?teclas=0.5')).toEqual({ total: 30_000, listo: 15_000 });
-    expect(typingTimes('?teclas=0')).toEqual({ total: TYPING_MS, listo: TYPING_LISTO_MS });
-    expect(typingTimes('?teclas=99')).toEqual({ total: TYPING_MS, listo: TYPING_LISTO_MS });
+  it('the three rounds plant about six seeds in 1ro', () => {
+    const holes = roundsFor(1).reduce((n, r) => n + r.goal, 0);
+    expect(seedsFor(holes)).toBeGreaterThanOrEqual(5);
+    expect(seedsFor(holes)).toBeLessThanOrEqual(MAX_TYPING_SEEDS);
+  });
+
+  it('a five-minute cap; ?teclas sets another (0.25–10 min)', () => {
+    expect(typingCap('')).toBe(TYPING_CAP_MS);
+    expect(TYPING_CAP_MS).toBe(300_000);
+    expect(typingCap('?debug&teclas=2')).toBe(120_000);
+    expect(typingCap('?teclas=0.5')).toBe(30_000);
+    expect(typingCap('?teclas=0')).toBe(TYPING_CAP_MS);
+    expect(typingCap('?teclas=99')).toBe(TYPING_CAP_MS);
+  });
+
+  it('?metas sets every round\'s goal (checks and screenshots)', () => {
+    expect(goalOverride('')).toBeNull();
+    expect(goalOverride('?debug&metas=2')).toBe(2);
+    expect(goalOverride('?metas=0')).toBeNull();
+    expect(goalOverride('?metas=99')).toBeNull();
   });
 });

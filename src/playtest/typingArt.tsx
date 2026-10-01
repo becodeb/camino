@@ -1,28 +1,36 @@
 // The drawings of "Teclas del bosque": the forest (a band of leafy canopy
 // across the top, two trunks, the meadow with its tufts), the seeds that
 // fall with a letter (a samara: a round yellow seed with its papery wing),
-// the leaves that fall with a word, the basket, the drawn keyboard's keys
-// (as printed on a Latin-American Spanish keyboard: uppercase, with Ñ) and
-// the bar's little instruction (a key, then the basket). The house style:
-// one ink colour, a darker flat facet for volume, flat offset shadows, blue
-// pen for what matters now, no gradients.
+// the leaves that fall with a word, the garden bed in front (the round's
+// goal: a hole per thing to catch, a sprout in each one filled, the next one
+// circled in pen; it blooms when it is full), the garland across the middle
+// with its three star lamps (the golden streak), the butterfly that carries
+// an item, the golden sparkle, the round medals of the bar, the "¡Listo!"
+// sign, the drawn keyboard's keys (as printed on a Latin-American Spanish
+// keyboard: uppercase, with Ñ, numbers when a command needs one) and the
+// bar's little instruction (a key, then a sprout in the bed). The house
+// style: one ink colour, a darker flat facet for volume, flat offset
+// shadows, blue pen for what matters now, no gradients.
 
 import { memo, useMemo } from 'react';
 import { blob, leaf, penLoop, rng, wobblyLine, wobblyPoly } from '../ink/ink.js';
 import { Bush, Mushroom, Tuft } from '../ui/forestArt';
+import { Sprout } from './round2Art';
 
 const INK = '#2b2622';
 const PEN = '#3d6ea5';
 const SHADOW = 'rgba(84, 62, 38, 0.2)';
 
-/** The scene's units: the viewBox is 0 0 1200 440; the ground line at GROUND. */
-export const SCENE = { w: 1200, h: 440 } as const;
+/** The scene's units: the viewBox is 0 0 1200 476; the ground line at GROUND, the garden bed under it. */
+export const SCENE = { w: 1200, h: 476 } as const;
 export const GROUND = 392;
-/** Where the child stands and where the basket waits (feet / bottom on the ground). */
-export const ME_AT = { x: 188, y: GROUND } as const;
-export const BASKET_AT = { x: 322, y: GROUND } as const;
-/** The basket is drawn this much bigger than its own units. */
-export const BASKET_S = 1.15;
+/** Where the child stands (feet on the ground). */
+export const ME_AT = { x: 170, y: GROUND } as const;
+/** The holes of the garden bed: their centre line, and from where to where they spread. */
+export const BED_Y = 436;
+const BED_X: [number, number] = [320, 1120];
+/** The garland across the middle of the fall: caught above it is caught early. */
+export const MID_Y = 244;
 /** A seed with its letter, drawn this much bigger than its own units. */
 export const SEED_S = 1.3;
 
@@ -84,12 +92,16 @@ export const Meadow = memo(function Meadow() {
     <g className="tk-meadow">
       <rect x={-420} y={GROUND} width={2040} height={SCENE.h} fill="#eef0da" />
       <path d={ground} fill="none" stroke={INK} strokeWidth={3} strokeLinecap="round" />
-      {[[-230, 1], [380, 2], [560, 3], [820, 4], [990, 5], [1330, 6]].map(([x, s]) => <Tuft key={s} x={x} y={GROUND + 18 + (s % 2) * 10} seed={s + 60} s={1.3} />)}
-      <Bush x={1040} y={GROUND + 2} s={1.3} seed={44} />
+      {[[-230, 1], [-90, 2], [1260, 3], [1400, 6]].map(([x, s]) => <Tuft key={s} x={x} y={GROUND + 22 + (s % 2) * 12} seed={s + 60} s={1.3} />)}
       <Mushroom x={1218} y={GROUND + 6} s={1.6} seed={3} />
       <Mushroom x={16} y={GROUND + 10} s={1.2} seed={5} />
     </g>
   );
+});
+
+/** The bush by the right trunk, drawn over the critters that peek from behind it. */
+export const FrontBush = memo(function FrontBush() {
+  return <g className="tk-front-bush"><Bush x={1040} y={GROUND + 2} s={1.3} seed={44} /></g>;
 });
 
 // ------------------------------------------------------------------ what falls
@@ -151,7 +163,9 @@ export const WordLeaf = memo(function WordLeaf({ text, pos, tone }: { text: stri
       <Faceted id={`tk-lf${text}${tone}`} d={d} light={light} dark={dark} shift={[-4, -9]} sw={3} />
       {[-0.36, 0.36].map((k, i) => <path key={i} d={`M${L * k},${-44 + i * 6} q10,10 22,10 M${L * k - 6},${46 - i * 4} q12,-8 24,-8`} fill="none" stroke={INK} strokeWidth={1.4} opacity={0.3} />)}
       {pos < text.length && <path d={blob(x(pos), 0, 21, 30, { wob: 0.06, n: 9, seed: pos + 3 })} fill="#fbeaa8" stroke={PEN} strokeWidth={2.2} className="tk-next-mark" />}
-      {[...text].map((ch, i) => (
+      {/* the space between a command and its number: a little drawn bar, like the keyboard's */}
+      {text[pos] === ' ' && <path d={`M${x(pos) - 13},6 L${x(pos) - 13},16 L${x(pos) + 13},16 L${x(pos) + 13},6`} fill="none" stroke={PEN} strokeWidth={3.4} strokeLinecap="round" strokeLinejoin="round" />}
+      {[...text].map((ch, i) => ch === ' ' ? null : (
         <text key={i} x={x(i)} y={17} textAnchor="middle" className={`tk-word-letter${i < pos ? ' is-typed' : i === pos ? ' is-next' : ''}`}>{ch}</text>
       ))}
       {pos > 0 && <path d={wobblyLine(x(0) - 15, 30, x(pos - 1) + 15, 29, { bow: 1.2, seed: pos, segs: Math.max(1, pos) })} fill="none" stroke={PEN} strokeWidth={3.2} />}
@@ -164,31 +178,240 @@ export function Puff() {
   return <path className="tk-puff" d="M-40,6 l-12,-6 M-30,-2 l-8,-12 M40,6 l12,-6 M30,-2 l8,-12" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" opacity={0.6} />;
 }
 
-// ------------------------------------------------------------------ the basket
+// ------------------------------------------------------------------ the garden bed
 
-/** A woven basket on the ground at (0, 0), with what was caught peeking over the rim. */
-export const Basket = memo(function Basket({ n, words }: { n: number; words: boolean }) {
-  const body = useMemo(() => wobblyPoly([[-62, -58], [62, -58], [48, 0], [-48, 0]], { wob: 1, bow: 2.4, seed: 12 }), []);
-  const heap = Math.min(n, 7);
-  const peeks: [number, number][] = [[-30, -62], [4, -66], [34, -60], [-12, -72], [20, -76], [-40, -70], [42, -72]];
+/** Where hole `i` of `goal` is: spread along the bed, never further apart than 150 units, centred. */
+export function holeX(i: number, goal: number): number {
+  const [a, b] = BED_X;
+  if (goal <= 1) return (a + b) / 2;
+  const gap = Math.min(150, (b - a) / (goal - 1));
+  const w = gap * (goal - 1);
+  return (a + b) / 2 - w / 2 + gap * i;
+}
+
+/** One hole's state: empty, the next one (circled), filled (a sprout), golden (a golden seed's sprout). */
+export type HoleState = 'empty' | 'next' | 'filled' | 'golden';
+
+/**
+ * The garden bed in front of the meadow: a long raised strip of soil with
+ * `holes.length` holes. A filled hole has its seed half buried and a sprout
+ * (a golden seed shines); the next hole is circled in blue pen; `bloom`
+ * (the round is full) turns every sprout into a plant in flower.
+ */
+export const GardenBed = memo(function GardenBed({ holes, bloom }: { holes: HoleState[]; bloom: boolean }) {
+  const goal = holes.length;
+  const art = useMemo(() => {
+    const x0 = BED_X[0] - 120, x1 = BED_X[1] + 70;
+    return {
+      top: wobblyPoly([[x0, BED_Y - 26], [x1, BED_Y - 28], [x1 + 14, BED_Y + 26], [x0 - 12, BED_Y + 28]], { wob: 1.4, bow: 2.6, seed: 31 }),
+      edge: wobblyLine(x0 - 10, BED_Y + 30, x1 + 12, BED_Y + 28, { bow: 2, seed: 32, segs: 6, jit: 1.2 }),
+      clods: Array.from({ length: 14 }, (_, i) => [x0 + 40 + i * ((x1 - x0 - 80) / 13), BED_Y + (i % 2 ? 14 : -16)] as Pt),
+    };
+  }, []);
   return (
-    <g className="tk-basket" strokeLinecap="round" strokeLinejoin="round">
-      <ellipse cx={6} cy={3} rx={70} ry={11} fill="url(#hatch)" />
-      {/* the handle behind */}
-      <path d="M-50,-60 C-46,-128 46,-128 50,-60" fill="none" stroke={INK} strokeWidth={9} />
-      <path d="M-50,-60 C-46,-128 46,-128 50,-60" fill="none" stroke="#c9a57a" strokeWidth={5} />
-      {peeks.slice(0, heap).map(([x, y], i) => words
-        ? <path key={i} d={leaf(x - 16, y + 12, x + 18, y - 10, 16)} fill={LEAF_TONES[i % 3][0]} stroke={INK} strokeWidth={2} />
-        : <path key={i} d={blob(x, y, 14, 12, { seed: i + 5, n: 8 })} fill="#f0d27a" stroke={INK} strokeWidth={2.2} />)}
-      <Faceted id="tk-basket" d={body} light="#d8b88a" dark="#b8945f" shift={[-6, -3]} sw={3} />
-      {[-40, -26, -12].map((y, i) => <path key={i} d={wobblyLine(-58 + i * 3.4, y, 58 - i * 3.4, y + 1, { bow: 1.4, seed: i + 20 })} fill="none" stroke={INK} strokeWidth={1.6} opacity={0.5} />)}
-      {[-36, -12, 12, 36].map((x, i) => <path key={i} d={`M${x},-56 L${x * 0.78},-2`} stroke={INK} strokeWidth={1.4} opacity={0.4} />)}
-      <path d={wobblyPoly([[-68, -64], [68, -64], [66, -54], [-66, -54]], { wob: 0.8, bow: 1, seed: 13 })} fill="#c9a57a" stroke={INK} strokeWidth={2.8} />
+    <g className={`tk-bed${bloom ? ' is-bloom' : ''}`} strokeLinecap="round" strokeLinejoin="round" data-goal={goal} data-filled={holes.filter((h) => h === 'filled' || h === 'golden').length}>
+      <path d={art.top} transform="translate(5 6)" fill={SHADOW} />
+      <Faceted id="tk-bed" d={art.top} light="#b98d63" dark="#9c7450" shift={[-4, -6]} sw={3} />
+      <path d={art.edge} fill="none" stroke={INK} strokeWidth={2} opacity={0.35} />
+      {art.clods.map(([cx, cy], i) => <path key={i} d={`M${cx - 6},${cy} q6,-5 12,0`} fill="none" stroke={INK} strokeWidth={1.6} opacity={0.35} />)}
+      {holes.map((h, i) => {
+        const x = holeX(i, goal);
+        return (
+          <g key={`${goal}-${i}`} transform={`translate(${x} ${BED_Y})`} className={`tk-hole is-${h}`} data-hole={i}>
+            <ellipse cx={0} cy={2} rx={27} ry={10} fill="#5e4632" stroke={INK} strokeWidth={2.4} />
+            {(h === 'filled' || h === 'golden') && (
+              <g className="tk-hole-plant">
+                <ellipse cx={0} cy={-1} rx={13} ry={9} fill={h === 'golden' ? '#f7c948' : '#f0d27a'} stroke={INK} strokeWidth={2.4} />
+                <g transform="translate(0 -6) scale(1.5)">
+                  <g className="tk-hole-sprout"><Sprout size={bloom ? 3 : 2} seed={i + 3} /></g>
+                </g>
+                {h === 'golden' && <Glint x={0} y={-18} s={1.2} />}
+              </g>
+            )}
+            {h === 'next' && <path className="tk-hole-ring" d={penLoop(0, 0, 38, 20, { seed: i + 9 })} fill="none" stroke={PEN} strokeWidth={3.2} />}
+          </g>
+        );
+      })}
     </g>
   );
 });
 
-/** A seed that flies from the basket to the garden (every few catches). */
+/** Three little four-point sparkles in gold: what still shines (a golden seed, an item still above the garland). */
+export function Glint({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
+  const star = (cx: number, cy: number, r: number) => `M${cx},${cy - r} Q${cx + r * 0.18},${cy - r * 0.18} ${cx + r},${cy} Q${cx + r * 0.18},${cy + r * 0.18} ${cx},${cy + r} Q${cx - r * 0.18},${cy + r * 0.18} ${cx - r},${cy} Q${cx - r * 0.18},${cy - r * 0.18} ${cx},${cy - r} Z`;
+  return (
+    <g className="tk-glint" transform={`translate(${x} ${y}) scale(${s})`} strokeLinejoin="round">
+      <path d={star(-26, -14, 11)} fill="#f7c948" stroke={INK} strokeWidth={1.8} />
+      <path d={star(24, -24, 8)} fill="#f7c948" stroke={INK} strokeWidth={1.6} />
+      <path d={star(30, 6, 6)} fill="#f7c948" stroke={INK} strokeWidth={1.4} />
+    </g>
+  );
+}
+
+/** A burst of gold sparkles where a golden seed was born. */
+export function Sparkle() {
+  return (
+    <g className="tk-sparkle" strokeLinecap="round">
+      {Array.from({ length: 8 }, (_, i) => {
+        const a = (i / 8) * Math.PI * 2;
+        return <path key={i} d={`M${Math.cos(a) * 30},${Math.sin(a) * 30} L${Math.cos(a) * 54},${Math.sin(a) * 54}`} stroke={i % 2 ? '#d9a520' : INK} strokeWidth={i % 2 ? 4 : 2.6} />;
+      })}
+      <Glint x={0} y={8} s={1.3} />
+    </g>
+  );
+}
+
+// ------------------------------------------------------------------ the garland and its star lamps
+
+/** A five-point star, wobbly, centred on (0, 0). */
+function starPath(r: number, seed: number) {
+  const pts: Pt[] = [];
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const rr = (i % 2 ? r * 0.48 : r) * (1 + ((seed * 7 + i * 3) % 5 - 2) * 0.02);
+    pts.push([Math.cos(a) * rr, Math.sin(a) * rr]);
+  }
+  return wobblyPoly(pts, { wob: 0.6, bow: 0.6, seed });
+}
+
+/**
+ * A garland strung across the middle of the fall, a few leaves along it;
+ * at its left end three star lamps light up one by one with the catches
+ * made above it (the golden streak). `n` lamps lit; `flash` when the third
+ * lit and made a golden seed.
+ */
+export const Garland = memo(function Garland({ n, flash }: { n: number; flash: boolean }) {
+  const art = useMemo(() => ({
+    line: wobblyLine(250, MID_Y - 4, 1150, MID_Y + 2, { bow: 9, seed: 41, segs: 8, jit: 2 }),
+    leaves: Array.from({ length: 11 }, (_, i) => 520 + i * 60),
+    stars: [0, 1, 2].map((i) => starPath(17, i + 4)),
+  }), []);
+  return (
+    <g className={`tk-garland${flash ? ' is-flash' : ''}`} strokeLinecap="round" strokeLinejoin="round" data-streak={n}>
+      <path d={art.line} fill="none" stroke={INK} strokeWidth={4.4} />
+      <path d={art.line} fill="none" stroke="#98ab66" strokeWidth={2} />
+      {art.leaves.map((x, i) => <path key={i} d={leaf(x, MID_Y + 1, x + (i % 2 ? 16 : -14), MID_Y + (i % 2 ? 18 : -16), 7)} fill={i % 3 ? '#a4b86d' : '#b4c47f'} stroke={INK} strokeWidth={1.8} />)}
+      {art.stars.map((d, i) => (
+        <g key={i} transform={`translate(${312 + i * 52} ${MID_Y + 4})`}>
+          <g className={`tk-lamp${i < n ? ' is-lit' : ''}`}>
+            <path d="M0,-22 L0,-14" stroke={INK} strokeWidth={2} />
+            <path d={d} transform="translate(3 4)" fill={SHADOW} />
+            <path d={d} className="tk-lamp-star" stroke={INK} strokeWidth={2.4} />
+          </g>
+        </g>
+      ))}
+    </g>
+  );
+});
+
+// ------------------------------------------------------------------ the butterfly
+
+/** A butterfly carrying an item: two pairs of wings behind it that flap, its body and feelers on top. */
+export function ButterflyWings({ y = -54 }: { y?: number }) {
+  return (
+    <g className="tk-butterfly" transform={`translate(0 ${y})`} strokeLinecap="round" strokeLinejoin="round">
+      <g className="tk-wing tk-wing-l">
+        <path d="M-2,-2 C-30,-44 -70,-38 -58,-6 C-50,12 -20,8 -2,0 Z" fill="#b9cde6" stroke={INK} strokeWidth={2.4} />
+        <path d="M-2,2 C-34,10 -50,36 -26,40 C-12,42 -4,22 -2,4 Z" fill="#e7a3a0" stroke={INK} strokeWidth={2.4} />
+        <circle cx={-38} cy={-16} r={6} fill="#fbf7ee" stroke={INK} strokeWidth={1.6} />
+      </g>
+      <g className="tk-wing tk-wing-r">
+        <path d="M2,-2 C30,-44 70,-38 58,-6 C50,12 20,8 2,0 Z" fill="#b9cde6" stroke={INK} strokeWidth={2.4} />
+        <path d="M2,2 C34,10 50,36 26,40 C12,42 4,22 2,4 Z" fill="#e7a3a0" stroke={INK} strokeWidth={2.4} />
+        <circle cx={38} cy={-16} r={6} fill="#fbf7ee" stroke={INK} strokeWidth={1.6} />
+      </g>
+      <path d="M-5,18 L-9,34 M5,18 L9,34" fill="none" stroke={INK} strokeWidth={2} />
+      <path d="M0,-18 C0,-6 0,10 0,22" stroke={INK} strokeWidth={6} />
+      <path d="M0,-18 C-4,-30 -10,-36 -14,-38 M0,-18 C4,-30 10,-36 14,-38" fill="none" stroke={INK} strokeWidth={2} />
+    </g>
+  );
+}
+
+// ------------------------------------------------------------------ the bar: the rounds
+
+/**
+ * The three rounds as wooden medals along a short pen path: a finished one
+ * golden with a flower, the one being played circled in pen with a sprout,
+ * those to come only a dashed outline with their dots (one, two, three).
+ */
+export function RoundMedals({ done, here, box }: { done: number; here: number; box?: { x: number; y: number; w: number } }) {
+  return (
+    <svg className="tk-medals" viewBox="0 0 156 52" aria-hidden="true" {...(box ? { x: box.x, y: box.y, width: box.w, height: (box.w * 52) / 156 } : {})}>
+      <g filter="url(#rough)" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M30,30 L126,30" fill="none" stroke={PEN} strokeWidth={2.2} strokeDasharray="1 6" opacity={0.7} />
+        {[0, 1, 2].map((i) => {
+          const x = 26 + i * 52;
+          const isDone = i < done;
+          const isHere = i === here && !isDone;
+          return (
+            <g key={i} transform={`translate(${x} 28)`}><g className={`tk-medal${isDone ? ' is-done' : isHere ? ' is-here' : ''}`}>
+              {isDone || isHere ? <>
+                <circle cx={2} cy={3} r={17} fill={SHADOW} stroke="none" />
+                <circle r={17} fill={isDone ? '#f0d27a' : PAPER} stroke={INK} strokeWidth={2.4} />
+                {isDone && <circle r={12} fill="none" stroke="#c99a35" strokeWidth={2} />}
+                <g transform={`translate(0 ${isDone ? 12 : 10}) scale(${isDone ? 0.5 : 0.62})`}><Sprout size={isDone ? 3 : 1} seed={i + 2} /></g>
+              </> : <>
+                <circle r={16} fill="none" stroke={INK} strokeWidth={2} strokeDasharray="5 5" opacity={0.55} />
+                {Array.from({ length: i + 1 }, (_, k) => <circle key={k} cx={(k - i / 2) * 9} cy={0} r={3} fill={INK} opacity={0.5} />)}
+              </>}
+              {isHere && <path d={penLoop(0, 0, 25, 23, { seed: i + 3 })} fill="none" stroke={PEN} strokeWidth={2.8} />}
+            </g></g>
+          );
+        })}
+      </g>
+    </svg>
+  );
+}
+
+const PAPER = '#fbf7ee';
+
+/** Between two rounds, in the middle of the scene: the three medals big on a taped paper card (the new one circled). */
+export function RoundCard({ done, here }: { done: number; here: number }) {
+  const card = useMemo(() => wobblyPoly([[-250, -96], [250, -100], [254, 96], [-246, 100]], { wob: 1.2, bow: 2, seed: 61 }), []);
+  return (
+    <g className="tk-round-card" strokeLinejoin="round">
+      <path d={card} transform="translate(8 10)" fill={SHADOW} />
+      <path d={card} fill={PAPER} stroke={INK} strokeWidth={2.8} />
+      <path d="M-40,-112 L40,-106 L36,-86 L-44,-92 Z" fill="#e2d3a8" opacity={0.85} />
+      <RoundMedals done={done} here={here} box={{ x: -222, y: -74, w: 444 }} />
+    </g>
+  );
+}
+
+/** The bar's instruction, the end of it: a sprout in its hole of the bed. */
+export function BedIcon({ size = 46 }: { size?: number }) {
+  return (
+    <svg viewBox="-34 -58 68 72" width={size} height={size} aria-hidden="true" className="doodle">
+      <g filter="url(#rough)" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M-32,-2 L32,-4 L30,12 L-30,13 Z" fill="#b98d63" stroke={INK} strokeWidth={2.4} />
+        <ellipse cx={0} cy={0} rx={18} ry={6} fill="#5e4632" stroke={INK} strokeWidth={2.2} />
+        <ellipse cx={0} cy={-2} rx={9} ry={6} fill="#f0d27a" stroke={INK} strokeWidth={2} />
+        <g transform="translate(0 -6) scale(1.1)"><Sprout size={2} seed={4} /></g>
+      </g>
+    </svg>
+  );
+}
+
+// ------------------------------------------------------------------ the finale
+
+/** "¡Listo!" on a wooden sign on its post, standing on the meadow at (0, 0). */
+export function ListoSign() {
+  const art = useMemo(() => ({
+    board: wobblyPoly([[-150, -210], [150, -214], [156, -104], [-154, -100]], { wob: 1.2, bow: 2.4, seed: 51 }),
+    post: wobblyPoly([[-12, -104], [12, -104], [11, 4], [-11, 4]], { wob: 0.8, bow: 1, seed: 52 }),
+  }), []);
+  return (
+    <g className="tk-listo-sign" strokeLinecap="round" strokeLinejoin="round">
+      <Faceted id="tk-listo-post" d={art.post} light="#b08560" dark="#8d6844" shift={[-4, 0]} />
+      <path d={art.board} transform="translate(7 8)" fill={SHADOW} />
+      <Faceted id="tk-listo-board" d={art.board} light="#e3c497" dark="#c9a57a" shift={[-6, -6]} sw={3.2} />
+      {[-150, 150].map((x) => <circle key={x} cx={x * 0.86} cy={-196} r={4} fill={INK} />)}
+      <text x={0} y={-136} textAnchor="middle" className="tk-listo-text">¡Listo!</text>
+    </g>
+  );
+}
+
+/** A seed that flies from the bed to the pouch in the bar (every few holes filled). */
 export function FlyingSeed() {
   return (
     <g className="tk-fly-seed" strokeLinecap="round" strokeLinejoin="round">
@@ -227,7 +450,7 @@ export function KeyRing({ seed }: { seed: number }) {
   );
 }
 
-/** The long space bar under the letters (drawn, not a key of the game). */
+/** The long space bar under the letters (a key of the game only for a command and its number). */
 export function SpaceBar() {
   const d = useMemo(() => ({
     lip: wobblyPoly([[3, 9], [297, 8], [298, 44], [2, 45]], { wob: 0.8, bow: 1.2, seed: 70 }),
@@ -235,8 +458,8 @@ export function SpaceBar() {
   }), []);
   return (
     <svg className="tk-space" viewBox="0 0 300 48" preserveAspectRatio="none" aria-hidden="true">
-      <path d={d.lip} fill="#d9ccb2" stroke={INK} strokeWidth={2.2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-      <path d={d.top} fill="#f7f1e3" stroke={INK} strokeWidth={2.2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <path className="tk-cap-lip" d={d.lip} stroke={INK} strokeWidth={2.2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <path className="tk-cap-top" d={d.top} stroke={INK} strokeWidth={2.2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -251,14 +474,6 @@ export function KeyPressIcon({ size = 46 }: { size?: number }) {
         <text x={27} y={36} textAnchor="middle" className="tk-icon-ch">a</text>
         <path d="M18,-4 L20,4 M36,-4 L34,4 M27,-8 L27,2" stroke={PEN} strokeWidth={2.4} />
       </g>
-    </svg>
-  );
-}
-
-export function BasketIcon({ size = 46 }: { size?: number }) {
-  return (
-    <svg viewBox="-80 -134 160 146" width={size} height={size} aria-hidden="true" className="doodle">
-      <Basket n={3} words={false} />
     </svg>
   );
 }
