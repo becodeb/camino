@@ -46,6 +46,16 @@
 //   SHOTS:    a directory: also a screenshot at every step of the flow, named
 //             <grade>-<nn>-<step>-<width>.png (the tour; ?debug's dev tab is hidden in them)
 //   VIEWPORT: e.g. 1280x800 (default 1366x768)
+//   DEMO:     1: turn the demo mode on at the setup (T14) and play the same
+//             sessions as demo sessions (the export leaves them out; the
+//             demo bar sits on the right; delete them, or wait 24 h)
+//
+// T14 (the classroom round): no division at setup; after the wardrobe the
+// route is done (the green flag) and the child is back in free play; the
+// adult opens the survey with a long press on the flag, then ends the
+// session from the corner menu (straight to the goodbye). Free play's first
+// pass also ends after four activities. tools/check-class.mjs covers the
+// class commands.
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -56,6 +66,8 @@ const base = (args.find((a) => /^https?:\/\//.test(a)) ?? 'http://127.0.0.1:8810
 const grades = args.filter((a) => !/^https?:\/\//.test(a));
 const wanted = grades.length ? grades : ['1ro', '5to', '3ro'];
 const SHOTS = process.env.SHOTS ?? '';
+/** DEMO=1: every session in demo mode (T14): the same scripted sessions, synced as demo (out of the export). */
+const DEMO = /^(1|true|yes)$/i.test(process.env.DEMO ?? '');
 const [VW, VH] = (process.env.VIEWPORT ?? '1366x768').split('x').map(Number);
 
 let failures = 0;
@@ -161,7 +173,9 @@ async function winRuleGame(p, rules) {
 async function newSession(p, grade, character, query) {
   await p.goto(`${base}?${query}#/piloto`);
   await p.waitForSelector('.pp-setup', { timeout: 60_000 });
-  await p.getByRole('button', { name: 'A', exact: true }).click();
+  // T14: no division buttons; the demo mode (DEMO=1) from the setup's discreet corner word
+  ok(!(await p.locator('.pp-divisions .pp-div:not(.pp-cap-choice)').count()), 'no division buttons at setup (T14)');
+  if (DEMO) await demoOn(p);
   await shot(p, 'setup', 200);
   // round 2: one tap on the grade starts (no consent tick, no code screen)
   ok(!(await p.getByRole('checkbox').count()), 'no consent tick at setup');
@@ -170,6 +184,10 @@ async function newSession(p, grade, character, query) {
   const sid = await p.evaluate(() => window.__piloto.session().id);
   const code = await p.evaluate(() => window.__piloto.session().code);
   ids.push(sid);
+  if (DEMO) {
+    ok(await p.evaluate(() => window.__piloto.session().demo === true), 'demo: the session is synced as a demo session');
+    ok(await p.locator('.pp-demo-bar .pp-demo-mark').isVisible(), 'demo: the demo bar with its DEMO mark');
+  }
   console.log(`     session ${sid} "${code}" (${grade})`);
   ok(!(await p.evaluate((c) => document.body.innerText.includes(c), code)), 'the session code is shown nowhere');
   await p.waitForTimeout(500);
@@ -179,6 +197,17 @@ async function newSession(p, grade, character, query) {
   await shot(p, 'character-picked', 300);
   await p.locator('.doors-next').click({ force: true });
   return { sid, code };
+}
+
+/** T14: the demo mode, as the adult turns it on: a 2-second press on the setup's corner word, then the confirm. */
+async function demoOn(p) {
+  const [x, y] = await center(p, '.pp-demo-link');
+  await hold(p, x, y, 1000);
+  ok(!(await p.locator('[data-demo="confirm"]').count()), 'demo: a short press on the corner word does nothing');
+  await hold(p, x, y, 2300);
+  await p.locator('[data-demo="confirm"]').click();
+  await p.waitForSelector('.pp-demo-on');
+  ok(true, 'demo: on after the long press and the confirm (the DEMO stamp on the setup)');
 }
 
 /** The service worker controls the page (an offline reload needs it). */
@@ -261,7 +290,7 @@ async function typing(p, n, liked, listo = false) {
   if (listo) {
     await p.locator('.pp-tk-listo').waitFor({ timeout: 20_000 });
     await p.locator('.pp-tk-listo').click({ force: true });
-    ok(true, 'typing: "listo" after round 1');
+    ok(true, 'typing: "listo" once half of round 2 is filled (T14)');
   }
   await p.waitForSelector('.tk-finale', { timeout: 60_000 });
   await shot(p, 'typing-finale', 1200);
@@ -271,7 +300,12 @@ async function typing(p, n, liked, listo = false) {
   await cheerNext(p);
 }
 
-/** The wardrobe, the survey, the goodbye and the adult form. */
+/**
+ * The wardrobe, then (T14) the route is done: the green flag and free play
+ * again; the adult opens the survey (a long press on the flag), the child
+ * is back in free play after it; the adult ends the session from the corner
+ * menu (the survey done: straight to the goodbye); the adult's comment.
+ */
 async function closing(p, favorite, form) {
   await p.waitForSelector('.mode-wardrobe .hooks', { timeout: 30_000 });
   await p.waitForTimeout(900);
@@ -280,7 +314,14 @@ async function closing(p, favorite, form) {
   await p.waitForTimeout(700);
   await shot(p, 'wardrobe-scarf', 300);
   await p.locator('.wardrobe-next').click({ force: true });
-  await p.waitForSelector('.pp-survey');
+  await p.waitForSelector('.pp-flag', { timeout: 20_000 });
+  await p.waitForSelector('.piloto[data-step="free_play"] .pp-menu', { timeout: 20_000 });
+  await shot(p, 'route-done-flag', 900);
+  ok(true, 'the route is done: the green flag in the bar, back to free play (no survey forced)');
+  const [fx, fy] = await center(p, '.pp-flag');
+  await hold(p, fx, fy, 1900);
+  await p.waitForSelector('.pp-survey', { timeout: 10_000 });
+  ok(true, 'the adult\'s long press on the flag opens the survey');
   for (const [q, a] of [['liked', 'yes'], ['difficulty', 'mid']]) {
     await p.waitForSelector(`[data-question="${q}"]`);
     await shot(p, `survey-${q}`);
@@ -295,6 +336,14 @@ async function closing(p, favorite, form) {
   await p.waitForSelector('[data-question="play_again"]');
   await shot(p, 'survey-again');
   await p.locator('[data-answer="yes"]').click();
+  await p.waitForSelector('.piloto[data-step="free_play"] .pp-menu', { timeout: 20_000 });
+  ok(await p.locator('.pp-flag').count() === 1, 'after the survey the child is back in free play, the flag still up');
+  // the adult ends the session from the corner menu: the survey is done, so the goodbye
+  await p.waitForTimeout(600);
+  await hold(p, 18, 18, 1700);
+  ok(!(await p.locator('[data-act="survey"]').count()), 'the corner menu no longer offers the survey once it is done');
+  await p.locator('[data-act="end"]').click();
+  await p.locator('[data-act="end-confirm"]').click();
   await p.waitForSelector('.pp-bye .pp-garden-svg', { timeout: 20_000 });
   await p.waitForTimeout(1200);
   await shot(p, 'goodbye', 800);
@@ -388,8 +437,9 @@ const SESSIONS = {
     await p.locator('.pp-fp-card[data-activity="editor"]').click();
     await shot(p, 'fp-editor', 3000);
     await p.locator('.pp-menu-back').click();
-    await p.waitForSelector('.pp-menu');
-    await p.evaluate(() => window.__freePlay.budget(0));
+    // T14: back on the menu after a fourth activity, the first pass of free play ends (well before its 8 minutes)
+    await p.waitForSelector('[data-interlude="cheer"]', { timeout: 15_000 });
+    ok(true, 'free play: back on the menu after the fourth activity, the first pass ends (the cheer)');
     await cheerNext(p, 'fp-over');
     await typing(p, 5, 'yes');
     await closing(p, 'sheet', { engagement: 'high', help: 'some', comment: 'Chequeo automático: sesión completa de 1ro.' });
@@ -564,7 +614,7 @@ const SESSIONS = {
     await p.waitForSelector('.pp-menu');
     await p.evaluate(() => window.__freePlay.budget(0));
     await cheerNext(p, 'fp-over');
-    await typing(p, 1, 'no', true);
+    await typing(p, 2, 'no', true);
     await closing(p, 'rule_game', { engagement: 'high', help: 'none', comment: 'Chequeo automático: sesión de 3ro.' });
   },
 };

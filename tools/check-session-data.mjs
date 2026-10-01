@@ -3,6 +3,9 @@
 // with PSQL set (a local database), in the SQL views too. Needs no secret:
 // it reads the files the export wrote.
 //
+// T14: also the route done (route_done after the wardrobe), the survey the
+// adult opened from free play, and the end from the corner menu.
+//
 // Per session: the row (grade, code, ended as completed, the survey's four
 // answers, the adult form), its events with seq 0..n-1 and no gaps, the
 // event types a scripted session of its grade must have, and a few payloads
@@ -35,7 +38,7 @@ const allSessions = data.sessions ?? [];
 const allEvents = data.events ?? [];
 ok(Array.isArray(data.sessions) && Array.isArray(data.events), `the export has sessions (${allSessions.length}) and events (${allEvents.length})`);
 
-const COMMON = ['step', 'choice', 'tool_check', 'tap_add', 'drag', 'help', 'level_start', 'run', 'level_end', 'ladder_step', 'ladder_end', 'activity_end', 'typing', 'typing_round', 'typing_end', 'wardrobe', 'survey_answer', 'garden_view', 'adult_form'];
+const COMMON = ['step', 'choice', 'tool_check', 'tap_add', 'drag', 'help', 'level_start', 'run', 'level_end', 'ladder_step', 'ladder_end', 'activity_end', 'typing', 'typing_round', 'typing_end', 'wardrobe', 'survey_answer', 'garden_view', 'adult_form', 'route_done'];
 const BY_GRADE = {
   1: ['ghost_demo', 'speak', 'call_adult', 'call_adult_end', 'adult_help', 'resume'],
   3: [],
@@ -73,10 +76,19 @@ for (const id of ids) {
     const tr = of('typing_round');
     const keysByRound = (n) => of('typing').filter((x) => x.round === n).length;
     ok(of('typing').every((x) => [1, 2, 3].includes(x.round)) && tr.length >= 1 && tr.every((r, i) => r.round === i + 1 && r.keys === keysByRound(r.round))
-      && te.rounds_done === tr.filter((r) => r.completed).length && ['rounds', 'time', 'done'].includes(te.reason),
+      && te.rounds_done === tr.filter((r) => r.completed).length && ['rounds', 'time', 'done', 'wrap_up'].includes(te.reason),
       `${tag}: typing rounds ${tr.map((r) => `${r.round}:${r.set}:${r.caught}/${r.goal}:${r.reason}`).join(' ')}, typing_end ${te.reason} (${te.rounds_done} done)`);
   }
   ok(of('wardrobe').some((x) => x.action === 'close'), `${tag}: the wardrobe closed with an outfit`);
+  // T14: the route done (the green flag) after the wardrobe, then the survey the adult opened, back to free play, the end from the corner
+  {
+    const steps = of('step').map((x) => `${x.to}:${x.reason}`);
+    const rd = of('route_done')[0];
+    const iWard = steps.indexOf('wardrobe:next') + 1;
+    ok(rd?.via === 'route' && rd.time_ms > 0 && rd.survey_done === false, `${tag}: route_done ${JSON.stringify(rd)}`);
+    ok(steps.slice(iWard).join(' ') === 'free_play:next survey:adult free_play:next goodbye:end_now', `${tag}: after the wardrobe ${steps.slice(iWard).join(' ')}`);
+    ok(!s.division, `${tag}: no division (T14 setup)`);
+  }
   if (s.grade === 1) {
     const r = of('resume')[0];
     ok(r?.step === 'ladder', `1° ${s.code}: resume after the offline reload at the ladder ${JSON.stringify(r)}`);

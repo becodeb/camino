@@ -9,7 +9,13 @@
 // plays round 2's own items (pp-l<rung>) and every item's end_reason is
 // checked; tools/check-caps.mjs covers the caps themselves.
 //
-// 1ro — setup (division A), character; the real tool check (the arrow put in
+// T14: no division at setup; after the wardrobe the route is done (the
+// green flag, free play again), the adult opens the survey from the corner
+// menu, the child is back in free play, the adult ends from the corner; on
+// 3ro's rule game a ✋ press under 1.5 s is the child's help and a 1.5 s
+// hold the adult's "¿En qué lo ayudaste?".
+//
+// 1ro — setup, character; the real tool check (the arrow put in
 //   by a DRAG when a tap is asked, ▶, the arrow put in by a TAP when a drag is
 //   asked, ↺ and ✋ pressed while they are shown);
 //   the ladder from rung 1: pass 1, pass 2, then rung 3 (the fix page) with
@@ -102,12 +108,12 @@ async function failRun(p, program = [{ t: 'cmd', cmd: 'up' }]) {
   await p.waitForTimeout(400);
 }
 
-/** The setup in one tap (division A first; `captions`: the setup's on-screen text choice, auto by default). */
+/** The setup in one tap (T14: no division; `captions`: the setup's on-screen text choice, auto by default). */
 async function newSession(p, grade, query = 'debug', captions = null) {
   await p.goto(`${base}?${query}#/piloto`);
   await p.waitForSelector('.pp-setup');
   ok(!(await p.getByRole('checkbox').count()), `${grade}: no consent tick at setup`);
-  await p.getByRole('button', { name: 'A', exact: true }).click();
+  ok(!(await p.getByRole('button', { name: 'A', exact: true }).count()), `${grade}: no division buttons at setup (T14)`);
   if (captions) await p.locator(`[data-captions="${captions}"]`).click();
   await p.locator(`.pp-grade-card[aria-label="${grade}"]`).click();
   await p.waitForSelector('.choice-row');
@@ -274,8 +280,16 @@ ok(true, 'three catches and the golden seed filled the four holes: round 1 done'
 await p.waitForSelector('.tk-medal.is-done', { timeout: 3_000 });
 ok(await p.locator('.tk-critter').count() === 1, 'a critter came to see the full bed');
 await p.waitForSelector('.tk-round-card', { timeout: 6_000 });
-ok(await p.locator('.pp-tk-listo').count() === 1, 'round 2\'s card is up; "listo" is offered after round 1');
+ok(await p.locator('.pp-tk-listo').count() === 0, 'round 2\'s card is up; no "listo" after round 1 (T14)');
 await p.waitForFunction(() => window.__typing.state().phase === 'play' && window.__typing.state().round === 2, null, { timeout: 10_000 });
+ok(!(await p.locator('.pp-tk-listo').count()), 'T14: no "listo" in round 2 before half its bed is filled');
+for (let i = 0; i < 20 && (await p.evaluate(() => window.__typing.state().filled)) < 2; i++) {
+  const k = await expectedKey(p);
+  await p.keyboard.press(k);
+  await p.waitForTimeout(350);
+}
+await p.waitForSelector('.pp-tk-listo', { timeout: 5_000 });
+ok(true, 'T14: "listo" shows once half of round 2\'s bed (2 of 4) is filled');
 {
   const k = await expectedKey(p);
   await p.keyboard.press(k === 'q' ? 'w' : 'q');
@@ -306,7 +320,14 @@ ok(!locked.includes('bufanda') && !locked.includes('hongo') && locked.includes('
 for (const id of ['bufanda', 'hongo', 'hongo', 'corona']) { await p.locator(`[data-prenda="${id}"]`).click(); await p.waitForTimeout(700); }
 await p.locator('.wardrobe-next').click({ force: true });
 
-// the survey, the goodbye, the adult's comment from the corner menu, "jugar otra vez"
+// T14: the route is done: the green flag, free play again; the adult opens the survey from the corner menu
+await p.waitForSelector('.pp-flag', { timeout: 20_000 });
+await p.waitForSelector('.piloto[data-step="free_play"] .pp-menu', { timeout: 20_000 });
+ok(await p.locator('.piloto.route-done .level-bar').count() >= 1, 'the route is done: the green flag in the bar (the bar tinted green), back to free play');
+await p.waitForTimeout(600);
+await hold(p, 18, 18, 1700);
+await p.locator('[data-act="survey"]').click();
+// the survey, back to free play, the end from the corner menu (the goodbye), the adult's comment, "jugar otra vez"
 await p.waitForSelector('.pp-survey');
 for (const [q, a] of [['liked', 'yes'], ['difficulty', 'mid']]) {
   await p.waitForSelector(`[data-question="${q}"]`);
@@ -319,6 +340,12 @@ await p.locator('[data-answer="ladder"]').click();
 await p.waitForTimeout(1300);
 await p.waitForSelector('[data-question="play_again"]');
 await p.locator('[data-answer="yes"]').click();
+await p.waitForSelector('.piloto[data-step="free_play"] .pp-menu', { timeout: 20_000 });
+ok(true, 'after the survey the child is back in free play (no end)');
+await p.waitForTimeout(600);
+await hold(p, 18, 18, 1700);
+await p.locator('[data-act="end"]').click();
+await p.locator('[data-act="end-confirm"]').click();
 await p.waitForSelector('.pp-bye .pp-garden-svg');
 await p.waitForTimeout(1200);
 const byeSeeds = Number(await p.locator('.pp-garden-svg').getAttribute('data-seeds'));
@@ -443,9 +470,19 @@ await p.locator('.btn-play').click(); await p.waitForTimeout(500);
 for (const k of ['ArrowRight', 'ArrowRight']) { await p.keyboard.press(k); await p.waitForTimeout(700); }
 await p.locator('.btn-play').click(); await p.waitForTimeout(500);
 ok(!(await p.locator('.pp-cap').count()), '3ro with on-screen text forced off at setup: no bubble');
-// the hand raised (✋ held), nobody comes; the child wins: it goes down by itself
+// T14: a press on ✋ shorter than 1.5 s is the child's help as before; held 1.5 s it is the adult's "¿En qué lo ayudaste?"
 const [h3x, h3y] = await center(p, '.level-bar .help');
-await hold(p, h3x, h3y, 1300);
+await hold(p, h3x, h3y, 1100);
+await p.waitForTimeout(400);
+ok(!(await p.locator('.pp-help-q').count()) && !(await p.locator('.pp-hand').count()), 'a ✋ press under 1.5 s opens no adult question and raises no hand (the child\'s help)');
+await hold(p, h3x, h3y, 1800);
+await p.waitForSelector('.pp-help-q');
+ok(await p.locator('.pp-help-q [data-kind]').count() === 4, 'held 1.5 s: "¿En qué lo ayudaste?" with its four answers');
+await p.locator('.pp-help-q [data-kind="tool"]').click();
+ok(!(await p.locator('.pp-help-q').count()), 'one tap answers and closes it');
+// the hand raised after the help steps (as a fourth ✋ would; the hold no longer raises it), nobody comes; the child wins: it goes down by itself
+await p.evaluate(() => window.__piloto.raiseHand());
+await p.waitForTimeout(300);
 ok(await p.locator('.pp-hand').isVisible(), 'the hand is up');
 // the reference rules and the way to the seed
 await p.evaluate(() => window.__camino.setRules(window.__camino.level.realtime.solution));
@@ -575,7 +612,11 @@ const lvEnd3 = JSON.parse(json(`select payload p from events where session_id = 
 ok(lvEnd3?.outcome === 'fail' && lvEnd3?.adult_helped === true && lvEnd3?.rung === 3 && lvEnd3?.end_reason === 'solution_hint', `the fix page's level_end: ${lvEnd3?.outcome}, adult_helped ${lvEnd3?.adult_helped}, end_reason ${lvEnd3?.end_reason}`);
 ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'run' and (payload->>'after_ghost')::boolean;`)) >= 1, 'a run after the ghost demo is marked after_ghost');
 const sess = JSON.parse(sql(`select row_to_json(s) from (select code, grade, division, consent, ended_at is not null as ended, end_reason, survey, adult_form from sessions where id = '${s1.sid}') s;`));
-ok(sess.code === s1.code && sess.division === 'A' && sess.consent === null, `session ${sess.code}, grade ${sess.grade}, division ${sess.division}, consent ${sess.consent}`);
+ok(sess.code === s1.code && sess.division === null && sess.consent === null, `session ${sess.code}, grade ${sess.grade}, division ${sess.division}, consent ${sess.consent}`);
+const rd1 = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'route_done'`)).map((x) => x.p);
+ok(rd1.length === 1 && rd1[0].via === 'route', `1ro: route_done once after the wardrobe ${JSON.stringify(rd1)}`);
+const steps1to = sql(`select string_agg(payload->>'to' || ':' || (payload->>'reason'), ' ' order by seq) from events where session_id = '${s1.sid}' and type = 'step';`);
+ok(steps1to.endsWith('wardrobe:next free_play:next survey:adult free_play:next goodbye:end_now'), `1ro steps: ${steps1to}`);
 ok(sess.ended && sess.end_reason === 'completed', `ended, end_reason ${sess.end_reason}`);
 ok(sql(`select end_reason from sessions where id = '${s5.sid}';`) === 'adult_ended', '5to: end_reason adult_ended');
 ok(sess.survey?.liked === 'yes' && sess.survey?.favorite_activity === 'ladder' && sess.survey?.play_again === 'yes', `survey ${JSON.stringify(sess.survey)}`);
@@ -591,6 +632,10 @@ const dev3 = JSON.parse(sql(`select device from sessions where id = '${s3b.sid}'
 ok(dev5.captions === true && dev5.captions_set === 'grade' && dev3.captions === false && dev3.captions_set === 'setup', `5to captions on by the grade, 3ro off by the setup: ${JSON.stringify([dev5.captions, dev5.captions_set, dev3.captions, dev3.captions_set])}`);
 const hands3 = JSON.parse(json(`select payload p from events where session_id = '${s3b.sid}' and type = 'call_adult_end'`)).map((x) => x.p);
 ok(hands3.length === 1 && hands3[0].resolved_by === 'self' && hands3[0].level_id === 'pp-l11', `3ro solved it with the hand up: ${JSON.stringify(hands3)}`);
+const help3 = JSON.parse(json(`select payload p from events where session_id = '${s3b.sid}' and type in ('help', 'adult_help') and payload->>'level_id' = 'pp-l11' order by seq`)).map((x) => x.p);
+ok(help3.length >= 2 && help3[0].step === 1 && help3.some((x) => x.kind === 'tool' && x.prompted === false && x.via === 'help_hold'),
+  `3ro: the short press was the child's help step 1, the long one the adult's answer: ${JSON.stringify(help3)}`);
+ok(!Number(sql(`select count(*) from events where session_id = '${s3b.sid}' and type = 'call_adult' and payload->>'reason' = 'help_held';`)), '3ro: no hand raised by holding ✋ (T14)');
 
 // the 5to ladder
 const steps5 = JSON.parse(json(`select (payload->>'rung')::int rung, payload->>'check' chk, payload->>'result' result, payload->>'next' nxt, (payload->>'attempts')::int attempts, payload->>'end_reason' why from events where session_id = '${s5.sid}' and type = 'ladder_step' order by seq`));
@@ -615,7 +660,8 @@ ok(rt[1]?.keys === 2 && rt[1]?.prog === 'key:right(right)' && rt[1]?.blocks === 
 ok(rt[2]?.keys >= 7 && rt[2]?.prog.includes('key:up(up)'), `the winning game: ${JSON.stringify(rt[2])}`);
 const step3 = JSON.parse(json(`select payload p from events where session_id = '${s3b.sid}' and type = 'ladder_step'`)).map((x) => x.p);
 const rule = step3.find((x) => x.rung === 11);
-ok(rule?.result === 'pass' && rule?.attempts === 3, `the rule game item: ${rule?.result}, ${rule?.attempts} runs`);
+// won, but the adult's help (the ✋ hold's answer) marked the item: not a pass
+ok(rule?.result === 'fail' && rule?.outcome === 'win' && rule?.adult_helped === true && rule?.attempts === 3, `the rule game item, won with the adult's help: ${rule?.result} (${rule?.outcome}, adult_helped ${rule?.adult_helped}), ${rule?.attempts} runs`);
 
 console.log(failures ? `${failures} check(s) failed` : 'all checks passed');
 process.exit(failures ? 1 : 0);
