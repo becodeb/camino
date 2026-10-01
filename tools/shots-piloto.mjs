@@ -8,15 +8,14 @@ import { createRequire } from 'node:module';
 
 const { chromium } = createRequire(`${process.env.PW ?? '/tmp/pw'}/`)('playwright');
 const [out = '.', base = 'http://127.0.0.1:8811/', only = ''] = process.argv.slice(2);
-const SIZES = [[1366, 768], [1280, 800]];
+// SIZES=1920x911,1366x650 for other windows (round 2: the user's browser was 1920×911, not fullscreen)
+const SIZES = (process.env.SIZES ?? '1366x768,1280x800').split(',').map((x) => x.split('x').map(Number));
 
-/** The adult's setup, by the real UI: grade, division, consent, Empezar. */
+/** The setup, by the real UI (round 2): the division, then one tap on the grade starts. */
 async function setup(p, grade = '1ro', division = 'B') {
-  await p.getByRole('button', { name: grade, exact: true }).click();
   if (division) await p.getByRole('button', { name: division, exact: true }).click();
-  await p.getByRole('checkbox').click();
-  await p.getByRole('button', { name: 'Empezar' }).click();
-  await p.waitForSelector('.pp-code-word');
+  await p.getByRole('button', { name: grade, exact: true }).click();
+  await p.waitForSelector('.choice-row');
 }
 const pil = (p, js, arg) => p.evaluate(js, arg);
 const jump = (p, step) => pil(p, (s) => window.__piloto.jump(s), step);
@@ -27,10 +26,8 @@ async function hold(p, x, y, ms) {
   await p.waitForTimeout(ms);
   await p.mouse.up();
 }
-async function toCharacter(p) {
-  await setup(p);
-  await p.getByRole('button', { name: 'Empezar' }).click();
-  await p.waitForSelector('.choice-row');
+async function toCharacter(p, grade = '1ro') {
+  await setup(p, grade);
 }
 /** The tool check's first page, by the real UI from the character. */
 async function toTool(p) {
@@ -90,8 +87,6 @@ async function toLevel(p) {
 async function toFreePlay(p, grade = '1ro', who = 'pliegue', query = '') {
   if (query) await p.goto(`${base}?debug&${query}#/piloto`);
   await setup(p, grade);
-  await p.getByRole('button', { name: 'Empezar' }).click();
-  await p.waitForSelector('.choice-row');
   await p.waitForTimeout(500);
   await p.locator(`[data-choice-char="${who}"]`).click();
   await p.waitForTimeout(400);
@@ -149,8 +144,6 @@ async function toWardrobe(p, n = 4) {
 async function toTyping(p, grade = '1ro', query = '', play = true) {
   if (query) await p.goto(`${base}?debug&${query}#/piloto`);
   await setup(p, grade);
-  await p.getByRole('button', { name: 'Empezar' }).click();
-  await p.waitForSelector('.choice-row');
   await p.waitForTimeout(500);
   await p.locator('[data-choice-char="mina"]').click();
   await p.waitForTimeout(400);
@@ -174,12 +167,10 @@ const SCENARIOS = [
   {
     name: 'pp-setup-filled',
     run: async (p) => {
-      await p.getByRole('button', { name: '3ro', exact: true }).click();
       await p.getByRole('button', { name: 'C', exact: true }).click();
-      await p.getByRole('checkbox').click();
+      await p.locator('[data-captions="on"]').click();
     },
   },
-  { name: 'pp-code', run: async (p) => { await setup(p); } },
   { name: 'pp-character', run: async (p) => { await toCharacter(p); await p.waitForTimeout(900); } },
   {
     name: 'pp-character-picked',
@@ -265,7 +256,8 @@ const SCENARIOS = [
     name: 'pp-adult-form',
     run: async (p) => {
       await toCharacter(p); await jump(p, 'goodbye'); await p.waitForSelector('.pp-bye');
-      await p.click('.pp-for-adult');
+      await hold(p, 18, 18, 1700);
+      await p.click('[data-act="adult-form"]');
       await p.click('[data-value="high"]'); await p.click('[data-value="some"]');
       await p.fill('.pp-comment textarea', 'Arrastró sin problemas; pidió ayuda con la consigna.');
     },
@@ -279,8 +271,24 @@ const SCENARIOS = [
     name: 'pp-tool-help',
     run: async (p) => { await toToolPage2(p); await dragArrow(p); await p.waitForTimeout(900); await p.click('.btn-restart'); await p.waitForTimeout(1400); },
   },
-  // the drag not done in 20 s: the ghost hand shows it, mid-way
-  { name: 'pp-tool-ghost', run: async (p) => { await toToolPage2(p); await p.waitForTimeout(20_000 + 1300); } },
+  // the drag not done in 8 s: the ghost hand shows it, mid-way
+  { name: 'pp-tool-ghost', run: async (p) => { await toToolPage2(p); await p.waitForTimeout(8_000 + 1300); } },
+  // ---------------------------------------------------------------- T10: on-screen text, the new bar, "¿Cómo seguís?", the wardrobe
+  { name: 'pp-cap-3ro-ladder', run: async (p) => { await toCharacter(p, '3ro'); await jump(p, 'ladder'); await p.waitForSelector('main.level'); await p.waitForTimeout(2500); } },
+  { name: 'pp-cap-1ro-ladder', run: async (p) => { await toCharacter(p, '1ro'); await jump(p, 'ladder'); await p.waitForSelector('main.level'); await p.waitForTimeout(2500); } },
+  { name: 'pp-cap-3ro-menu', run: async (p) => { await toFreePlay(p, '3ro'); } },
+  {
+    name: 'pp-next-choice',
+    run: async (p) => {
+      await toFreePlay(p, '1ro');
+      await pil(p, () => window.__freePlay.pick('sheet'));
+      await p.waitForSelector('main.level');
+      await pil(p, () => window.__freePlay.solveCores());
+      await p.evaluate(() => { location.hash = '#/1ro/hoja/6/puertas'; });
+      await p.waitForSelector('.pp-next');
+      await p.waitForTimeout(1500);
+    },
+  },
   // ---------------------------------------------------------------- T4: the ladder, one item of each kind of board
   { name: 'pp-ladder-sequence', run: async (p) => { await toRung(p, 1); } },
   { name: 'pp-ladder-fix', run: async (p) => { await toRung(p, 3); } },

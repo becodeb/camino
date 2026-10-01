@@ -35,9 +35,9 @@ const allSessions = data.sessions ?? [];
 const allEvents = data.events ?? [];
 ok(Array.isArray(data.sessions) && Array.isArray(data.events), `the export has sessions (${allSessions.length}) and events (${allEvents.length})`);
 
-const COMMON = ['step', 'choice', 'tool_check', 'tap_add', 'drag', 'help', 'level_start', 'run', 'level_end', 'ladder_step', 'ladder_end', 'activity_end', 'typing', 'typing_end', 'wardrobe', 'survey_answer', 'garden_view'];
+const COMMON = ['step', 'choice', 'tool_check', 'tap_add', 'drag', 'help', 'level_start', 'run', 'level_end', 'ladder_step', 'ladder_end', 'activity_end', 'typing', 'typing_end', 'wardrobe', 'survey_answer', 'garden_view', 'adult_form'];
 const BY_GRADE = {
-  1: ['ghost_demo', 'speak', 'call_adult', 'adult_help', 'resume'],
+  1: ['ghost_demo', 'speak', 'call_adult', 'call_adult_end', 'adult_help', 'resume'],
   3: [],
   5: ['resume', 'text_item', 'text_run', 'probe_end', 'rule_edit', 'game_run', 'scratch_predict'],
 };
@@ -51,7 +51,8 @@ for (const id of ids) {
   ok(s.ended_at && s.end_reason === 'completed', `${tag}: ended, ${s.end_reason}`);
   ok(['liked', 'difficulty', 'favorite_activity', 'play_again'].every((k) => s.survey?.[k]), `${tag}: survey ${JSON.stringify(s.survey)}`);
   ok(s.adult_form?.engagement && s.adult_form?.help_needed, `${tag}: adult form ${JSON.stringify(s.adult_form)}`);
-  ok(s.current_step === 'adult_form' || s.current_step === 'goodbye', `${tag}: current_step ${s.current_step}`);
+  ok(s.current_step === 'goodbye', `${tag}: current_step ${s.current_step}`);
+  ok(s.consent === null, `${tag}: no consent tick since round 2 (consent ${s.consent})`);
   ok(ev.length > 30 && ev.every((e, i) => e.seq === i), `${tag}: ${ev.length} events, seq 0..${ev.length - 1} with no gaps`);
   const types = new Set(ev.map((e) => e.type));
   const missing = [...COMMON, ...(BY_GRADE[s.grade] ?? [])].filter((t) => !types.has(t));

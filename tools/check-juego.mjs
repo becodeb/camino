@@ -37,12 +37,10 @@ const ok = (cond, what) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${what}`); i
 async function newSession(p, grade) {
   await p.goto(`${base}?debug#/piloto`);
   await p.waitForSelector('.pp-setup');
+  // round 2: one tap on the grade starts (no consent tick, no code screen)
   await p.getByRole('button', { name: grade, exact: true }).click();
-  await p.getByRole('checkbox').click();
-  await p.getByRole('button', { name: 'Empezar' }).click();
-  const sid = await p.evaluate(() => window.__piloto.session().id);
-  await p.getByRole('button', { name: 'Empezar' }).click();
   await p.waitForSelector('.choice-row');
+  const sid = await p.evaluate(() => window.__piloto.session().id);
   await p.waitForTimeout(500);
   await p.locator('[data-choice-char="ovillo"]').click();
   await p.waitForTimeout(500);

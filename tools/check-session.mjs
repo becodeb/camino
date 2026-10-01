@@ -6,7 +6,11 @@
 // (`SESSION_IDS=<uuid>,<uuid>…`) so they can be checked in an export
 // (tools/check-session-data.mjs) and then deleted (tools/delete-sessions.mjs).
 //
-// 1ro — setup, code, the character (Pliegue), the real tool check (tap, ▶,
+// Round 2 (T10): the setup is one tap on the grade (no consent tick, no
+// code screen), the adult's comment is saved from the corner menu, and the
+// goodbye's "jugar otra vez" opens the next child's setup.
+//
+// 1ro — setup, the character (Pliegue), the real tool check (tap, ▶,
 //   drag, ↺, ✋); the ladder: rungs 1 and 2 solved, rung 3 (the fix page)
 //   OFFLINE: the three helps, 🔊, a fourth ✋ raises the hand, the adult
 //   answers it; the tab RELOADS while offline (the service worker opens the
@@ -15,7 +19,7 @@
 //   (its thumbnails draw Pliegue), sheet 6 (two pages), the music recess
 //   (one song), the time runs out on the menu; the typing game (30 s): five
 //   letters, "¿Te gustó?" yes; the wardrobe (the scarf, "listo"); the
-//   survey; the goodbye; the adult form.
+//   survey; the goodbye; the adult's comment; "jugar otra vez".
 // 5to — Mina; the tool check; the ladder from rung 9: the fog and the three
 //   worlds solved, the rule game (rung 11) stopped twice (ceiling 10); free
 //   play: the workshop of sheet 15 (five lines refused, two lines: a level
@@ -24,12 +28,12 @@
 //   question), a reload on the menu (free play carries on), the game maker
 //   from the adult's corner menu (a game, a rule changed, the three
 //   predictions, the liking question); back online; the time runs out; the
-//   typing game (15 s, words); the wardrobe; the survey; the adult form.
+//   typing game (15 s, words); the wardrobe; the survey; the adult's comment.
 // 3ro — Ovillo; the tool check; the ladder from rung 5: 5 and 6 solved, 7
 //   failed twice (ceiling 6); free play: the rule game's three pages (3ro-1,
 //   3ro-2 and the free page pp-reglas, each won with the arrows), back on
 //   the menu; the time runs out; the typing game; the wardrobe; the survey;
-//   the adult form.
+//   the adult's comment.
 //
 // Before the sessions it opens the app without ?debug: the adult's setup, and
 // no dev tab (a playtest build keeps dev mode off without ?debug).
@@ -155,18 +159,17 @@ async function winRuleGame(p, rules) {
 async function newSession(p, grade, character, query) {
   await p.goto(`${base}?${query}#/piloto`);
   await p.waitForSelector('.pp-setup', { timeout: 60_000 });
-  await p.getByRole('button', { name: grade, exact: true }).click();
   await p.getByRole('button', { name: 'A', exact: true }).click();
-  await p.getByRole('checkbox').click();
   await shot(p, 'setup', 200);
-  await p.getByRole('button', { name: 'Empezar' }).click();
-  const code = await p.locator('.pp-code-word').getAttribute('data-code');
-  await shot(p, 'code');
+  // round 2: one tap on the grade starts (no consent tick, no code screen)
+  ok(!(await p.getByRole('checkbox').count()), 'no consent tick at setup');
+  await p.getByRole('button', { name: grade, exact: true }).click();
+  await p.waitForSelector('.choice-row');
   const sid = await p.evaluate(() => window.__piloto.session().id);
+  const code = await p.evaluate(() => window.__piloto.session().code);
   ids.push(sid);
   console.log(`     session ${sid} "${code}" (${grade})`);
-  await p.getByRole('button', { name: 'Empezar' }).click();
-  await p.waitForSelector('.choice-row');
+  ok(!(await p.evaluate((c) => document.body.innerText.includes(c), code)), 'the session code is shown nowhere');
   await p.waitForTimeout(500);
   await shot(p, 'character');
   await p.locator(`[data-choice-char="${character}"]`).click();
@@ -285,14 +288,20 @@ async function closing(p, favorite, form) {
   await shot(p, 'goodbye', 800);
   const planted = await p.locator('.pp-garden-plant').count();
   ok(planted >= 3, `the goodbye garden grows the session's seeds (${planted} plants)`);
-  await p.locator('.pp-for-adult').click();
+  // the adult's comment, from the corner menu (optional since round 2)
+  await hold(p, 18, 18, 1700);
+  await p.locator('[data-act="adult-form"]').click();
   await p.locator(`[data-value="${form.engagement}"]`).click();
   await p.locator(`[data-value="${form.help}"]`).click();
   await p.fill('.pp-comment textarea', form.comment);
   await shot(p, 'adult-form', 300);
-  await p.getByRole('button', { name: 'Guardar' }).click();
-  await drain(p);
+  await p.locator('[data-act="save-form"]').click();
   await shot(p, 'saved', 300);
+  await p.locator('.pp-adult-close').click();
+  await drain(p);
+  await p.locator('.pp-again').click();
+  await p.waitForSelector('.pp-setup');
+  ok(true, '"jugar otra vez": the next child\'s setup');
 }
 
 // ------------------------------------------------------------------ the sessions
