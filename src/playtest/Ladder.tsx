@@ -19,6 +19,7 @@ import {
 import { pilotLevel } from './levels';
 import { PlaytestLevel, type LevelEnd } from './PlaytestLevel';
 import { rememberPart, resumedPart } from './resume';
+import { wrapPending } from './flow';
 
 /** Said while the character walks to the next page (in turn, never about how it went). */
 const WALK_LINES = ['¡Vamos a la próxima!', '¡Seguimos!', '¡Otra hoja!', '¡A ver esta!'];
@@ -38,7 +39,12 @@ interface SavedLadder { state: LadderState; ended: boolean }
 const CAPS_NOW = capsFrom(typeof location !== 'undefined' ? location.search : '');
 
 export function Ladder() {
-  const { session, next, log } = usePlaytest();
+  const api = usePlaytest();
+  const { session, next, log } = api;
+  const apiRef = useRef(api);
+  apiRef.current = api;
+  /** "Quedan 5 minutos" (T14): the item on screen is the last one. */
+  const wrapping = () => wrapPending(apiRef.current.flow);
   const [start] = useState(() => {
     const saved = resumedPart<SavedLadder>('ladder');
     if (saved?.state && Array.isArray(saved.state.items)) {
@@ -95,7 +101,11 @@ export function Ladder() {
         key={`walk-${view.n}`}
         seed={40 + view.n}
         line={WALK_LINES[(view.n - 1) % WALK_LINES.length]}
-        done={() => { memo.current = newItemMemo(); setView({ ...view, kind: 'item' }); }}
+        done={() => {
+          if (wrapping()) { endLadder('wrap_up'); setView({ kind: 'end' }); return; }
+          memo.current = newItemMemo();
+          setView({ ...view, kind: 'item' });
+        }}
       />
     );
   }
@@ -108,7 +118,7 @@ export function Ladder() {
     const s = record(state.current, { rung: r.rung, check: view.check, result });
     state.current = s;
     rememberPart('ladder', { state: s, ended: false } satisfies SavedLadder);
-    const d = decide(s, Date.now(), CAPS_NOW);
+    const d: ReturnType<typeof decide> = wrapping() ? { stop: 'wrap_up' } : decide(s, Date.now(), CAPS_NOW);
     log('ladder_step', {
       concept: r.concept,
       rung: r.rung,

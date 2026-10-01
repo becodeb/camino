@@ -5,7 +5,7 @@
 // comes back.
 
 import { useSyncExternalStore } from 'react';
-import { Telemetry, type Backing, type Device, type PostResult, type SyncStatus } from './telemetry';
+import { POLL_MS, Telemetry, type Backing, type Device, type PostResult, type SyncStatus } from './telemetry';
 import { createErrorLimiter, createIdleTracker, sourceFile } from './watch';
 
 declare const __CAMINO_VERSION__: string | undefined;
@@ -75,7 +75,7 @@ export function telemetry(): Telemetry {
       setTimer: (fn, ms) => window.setTimeout(fn, ms),
       clearTimer: (h) => window.clearTimeout(h as number),
       warn: (...a) => console.warn(...a),
-    });
+    }, { pollMs: POLL_MS });
   }
   return client;
 }

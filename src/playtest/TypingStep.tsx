@@ -22,8 +22,11 @@
 // printed uppercase); on a touch screen its keys are tapped. A short spoken
 // intro with the ghost hand pressing the key of a first item; pressing it
 // yourself skips the intro. 🔊 says the intro and the item again; ✋ makes
-// the key glow harder (then the ghost hand shows it; a fourth press or a
-// held ✋ raises the hand). Then "¿Te gustó este juego?" and a cheer.
+// the key glow harder (then the ghost hand shows it; a fourth press raises
+// the hand; holding ✋ is the adult's question since T14). Then "¿Te gustó
+// este juego?" and a cheer. "Quedan 5 minutos" (T14) ends it after the item
+// on screen (`typing_end.reason: 'wrap_up'`); "listo" shows from half of
+// round 2 on.
 //
 // Logged: `typing` per key press (with its round), `typing_round` per
 // round, `help`, `speak`, `ghost_demo`, the liking answer as
@@ -47,12 +50,13 @@ import { ringNote } from '../ui/sound';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { SpeakerIcon } from '../ui/icons';
 import type { Pitch } from '../game/music';
-import { HAND_HOLD_HELP_MS, useHold } from './AdultControls';
+import { wrapPending } from './flow';
+import { provideDemoActions } from './demo';
 import { usePlaytest } from './context';
 import { Cheer } from './interlude';
 import { Face } from './surveyArt';
 import {
-  DIGIT_ROW, KEY_ROWS, LETTER_NAME, PACE_START, ROUNDS, addCatch, adaptPace, createRoundPicker, demoOf, fallMs, goalOverride,
+  DIGIT_ROW, KEY_ROWS, LETTER_NAME, PACE_START, ROUNDS, addCatch, adaptPace, createRoundPicker, demoOf, fallMs, goalOverride, listoShown,
   isEarly, keyFor, landedOn, modeOf, needsDigits, pressOn, roundDone, roundsFor, seedsFor, setOf, startRound, typingCap, wordSetOf,
   type Pace, type RoundDef, type RoundProgress, type TypingSet,
 } from './typing';
@@ -63,7 +67,8 @@ import {
 
 const LEVEL_ID = 'typing';
 type Input = 'physical' | 'touch';
-type EndReason = 'rounds' | 'time' | 'done' | 'left';
+/** `wrap_up`: el docente's "quedan 5 minutos" (T14): the item on screen is finished, then the finale. */
+type EndReason = 'rounds' | 'time' | 'done' | 'left' | 'wrap_up';
 
 /** Where a thing falls from and to (its centre): a seed with a letter, or a leaf. */
 const FALL_Y = { seed: [150, GROUND - 60], leaf: [166, GROUND - 62] } as const;
@@ -558,9 +563,11 @@ function TypingGame({ grade, end }: { grade: number; end(): void }) {
   leaveRef.current = () => { if (!g.current.ended) { logRound('left'); logEnd('left'); } };
 
   /** The cap or "listo": nothing new falls; a word already begun is finished (or lands) first. */
-  function stop(reason: 'time' | 'done') {
+  function stop(reason: 'time' | 'done' | 'wrap_up') {
     const s = g.current;
-    if (s.phase === 'finale' || s.phase === 'intro' || s.phase === 'stopping') return;
+    if (s.phase === 'finale' || s.phase === 'stopping') return;
+    // "quedan 5 minutos" during the intro: nothing begun, the game ends at once
+    if (s.phase === 'intro') { if (reason === 'wrap_up') { s.ghost?.cancel(); toFinale(reason); } return; }
     s.stopReason = reason;
     if (s.phase === 'between') { toFinale(reason); return; }
     // the last hole was just filled (its seed still flying): the round ends as full, then the finale
@@ -741,7 +748,6 @@ function TypingGame({ grade, end }: { grade: number; end(): void }) {
       log('ghost_demo', { level_id: LEVEL_ID, kind: 'hint' });
     }
   };
-  useHold(HAND_HOLD_HELP_MS, (e) => !!(e.target as Element | null)?.closest?.('.pp-typing .level-bar .help'), () => apiRef.current.raiseHand('help_held'));
 
   // screenshots and checks (?debug only)
   useEffect(() => {
@@ -779,14 +785,43 @@ function TypingGame({ grade, end }: { grade: number; end(): void }) {
     return () => { delete (window as unknown as { __typing?: unknown }).__typing; };
   });
 
+  // the demo bar (demo sessions): "Saltar esta ronda" fills it and moves on, "Resolver" fills the bed but one hole
+  const demoRef = useRef({ skip: () => {}, solve: () => {} });
+  demoRef.current = {
+    skip: () => {
+      const s = g.current;
+      if (s.phase === 'intro') { startRef.current(); return; }
+      if (s.phase !== 'play') return;
+      s.prog = { ...s.prog, filled: s.prog.goal };
+      setBed((b) => ({ goal: b.goal, fills: Array<'filled'>(b.goal).fill('filled') }));
+      endRound();
+    },
+    solve: () => {
+      const s = g.current;
+      if (s.phase === 'intro') startRef.current();
+      const k = s.prog.goal - 1 - s.prog.filled;
+      if (k <= 0) return;
+      s.prog = { ...s.prog, filled: s.prog.filled + k, caught: s.prog.caught + k };
+      s.filled += k;
+      setBed((b) => ({ goal: b.goal, fills: [...b.fills, ...Array<'filled'>(k).fill('filled')] }));
+    },
+  };
+  useEffect(() => provideDemoActions({ rank: 2, noun: 'ronda', skip: () => demoRef.current.skip(), solve: () => demoRef.current.solve() }), []);
+
+  // "quedan 5 minutos" (T14): the item on screen is finished, then the finale and the next step
+  const stopRef = useRef(stop);
+  stopRef.current = stop;
+  const wrap = wrapPending(api.flow);
+  useEffect(() => { if (wrap) stopRef.current('wrap_up'); }, [wrap]);
+
   // ---------------------------------------------------------------- drawing
 
   const t = phase === 'intro' ? items.find((it) => it.demo && it.state === 'fall') ?? null : target();
   const expected = t ? t.text[t.pos] ?? null : null;
   const rd = rounds[round];
   const holes: HoleState[] = Array.from({ length: bed.goal }, (_, i) => (i < bed.fills.length ? bed.fills[i] : i === bed.fills.length && phase !== 'finale' ? 'next' : 'empty'));
-  const showListo = roundsDone >= 1 && (phase === 'play' || phase === 'between');
   const filledNow = bed.fills.length;
+  const showListo = listoShown({ roundsDone, round, filled: filledNow, goal: bed.goal, phase });
 
   return (
     <main ref={rootRef} className={`pp-page pp-typing is-${modeOf(grade)}${touch ? ' is-touch' : ''}${digits ? ' has-digits' : ''}`} data-phase={phase} data-round={round + 1}>

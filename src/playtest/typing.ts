@@ -295,6 +295,19 @@ export const SEED_EVERY = 3;
 export const MAX_TYPING_SEEDS = 8;
 export const seedsFor = (filled: number) => Math.min(MAX_TYPING_SEEDS, Math.floor(filled / SEED_EVERY));
 
+/**
+ * When "listo" (the drawn next-page arrow that ends the game early) shows:
+ * since the classroom round (T14) only once half of round 2's bed is filled
+ * (round 2: the first round with something new), and from then on; never
+ * during round 1 or between rounds 1 and 2. Round-2 sessions showed it
+ * after round 1.
+ */
+export function listoShown(o: { roundsDone: number; round: number; filled: number; goal: number; phase: string }): boolean {
+  if (o.phase !== 'play' && o.phase !== 'between') return false;
+  if (o.roundsDone >= 2) return true;
+  return o.roundsDone === 1 && o.round === 1 && o.phase === 'play' && o.filled >= Math.ceil(o.goal / 2);
+}
+
 /** The three rounds take about three minutes; at five the game ends gently after the item on screen. */
 export const TYPING_CAP_MS = 5 * 60_000;
 

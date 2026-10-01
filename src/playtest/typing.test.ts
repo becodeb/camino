@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   COMMANDS, COMMON, DIGIT_ROW, KEY_ROWS, LETTER_NAME, MAX_TYPING_SEEDS, PACE, PACE_START, PHRASES3, PHRASES4, ROUNDS, STREAK,
-  SYLLABLES1, SYLLABLES2, TYPING_CAP_MS, VOWELS, WORDS, addCatch, adaptPace, createRoundPicker, demoOf, fallMs, goalOverride, isEarly,
+  SYLLABLES1, SYLLABLES2, TYPING_CAP_MS, VOWELS, WORDS, addCatch, adaptPace, createRoundPicker, demoOf, fallMs, goalOverride, isEarly, listoShown,
   keyFor, keyOf, landedOn, modeOf, needsDigits, pressOn, roundDone, roundsFor, seedsFor, setOf, startRound, typingCap, wordSetOf,
   type Pace, type PaceEvent,
 } from './typing';
@@ -283,5 +283,26 @@ describe('seeds and time', () => {
     expect(goalOverride('?debug&metas=2')).toBe(2);
     expect(goalOverride('?metas=0')).toBeNull();
     expect(goalOverride('?metas=99')).toBeNull();
+  });
+});
+
+describe('listo (T14: only after half of round 2)', () => {
+  const at = (o: Partial<{ roundsDone: number; round: number; filled: number; goal: number; phase: string }>) =>
+    listoShown({ roundsDone: 0, round: 0, filled: 0, goal: 8, phase: 'play', ...o });
+  it('never in round 1 nor between rounds 1 and 2', () => {
+    expect(at({ filled: 8 })).toBe(false);
+    expect(at({ roundsDone: 1, round: 0, phase: 'between' })).toBe(false);
+    expect(at({ roundsDone: 1, round: 1, phase: 'between' })).toBe(false);
+  });
+  it('in round 2 once half its bed is filled (rounded up), and after', () => {
+    expect(at({ roundsDone: 1, round: 1, filled: 3, goal: 8 })).toBe(false);
+    expect(at({ roundsDone: 1, round: 1, filled: 4, goal: 8 })).toBe(true);
+    expect(at({ roundsDone: 1, round: 1, filled: 2, goal: 5 })).toBe(false);
+    expect(at({ roundsDone: 1, round: 1, filled: 3, goal: 5 })).toBe(true);
+    expect(at({ roundsDone: 2, round: 1, phase: 'between' })).toBe(true);
+    expect(at({ roundsDone: 2, round: 2, filled: 0 })).toBe(true);
+  });
+  it('not while stopping, in the intro or the finale', () => {
+    for (const phase of ['intro', 'stopping', 'finale']) expect(at({ roundsDone: 2, round: 2, phase })).toBe(false);
   });
 });

@@ -26,16 +26,16 @@ One row per playtest session (one child, one sitting).
 | `id` | uuid, PK | Client-generated session id. | — |
 | `code` | text | An anonymous session code (e.g. "Zorro 27"). Round 1 showed it to the adult for paper notes; since round 2 (2026-10-01) the kid app never shows it: it is only for the admin page (telling sessions apart, "Borrar"). | 3 |
 | `grade` | smallint 1–5 | Grade (1ro–5to). | all, as the grouping dimension |
-| `division` | text, 1 letter or null | Optional division letter. | grouping only |
+| `division` | text, 1 letter or null | Optional division letter. Since T14 the setup has no division buttons: new sessions write `NULL` (the column stays for older rows). | grouping only |
 | `consent` | boolean, nullable | Round 1: `true`, the adult ticked "La escuela autorizó esta prueba" at setup. Since round 2 the setup asks no tick (the school's authorization is kept outside the app, and nothing here names a child): new sessions write `NULL` (migration `006_consent_nullable.sql`). | — |
 | `started_at` | timestamptz | When the session began. | 5 (duration, idle) |
 | `ended_at` | timestamptz, nullable | When the session ended (set on goodbye or an adult end-session gesture). | 5 |
-| `end_reason` | text, nullable | `'completed'` (the child reached the goodbye), `'adult_ended'` (the adult's hidden "end the session"; the survey still follows), `'abandoned'` (set by the client when a new session starts on the device while this one never ended, e.g. the adult set up a new child without ending the last one, or a tab reloaded more than 2 hours after its last save; `ended_at` is then its last event's time). A reload within a session no longer abandons it: the session carries on (see `resume`). | 5 |
+| `end_reason` | text, nullable | `'completed'` (the child reached the goodbye; since T14 also the adult's "end the session" once the core route was done, the green flag), `'adult_ended'` (the adult's hidden "end the session" before the route was done; the survey still follows), `'class_end'` (T14: el docente's "terminar la clase" from `/admin`, at the end of the 10-second countdown), `'demo_ended'` (a demo session ended from the demo bar; demo sessions are never exported), `'abandoned'` (set by the client when a new session starts on the device while this one never ended, e.g. the adult set up a new child without ending the last one, or a tab reloaded more than 2 hours after its last save; `ended_at` is then its last event's time). A reload within a session no longer abandons it: the session carries on (see `resume`). | 5 |
 | `app_version` | text, nullable | Front-end build version at the time of the session. | — |
 | `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang, captions?, captions_set?}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language; since round 2 `captions` (on-screen text on now: set at the start and updated by every 💬 toggle, see `captions`) and `captions_set` (`'grade'`: the default, on from 3ro; `'setup'`: forced on or off at setup). | 1 (device capability vs. tool failures), 3 (captions) |
 | `survey` | jsonb, nullable | See "survey_answer" below; the final answers, keyed by question. | 9 |
 | `adult_form` | jsonb, nullable | The adult's form: `{engagement: 'low'|'mid'|'high'|null, help_needed: 'none'|'some'|'a_lot'|null, comment?: string, step?: string}`. Round 1: a step after the goodbye, both answers required. Since round 2 it is optional, from the corner menu ("Comentario del adulto") at any time of the session; any answer may be left out (`null`), saving again replaces it, and `step` is the flow step it was saved on (see the `adult_form` event). Most round-2 sessions will have none. | 3, 5 |
-| `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`; round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. | 5 |
+| `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, and since T14 `'class_end'`; round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. | 5 |
 | `created_at` | timestamptz | First time this session row was written. | — |
 | `last_seen_at` | timestamptz | Updated on every sync; drives the admin page's "active now" indicator. Since T14 a device with a session open syncs at least every ~10 s, so this is also the class's "seen" time. | 5 |
 | `demo` | boolean, default false | T14: a session played in demo mode (the adult showing or trying the pilot; see "Demo mode" below). Stored like any other, but left out of `/api/export`, `/api/admin/*` lists and counts and every SQL view, and deleted 24 hours after it started. A later sync never turns it back to `false` (migration `008_class_control.sql`). | — |
@@ -249,8 +249,10 @@ The child called the adult: the character raises its hand on screen. **RQ 3.**
 ```
 { level_id?: string, reason: 'help_held' | 'help_step_3', help_step: number, hand_up: boolean }
 ```
-`help_held`: ✋ kept pressed ~1 s; `help_step_3`: ✋ pressed again after
-the third automatic help. `help_step` is the automatic help reached on the
+`help_held`: ✋ kept pressed ~1 s (rounds 1–2 only: since T14 holding ✋ is
+the adult's question, see `adult_help`, and the child raises the hand only
+through the help steps); `help_step_3`: ✋ pressed again after the third
+automatic help. `help_step` is the automatic help reached on the
 level (0–3). Several calls in a row keep one hand up (`hand_up: true` on
 the repeats).
 
@@ -268,13 +270,20 @@ the page, item, probe phase or step with the hand up and nobody came.
 such event (the hand stayed up until the adult answered or the survey).
 
 ### `adult_help`
-The adult resolved a call (long press on the raised hand, which lowers
-it), or logged help given without a call (long press on the top-left
-corner → "Registrar ayuda"). **RQ 3.**
+The adult told how they helped. Since T14 the main way is to **hold ✋ for
+~1.5 s** whenever they help a child (any ✋ of a page bar: levels, the
+typing game, the probes, the tool check): "¿En qué lo ayudaste?" opens with
+the four answers as big buttons, and one tap logs it and closes. A blue
+ring fills round ✋ while it is held; a shorter press is the child's help,
+exactly as before (the click that ends a 1.5 s hold is swallowed, so it
+gives no help step). The same question opens with a long press on the
+raised hand (which lowers it) and from the corner menu ("Registrar
+ayuda"). **RQ 3.**
 ```
-{ level_id?: string, kind: 'instruction' | 'tool' | 'hint' | 'solved_together', prompted: boolean, duration_ms?: number }
+{ level_id?: string, kind: 'instruction' | 'tool' | 'hint' | 'solved_together', prompted: boolean, duration_ms?: number, via?: 'help_hold' | 'hand' | 'menu' }
 ```
-`prompted` is `false` for help logged without a `call_adult`;
+`prompted` is `true` when a hand was raised at the time (the answer lowers
+it), `false` otherwise; `via` (T14) is how the adult got to the question;
 `duration_ms` (only when prompted) is the time from the call that raised
 the hand to the adult's answer. The level open at the time gets
 `adult_helped: true` on its `level_end`.
@@ -419,8 +428,14 @@ keeps one more try: the next failed run ends the item). After a pass, one rung u
 stops). After the first non-pass: if the rung below was not passed in this
 ladder, it is tried once (`check: 'floor'`) and the ladder stops whatever
 happens; if it was passed, or there is none (rung 1), the ladder stops. At
-most 10 items or 12 minutes (checked between items; an item open at 12
-minutes still ends by 13 minutes, `end_reason: 'ladder_time'`). The caps
+most 8 items or 8 minutes since the classroom round (T14; round 2: 10 items
+or 12 minutes): checked between items; an item open at 8 minutes still ends
+by 9 minutes, `end_reason: 'ladder_time'`. The ceiling is the pilot's most
+important number: with the entry by grade, 8 items still let a child who
+keeps passing climb far (1ro from rung 1 to 8, 3ro from 5 to the top), and
+8 minutes keep the ladder a short part of a free class. El docente's
+"quedan 5 minutos" ends the ladder after the item on screen (`ladder_end`
+`reason: 'wrap_up'`). The caps
 are wall time; round 1's rule-game item ran 234 s because the tab was
 hidden and the browser delayed the 5-second check (round 2 also checks when
 the tab shows again, and on every input). `?caps=fast` in the URL shortens
@@ -448,10 +463,11 @@ The ladder stopped (once per session that reached it). **RQ 2.**
   ceiling_rung: number | null,  // highest rung passed, null if none
   items: number,
   time_ms: number,
-  reason: 'top' | 'ceiling' | 'floor' | 'bottom' | 'max_items' | 'max_time' | 'left'
+  reason: 'top' | 'ceiling' | 'floor' | 'bottom' | 'max_items' | 'max_time' | 'wrap_up' | 'left'
 }
 ```
 `top`: rung 12 passed; `ceiling`: a fail right above a passed rung;
+`wrap_up` (T14): "quedan 5 minutos" arrived, the item on screen was the last;
 `floor`: after the floor check; `bottom`: rung 1 failed; `max_items`,
 `max_time`: the caps; `left`: the flow moved on mid-ladder (the adult ended
 the session or skipped the step; the item open then has no `ladder_step`,
@@ -538,7 +554,7 @@ One round of the typing game ended (T12). **RQ 7.**
 The typing game ended (once per session that reached it). **RQ 7, 5.**
 ```
 {
-  reason: 'rounds' | 'time' | 'done' | 'left',  // the three rounds; the cap (five minutes); "listo" (shown after round 1); the adult moved on. Round-1 sessions: 'time' was four minutes, no 'rounds'
+  reason: 'rounds' | 'time' | 'done' | 'wrap_up' | 'left',  // the three rounds; the cap (five minutes); "listo" (T14: shown once half of round 2's bed is filled; round 2: after round 1); "quedan 5 minutos" (T14: after the item on screen); the adult moved on. Round-1 sessions: 'time' was four minutes, no 'rounds'
   mode: 'letters' | 'words',   // the grade's kind of game (1ro letters, 2do+ words), as in round 1
   set: 'letters' | 'words' | 'commands',  // the grade's family (1ro, 2do, 3ro+), as in round 1
   rounds_done: number,    // beds filled (0–3)
@@ -645,8 +661,16 @@ critter or plant to the goodbye garden. Per pick: `choice` {activity,
 visit}, the pages' events with `activity` (and `sheet`, `page`, `door`), a
 door's `choice`, and `activity_end`.
 
-Time: `FREE_PLAY_BUDGET_MS` = 12 minutes for every grade (`?libre=<minutes>`
-in the URL sets another, 1–30). A level is never cut: when the time is over,
+Time (T14): free play's first pass, on the core route before the typing
+game, lasts `FREE_PLAY_BUDGET_MS` = 8 minutes for every grade (round 2: 12;
+`?libre=<minutes>` in the URL sets another, 1–30) **or** until the child is
+back on the menu after a fourth activity picked (`FREE_PLAY_MIN_VISITS`),
+whichever comes first. After the route is done (the green flag, see
+`route_done`) free play has no end: only el docente ("quedan 5 minutos",
+"terminar la clase") or the adult's corner menu end it. "Quedan 5 minutos"
+ends it like the time does, after the page on screen (a probe after the
+two-minute grace of a non-level page), for the wardrobe and the survey; the
+open activity's `activity_end` says `budget`. A level is never cut: when the time is over,
 free play moves on from the menu at once, after the level on screen ends
 (the child turns it, or moves to another page), or, on a page that is not a
 level (the editor, the corkboard), at the next page or after two
@@ -922,16 +946,59 @@ The session moved to another flow step (the same change also updates
 {
   from: string | null,          // the step left (null for the first one)
   to: string,                   // one of the current_step values above
-  reason: 'start' | 'next' | 'skip' | 'end_now',
+  reason: 'start' | 'next' | 'skip' | 'end_now' | 'adult' | 'class_end' | 'demo',
   time_ms?: number,             // time spent on `from`
   budget_ms?: number,           // `from`'s planned time (recorded, not enforced)
-  over_budget?: boolean
+  over_budget?: boolean,
+  wrap_up?: boolean             // T14: the move was "quedan 5 minutos"'s way out
 }
 ```
 `skip` is the adult skipping a step (or a step with nothing to show);
 `end_now` is the adult's "end the session" gesture (straight to the survey).
 Round 2: the first `step` goes from `setup` straight to `character` (no
 `code` step), and the last one reaches `goodbye` (no `adult_form` step).
+
+T14 (the classroom round): the core route is `character` → `tool_check` →
+`ladder` → `free_play` → `typing` → `wardrobe`, and then `free_play` again
+(the route done, `route_done`), with no end. `adult`: the adult opened the
+survey (the corner menu, or a long press on the green flag); after it, back
+to `free_play`. `end_now` goes to `survey`, or straight to `goodbye` when
+the survey was done. `class_end`: el docente's "terminar la clase"
+(`to: 'class_end'`). `demo`: the demo bar's "Ir a…", "Mostrar que terminó"
+or "Terminar la sesión" (demo sessions only). Under "quedan 5 minutos"
+the step on screen ends after its item and the next steps are the wardrobe
+(if not visited), the survey (if not done), then free play (`wrap_up:
+true`).
+
+### `route_done`
+T14: the child finished the core route (tool check, ladder, free play,
+typing, wardrobe; a step the adult skipped counts as gone through). The
+green flag shows in the top bar from then on (and the bar turns light
+green), seen from across the room, and `/admin` shows "Terminó" ✓. Logged
+once, when the wardrobe is left. **RQ 5.**
+```
+{ time_ms: number, via: 'route' | 'wrap_up' | 'demo', survey_done: boolean }
+```
+`time_ms`: since the session started; `via`: `wrap_up` when it happened
+under "quedan 5 minutos", `demo` from the demo bar.
+
+### `class_command`
+T14: a class command from `/admin` reached this device and was applied
+(see the table `class_commands`). **RQ 5** (and data cleaning: what the
+class end cut).
+```
+{ kind: 'five_min' | 'cancel_five_min' | 'end_class', id: number, sent_at: string, received_at: string, step: string }
+```
+`five_min`: "¡Quedan 5 minutos!" was shown and said; the step on screen
+ends after its item (`ladder_end`/`typing_end` `wrap_up`, free play like its
+time), then the wardrobe and the survey, then free play. `cancel_five_min`:
+"Cancelar aviso" reached the device while the warning was still pending
+(a warning cancelled before the device saw it is never applied).
+`end_class`: "Actividad terminada" with a 10-second countdown, then the
+session ends (`end_reason: 'class_end'`), the queue is sent, and the device
+rests until an adult holds "Adulto: mantené apretado para empezar otra vez"
+(2 s). `sent_at` is the server's time of the command, `received_at` the
+device's.
 
 ### `captions`
 Round 2: the on-screen text was turned on or off with the 💬 toggle (in the
@@ -978,6 +1045,29 @@ open free-play activity no `activity_end`).
 }
 ```
 
+## Demo mode (T14)
+
+For el docente to show or try the pilot without touching the data. At the
+setup, a tiny "demo" word in the bottom-left corner, held 2 s, asks "¿Activar
+el modo demo?" (a child tapping it gets nothing); on, the setup shows a
+"DEMO" stamp and "Salir del modo demo", and the mode lasts for the browser
+tab (`sessionStorage` `camino.piloto.demo.v1`). Sessions started then are
+synced with `sessions.demo = true`: stored, but left out of the export,
+`/admin`'s lists and counts and every view, and deleted 24 hours after
+they started. A demo session shows the demo bar, docked on the right edge
+(the page is laid out in the rest of the window), with a "DEMO · no se
+guarda" mark and buttons that say what they do: "Más rápido ×3" (the
+character's runs and moves, the pages' waits and every animation three
+times faster; speech is not), "Saltar este nivel / esta ronda / este juego
+/ este paso" (the page turned as the child would; a typing round counted
+full; back to the menu from an activity; else the step skipped), "Resolver
+este nivel" (the page plays its own solution: a program page's reference
+program and ▶, a predict page the right cell, a rule game its rules and ▶),
+"Ir a…" (the steps by the names the children hear), "Mostrar que terminó"
+(the route done: the green flag, free play) and "Terminar la sesión" (the
+goodbye, after a second tap). Demo sessions get the class commands too, so
+el docente can try the class control in demo mode.
+
 ## How the client sends (offline queue)
 
 `src/playtest/telemetry.ts`. Every event is stored first in the browser
@@ -994,7 +1084,12 @@ the page is hidden or closed the queue is flushed with `fetch(…, {keepalive:
 true})` (≤ 60 KB per request). Sessions left in the queue by an earlier page
 load sync on the next load (a reload, even offline: the playtest build's
 service worker serves the app from its cache when the network fails or
-does not answer in 4 s; it never caches `/api` or `/admin`). Session changes (`current_step`, `ended_at`,
+does not answer in 4 s; it never caches `/api` or `/admin`). Since T14,
+while a session is open (not ended) the client also posts at least every
+10 s even with nothing queued (the session record alone, so `last_seen_at`
+moves too): the answer carries the class's commands (`class_commands`), so
+"quedan 5 minutos" and "terminar la clase" reach every device within about
+10 s, and a device that was offline gets them when it reconnects. Session changes (`current_step`, `ended_at`,
 `end_reason`, `survey`, `adult_form`) travel in the same posts. Gaps in `seq`
 for a session therefore mean a 400-dropped batch, never a network failure.
 

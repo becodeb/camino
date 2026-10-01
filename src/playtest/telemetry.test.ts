@@ -26,6 +26,8 @@ function world(opts: { storage?: Backing & { data: Map<string, string> }; random
   /** What the server does next: 'ok' (acks everything), a status, or 'down' (network error). */
   const script: (number | 'ok' | 'down')[] = [];
   const warn = vi.fn();
+  /** The class commands the fake server hands out with every 'ok' (T14). */
+  const commands: unknown[] = [];
   const deps: TelemetryDeps = {
     storage,
     async post(body, o) {
@@ -33,7 +35,7 @@ function world(opts: { storage?: Backing & { data: Map<string, string> }; random
       posts.push({ body: parsed, keepalive: o.keepalive });
       const next = script.shift() ?? 'ok';
       if (next === 'down') throw new TypeError('Failed to fetch');
-      if (next === 'ok') return { status: 200, body: { ok: true, acked: parsed.events.map((e) => e.seq) } } satisfies PostResult;
+      if (next === 'ok') return { status: 200, body: { ok: true, acked: parsed.events.map((e) => e.seq), commands: commands.map((c) => ({ ...(c as object) })) } } satisfies PostResult;
       return { status: next, body: { error: 'x' } };
     },
     now: () => t,
@@ -60,7 +62,7 @@ function world(opts: { storage?: Backing & { data: Map<string, string> }; random
     t = end;
   };
   const nextTimerIn = () => (timers.length ? Math.min(...timers.map((x) => x.at)) - t : null);
-  return { storage, posts, script, deps, advance, warn, nextTimerIn, now: () => t };
+  return { storage, posts, script, deps, advance, warn, nextTimerIn, commands, now: () => t };
 }
 
 let ids = 0;
@@ -278,5 +280,101 @@ describe('automatic events', () => {
     expect(limit({ message: 'boom', source: 'a.js', line: 1 }, 20_000)).not.toBeNull();
     expect(limit({ message: 'x'.repeat(900) }, 0)!.message).toHaveLength(300);
     expect(limit({ message: 'other' }, 0)).toBeNull();
+  });
+});
+
+describe('class commands and the poll (T14)', () => {
+  const cmd = (id: number, kind: 'five_min' | 'end_class', cancelled = false) => ({ id, kind, at: '2026-10-01T12:00:00Z', expires_at: '2026-10-01T14:00:00Z', cancelled });
+
+  it('polls every 10 s with an empty queue while a session is open (the session record alone), and stops once it ended', async () => {
+    const w = world();
+    const tel = new Telemetry(w.deps, { pollMs: 10_000 });
+    tel.startSession({ grade: 3, division: null });
+    await w.advance(5_000);
+    expect(w.posts).toHaveLength(1);
+    await w.advance(30_000);
+    const empty = w.posts.slice(1);
+    expect(empty.length).toBeGreaterThanOrEqual(3);
+    expect(empty.every((p) => p.body.events.length === 0 && !p.keepalive)).toBe(true);
+    tel.updateSession({ ended_at: new Date(w.now()).toISOString(), end_reason: 'class_end' });
+    await w.advance(5_000);
+    const n = w.posts.length;
+    await w.advance(60_000);
+    expect(w.posts.length).toBe(n);
+  });
+
+  it('no poll at all without pollMs (the default), and none before a session starts', async () => {
+    const w = world();
+    const tel = new Telemetry(w.deps);
+    tel.startSession({ grade: 1, division: null });
+    await w.advance(60_000);
+    expect(w.posts).toHaveLength(1);
+    const w2 = world();
+    new Telemetry(w2.deps, { pollMs: 10_000 });
+    await w2.advance(60_000);
+    expect(w2.posts).toHaveLength(0);
+  });
+
+  it('hands each command id to the listeners once, and once more when it is cancelled; a reload does not repeat it', async () => {
+    const storage = fakeStorage();
+    const w = world({ storage });
+    const tel = new Telemetry(w.deps, { pollMs: 10_000 });
+    const got: string[] = [];
+    tel.onCommand((c) => got.push(`${c.kind}#${c.id}${c.cancelled ? ':cancelled' : ''}`));
+    tel.startSession({ grade: 2, division: null });
+    w.commands.push(cmd(7, 'five_min'));
+    await w.advance(25_000);
+    expect(got).toEqual(['five_min#7']);
+    (w.commands[0] as { cancelled: boolean }).cancelled = true;
+    await w.advance(10_000);
+    w.commands.push(cmd(8, 'end_class'));
+    await w.advance(20_000);
+    expect(got).toEqual(['five_min#7', 'five_min#7:cancelled', 'end_class#8']);
+    // the same tab reloads: the queue remembers what this session already applied
+    const again = new Telemetry({ ...w.deps, storage }, { pollMs: 10_000 });
+    const after: string[] = [];
+    again.onCommand((c) => after.push(c.kind));
+    await w.advance(25_000);
+    expect(after).toEqual([]);
+  });
+
+  it('a warning cancelled before the device saw it is ignored; malformed commands are ignored; an ended session gets none', async () => {
+    const w = world();
+    const tel = new Telemetry(w.deps, { pollMs: 10_000 });
+    const got: string[] = [];
+    tel.onCommand((c) => got.push(c.kind));
+    tel.startSession({ grade: 4, division: null });
+    w.commands.push(cmd(3, 'five_min', true), { id: 'x', kind: 'five_min' }, { id: 4, kind: 'reboot' });
+    await w.advance(25_000);
+    expect(got).toEqual([]);
+    tel.updateSession({ ended_at: new Date(w.now()).toISOString(), end_reason: 'class_end' });
+    w.commands.push(cmd(5, 'end_class'));
+    tel.log('step', {});
+    await w.advance(10_000);
+    expect(got).toEqual([]);
+  });
+
+  it('commands answered to an earlier session still syncing are not applied to the one being played', async () => {
+    const w = world();
+    const tel = new Telemetry(w.deps, { pollMs: 10_000 });
+    const got: string[] = [];
+    tel.onCommand((c) => got.push(c.kind));
+    w.script.push('down');
+    tel.startSession({ grade: 1, division: null });
+    tel.log('step', {});
+    await w.advance(5_000);
+    tel.startSession({ grade: 1, division: null });
+    w.commands.push(cmd(9, 'end_class'));
+    // both sessions' posts are answered with the command; only the current one applies it (once: a second would mean the abandoned one did too)
+    await w.advance(30_000);
+    expect(w.posts.some((p) => p.body.session.end_reason === 'abandoned')).toBe(true);
+    expect(got).toEqual(['end_class']);
+  });
+
+  it('a demo session says so in its record', () => {
+    const w = world();
+    const tel = new Telemetry(w.deps);
+    expect(tel.startSession({ grade: 1, division: null, demo: true }).demo).toBe(true);
+    expect(tel.startSession({ grade: 1, division: null }).demo).toBeUndefined();
   });
 });

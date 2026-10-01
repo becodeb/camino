@@ -13,12 +13,16 @@
 // extras, reason} when the child leaves it (v_activity_time sums these).
 // Every page solved plants a seed (PlaytestLevel).
 //
-// Time: when the budget (12 min, `?libre=<min>`) runs out, nothing is cut:
+// Time (the core route's first pass): when the budget (8 min, `?libre=<min>`)
+// runs out, or the child is back on the menu after a fourth activity
+// (T14), nothing is cut:
 // on the menu the step moves on at once; with a level open, when it ends (or
 // the child moves to another page); on a page that is not a level (the doors,
 // the editor, the corkboard), at the next page or after a short grace. Then
 // a gentle cheer, "¡Ahora vamos a otro juego!", and the next step. The adult
-// can skip the step from the corner menu.
+// can skip the step from the corner menu. After the route is done (the green
+// flag) free play has no end; "quedan 5 minutos" ends it after the page on
+// screen (a probe after a short grace) for the wardrobe and the survey.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -34,6 +38,8 @@ import { ThenArrow } from '../ui/art';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { usePlaytest } from './context';
 import { activityFor, budgetFrom, budgetVerdict, menuFor, MENU_LINES, type Activity, type ProbeId } from './freePlay';
+import { wrapPending } from './flow';
+import { provideDemoActions } from './demo';
 import { setHashConsumer } from './hashHold';
 import { Cheer, WalkOn } from './interlude';
 import type { LevelDef } from '../game/levels';
@@ -189,15 +195,24 @@ export function FreePlay() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view.kind === 'activity' ? view.n : -1]);
 
-  // the time
+  // the time: the first pass ends after its minimum (8 min or 4 activities); after the route free play has no end;
+  // "quedan 5 minutos" ends it after the page on screen (a probe, a long activity of its own, gets the grace of a non-level page)
+  const wrap = wrapPending(api.flow);
   useEffect(() => {
     const check = () => {
       if (finished.current) return;
+      const f = apiRef.current.flow;
+      const wrapping = wrapPending(f);
+      if (f.routeDone && !wrapping) return;
       const cur = viewRef.current;
-      const levelOpen = cur.kind === 'activity' && ('sheet' in cur.a.kind ? levelsOpen.current > 0 : true);
+      const inProbe = cur.kind === 'activity' && 'probe' in cur.a.kind;
+      const levelOpen = cur.kind === 'activity' && ('sheet' in cur.a.kind ? levelsOpen.current > 0 : !(wrapping && inProbe));
       // "¿Cómo seguís?" is a menu too: the time ends there at once
       const onMenu = cur.kind === 'menu' || (cur.kind === 'activity' && cur.page?.kind === 'doors');
-      const verdict = budgetVerdict({ now: Date.now(), startedAt: startedAt.current, budget, onMenu, levelOpen, dueSince: due.current });
+      const verdict = budgetVerdict({
+        now: Date.now(), startedAt: startedAt.current, budget: wrapping ? 0 : budget, onMenu, levelOpen, dueSince: due.current,
+        visits: visits.current, onMainMenu: cur.kind === 'menu',
+      });
       if (verdict === 'wait') return;
       due.current ??= Date.now();
       if (verdict === 'now') finish();
@@ -206,7 +221,15 @@ export function FreePlay() {
     const id = setInterval(check, TICK_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [budget, view.kind, view.kind === 'activity' ? view.page?.kind : null]);
+  }, [budget, wrap, view.kind, view.kind === 'activity' ? view.page?.kind : null]);
+
+  // the demo bar (demo sessions): an open activity's "Saltar este juego" goes back to the menu (a level page on show offers its own)
+  useEffect(() => {
+    if (view.kind !== 'activity') return;
+    return provideDemoActions({ rank: 1, noun: 'juego', skip: () => toMenu('menu') });
+    // one registration per visit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.kind === 'activity' ? view.n : -1]);
 
   // the flow moved on (the adult skipped the step or ended the session): the open activity ends where it was
   // eslint-disable-next-line react-hooks/exhaustive-deps

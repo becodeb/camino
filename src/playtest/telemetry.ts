@@ -20,6 +20,14 @@
 //   keepalive request.
 // - Sessions left in the queue by earlier page loads sync too; a session
 //   that was never ended is closed as 'abandoned' when the next one starts.
+// - The class's commands (T14: "quedan 5 minutos", "terminar la clase") come
+//   back in the /api/sync answers. While a session is open the client polls
+//   every `pollMs` even with nothing queued (an empty post: the session
+//   record alone), so a command reaches every device within seconds; each
+//   command id is handed to `onCommand` listeners once (and once more if it
+//   is cancelled later), and only for the session being played. The ids
+//   already seen live with the queued session, so a reload does not apply a
+//   command twice. Still idempotent and anonymous.
 //
 // Pure of the browser: storage, the network, time, randomness and timers are
 // injected (see `browserTelemetry` in ./runtime.ts), so the tests drive it.
@@ -63,6 +71,17 @@ export interface SessionRecord {
   survey: Record<string, unknown> | null;
   adult_form: Record<string, unknown> | null;
   current_step: string | null;
+  /** T14: a demo session (the adult's demo mode): stored, but out of the data. */
+  demo?: boolean;
+}
+
+/** A class command from /admin, as /api/sync hands it out. */
+export interface ClassCommand {
+  id: number;
+  kind: 'five_min' | 'end_class';
+  at: string;
+  expires_at: string;
+  cancelled: boolean;
 }
 
 export type SessionPatch = Partial<Pick<SessionRecord, 'ended_at' | 'end_reason' | 'survey' | 'adult_form' | 'current_step' | 'device'>>;
@@ -81,6 +100,8 @@ interface Entry {
   rev: number;
   synced: number;
   events: QueuedEvent[];
+  /** Class commands already handed out for this session: id → cancelled. */
+  cmds?: Record<string, boolean>;
 }
 
 interface QueueState {
@@ -116,6 +137,8 @@ export interface TelemetryOptions {
   backoffMaxMs: number;
   /** Browsers cap a keepalive request's body at 64 KB. */
   keepaliveBytes: number;
+  /** While a session is open, a post at least this often even with nothing queued (class commands); 0: off. */
+  pollMs: number;
 }
 
 export const DEFAULTS: TelemetryOptions = {
@@ -125,7 +148,11 @@ export const DEFAULTS: TelemetryOptions = {
   backoffBaseMs: 1_000,
   backoffMaxMs: 60_000,
   keepaliveBytes: 60_000,
+  pollMs: 0,
 };
+
+/** The page's poll while a session is open (runtime.ts): a class command arrives within ~10 s. */
+export const POLL_MS = 10_000;
 
 export interface SyncStatus {
   /** Events still waiting to reach the server (every session in the queue). */
@@ -144,6 +171,8 @@ export interface StartInput {
   /** On-screen text at the start, and whether the grade or the setup decided it. */
   captions?: boolean;
   captionsSet?: 'grade' | 'setup';
+  /** T14: the adult's demo mode. */
+  demo?: boolean;
 }
 
 const EMPTY_STATE = (): QueueState => ({ v: 1, current: null, entries: {} });
@@ -162,6 +191,7 @@ function parseState(raw: string | null | undefined): QueueState {
         rev: Number(e.rev) || 0,
         synced: Number(e.synced) || 0,
         events: e.events.filter((x) => x && Number.isInteger(x.seq) && typeof x.type === 'string'),
+        ...(e.cmds && typeof e.cmds === 'object' ? { cmds: e.cmds } : {}),
       };
     }
     return { v: 1, current: typeof o.current === 'string' && entries[o.current] ? o.current : null, entries };
@@ -181,6 +211,9 @@ export class Telemetry {
   private lastError: string | null = null;
   private perPost: number;
   private subs = new Set<() => void>();
+  private cmdSubs = new Set<(c: ClassCommand) => void>();
+  private pollTimer: unknown = null;
+  private lastPostAt = 0;
   private readonly o: TelemetryOptions;
 
   constructor(private readonly deps: TelemetryDeps, opts: Partial<TelemetryOptions> = {}) {
@@ -191,6 +224,7 @@ export class Telemetry {
     this.state = parseState(raw);
     // what earlier page loads left behind goes out soon
     if (Object.values(this.state.entries).some(needsSync)) this.arm(this.o.batchMs);
+    this.armPoll();
   }
 
   // ---------------------------------------------------------------- sessions and events
@@ -224,12 +258,14 @@ export class Telemetry {
       survey: null,
       adult_form: null,
       current_step: null,
+      ...(input.demo ? { demo: true } : {}),
     };
     this.state.entries[session.id] = { session, nextSeq: 0, rev: 1, synced: 0, events: [] };
     this.state.current = session.id;
     this.prune();
     this.save();
     this.arm(this.o.batchMs);
+    this.armPoll();
     this.notify();
     return session;
   }
@@ -343,6 +379,7 @@ export class Telemetry {
     const { body, seqs } = this.bodyFor(e, keepalive);
     const rev = e.rev;
     if (!keepalive) this.inflight = true;
+    this.lastPostAt = this.deps.now();
     try {
       const res = await this.deps.post(body, { keepalive });
       if (res.status >= 200 && res.status < 300) {
@@ -354,6 +391,7 @@ export class Telemetry {
         this.perPost = this.o.maxPerPost;
         this.lastOkAt = this.deps.now();
         this.lastError = null;
+        this.takeCommands(e, (res.body as { commands?: unknown })?.commands);
         return true;
       }
       if (res.status === 413 && seqs.length > 1) {
@@ -406,6 +444,55 @@ export class Telemetry {
     if (this.timer == null) return;
     this.deps.clearTimer(this.timer);
     this.timer = null;
+  }
+
+  // ---------------------------------------------------------------- the class's commands (T14)
+
+  /** Called once per new command id (and once more when a command it had is cancelled), for the session being played. */
+  onCommand(fn: (c: ClassCommand) => void): () => void {
+    this.cmdSubs.add(fn);
+    return () => { this.cmdSubs.delete(fn); };
+  }
+
+  private takeCommands(e: Entry, raw: unknown) {
+    if (!Array.isArray(raw) || !raw.length) return;
+    // only the session on screen acts on commands (an earlier one still syncing does not)
+    if (this.state.current !== e.session.id || e.session.ended_at) return;
+    const seen = (e.cmds ??= {});
+    const fresh: ClassCommand[] = [];
+    for (const c of raw as Partial<ClassCommand>[]) {
+      if (!c || !Number.isInteger(c.id) || (c.kind !== 'five_min' && c.kind !== 'end_class')) continue;
+      const id = String(c.id);
+      const cancelled = c.cancelled === true;
+      if (id in seen && (seen[id] || !cancelled)) continue;
+      // a warning cancelled before this device ever saw it: nothing to do
+      const first = !(id in seen);
+      seen[id] = cancelled;
+      if (first && cancelled) continue;
+      fresh.push({ id: c.id!, kind: c.kind, at: String(c.at ?? ''), expires_at: String(c.expires_at ?? ''), cancelled });
+    }
+    this.save();
+    for (const c of fresh) this.cmdSubs.forEach((f) => f(c));
+  }
+
+  /** While the current session is open: a post every pollMs even with nothing queued, so commands arrive. */
+  private armPoll() {
+    if (!this.o.pollMs || this.pollTimer != null) return;
+    this.pollTimer = this.deps.setTimer(() => { this.pollTimer = null; void this.poll(); }, this.o.pollMs);
+  }
+
+  private async poll() {
+    const e = this.state.current ? this.state.entries[this.state.current] : null;
+    if (!e || e.session.ended_at) return;
+    try {
+      // a post went out (or was tried) recently: that was the poll. Offline, it keeps trying every pollMs (the backoff's
+      // longer waits are for the queue's own retries; a poll is one small post per device)
+      if (this.inflight || this.deps.now() - this.lastPostAt < this.o.pollMs / 2) return;
+      if (needsSync(e)) await this.flush();
+      else await this.sendOne(e, false);
+    } finally {
+      this.armPoll();
+    }
   }
 
   // ---------------------------------------------------------------- storage

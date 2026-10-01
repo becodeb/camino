@@ -42,7 +42,6 @@ import { NextPageArt, PenRing } from '../ui/art';
 import { playGhost, type DemoStep, type GhostRun } from '../ui/ghost';
 import { PlayIcon, SpeakerIcon } from '../ui/icons';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
-import { HAND_HOLD_HELP_MS, useHold } from './AdultControls';
 import { usePlaytest, type LevelTrack } from './context';
 import { Cheer } from './interlude';
 import type { ProbeProps } from './probes';
@@ -267,7 +266,6 @@ function useItemVisit(item: TextItem | null, first: boolean, rootRef: React.RefO
     if (step === 2) { o.hint(); return; }
     o.solve();
   };
-  useHold(HAND_HOLD_HELP_MS, (e) => !!(e.target as Element | null)?.closest?.('.tx-root .level-bar .help'), () => apiRef.current.raiseHand('help_held'));
 
   const onSpeak = () => { log('speak', { level_id: LEVEL_ID, item: id }); speak(say); };
 

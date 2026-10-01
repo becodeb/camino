@@ -24,6 +24,8 @@ export interface HandState {
 }
 
 export type AdultHelpKind = 'instruction' | 'tool' | 'hint' | 'solved_together';
+/** How the adult got to "¿En qué lo ayudaste?" (T14): holding ✋, the raised hand, the corner menu. */
+export type AdultHelpVia = 'help_hold' | 'hand' | 'menu';
 
 export interface PlaytestApi {
   /** Null only on the setup step. */
@@ -52,8 +54,16 @@ export interface PlaytestApi {
   lowerHand(how: 'self' | 'moved_on', levelId?: string): void;
   /** Turns the on-screen text on or off (the 💬 toggle); logs `captions`. */
   setCaptions(on: boolean, where: 'bar' | 'corner'): void;
-  /** The adult tells what they did (`prompted`: answering the raised hand). */
-  adultHelp(kind: AdultHelpKind, prompted: boolean): void;
+  /** The adult tells what they did (`prompted`: a hand was raised, and this answers it). */
+  adultHelp(kind: AdultHelpKind, prompted: boolean, via?: AdultHelpVia): void;
+  /** T14: the adult opens the survey (corner menu, the green flag); after it the child returns to free play. */
+  openSurvey(via: 'menu' | 'flag'): void;
+  /** T14: the session ends where it is (the class end's countdown reached zero) and the queue is sent. */
+  endSession(reason: 'class_end'): void;
+  /** T14 demo tools (demo sessions only). */
+  demoGoto(step: import('./flow').StepId): void;
+  demoRouteDone(): void;
+  demoEnd(): void;
 }
 
 export const PlaytestContext = createContext<PlaytestApi | null>(null);

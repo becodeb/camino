@@ -87,13 +87,25 @@ describe('where the ladder goes', () => {
     expect(ceiling(s)).toBeNull();
   });
 
-  it('stops at MAX_ITEMS items', () => {
-    // 1ro climbing from 1 with passes reaches the tenth item on rung 10
+  it('stops at MAX_ITEMS items (8 since the classroom round), not before', () => {
+    // 1ro climbing from 1 with passes reaches the eighth item on rung 8
     let s = startLadder(1, T0);
-    for (let r = 1; r <= MAX_ITEMS; r++) s = record(s, pass(r));
-    expect(MAX_ITEMS).toBe(10);
+    for (let r = 1; r < MAX_ITEMS; r++) s = record(s, pass(r));
+    expect(decide(s, T0)).toEqual({ rung: 8, check: 'climb' });
+    s = record(s, pass(8));
+    expect(MAX_ITEMS).toBe(8);
     expect(decide(s, T0)).toEqual({ stop: 'max_items' });
-    expect(ceiling(s)).toBe(10);
+    expect(ceiling(s)).toBe(8);
+    // 3ro from rung 5 can still reach the top in 8 items
+    let t = startLadder(3, T0);
+    for (let r = 5; r <= 12; r++) t = record(t, pass(r));
+    expect(t.items).toHaveLength(8);
+    expect(ceiling(t)).toBe(12);
+  });
+
+  it('the ladder lasts at most 8 minutes (an item open then ends by 9)', () => {
+    expect(MAX_MS).toBe(8 * 60_000);
+    expect(HARD_MS).toBe(9 * 60_000);
   });
 
   it('stops once MAX_MS has passed, and not before', () => {

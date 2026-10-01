@@ -295,10 +295,15 @@ export function Shell({ level, mode, rootRef, onSpeak, onHelp, busy, children, n
 
 // ------------------------------------------------------------------ test hooks
 
-/** Automation hooks for screenshots, only with ?debug in the URL (never always-on). */
+/** The pilot's demo sessions (T14) turn the page hooks on too: the demo bar's "Resolver este nivel" plays through them. */
+let extraHooks = false;
+export function setPageHooks(on: boolean) { extraHooks = on; }
+export const pageHooksOn = () => DEBUG || extraHooks;
+
+/** Automation hooks for screenshots, only with ?debug in the URL (or in a pilot demo session; never always-on). */
 export function useDebugHooks(hooks: Record<string, unknown>) {
   useEffect(() => {
-    if (!DEBUG) return;
+    if (!pageHooksOn()) return;
     (window as unknown as { __camino: unknown }).__camino = { ...hooks, cmdProgram, stamp };
   });
 }

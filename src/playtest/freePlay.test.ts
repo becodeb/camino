@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { sheetByN } from '../curriculum/primer';
 import { isBuilt } from '../curriculum/model';
-import { FREE_PLAY_BUDGET_MS, FREE_PLAY_GRACE_MS, budgetFrom, budgetVerdict, menuFor, type ProbeId } from './freePlay';
+import { FREE_PLAY_BUDGET_MS, FREE_PLAY_GRACE_MS, FREE_PLAY_MIN_VISITS, budgetFrom, budgetVerdict, menuFor, type ProbeId } from './freePlay';
 import { FREE_RULES, RULE_GAME_PAGES, pilotLevel } from './levels';
 
 const none = () => false;
@@ -62,10 +62,10 @@ describe('the free-play menu', () => {
 describe('the free-play time', () => {
   const base = { startedAt: 0, budget: FREE_PLAY_BUDGET_MS, onMenu: false, levelOpen: false, dueSince: null };
 
-  it('is 12 minutes unless ?libre=<minutes> says otherwise (1 to 30)', () => {
-    expect(FREE_PLAY_BUDGET_MS).toBe(12 * 60_000);
+  it('is 8 minutes (T14) unless ?libre=<minutes> says otherwise (1 to 30)', () => {
+    expect(FREE_PLAY_BUDGET_MS).toBe(8 * 60_000);
     expect(budgetFrom('')).toBe(FREE_PLAY_BUDGET_MS);
-    expect(budgetFrom('?debug&libre=8')).toBe(8 * 60_000);
+    expect(budgetFrom('?debug&libre=5')).toBe(5 * 60_000);
     expect(budgetFrom('?libre=0.5')).toBe(30_000);
     expect(budgetFrom('?libre=0')).toBe(FREE_PLAY_BUDGET_MS);
     expect(budgetFrom('?libre=45')).toBe(FREE_PLAY_BUDGET_MS);
@@ -74,6 +74,15 @@ describe('the free-play time', () => {
 
   it('keeps playing before the time is over', () => {
     expect(budgetVerdict({ ...base, now: FREE_PLAY_BUDGET_MS - 1, onMenu: true })).toBe('wait');
+  });
+
+  it('or four activities: the child back on the drawn menu after the fourth moves on, whatever the time (T14)', () => {
+    expect(FREE_PLAY_MIN_VISITS).toBe(4);
+    expect(budgetVerdict({ ...base, now: 60_000, onMenu: true, onMainMenu: true, visits: 3 })).toBe('wait');
+    expect(budgetVerdict({ ...base, now: 60_000, onMenu: true, onMainMenu: true, visits: 4 })).toBe('now');
+    // still inside the fourth activity (its "¿Cómo seguís?" too): it plays on
+    expect(budgetVerdict({ ...base, now: 60_000, levelOpen: true, visits: 4 })).toBe('wait');
+    expect(budgetVerdict({ ...base, now: 60_000, onMenu: true, onMainMenu: false, visits: 4 })).toBe('wait');
   });
 
   it('moves on at once from the menu', () => {

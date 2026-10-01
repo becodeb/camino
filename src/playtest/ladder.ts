@@ -45,10 +45,17 @@ export const rungOf = (n: number): Rung => LADDER[n - 1];
 export const ENTRY: Readonly<Record<number, number>> = { 1: 1, 2: 2, 3: 5, 4: 7, 5: 9 };
 export const entryRung = (grade: number) => ENTRY[grade] ?? 1;
 
-export const MAX_ITEMS = 10;
-export const MAX_MS = 12 * 60_000;
+/**
+ * The classroom round (T14): 8 items or 8 minutes (round 2: 10 / 12). The
+ * ceiling is the pilot's most important number, and with the entry by
+ * grade 8 items still let a child who keeps passing climb far (1ro from
+ * rung 1 to 8, 3ro from 5 to the top); 8 minutes keep the ladder a short
+ * part of a free class.
+ */
+export const MAX_ITEMS = 8;
+export const MAX_MS = 8 * 60_000;
 /** An item open when the ladder's time is over ends by then, whatever its own clock says. */
-export const HARD_MS = 13 * 60_000;
+export const HARD_MS = 9 * 60_000;
 /** An item not solved in this time (wall time: a hidden tab counts too) ends as a fail. */
 export const ITEM_MS = 3 * 60_000;
 /** An item with no input at all (no tap, no drag, no key) for this long ends as a fail. */
@@ -65,7 +72,8 @@ export const FAILED_RUNS = 2;
 export type ItemResult = 'pass' | 'fail';
 /** `climb`: a step of the way up (the entry included); `floor`: the one easier item after the first non-pass. */
 export type Check = 'climb' | 'floor';
-export type StopReason = 'top' | 'ceiling' | 'floor' | 'bottom' | 'max_items' | 'max_time';
+/** `wrap_up`: el docente's "quedan 5 minutos" (T14) ended the ladder after the item on screen. */
+export type StopReason = 'top' | 'ceiling' | 'floor' | 'bottom' | 'max_items' | 'max_time' | 'wrap_up';
 /**
  * Why an item ended as a fail (`level_end.end_reason`, `ladder_step.end_reason`):
  * two failed runs; a failed run after the solution hint or after an adult's

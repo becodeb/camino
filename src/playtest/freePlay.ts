@@ -77,8 +77,15 @@ export const MENU_LINES = {
 
 // ------------------------------------------------------------------ the time
 
-/** The planned time for free play (grade-independent): when it runs out, the next step comes after the page on screen. */
-export const FREE_PLAY_BUDGET_MS = 12 * 60_000;
+/**
+ * Free play's first pass (on the core route, before the typing game) lasts
+ * at least this long (grade-independent), or until FREE_PLAY_MIN_VISITS
+ * activities were picked; then the next step comes after the page on
+ * screen. After the route is done (T14) free play has no end at all.
+ */
+export const FREE_PLAY_BUDGET_MS = 8 * 60_000;
+/** T14: four activities picked (the child back on the menu after the fourth) also end the first pass. */
+export const FREE_PLAY_MIN_VISITS = 4;
 /** A page that is not a level (the doors, the editor, the corkboard): once the time is over, it gets this long before moving on. */
 export const FREE_PLAY_GRACE_MS = 2 * 60_000;
 
@@ -93,8 +100,14 @@ export function budgetFrom(search: string): number {
  * What to do about the time: `wait` (keep playing), `now` (move on at once:
  * the menu is on screen, or a page that is not a level has had its grace),
  * or `after_level` (a level is open: move on when it ends, never cutting it).
+ * `visits` and `onMainMenu`: four activities picked and the child back on
+ * the drawn menu also end it.
  */
-export function budgetVerdict(o: { now: number; startedAt: number; budget: number; onMenu: boolean; levelOpen: boolean; dueSince: number | null }): 'wait' | 'now' | 'after_level' {
+export function budgetVerdict(o: {
+  now: number; startedAt: number; budget: number; onMenu: boolean; levelOpen: boolean; dueSince: number | null;
+  visits?: number; onMainMenu?: boolean;
+}): 'wait' | 'now' | 'after_level' {
+  if ((o.visits ?? 0) >= FREE_PLAY_MIN_VISITS && o.onMainMenu) return 'now';
   if (o.now - o.startedAt < o.budget) return 'wait';
   if (o.onMenu) return 'now';
   if (o.levelOpen) return 'after_level';

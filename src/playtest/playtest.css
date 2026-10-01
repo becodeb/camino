@@ -525,3 +525,145 @@ button.pp-key:focus-visible { outline: 3px dashed var(--blue-ink); outline-offse
   /* the rule game's palette (eight blocks or more) holds on the paper: drawn a little smaller */
   .piloto .level.mode-realtime .zone-palette { zoom: 0.8; }
 }
+
+/* ================================================ the classroom round (T14) */
+
+/* ------------------------------------------------ holding ✋: the adult's ring fills round it (a short tap is the child's help) */
+.piloto .help.pp-holding { position: relative; }
+.piloto .help.pp-holding::after {
+  content: ""; position: absolute; inset: -9px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(var(--blue-ink) calc(var(--hold, 0) * 360deg), transparent 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+}
+/* "¿En qué lo ayudaste?": four big answers, two by two */
+.pp-help-q { width: min(720px, 100%); }
+.pp-kinds.is-big { grid-template-columns: 1fr 1fr; gap: 14px; }
+.pp-kinds.is-big .pp-adult-btn { min-height: 96px; font-size: 22px; text-align: center; }
+@media (max-width: 600px) { .pp-kinds.is-big { grid-template-columns: 1fr; } }
+.pp-adult-btn.is-go { --fill: #dfe9c4; }
+
+/* ------------------------------------------------ the green flag: done the route (seen from across the room) */
+.piloto.route-done .level-bar { --fill: #e6efcf; }
+.pp-flag {
+  flex: none; order: 5;
+  position: relative;
+  margin: -18px 4px -16px; padding: 0;
+  border: 0; background: none; cursor: pointer;
+  display: grid; place-items: center;
+  animation: pp-flag-in 600ms cubic-bezier(.3, 1.6, .5, 1) both;
+}
+.pp-flag-art { overflow: visible; display: block; }
+.pp-flag .pp-flag-cloth { transform-origin: 16px 26px; animation: pp-flag-wave 2.4s ease-in-out infinite; }
+.pp-flag.is-float { position: fixed; top: 6px; left: 50%; translate: -50% 0; z-index: 76; margin: 0; }
+.pp-flag-hold {
+  position: absolute; inset: -4px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(var(--blue-ink) calc(var(--hold, 0) * 360deg), transparent 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+}
+@keyframes pp-flag-in { from { scale: 0.2; rotate: -18deg; opacity: 0; } to { scale: 1; rotate: 0deg; opacity: 1; } }
+@keyframes pp-flag-wave { 0%, 100% { scale: 1 1; skew: 0deg 0deg; } 50% { scale: 0.94 1.04; skew: 0deg 3deg; } }
+
+/* ------------------------------------------------ "¡Quedan 5 minutos!": a calm banner over the top bar for a few seconds (the line also shows as its caption; the page's buttons stay in view) */
+.pp-five { position: fixed; top: 2px; left: 0; right: 0; z-index: 77; display: flex; justify-content: center; pointer-events: none; }
+.pp-five-card {
+  display: flex; align-items: center; gap: 18px;
+  padding: 12px 34px 12px 22px;
+  background: #fff4cf;
+  box-shadow: 5px 6px 0 var(--shadow);
+  animation: pp-five-in 700ms cubic-bezier(.3, 1.4, .5, 1) both, pp-five-out 600ms ease-in 8.4s both;
+}
+.pp-five-clock { width: 72px; height: 76px; overflow: visible; flex: none; }
+.pp-five-text { margin: 0; font: 700 clamp(30px, 3.6vw, 44px)/1.1 var(--body); color: var(--ink); }
+@keyframes pp-five-in { from { translate: 0 -40px; opacity: 0; rotate: -2deg; } to { translate: 0 0; opacity: 1; rotate: -0.6deg; } }
+@keyframes pp-five-out { to { translate: 0 -30px; opacity: 0; } }
+
+/* ------------------------------------------------ "Actividad terminada" and the resting page */
+.pp-end { position: fixed; inset: 0; z-index: 85; background: var(--paper); place-items: center; }
+.pp-end-card { width: min(980px, 100%); display: grid; justify-items: center; gap: 10px; padding: 26px 34px 30px; }
+.pp-end-title { margin: 0; font: 700 clamp(40px, 6vw, 72px)/1.05 var(--body); color: var(--ink); text-align: center; }
+.pp-end-row { display: flex; align-items: center; justify-content: center; gap: clamp(20px, 5vw, 70px); flex-wrap: wrap; }
+.pp-end-wave { width: clamp(220px, 30vw, 340px); height: auto; aspect-ratio: 260 / 230; overflow: visible; }
+.pp-end-hand { animation: pp-wave 1.3s ease-in-out infinite; }
+.pp-end-ticks { animation: pp-ticks 1.3s ease-in-out infinite; }
+.pp-countdown { width: clamp(150px, 20vw, 230px); height: auto; aspect-ratio: 1; overflow: visible; }
+.pp-countdown-n { font: 700 36px var(--body); fill: var(--ink); }
+.pp-rest-art { width: clamp(220px, 30vw, 320px); height: auto; aspect-ratio: 220 / 140; overflow: visible; margin: 8px 0; }
+.pp-end-say { margin: 0; font: 400 clamp(22px, 2.6vw, 30px)/1.25 var(--body); color: var(--ink-2); text-align: center; }
+.pp-rest-start {
+  position: fixed; right: 18px; bottom: 16px; z-index: 86;
+  min-height: 48px; padding: 8px 16px;
+  border: 2px dashed rgba(43, 38, 34, 0.35); border-radius: 12px;
+  background: transparent; cursor: pointer;
+  font: 400 16px var(--body); color: var(--ink-2);
+}
+.pp-rest-ring {
+  position: absolute; left: 0; bottom: -2px; height: 5px; border-radius: 3px;
+  width: calc(var(--hold, 0) * 100%); background: var(--blue-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pp-flag, .pp-flag .pp-flag-cloth, .pp-five-card, .pp-end-hand, .pp-end-ticks { animation: none; }
+}
+
+/* ------------------------------------------------ demo mode: the setup's discreet switch */
+.pp-demo-link {
+  position: fixed; left: 10px; bottom: 6px; z-index: 5;
+  padding: 10px 12px; min-width: 44px; min-height: 44px;
+  border: 0; background: none; cursor: default;
+  font: 400 13px var(--body); color: rgba(43, 38, 34, 0.32);
+  -webkit-touch-callout: none;
+}
+.pp-demo-link::after {
+  content: ""; position: absolute; left: 10px; right: 10px; bottom: 8px; height: 2px;
+  transform-origin: left; scale: var(--hold, 0) 1; background: var(--blue-ink);
+}
+.pp-demo-on {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: center;
+  font: 400 17px var(--body); color: var(--ink-2);
+}
+.pp-demo-stamp, .pp-demo-mark {
+  display: inline-block; padding: 2px 12px;
+  border: 3px solid #b8463a; border-radius: 8px 6px 9px 5px;
+  color: #b8463a; font: 700 24px/1.1 var(--body); letter-spacing: 0.12em;
+  rotate: -4deg; background: rgba(251, 247, 238, 0.85);
+}
+
+/* ------------------------------------------------ the demo bar: docked on the right, the page laid out beside it */
+:root { --demo-w: 0px; }
+html.pp-demo { --demo-w: 190px; }
+html.pp-demo body { overflow-x: hidden; }
+/* the page's fixed layers (the raised hand, the next-page arrow, veils) belong to the page's box, not the window's */
+html.pp-demo #root { width: calc(100% - var(--demo-w)); transform: translateZ(0); min-height: 100dvh; }
+html.pp-demo .mode-taller { --sheet-w: min(calc(100vw - var(--demo-w) - 260px), calc(var(--board-h) * var(--aspect) + 28px)); }
+html.pp-demo .pad > .sheet { max-width: calc(100vw - var(--demo-w) - 36px - 2 * (var(--side) + 14px)); }
+.pp-demo-bar {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 200;
+  width: var(--demo-w);
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 10px 12px;
+  overflow-y: auto;
+  background: repeating-linear-gradient(-45deg, #f3e2dc 0 12px, #f6ebe5 12px 24px);
+  border-left: 3px solid #b8463a;
+  font-family: var(--body);
+}
+.pp-demo-bar .pp-demo-mark { align-self: center; text-align: center; font-size: 26px; margin: 4px 0 6px; }
+.pp-demo-mark small { display: block; font-size: 12px; letter-spacing: 0; font-weight: 400; }
+.pp-demo-btn {
+  flex: none;
+  min-height: 48px; padding: 5px 9px;
+  border: 2.4px solid var(--ink); border-radius: 10px 8px 11px 7px / 8px 11px 7px 10px;
+  background: var(--sheet); color: var(--ink); cursor: pointer;
+  font: 700 15px/1.15 var(--body); text-align: left;
+  box-shadow: 2px 3px 0 var(--shadow);
+  white-space: nowrap;
+}
+.pp-demo-btn small { display: block; font-weight: 400; font-size: 12px; color: var(--ink-2); margin-top: 2px; white-space: normal; }
+.pp-demo-btn:disabled { opacity: 0.45; cursor: default; }
+.pp-demo-btn.is-on { background: #fff4cf; outline: 3px solid var(--blue-ink); outline-offset: 1px; }
+.pp-demo-btn.is-end { background: #f3cfc9; }
+.pp-demo-btn:active:not(:disabled) { translate: 1px 2px; box-shadow: 1px 1px 0 var(--shadow); }
+.pp-demo-list { flex: none; list-style: none; margin: -2px 0 2px; padding: 4px; display: grid; gap: 0; background: var(--sheet); border: 2px solid var(--ink); border-radius: 8px; }
+.pp-demo-go { width: 100%; min-height: 44px; padding: 2px 8px; border: 0; border-radius: 6px; background: none; text-align: left; cursor: pointer; font: 400 14px/1.1 var(--body); color: var(--ink); white-space: nowrap; }
+.pp-demo-go:hover { background: #dce6f0; }
+.pp-demo-go.is-here { font-weight: 700; text-decoration: underline wavy var(--blue-ink); }

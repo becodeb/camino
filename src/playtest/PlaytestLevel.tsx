@@ -4,7 +4,8 @@
 // run and its result); `speak`, `tap_add`, `drag`; ✋ in three steps
 // (`help` 1–3: the instruction again and the goal glowing, the next-step
 // hint with the ghost hand, the solution's footprints; a fourth press raises
-// the character's hand, `call_adult`); holding ✋ 1 s raises it at once; and
+// the character's hand, `call_adult`; since T14 holding ✋ is the adult's
+// "¿En qué lo ayudaste?", AdultControls.tsx); and
 // `level_end` (outcome, time, attempts, help, blocks, adult help) when the
 // child turns the page, the step's `watch` ends it, or the flow moves on.
 // The bar shows the page's own title only (never an id): a child may read it.
@@ -30,7 +31,7 @@ import { LevelScreen } from '../screens/LevelScreen';
 import { LevelNavContext, LevelWrapContext, useLevelNav, type LevelNav, type RunReport } from '../screens/levelKit';
 import { glowTargets } from '../ui/ghost';
 import { speak } from '../ui/speech';
-import { HAND_HOLD_HELP_MS, useHold } from './AdultControls';
+import { provideDemoActions, solvePageOnScreen } from './demo';
 import { withName } from './characterName';
 import { usePlaytest, type LevelTrack } from './context';
 import { showFootprints } from './footprints';
@@ -211,9 +212,6 @@ function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs
     return () => { window.removeEventListener('pointerdown', on, true); window.removeEventListener('keydown', on, true); };
   }, []);
 
-  // holding ✋ for a second raises the hand at once (the click that ends the hold does not count as a help)
-  useHold(HAND_HOLD_HELP_MS, (e) => !!(e.target as Element | null)?.closest?.('.level-bar .help'), () => apiRef.current.raiseHand('help_held'));
-
   const nav = useMemo<LevelNav>(() => ({
     ...base,
     // round 2: no page icons, doors or boss in the bar, only the activity's simple progress (barProgress.tsx)
@@ -299,6 +297,11 @@ function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs
   // one nav per level
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [level, base]);
+
+  // the demo bar (demo sessions): "Saltar este nivel" turns the page as the child would; "Resolver" plays its solution
+  const navRef = useRef(nav);
+  navRef.current = nav;
+  useEffect(() => provideDemoActions({ rank: 2, noun: 'nivel', skip: () => navRef.current.next(level), solve: () => { solvePageOnScreen(); } }), [level]);
 
   return <LevelNavContext.Provider value={nav}>{children}</LevelNavContext.Provider>;
 }

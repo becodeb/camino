@@ -50,7 +50,10 @@ export function pickResume(raw: string | null, sessionId: string | null | undefi
     v: 1,
     sid: o.sid,
     at: o.at,
-    flow: { step: f.step, visits: f.visits, activities: f.activities, endedEarly: !!f.endedEarly },
+    flow: {
+      step: f.step, visits: f.visits, activities: f.activities, endedEarly: !!f.endedEarly,
+      ...(f.routeDone ? { routeDone: true } : {}), ...(f.surveyDone ? { surveyDone: true } : {}), ...(f.wrapUp ? { wrapUp: true } : {}),
+    },
     progress: typeof o.progress === 'string' ? o.progress : null,
     parts: o.parts && typeof o.parts === 'object' ? o.parts : {},
   };

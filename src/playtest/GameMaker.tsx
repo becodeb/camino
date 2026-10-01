@@ -40,7 +40,6 @@ import { playGhost, type DemoStep, type GhostRun } from '../ui/ghost';
 import { PlayIcon, StopIcon, RestartIcon, SpeakerIcon } from '../ui/icons';
 import { REDUCED } from '../ui/runtime';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
-import { HAND_HOLD_HELP_MS, useHold } from './AdultControls';
 import { usePlaytest } from './context';
 import { Cheer } from './interlude';
 import type { ProbeProps } from './probes';
@@ -345,7 +344,6 @@ function Workshop({ phase, game, gameRef, setGame, onDone }: {
     }
     showRule();
   };
-  useHold(HAND_HOLD_HELP_MS, (e) => !!(e.target as Element | null)?.closest?.('.gm-root .level-bar .help'), () => apiRef.current.raiseHand('help_held'));
 
   // keys: the arrows play the game
   useEffect(() => {

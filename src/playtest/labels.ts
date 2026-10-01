@@ -8,4 +8,5 @@ export const GRADE_LABEL: Record<number, string> = { 1: '1ro', 2: '2do', 3: '3ro
 export const STEP_NAME: Record<StepId, string> = {
   setup: 'preparación', character: 'personaje', tool_check: 'prueba de herramientas', ladder: 'escalera de niveles',
   free_play: 'juego libre', typing: 'Teclas del bosque', wardrobe: 'vestidor', survey: 'encuesta', goodbye: 'despedida',
+  class_end: 'actividad terminada',
 };

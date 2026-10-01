@@ -26,6 +26,9 @@ import { ToolCheck } from './ToolCheck';
 import { TypingStep } from './TypingStep';
 import { WardrobeStep } from './WardrobeStep';
 import type { StartInput } from './telemetry';
+import { ClassEnd } from './classroom';
+import { useHold } from './AdultControls';
+import { demoMode, useDemo } from './demo';
 
 export interface StepViewProps {
   /** The setup's grade tap: a new session with this grade, division and on-screen text. */
@@ -33,8 +36,6 @@ export interface StepViewProps {
   /** The goodbye's "jugar otra vez" (or its time): back to the setup, fresh progress. */
   newSession(): void;
 }
-
-const DIVISIONS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
 
 // ------------------------------------------------------------------ the setup: one tap
 
@@ -48,11 +49,12 @@ const CAPTION_CHOICES: { v: CaptionsSetting; label: string }[] = [
 /**
  * One screen anyone can do: "¿En qué grado estás?" said aloud (🔊 again),
  * five big drawn grade cards, and the tap on a grade starts. Before it, the
- * adult may set the division and the on-screen text (small, secondary).
+ * adult may set the on-screen text (small, secondary). The classroom round
+ * (T14) dropped the division buttons: `division` is stored as null.
  */
 function Setup({ start }: StepViewProps) {
-  const [division, setDivision] = useState<string | null>(null);
   const [cap, setCap] = useState<CaptionsSetting>('auto');
+  const demo = useDemo();
   useEffect(() => {
     let off = () => {};
     const t = setTimeout(() => { off = speakWhenAllowed(SETUP_SAY); }, 450);
@@ -60,10 +62,10 @@ function Setup({ start }: StepViewProps) {
   }, []);
   const go = (g: number) => {
     stopSpeaking();
-    start({ grade: g, division, captions: captionsFor(g, cap), captionsSet: cap === 'auto' ? 'grade' : 'setup' });
+    start({ grade: g, division: null, captions: captionsFor(g, cap), captionsSet: cap === 'auto' ? 'grade' : 'setup', ...(demo.on ? { demo: true } : {}) });
   };
   return (
-    <main className="pp-page pp-setup">
+    <main className={`pp-page pp-setup${demo.on ? ' is-demo' : ''}`}>
       <header className="pp-setup-q">
         <button type="button" className="speak cut" aria-label="Escuchar otra vez" onClick={() => speak(SETUP_SAY)}><SpeakerIcon /></button>
         <PlayerFace className="bar-face" />
@@ -81,14 +83,6 @@ function Setup({ start }: StepViewProps) {
       </ul>
       <section className="pp-setup-adult" aria-label="Para el adulto (opcional)">
         <div className="pp-setup-row">
-          <span className="pp-setup-label">División <small>(si hace falta)</small></span>
-          <div className="pp-divisions">
-            {DIVISIONS.map((d) => (
-              <button key={d} type="button" className={`pp-div cut${division === d ? ' is-on' : ''}`} aria-pressed={division === d} onClick={() => setDivision(division === d ? null : d)}>{d}</button>
-            ))}
-          </div>
-        </div>
-        <div className="pp-setup-row">
           <span className="pp-setup-label"><CaptionsIcon on={cap !== 'off'} /> Texto en pantalla</span>
           <div className="pp-divisions">
             {CAPTION_CHOICES.map((c) => (
@@ -97,7 +91,51 @@ function Setup({ start }: StepViewProps) {
           </div>
         </div>
       </section>
+      <DemoToggle />
     </main>
+  );
+}
+
+/** How long the adult holds the setup's tiny "demo" word before the confirm (a child tapping it gets nothing). */
+export const DEMO_HOLD_MS = 2000;
+
+/**
+ * The demo mode's discreet switch (T14): a tiny "demo" word in the bottom
+ * corner; held 2 s, it asks the adult to confirm. On, the setup says so
+ * with a "DEMO" stamp and a way out; every session started then is a demo
+ * session (not in the data, deleted after 24 h) with the demo bar.
+ */
+function DemoToggle() {
+  const demo = useDemo();
+  const [ask, setAsk] = useState(false);
+  const [hold, setHold] = useState<number | null>(null);
+  useHold(DEMO_HOLD_MS, (e) => !demo.on && !!(e.target as Element | null)?.closest?.('.pp-demo-link'), () => setAsk(true), setHold);
+  if (demo.on) {
+    return (
+      <div className="pp-demo-on" role="status">
+        <span className="pp-demo-stamp">DEMO</span>
+        <span>Modo demo: las sesiones no se guardan en los datos.</span>
+        <button type="button" className="pp-div cut" data-demo="off" onClick={() => demoMode.setOn(false)}>Salir del modo demo</button>
+      </div>
+    );
+  }
+  return (
+    <>
+      <button type="button" className="pp-demo-link" aria-label="Modo demo (para el adulto: mantené apretado)" style={hold != null ? { ['--hold' as string]: hold } : undefined}>demo</button>
+      {ask && (
+        <div className="pp-adult-veil" role="dialog" aria-modal="true" aria-label="Modo demo">
+          <section className="sheet pp-adult-sheet pp-demo-ask">
+            <span className="tape tape-l" aria-hidden="true" />
+            <h2 className="pp-adult-h">¿Activar el modo demo?</h2>
+            <p className="pp-adult-note">Para mostrar o probar la prueba. Las sesiones de demo no se guardan en los datos (se borran solas en un día) y tienen una barra de herramientas: más rápido, saltar o resolver un nivel, ir a cualquier parte.</p>
+            <div className="pp-kinds">
+              <button type="button" className="pp-adult-btn cut" data-demo="confirm" onClick={() => { demoMode.setOn(true); setAsk(false); }}>Sí, modo demo</button>
+              <button type="button" className="pp-adult-btn cut" data-demo="cancel" onClick={() => setAsk(false)}>No, volver</button>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -127,4 +165,5 @@ export const STEP_VIEWS: Record<StepId, ComponentType<StepViewProps>> = {
   wardrobe: WardrobeStep,
   survey: Survey,
   goodbye: Goodbye,
+  class_end: ClassEnd,
 };
