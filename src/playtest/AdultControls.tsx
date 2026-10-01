@@ -1,7 +1,9 @@
 // The adult's hidden controls, never a button the child sees:
 // - a long press (1.5 s) on the top-left corner of the screen opens the
-//   adult menu: log help given without a call, skip the step, end the
-//   session (straight to the survey), the sync status;
+//   adult menu: log help given without a call, the adult's optional comment
+//   ("Comentario del adulto": sessions.adult_form, no longer a step of its
+//   own), skip the step, end the session (straight to the survey), the sync
+//   status; never the session code (round 2);
 // - in free play, the adult menu also opens a probe for any grade ("Hacé
 //   tu juego", "Del bloque al texto": for testing, or for a child who wants it);
 // - a long press (1.2 s) on the character's raised hand opens the help
@@ -10,6 +12,8 @@
 // (the 🔊 of a level's bar) keeps working for a normal tap.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { holdAdultSheet } from './adultState';
+import { AdultFormPanel } from './closing';
 import { usePlaytest, type AdultHelpKind } from './context';
 import { canEndNow, canSkip } from './flow';
 import { useSyncStatus } from './runtime';
@@ -130,6 +134,8 @@ function HelpKinds({ onPick }: { onPick: (k: AdultHelpKind) => void }) {
 
 /** A sheet for the adult over the page (short text allowed). */
 export function AdultSheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  // the goodbye waits while the adult has a sheet open
+  useEffect(() => holdAdultSheet(), []);
   return (
     <div className="pp-adult-veil" role="dialog" aria-modal="true" aria-label={title} onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <section className="sheet pp-adult-sheet">
@@ -154,11 +160,15 @@ function AdultMenu({ onClose }: { onClose: () => void }) {
   const [help, setHelp] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [noted, setNoted] = useState(false);
+  const [form, setForm] = useState(false);
+  const [saved, setSaved] = useState(false);
   const step = api.flow.step;
   return (
-    <AdultSheet title="Menú del adulto" onClose={onClose}>
-      <p className="pp-adult-note">{api.session?.code} · {STEP_NAME[step]}</p>
-      {help ? (
+    <AdultSheet title={form ? 'Comentario del adulto' : 'Menú del adulto'} onClose={onClose}>
+      <p className="pp-adult-note">{STEP_NAME[step]}</p>
+      {form ? (
+        <AdultFormPanel done={() => { setForm(false); setSaved(true); }} />
+      ) : help ? (
         <>
           <p className="pp-adult-note">¿Qué ayuda diste?</p>
           <HelpKinds onPick={(k) => { api.adultHelp(k, false); setHelp(false); setNoted(true); }} />
@@ -166,6 +176,7 @@ function AdultMenu({ onClose }: { onClose: () => void }) {
       ) : (
         <div className="pp-kinds">
           <button type="button" className="pp-adult-btn cut" data-act="log-help" onClick={() => { setHelp(true); setNoted(false); }}>Registrar ayuda{noted ? ' ✓' : ''}</button>
+          <button type="button" className="pp-adult-btn cut" data-act="adult-form" onClick={() => setForm(true)}>Comentario del adulto <small>(opcional)</small>{saved ? ' ✓' : ''}</button>
           {step === 'free_play' && <button type="button" className="pp-adult-btn cut" data-act="open-game-maker" onClick={() => { openProbe('game_maker'); onClose(); }}>Abrir «Hacé tu juego»</button>}
           {step === 'free_play' && <button type="button" className="pp-adult-btn cut" data-act="open-text-probe" onClick={() => { openProbe('text_probe'); onClose(); }}>Abrir «Del bloque al texto»</button>}
           {canSkip(step) && <button type="button" className="pp-adult-btn cut" data-act="skip" onClick={() => { api.skip(); onClose(); }}>Saltar este paso</button>}

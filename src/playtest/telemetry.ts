@@ -4,8 +4,10 @@
 // nothing and the session keeps working fully offline.
 //
 // - Each session (one child, one sitting) gets a client uuid, an anonymous
-//   code ("Zorro 27"), its grade and division, the adult's consent and the
-//   device; never a name.
+//   code ("Zorro 27", for the admin page only: the kid app never shows it
+//   since round 2), its grade and division, and the device; never a name.
+//   `consent` is null since round 2 (no tick at setup: the school's
+//   authorization is kept outside the app).
 // - `log(type, payload)` gives the event the session's next `seq` (0, 1, 2…)
 //   and the client time, and appends it to the queue.
 // - The sender posts the session record with up to `maxPerPost` of its events
@@ -40,6 +42,9 @@ export interface Device {
   dpr: number;
   touch: boolean;
   lang: string;
+  /** On-screen text (captions.ts): its state now, and how it was set at the start (by the grade, or the setup). */
+  captions?: boolean;
+  captions_set?: 'grade' | 'setup';
 }
 
 /** The `sessions` row, as POST /api/sync takes it (docs/prueba-piloto-datos.md). */
@@ -48,7 +53,8 @@ export interface SessionRecord {
   code: string;
   grade: number;
   division: string | null;
-  consent: boolean;
+  /** Null since round 2 (no tick); earlier sessions: true. */
+  consent: boolean | null;
   started_at: string;
   ended_at: string | null;
   end_reason: string | null;
@@ -59,7 +65,7 @@ export interface SessionRecord {
   current_step: string | null;
 }
 
-export type SessionPatch = Partial<Pick<SessionRecord, 'ended_at' | 'end_reason' | 'survey' | 'adult_form' | 'current_step'>>;
+export type SessionPatch = Partial<Pick<SessionRecord, 'ended_at' | 'end_reason' | 'survey' | 'adult_form' | 'current_step' | 'device'>>;
 
 export interface QueuedEvent {
   seq: number;
@@ -135,7 +141,9 @@ export interface SyncStatus {
 export interface StartInput {
   grade: number;
   division: string | null;
-  consent: boolean;
+  /** On-screen text at the start, and whether the grade or the setup decided it. */
+  captions?: boolean;
+  captionsSet?: 'grade' | 'setup';
 }
 
 const EMPTY_STATE = (): QueueState => ({ v: 1, current: null, entries: {} });
@@ -207,12 +215,12 @@ export class Telemetry {
       code,
       grade: input.grade,
       division: input.division,
-      consent: input.consent,
+      consent: null,
       started_at: new Date(now).toISOString(),
       ended_at: null,
       end_reason: null,
       app_version: this.deps.appVersion,
-      device: this.deps.device(),
+      device: { ...this.deps.device(), ...(input.captions != null ? { captions: input.captions, captions_set: input.captionsSet ?? 'grade' } : {}) },
       survey: null,
       adult_form: null,
       current_step: null,

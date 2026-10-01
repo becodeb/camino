@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { formatOf } from '../game/formats';
 import { DEBUG } from '../screens/levelKit';
 import { usePlaytest } from './context';
+import { BarProgressContext } from './barProgress';
 import { Cheer, WalkOn } from './interlude';
 import {
   ceiling, decide, firstItem, itemResult, itemVerdict, newItemMemo, record, rungOf, startLadder,
@@ -124,15 +125,19 @@ export function Ladder() {
     setTimeout(() => setView(after), end.outcome === 'win' ? 0 : LINGER_MS);
   };
 
+  // the bar: a stone (with its seed) per item met so far, and the one on screen circled; a path that grows (the ladder's length depends on the child)
+  const items = state.current.items.length;
   return (
-    <PlaytestLevel
-      key={`${level.id}-${view.n}`}
-      level={level}
-      activity="ladder"
-      extra={{ concept: r.concept, rung: r.rung, item: r.item, check: view.check }}
-      watch={(stats) => itemVerdict(stats, memo.current, Date.now())}
-      autoNextMs={AUTO_NEXT_MS}
-      onEnd={onEnd}
-    />
+    <BarProgressContext.Provider value={{ kind: 'dots', done: [...Array.from({ length: items }, () => true), false], here: items }}>
+      <PlaytestLevel
+        key={`${level.id}-${view.n}`}
+        level={level}
+        activity="ladder"
+        extra={{ concept: r.concept, rung: r.rung, item: r.item, check: view.check }}
+        watch={(stats) => itemVerdict(stats, memo.current, Date.now())}
+        autoNextMs={AUTO_NEXT_MS}
+        onEnd={onEnd}
+      />
+    </BarProgressContext.Provider>
   );
 }

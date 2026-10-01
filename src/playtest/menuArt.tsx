@@ -2,7 +2,7 @@
 // a taped page with a small drawing of the real thing (the sheet's own
 // board, the recess's song and xylophone, a guarda on squared paper, a
 // board being made, the rule game's falling seeds), and what goes with it
-// drawn beside the page (the three doors and the boss page, mallets and
+// drawn beside the page (the ways on and the boss page, mallets and
 // notes, the pencil, the corkboard, the arrow keys and the jar). Also the
 // "volver al menú" button's drawing: the menu's cards with a blue pen arrow
 // curling back to them. Ink boiled by #rough, flat facets, no text needed.
@@ -13,7 +13,8 @@ import { blob, leaf, wobblyLine, wobblyPoly } from '../ink/ink.js';
 import { sheetByN } from '../curriculum/primer';
 import { levelById } from '../game/levels';
 import { BoardThumb, PageThumb, ThumbCharacterContext } from '../ui/thumbs';
-import { BossPageArt, DoorArt } from '../ui/forestArt';
+import { BossPageArt } from '../ui/forestArt';
+import { Sprout } from './round2Art';
 import { Pencil } from '../ui/workshopArt';
 import type { Activity } from './freePlay';
 
@@ -38,7 +39,7 @@ function Page({ x, y, w, h, rot, seed, children }: { x: number; y: number; w: nu
   );
 }
 
-/** A sheet of 1ro: its second page's board on a page, the three doors under the boss page beside it. */
+/** A sheet of 1ro: its second page's board on a page, the boss page beside it and, under it, the three ways on (round 2: no doors). */
 function SheetCard({ n }: { n: number }) {
   const s = sheetByN(n);
   const level = s?.core[1]?.level ?? s?.core[0]?.level;
@@ -49,8 +50,10 @@ function SheetCard({ n }: { n: number }) {
           {level && <PageThumb level={level} place={{ x: 10, y: 12, width: 128, height: 124 }} />}
         </Page>
         <g transform="translate(214 58) rotate(5) scale(0.62)"><BossPageArt seed={n + 2} /></g>
-        {(['easy', 'medium', 'hard'] as const).map((d, i) => (
-          <g key={d} transform={`translate(${184 + i * 28} ${162 - i * 2}) scale(${0.3 + i * 0.03})`}><DoorArt size={d} seed={n * 3 + i} /></g>
+        {/* round 2: the ways on after the pages (a gentle hill, a flat path, a steep one), not doors */}
+        <path d="M168,170 C180,169 186,160 196,160 C204,160 206,168 214,168 L226,168 C232,168 236,150 246,146" fill="none" stroke={INK} strokeWidth={2} />
+        {([[194, 160, 1], [220, 168, 2], [246, 146, 3]] as const).map(([x, y, k]) => (
+          <g key={k} transform={`translate(${x} ${y}) scale(0.62)`}><Sprout size={k} seed={n + k} /></g>
         ))}
       </g>
     </svg>

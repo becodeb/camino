@@ -22,7 +22,7 @@ describe('resume after a reload', () => {
   beforeEach(() => { st = fakeStorage(); resetResumeForTests(st); });
 
   it('carries on the queue\'s current session on the step it was on, with its progress and parts', () => {
-    const ladder = walked(4); // setup → code → character → tool_check → ladder
+    const ladder = walked(3); // setup → character → tool_check → ladder
     rememberFlow('s1', ladder, 10_000);
     rememberProgress('{"seeds":3}', 11_000);
     rememberPart('ladder', { items: [1] }, 12_000);
@@ -35,7 +35,7 @@ describe('resume after a reload', () => {
   });
 
   it('keeps the parts while the step stays, forgets them when it changes', () => {
-    const f = walked(4);
+    const f = walked(3);
     rememberFlow('s1', f, 1);
     rememberPart('ladder', { a: 1 }, 2);
     rememberFlow('s1', reduce(f, { type: 'did', activity: 'ladder' }, 3).state, 3);
@@ -45,7 +45,7 @@ describe('resume after a reload', () => {
   });
 
   it('a resumed step\'s parts are gone once the flow moves on', () => {
-    const f = walked(5);
+    const f = walked(4);
     rememberFlow('s1', f, 1);
     rememberPart('free_play', { visits: 2 }, 2);
     resetResumeForTests(st);
@@ -56,7 +56,7 @@ describe('resume after a reload', () => {
   });
 
   it('starts fresh for another session, the setup, a stale or broken save', () => {
-    rememberFlow('s1', walked(3), 1000);
+    rememberFlow('s1', walked(2), 1000);
     const raw = st.m.get(RESUME_KEY)!;
     expect(pickResume(raw, 's1', 2000)?.flow.step).toBe('tool_check');
     expect(pickResume(raw, 's2', 2000)).toBeNull();
@@ -64,6 +64,8 @@ describe('resume after a reload', () => {
     expect(pickResume(raw, 's1', 1000 + RESUME_MAX_AGE_MS + 1)).toBeNull();
     expect(pickResume('{nope', 's1', 2000)).toBeNull();
     expect(pickResume(JSON.stringify({ ...JSON.parse(raw), flow: { step: 'lost', visits: [], activities: [] } }), 's1', 2000)).toBeNull();
+    // a tab saved by round 1 on its code screen: a step that no longer exists starts fresh
+    expect(pickResume(JSON.stringify({ ...JSON.parse(raw), flow: { ...JSON.parse(raw).flow, step: 'code' } }), 's1', 2000)).toBeNull();
     rememberFlow('s1', initialFlow(3000), 3000);
     expect(st.m.has(RESUME_KEY)).toBe(false);
   });

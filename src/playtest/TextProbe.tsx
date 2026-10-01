@@ -231,6 +231,8 @@ function useItemVisit(item: TextItem | null, first: boolean, rootRef: React.RefO
     const t = window.setTimeout(() => { off = speakWhenAllowed(line); }, 400);
     return () => {
       clearTimeout(t); off(); ghostRun.current?.cancel();
+      // another item: a hand nobody answered goes down (the child moved on)
+      apiRef.current.lowerHand('moved_on');
       if (apiRef.current.level.current === track.current) apiRef.current.level.current = null;
     };
     // once per visit

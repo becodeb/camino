@@ -5,10 +5,13 @@
 //   more). Each answer is a `survey_answer`; all of them go on the session.
 // - The goodbye: the session's garden (every page solved planted a seed; a
 //   boss won sent its critter or plant) with the character in it, wearing
-//   the outfit kept in the wardrobe, and the session code again for the
-//   adult; a small "para el adulto" link.
-// - The adult form (after the child leaves): engagement, help needed, a
-//   comment without names; then a new session.
+//   the outfit kept in the wardrobe; a big drawn "jugar otra vez" starts the
+//   next session (back to the setup), and so does the goodbye by itself
+//   after GOODBYE_MS (paused while the adult's menu is open). No code is
+//   shown anywhere (round 2).
+// - The adult's comment (AdultFormPanel): optional, from the corner menu at
+//   any time of the session: engagement, help needed, a comment without
+//   names (`sessions.adult_form`).
 
 import { useEffect, useRef, useState } from 'react';
 import { CHARACTER_NAME, isCharacterId } from '../curriculum/motivation';
@@ -18,11 +21,11 @@ import { PlayerFace } from '../screens/player';
 import { PenRing, SeedIcon } from '../ui/art';
 import { SpeakerIcon } from '../ui/icons';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
-import { SyncDot } from './AdultControls';
+import { adultSheetOpen } from './adultState';
 import { usePlaytest } from './context';
 import { ActivityPicture, Face, YesNo } from './surveyArt';
 import type { StepViewProps } from './steps';
-import { GRADE_LABEL } from './labels';
+import { PlayAgainArt } from './round2Art';
 import { SessionGarden } from './SessionGarden';
 
 type QuestionId = 'liked' | 'difficulty' | 'favorite_activity' | 'play_again';
@@ -142,21 +145,42 @@ const BYE = {
   say: (name: string) => `¡Gracias por jugar! Chau, ${name}. ¡Hasta la próxima!`,
 };
 
-export function Goodbye() {
+/** The goodbye starts the next session by itself after this long (the adult's menu open pauses it). */
+export const GOODBYE_MS = 45_000;
+
+export function Goodbye({ newSession }: StepViewProps) {
   const api = usePlaytest();
+  const apiRef = useRef(api);
+  apiRef.current = api;
   const p = useProgress();
   const since = useRef(Date.now());
+  const left = useRef(false);
   const [cheer, setCheer] = useState(0);
   const name = isCharacterId(p.character) ? CHARACTER_NAME[p.character] : 'Brote';
+
+  /** The garden's time and what it showed, then the next session (logged first: the setup logs nothing). */
+  const leave = (how: 'again' | 'time' | 'left') => {
+    if (left.current) return;
+    left.current = true;
+    const q = progress.get();
+    apiRef.current.log('garden_view', { duration_ms: Date.now() - since.current, seeds: q.seeds, critters: arrivedCritters(q), plants: arrivedPlants(q), outfit: outfitOf(q), left: how });
+    if (how !== 'left') { stopSpeaking(); newSession(); }
+  };
+  const leaveRef = useRef(leave);
+  leaveRef.current = leave;
 
   useEffect(() => {
     const off = speakWhenAllowed(BYE.say(name));
     const t = setTimeout(() => setCheer(1), 900);
+    // the next child: after GOODBYE_MS, not while the adult's menu is open
+    const tick = setInterval(() => {
+      if (Date.now() - since.current >= GOODBYE_MS && !adultSheetOpen()) leaveRef.current('time');
+    }, 1000);
     return () => {
       off();
       clearTimeout(t);
-      const q = progress.get();
-      api.log('garden_view', { duration_ms: Date.now() - since.current, seeds: q.seeds, critters: arrivedCritters(q), plants: arrivedPlants(q), outfit: outfitOf(q) });
+      clearInterval(tick);
+      leaveRef.current('left');
     };
     // once, when the goodbye opens
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -171,14 +195,13 @@ export function Goodbye() {
           <SessionGarden cheer={cheer} />
         </div>
         <p className="pp-bye-seeds" aria-label={`${p.seeds} semillas`}><SeedIcon size={34} /> <b>{p.seeds}</b></p>
-        {api.session && <p className="pp-bye-code">{api.session.code}</p>}
       </section>
-      <button type="button" className="pp-for-adult" onClick={api.next}>para el adulto</button>
+      <button type="button" className="pp-again cut" aria-label="Jugar otra vez" onClick={() => leave('again')}><PlayAgainArt /></button>
     </main>
   );
 }
 
-// ------------------------------------------------------------------ the adult form
+// ------------------------------------------------------------------ the adult's comment (from the corner menu)
 
 const ENGAGEMENT = [{ v: 'low', label: 'Poco' }, { v: 'mid', label: 'Medio' }, { v: 'high', label: 'Mucho' }] as const;
 const HELP = [{ v: 'none', label: 'Ninguna' }, { v: 'some', label: 'Algo' }, { v: 'a_lot', label: 'Mucha' }] as const;
@@ -196,44 +219,30 @@ function Choice<T extends string>({ legend, options, value, set }: { legend: str
   );
 }
 
-export function AdultForm({ newSession }: StepViewProps) {
+/** The adult's optional comment on this session (`sessions.adult_form`); saving again replaces it. */
+export function AdultFormPanel({ done }: { done: () => void }) {
   const api = usePlaytest();
-  const [engagement, setEngagement] = useState<'low' | 'mid' | 'high' | null>(null);
-  const [help, setHelp] = useState<'none' | 'some' | 'a_lot' | null>(null);
-  const [comment, setComment] = useState('');
-  const [saved, setSaved] = useState(false);
-  const s = api.session;
+  const prev = api.session?.adult_form as { engagement?: 'low' | 'mid' | 'high'; help_needed?: 'none' | 'some' | 'a_lot'; comment?: string } | null | undefined;
+  const [engagement, setEngagement] = useState<'low' | 'mid' | 'high' | null>(prev?.engagement ?? null);
+  const [help, setHelp] = useState<'none' | 'some' | 'a_lot' | null>(prev?.help_needed ?? null);
+  const [comment, setComment] = useState(prev?.comment ?? '');
   const save = () => {
-    const form: Record<string, unknown> = { engagement, help_needed: help };
+    const form: Record<string, unknown> = { engagement, help_needed: help, step: api.flow.step };
     const text = comment.trim().slice(0, 2000);
     if (text) form.comment = text;
     api.patchSession({ adult_form: form });
-    setSaved(true);
+    api.log('adult_form', { step: api.flow.step, engagement, help_needed: help, comment: !!text });
+    done();
   };
   return (
-    <main className="pp-page pp-adult-form">
-      <section className="sheet pp-card" aria-labelledby="pp-form-title">
-        <span className="tape tape-l" aria-hidden="true" />
-        <span className="tape tape-r" aria-hidden="true" />
-        <h1 id="pp-form-title" className="pp-adult-title">Para el adulto{s ? <small>{s.code} · {GRADE_LABEL[s.grade]}{s.division ? ` ${s.division}` : ''}</small> : null}</h1>
-        {saved ? (
-          <>
-            <p className="pp-adult-note">Guardado. Se envía solo cuando hay conexión.</p>
-            <SyncDot />
-            <button type="button" className="btn btn-play cut pp-start" onClick={newSession}>Nueva sesión</button>
-          </>
-        ) : (
-          <>
-            <Choice legend="¿Cuánto se enganchó?" options={ENGAGEMENT} value={engagement} set={setEngagement} />
-            <Choice legend="¿Cuánta ayuda necesitó?" options={HELP} value={help} set={setHelp} />
-            <label className="pp-comment">
-              <span>Comentario <small>(sin nombres)</small></span>
-              <textarea rows={3} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Lo que viste, sin nombres." />
-            </label>
-            <button type="button" className="btn btn-play cut pp-start" disabled={!engagement || !help} onClick={save}>Guardar</button>
-          </>
-        )}
-      </section>
-    </main>
+    <div className="pp-adult-form">
+      <Choice legend="¿Cuánto se enganchó?" options={ENGAGEMENT} value={engagement} set={setEngagement} />
+      <Choice legend="¿Cuánta ayuda necesitó?" options={HELP} value={help} set={setHelp} />
+      <label className="pp-comment">
+        <span>Comentario <small>(sin nombres)</small></span>
+        <textarea rows={3} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Lo que viste, sin nombres." />
+      </label>
+      <button type="button" className="btn btn-play cut pp-start" data-act="save-form" disabled={!engagement && !help && !comment.trim()} onClick={save}>Guardar</button>
+    </div>
   );
 }

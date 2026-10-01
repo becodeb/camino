@@ -48,7 +48,7 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
     case 'sheet': {
       const n = SHEET_FOR[grade];
       if (!n) return null;
-      return { id, kind: { sheet: n }, say: `${title(n)}: una hoja con puertas y un desafío.`, caption: title(n) };
+      return { id, kind: { sheet: n }, say: `${title(n)}: una hoja con caminos y un desafío.`, caption: title(n) };
     }
     case 'recess': return { id, kind: { sheet: RECESS_SHEET }, say: 'La música: armá canciones en el xilofón.', caption: 'La música' };
     case 'guardas': return { id, kind: { sheet: GUARDAS_SHEET }, say: 'Las guardas: pintá dibujos que se repiten.', caption: 'Las guardas' };

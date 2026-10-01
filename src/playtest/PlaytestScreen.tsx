@@ -1,9 +1,12 @@
 // The pilot playtest: one child, one sitting, 20–40 minutes, an adult next
-// to them (or one teacher for the room). The adult sets the grade, the app
-// gives an anonymous session code, the child plays the flow's steps
-// (flow.ts), and every step writes anonymous events to the offline queue
-// (telemetry.ts → POST /api/sync). Hidden adult controls (AdultControls.tsx)
-// end the session, skip a step, log help and answer the raised hand.
+// to them (or one teacher for the room). One tap on the grade starts (the
+// child can do it), the child plays the flow's steps (flow.ts), and every
+// step writes anonymous events to the offline queue (telemetry.ts → POST
+// /api/sync); the goodbye starts the next session by itself. Hidden adult
+// controls (AdultControls.tsx) end the session, skip a step, log help, take
+// the adult's optional comment and answer the raised hand; a hand nobody
+// answers goes down when the child solves the page or moves on. Every spoken
+// line can also show as on-screen text (captions.ts, Captions.tsx).
 //
 // The playtest keeps its own progress in memory (never the demo's
 // `camino.progress.v1`), fresh for every session. A reload of the tab
@@ -17,6 +20,8 @@ import { forgetRealtimeIntros } from '../screens/RealtimeLevel';
 import { forgetWorkshopGuides } from '../screens/WorkshopScreen';
 import { setUnlocks } from '../curriculum/rewards';
 import { setSpeechFilter } from '../ui/speech';
+import { clearCaption, installCaptions, setCaptions } from './captions';
+import { Captions } from './Captions';
 import { PLAYTEST_UNLOCKS } from './WardrobeStep';
 import { withName } from './characterName';
 import { holdHash } from './hashHold';
@@ -48,6 +53,12 @@ export function PlaytestScreen() {
   // the wardrobe's pieces unlock at a few seeds of this session (the year's milestones are for a year)
   useState(() => { setUnlocks(PLAYTEST_UNLOCKS); return true; });
   useEffect(() => () => setUnlocks(null), []);
+  // every spoken line can show as text (on from 3ro, or as the setup and 💬 say); a reloaded tab keeps its state
+  useEffect(() => {
+    const off = installCaptions();
+    setCaptions(!!(resumed && telemetry().session?.device.captions));
+    return off;
+  }, [resumed]);
   return <Playtest resumed={resumed} />;
 }
 
@@ -81,11 +92,13 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     if (c.reason === 'end_now') Object.assign(patch, { ended_at: new Date(now).toISOString(), end_reason: 'adult_ended' });
     else if (c.to === 'goodbye' && !t.state.endedEarly) Object.assign(patch, { ended_at: new Date(now).toISOString(), end_reason: 'completed' });
     tel.updateSession(patch);
-    // the child's part is over: nobody is waiting with a raised hand
-    if (c.to === 'survey') setHand(null);
+    // a new step: the last line's text goes, and a hand nobody answered goes down (the child moved on)
+    clearCaption();
+    endHandRef.current('moved_on');
   }, [tel]);
 
   const start = useCallback((input: StartInput) => {
+    setCaptions(!!input.captions);
     progress.reset();
     // a new child: the pages' first-entry demos play again
     forgetRealtimeIntros();
@@ -99,6 +112,8 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
   const newSession = useCallback(() => {
     progress.reset();
     setHand(null);
+    setCaptions(false);
+    clearCaption();
     level.current = null;
     setSession(null);
     const s = initialFlow(Date.now());
@@ -107,12 +122,23 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     rememberFlow(null, s);
   }, []);
 
+  /** A raised hand goes down: answered by the adult, or not (the child solved it alone, or moved on). */
+  function endHand(resolved_by: 'adult' | 'self' | 'moved_on', levelId?: string) {
+    const up = handRef.current;
+    if (!up || (levelId != null && up.level_id !== levelId)) return;
+    handRef.current = null;
+    setHand(null);
+    tel.log('call_adult_end', { ...(up.level_id ? { level_id: up.level_id } : {}), resolved_by, duration_ms: Date.now() - up.since });
+  }
+  const endHandRef = useRef(endHand);
+  endHandRef.current = endHand;
+
   const raiseHand = useCallback((reason: HandState['reason']) => {
     const lv = level.current;
     const up = handRef.current;
     const next: HandState = up ?? { since: Date.now(), level_id: lv?.id, help_step: lv?.helpStep ?? 0, reason };
     log('call_adult', { ...(lv ? { level_id: lv.id } : {}), reason, help_step: lv?.helpStep ?? 0, hand_up: !!up });
-    if (!up) setHand(next);
+    if (!up) { handRef.current = next; setHand(next); }
   }, [log]);
 
   const adultHelp = useCallback((kind: AdultHelpKind, prompted: boolean) => {
@@ -125,8 +151,17 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
       ...(prompted && up ? { duration_ms: Date.now() - up.since } : {}),
     });
     if (lv) lv.adultHelped = true;
-    if (prompted) setHand(null);
+    if (prompted) endHandRef.current('adult');
   }, [log]);
+
+  const lowerHand = useCallback((how: 'self' | 'moved_on', levelId?: string) => endHandRef.current(how, levelId), []);
+
+  const toggleCaptions = useCallback((on: boolean, where: 'bar' | 'corner') => {
+    setCaptions(on);
+    log('captions', { on, where });
+    const d = tel.session?.device;
+    if (d) tel.updateSession({ device: { ...d, captions: on } });
+  }, [log, tel]);
 
   const api = useMemo<PlaytestApi>(() => ({
     session,
@@ -140,8 +175,10 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     level,
     hand,
     raiseHand,
+    lowerHand,
     adultHelp,
-  }), [session, flow, apply, log, hand, raiseHand, adultHelp, tel]);
+    setCaptions: toggleCaptions,
+  }), [session, flow, apply, log, hand, raiseHand, lowerHand, adultHelp, toggleCaptions, tel]);
 
   useEffect(() => installWatchers(() => (flowRef.current.step === 'setup' ? null : flowRef.current.step)), []);
 
@@ -178,6 +215,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
       <PlayerContext.Provider value={useYearPlayer()}>
         <div className={`piloto step-${flow.step}`} data-step={flow.step}>
           <View key={flow.visits.length} start={start} newSession={newSession} />
+          {session && <Captions step={flow.step} />}
           {session && <AdultControls />}
         </div>
       </PlayerContext.Provider>

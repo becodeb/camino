@@ -6,7 +6,7 @@ export interface SessionInput {
   code: string;
   grade: number;
   division: string | null;
-  consent: boolean;
+  consent: boolean | null;
   started_at: string;
   ended_at?: string | null;
   end_reason?: string | null;

@@ -44,6 +44,14 @@ export interface PlaytestApi {
   level: MutableRefObject<LevelTrack | null>;
   hand: HandState | null;
   raiseHand(reason: HandState['reason']): void;
+  /**
+   * Lowers a raised hand nobody answered: the child solved the page (`self`)
+   * or moved on (`moved_on`); only the hand raised on `levelId` when given.
+   * Logs `call_adult_end`.
+   */
+  lowerHand(how: 'self' | 'moved_on', levelId?: string): void;
+  /** Turns the on-screen text on or off (the 💬 toggle); logs `captions`. */
+  setCaptions(on: boolean, where: 'bar' | 'corner'): void;
   /** The adult tells what they did (`prompted`: answering the raised hand). */
   adultHelp(kind: AdultHelpKind, prompted: boolean): void;
 }

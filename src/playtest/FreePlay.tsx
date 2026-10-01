@@ -42,6 +42,10 @@ import { ActivityArt, MenuBackArt } from './menuArt';
 import { InstrumentedPage, PlaytestLevel, type LevelEnd } from './PlaytestLevel';
 import { hasProbe, OPEN_PROBE_EVENT, PROBES } from './probes';
 import { rememberPart, resumedPart } from './resume';
+import { NextChoice } from './NextChoice';
+import { BarProgressContext, type BarProgress } from './barProgress';
+import { coreId } from '../curriculum/model';
+import { solve, useProgress } from '../curriculum/progress';
 
 /** How long a card is held before its name is said (a shorter press picks it). */
 const HOLD_MS = 550;
@@ -87,6 +91,8 @@ export function FreePlay() {
   const keep = () => rememberPart('free_play', { startedAt: startedAt.current, visits: visits.current });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(keep, []);
+  /** "¿Cómo seguís?": how many times it was shown in this visit (its `next_choice.n`). */
+  const choiceShown = useRef(0);
   /** Level pages open inside a sheet activity (the wrap counts them). */
   const levelsOpen = useRef(0);
   /** When the time ran out while something was open. */
@@ -136,7 +142,9 @@ export function FreePlay() {
     apiRef.current.did(a.id);
     visit.current = { a, n, at: Date.now(), levels: 0, wins: 0, extras: 0 };
     const sheet = 'sheet' in a.kind ? sheetByN(a.kind.sheet) : null;
-    setView({ kind: 'activity', a, n, page: sheet ? entryPage(sheet, progress.get()) : null });
+    const page = sheet ? entryPage(sheet, progress.get()) : null;
+    choiceShown.current = page?.kind === 'doors' ? 1 : 0;
+    setView({ kind: 'activity', a, n, page });
   };
 
   /** Every level_end of the activity (turned, left by another page, cut by the flow): what activity_end counts. */
@@ -161,12 +169,18 @@ export function FreePlay() {
     setHashConsumer((hash) => {
       if (finished.current) return;
       const r = parseRoute(hash);
-      if (r.screen !== 'sheet' || r.n !== n) { toMenu('done'); return; }
+      const cur = viewRef.current;
+      const was = cur.kind === 'activity' ? cur.page : null;
+      // after the challenge (its next page is the map) and after an extra page (its next is the same door's next page): "¿Cómo seguís?" again
+      const backToChoice = (was?.kind === 'boss' && (r.screen !== 'sheet' || r.n !== n))
+        || (was?.kind === 'extra' && r.screen === 'sheet' && r.n === n && r.page.kind === 'extra' && r.page.door === was.door && r.page.i === was.i + 1);
+      if (!backToChoice && (r.screen !== 'sheet' || r.n !== n)) { toMenu('done'); return; }
       // the time ran out: moving to another page is where it ends
       if (due.current != null) { finish(); return; }
-      const cur = viewRef.current;
       if (cur.kind !== 'activity') return;
-      const was = cur.page;
+      if (backToChoice) { choiceShown.current++; setView({ ...cur, page: { kind: 'doors' } }); return; }
+      if (r.screen !== 'sheet') return;
+      if (r.page.kind === 'doors') choiceShown.current++;
       if (r.page.kind === 'extra' && (was?.kind !== 'extra' || was.door !== r.page.door)) log('choice', { activity: cur.a.id, door: r.page.door, sheet: n });
       setView({ ...cur, page: r.page });
     });
@@ -181,7 +195,9 @@ export function FreePlay() {
       if (finished.current) return;
       const cur = viewRef.current;
       const levelOpen = cur.kind === 'activity' && ('sheet' in cur.a.kind ? levelsOpen.current > 0 : true);
-      const verdict = budgetVerdict({ now: Date.now(), startedAt: startedAt.current, budget, onMenu: cur.kind === 'menu', levelOpen, dueSince: due.current });
+      // "¿Cómo seguís?" is a menu too: the time ends there at once
+      const onMenu = cur.kind === 'menu' || (cur.kind === 'activity' && cur.page?.kind === 'doors');
+      const verdict = budgetVerdict({ now: Date.now(), startedAt: startedAt.current, budget, onMenu, levelOpen, dueSince: due.current });
       if (verdict === 'wait') return;
       due.current ??= Date.now();
       if (verdict === 'now') finish();
@@ -190,7 +206,7 @@ export function FreePlay() {
     const id = setInterval(check, TICK_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [budget, view.kind]);
+  }, [budget, view.kind, view.kind === 'activity' ? view.page?.kind : null]);
 
   // the flow moved on (the adult skipped the step or ended the session): the open activity ends where it was
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,6 +237,12 @@ export function FreePlay() {
       budget: (msFromNow: number) => { startedAt.current = Date.now(); due.current = null; setBudget(Math.max(0, msFromNow)); },
       pick: (id: string) => { const a = menu.find((x) => x.id === id); if (a) pick(a); },
       menu: () => menu.map((a) => a.id),
+      /** Screenshots and checks: the open sheet's core pages solved (so "¿Cómo seguís?" opens its doors). */
+      solveCores: () => {
+        const cur = viewRef.current;
+        const sheet = cur.kind === 'activity' && 'sheet' in cur.a.kind ? sheetByN(cur.a.kind.sheet) : null;
+        if (sheet) progress.update((q) => sheet.core.reduce((acc, _, i) => solve(acc, coreId(sheet, i + 1)), q));
+      },
     };
   });
 
@@ -244,10 +266,15 @@ export function FreePlay() {
 
   const a = view.a;
   let body: ReactNode;
-  if ('sheet' in a.kind) {
+  if ('sheet' in a.kind && view.page?.kind === 'doors') {
+    // round 2: the year's three doors are "¿Cómo seguís?"
+    body = <NextChoice key={`choice-${view.n}-${choiceShown.current}`} sheet={sheetByN(a.kind.sheet)!} n={choiceShown.current} onMenu={() => toMenu('menu')} />;
+  } else if ('sheet' in a.kind) {
     body = view.page && (
       <LevelWrapContext.Provider value={Wrap}>
-        <SheetScreen key={JSON.stringify(view.page)} n={a.kind.sheet} page={view.page} />
+        <SheetProgress n={a.kind.sheet} page={view.page}>
+          <SheetScreen key={JSON.stringify(view.page)} n={a.kind.sheet} page={view.page} />
+        </SheetProgress>
       </LevelWrapContext.Provider>
     );
   } else if ('rules' in a.kind) {
@@ -288,6 +315,17 @@ function ActivityFrame({ id, page, back, children }: { id: string; page: SheetPa
       {bar ? createPortal(button, bar) : button}
     </div>
   );
+}
+
+/** A sheet page's progress in the bar: its core pages as stones (the solved ones with a seed), or the way chosen on "¿Cómo seguís?". */
+function SheetProgress({ n, page, children }: { n: number; page: SheetPage; children: ReactNode }) {
+  const p = useProgress();
+  const sheet = sheetByN(n);
+  let value: BarProgress = null;
+  if (sheet && page.kind === 'core') value = { kind: 'dots', done: sheet.core.map((_, i) => !!p.solved[coreId(sheet, i + 1)]), here: page.k - 1 };
+  else if (page.kind === 'extra') value = { kind: 'path', door: page.door };
+  else if (page.kind === 'boss') value = { kind: 'path', door: 'boss' };
+  return <BarProgressContext.Provider value={value}>{children}</BarProgressContext.Provider>;
 }
 
 // ------------------------------------------------------------------ the menu

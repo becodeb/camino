@@ -92,16 +92,17 @@ describe('the telemetry queue', () => {
   it('starts a session with a code, the device and no name', () => {
     const w = world();
     const tel = new Telemetry(w.deps);
-    const s = tel.startSession({ grade: 2, division: 'B', consent: true });
+    const s = tel.startSession({ grade: 2, division: 'B', captions: true, captionsSet: 'setup' });
     expect(s.code).toMatch(CODE_RE);
-    expect(s).toMatchObject({ grade: 2, division: 'B', consent: true, app_version: '0.1.0', ended_at: null });
+    expect(s).toMatchObject({ grade: 2, division: 'B', consent: null, app_version: '0.1.0', ended_at: null });
+    expect(s.device).toMatchObject({ captions: true, captions_set: 'setup' });
     expect(Object.keys(s).sort()).toEqual(['adult_form', 'app_version', 'code', 'consent', 'current_step', 'device', 'division', 'ended_at', 'end_reason', 'grade', 'id', 'started_at', 'survey'].sort());
   });
 
   it('numbers events 0, 1, 2… per session, stores them first and removes what the server acked', async () => {
     const w = world();
     const tel = new Telemetry(w.deps);
-    tel.startSession({ grade: 1, division: null, consent: true });
+    tel.startSession({ grade: 1, division: null });
     expect(tel.log('level_start', { level_id: 'a' })).toBe(0);
     expect(tel.log('run', { level_id: 'a' })).toBe(1);
     expect(tel.log('level_end', { level_id: 'a' })).toBe(2);
@@ -114,14 +115,14 @@ describe('the telemetry queue', () => {
     expect(w.posts[0].body.events.map((e) => e.seq)).toEqual([0, 1, 2]);
     expect(tel.status().pending).toBe(0);
     // a new session starts from seq 0 again
-    tel.startSession({ grade: 3, division: null, consent: true });
+    tel.startSession({ grade: 3, division: null });
     expect(tel.log('step')).toBe(0);
   });
 
   it('sends at once when 25 events wait', async () => {
     const w = world();
     const tel = new Telemetry(w.deps);
-    tel.startSession({ grade: 1, division: null, consent: true });
+    tel.startSession({ grade: 1, division: null });
     for (let i = 0; i < 25; i++) tel.log('drag', { phase: 'start' });
     await settle();
     expect(w.posts).toHaveLength(1);
@@ -132,7 +133,7 @@ describe('the telemetry queue', () => {
     const w = world();
     const deps = { ...w.deps, post: async (body: string) => ({ status: 200, body: { acked: (JSON.parse(body).events as { seq: number }[]).slice(0, 1).map((e) => e.seq) } }) };
     const tel = new Telemetry(deps);
-    tel.startSession({ grade: 1, division: null, consent: true });
+    tel.startSession({ grade: 1, division: null });
     tel.log('a'); tel.log('b');
     await tel.flush();
     // one acked per post: the loop keeps sending until the queue is empty
@@ -142,7 +143,7 @@ describe('the telemetry queue', () => {
   it('never drops events offline: backs off exponentially with jitter (capped) and sends everything once back', async () => {
     const w = world();
     const tel = new Telemetry(w.deps);
-    tel.startSession({ grade: 4, division: null, consent: true });
+    tel.startSession({ grade: 4, division: null });
     tel.log('level_start');
     w.script.push('down', 'down', 'down', 'down', 'down', 'down', 'down', 503, 429);
     await w.advance(5_000);
@@ -175,7 +176,7 @@ describe('the telemetry queue', () => {
   it('drops a batch only on a 400, with a warning', async () => {
     const w = world();
     const tel = new Telemetry(w.deps);
-    tel.startSession({ grade: 1, division: null, consent: true });
+    tel.startSession({ grade: 1, division: null });
     tel.log('bad');
     w.script.push(400);
     await tel.flush();
@@ -189,7 +190,7 @@ describe('the telemetry queue', () => {
   it('halves the batch on a 413 and goes on', async () => {
     const w = world();
     const tel = new Telemetry(w.deps, { maxPerPost: 8 });
-    tel.startSession({ grade: 1, division: null, consent: true });
+    tel.startSession({ grade: 1, division: null });
     for (let i = 0; i < 8; i++) tel.log('x');
     w.script.push(413);
     await tel.flush();
@@ -200,7 +201,7 @@ describe('the telemetry queue', () => {
   it('syncs session changes (step, end, survey) through the same queue', async () => {
     const w = world();
     const tel = new Telemetry(w.deps);
-    tel.startSession({ grade: 5, division: null, consent: true });
+    tel.startSession({ grade: 5, division: null });
     await tel.flush();
     expect(tel.status().dirty).toBe(0);
     tel.updateSession({ current_step: 'survey' });
@@ -215,7 +216,7 @@ describe('the telemetry queue', () => {
     const a = world({ storage });
     a.script.push('down');
     const tel1 = new Telemetry(a.deps);
-    const s1 = tel1.startSession({ grade: 2, division: null, consent: true });
+    const s1 = tel1.startSession({ grade: 2, division: null });
     tel1.log('level_start'); tel1.log('run');
     await tel1.flush();
     expect(tel1.status().pending).toBe(2);
@@ -224,7 +225,7 @@ describe('the telemetry queue', () => {
     const b = world({ storage });
     const tel2 = new Telemetry(b.deps);
     expect(tel2.status().pending).toBe(2);
-    tel2.startSession({ grade: 2, division: null, consent: true });
+    tel2.startSession({ grade: 2, division: null });
     await b.advance(5_000);
     const first = b.posts.find((p) => p.body.session.id === s1.id)!;
     expect(first.body.events.map((e) => e.seq)).toEqual([0, 1]);
@@ -237,7 +238,7 @@ describe('the telemetry queue', () => {
   it('works in memory when storage is blocked', async () => {
     const w = world({ storage: fakeStorage(true) });
     const tel = new Telemetry(w.deps);
-    tel.startSession({ grade: 1, division: null, consent: true });
+    tel.startSession({ grade: 1, division: null });
     expect(tel.log('x')).toBe(0);
     await tel.flush();
     expect(w.posts).toHaveLength(1);
@@ -246,7 +247,7 @@ describe('the telemetry queue', () => {
   it('keepalive posts fit in a keepalive request', async () => {
     const w = world();
     const tel = new Telemetry(w.deps, { keepaliveBytes: 2_000 });
-    tel.startSession({ grade: 1, division: null, consent: true });
+    tel.startSession({ grade: 1, division: null });
     for (let i = 0; i < 20; i++) tel.log('x', { pad: 'x'.repeat(200) });
     tel.flushKeepalive();
     await settle();

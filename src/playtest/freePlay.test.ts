@@ -48,7 +48,7 @@ describe('the free-play menu', () => {
 
   it('names every card aloud (the child does not need to read)', () => {
     for (const g of [1, 2, 3, 4, 5]) for (const a of menuFor(g, all)) expect(a.say.length).toBeGreaterThan(8);
-    expect(menuFor(1, none)[0].say).toBe('La escalera: una hoja con puertas y un desafío.');
+    expect(menuFor(1, none)[0].say).toBe('La escalera: una hoja con caminos y un desafío.');
   });
 
   it('plays the rule game\'s pages, the last one the child\'s own game', () => {

@@ -131,6 +131,21 @@ dbDescribe('API against Postgres', () => {
     ]);
   });
 
+  it('round 2: a session without consent (null) is stored as null; a later sync updates the device captions; a string consent is refused', async () => {
+    const app = createApp(pool, { distDir });
+    const post = (body: unknown) => app.request('/api/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const session = newSession({ consent: null, device: { ua: 'test', w: 1920, h: 1080, vw: 1920, vh: 911, touch: false, captions: false, captions_set: 'grade' } });
+    expect((await post({ session, events: [event(0, { type: 'captions', payload: { on: true, where: 'bar' } })] })).status).toBe(200);
+    expect((await post({ session: { ...session, device: { ...session.device, captions: true } }, events: [] })).status).toBe(200);
+    const { rows } = await pool.query('SELECT consent, device FROM sessions WHERE id = $1', [session.id]);
+    expect(rows[0].consent).toBeNull();
+    expect(rows[0].device).toMatchObject({ captions: true, captions_set: 'grade', vh: 911 });
+    const old = newSession();
+    expect((await post({ session: old, events: [] })).status).toBe(200);
+    expect((await pool.query('SELECT consent FROM sessions WHERE id = $1', [old.id])).rows[0].consent).toBe(true);
+    expect((await post({ session: newSession({ consent: 'yes' }), events: [] })).status).toBe(400);
+  });
+
   it('v_activity_time counts a free-play visit whole (activity_end) and the other activities by their pages', async () => {
     const app = createApp(pool, { distDir });
     const session = newSession();

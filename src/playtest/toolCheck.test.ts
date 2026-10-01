@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { simulate } from '../game/engine';
-import { GESTURES, ends, gestureHit, toolLevels } from './toolCheck';
+import { GESTURES, GHOST_AFTER_MS, MOVE_ON_MS, SHOW_MS, gestureHit, toolLevels } from './toolCheck';
 
 describe('the tool check', () => {
   it('asks five gestures in order: tap and ▶ on the first page; drag, ↺ and ✋ on the second', () => {
@@ -23,24 +23,27 @@ describe('the tool check', () => {
     expect(b.say).toBe(GESTURES[2].say);
   });
 
-  it('reads each gesture from the events the page logs', () => {
+  it('reads each gesture from the events the page logs: a tap or a drag both put the block in', () => {
     const drop = (success: boolean) => ({ phase: 'drop', success, from: 'palette' });
-    expect(gestureHit('tap', 'tap_add', {})).toBe('done');
-    expect(gestureHit('tap', 'drag', drop(true))).toBe('other');
+    // the first data showed {"via":"drag","done":false,"gesture":"tap"}: a drag answers a tap now, and a tap a drag
+    expect(gestureHit('tap', 'tap_add', {})).toEqual({ hit: 'done', via: 'tap' });
+    expect(gestureHit('tap', 'drag', drop(true))).toEqual({ hit: 'done', via: 'drag' });
+    expect(gestureHit('drag', 'drag', drop(true))).toEqual({ hit: 'done', via: 'drag' });
+    expect(gestureHit('drag', 'tap_add', {})).toEqual({ hit: 'done', via: 'tap' });
+    expect(gestureHit('drag', 'drag', drop(false))).toEqual({ hit: 'try', via: 'drag' });
     expect(gestureHit('tap', 'drag', { phase: 'start' })).toBeNull();
-    expect(gestureHit('play', 'run', { result: 'empty' })).toBe('done');
-    expect(gestureHit('drag', 'drag', drop(true))).toBe('done');
-    expect(gestureHit('drag', 'drag', drop(false))).toBe('try');
-    expect(gestureHit('drag', 'tap_add', {})).toBe('other');
-    expect(gestureHit('reset', 'reset', {})).toBe('done');
-    expect(gestureHit('help', 'help', { step: 1 })).toBe('done');
+    expect(gestureHit('play', 'run', { result: 'empty' })).toEqual({ hit: 'done' });
+    expect(gestureHit('reset', 'reset', {})).toEqual({ hit: 'done' });
+    expect(gestureHit('help', 'help', { step: 1 })).toEqual({ hit: 'done' });
     expect(gestureHit('help', 'run', {})).toBeNull();
   });
 
-  it('a drag answers a tap (the block is in), a tap does not answer a drag', () => {
-    expect(ends('tap', 'other')).toBe(true);
-    expect(ends('drag', 'other')).toBe(false);
-    expect(ends('drag', 'try')).toBe(false);
-    expect(ends('drag', 'done')).toBe(true);
+  it('asks the three gestures that make a program and only shows ↺ and ✋; short waits', () => {
+    expect(GESTURES.filter((g) => g.asked).map((g) => g.id)).toEqual(['tap', 'play', 'drag']);
+    expect(GESTURES.filter((g) => !g.asked).map((g) => g.ghost.do)).toEqual(['point', 'point']);
+    expect(GHOST_AFTER_MS).toBeLessThanOrEqual(8_000);
+    expect(MOVE_ON_MS).toBeLessThanOrEqual(15_000);
+    // the whole check for a child who never touches anything stays near a minute
+    expect(3 * MOVE_ON_MS + 2 * SHOW_MS).toBeLessThanOrEqual(60_000);
   });
 });

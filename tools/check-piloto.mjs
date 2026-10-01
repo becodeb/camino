@@ -1,27 +1,39 @@
 // Scripted check of the pilot playtest's data path, through the real UI,
 // then the rows in Postgres. Three sessions:
 //
-// 1ro — setup, code, character; the real tool check (tap, ▶, drag, ↺, ✋);
+// Round 2 (T10): the setup is one tap on the grade (no consent tick, no
+// code screen), the tool check takes any equivalent gesture and only shows
+// ↺ and ✋, every spoken line can show as text (💬), the bar has no doors,
+// "¿Cómo seguís?" follows a sheet's core pages, the adult's comment is in
+// the corner menu and the goodbye starts the next session.
+//
+// 1ro — setup (division A), character; the real tool check (the arrow put in
+//   by a DRAG when a tap is asked, ▶, the arrow put in by a TAP when a drag is
+//   asked, ↺ and ✋ pressed while they are shown);
 //   the ladder from rung 1: pass 1, pass 2, then rung 3 (the fix page) with
 //   an offline stretch: the three helps, 🔊, a fourth ✋ raises the hand, the
 //   adult answers, a failed run ends the item (fail) and the ladder stops
-//   (ceiling 2); the cheer; free play: the menu, sheet 6 (three core pages,
-//   the easy door and its first extra), back to the menu, the music recess
+//   (ceiling 2); the cheer; free play: 💬 turned on in the bar (the line shows
+//   in a bubble), the menu, sheet 6 (its four core pages, "¿Cómo seguís?":
+//   más fácil, its first extra, "¿Cómo seguís?" again: otro juego), the music recess
 //   (one song), back, the time runs out on the menu (the cheer); the typing
 //   minigame (?teclas=0.5: 30 s): the intro, five letters caught (a seed), a
 //   wrong key, d-e-v and the backtick go to the game (dev mode stays off),
 //   ✋ and 🔊, the time ends it, "¿Te gustó?" yes; the wardrobe (the scarf kept, the hat on and off, the
 //   crown locked, "listo"); the survey, the goodbye garden with the session's
-//   seeds, the adult form.
-// 5to — enters at rung 9 (fog): two failed runs (fail), the floor check on
+//   seeds, the adult's comment from the corner menu, "jugar otra vez" (the setup).
+// 5to — captions on by default (the bubble in the bar); the tool check: the
+//   arrow never comes (the ghost at 8 s, on at 15 s), ▶, then "seguir" skips
+//   the rest; enters at rung 9 (fog): two failed runs (fail), the floor check on
 //   rung 8 passes, the ladder stops (floor, ceiling 8); the typing minigame
 //   on a touch keyboard (?tactil): a word command typed, its first letter
 //   tapped on the drawn keyboard, the rest on the real one, a wrong key;
 //   "listo"; "¿Te gustó?" more or less; the adult ends the session from the
 //   corner.
-// 3ro — the rule game (rung 11, opened with the ?debug ladder hook): a game
-//   stopped before any arrow (no_play), one stopped after arrows (stopped),
-//   then the rules and the arrows that win it.
+// 3ro — on-screen text forced off at setup; the rule game (rung 11, opened
+//   with the ?debug ladder hook): a game stopped before any arrow (no_play),
+//   one stopped after arrows (stopped), the hand raised (✋ held), then the
+//   rules and the arrows that win it: the hand goes down by itself.
 //
 // Then: every event in Postgres with seq 0..n-1 and no gaps, the tool_check
 // and ladder_step rows, the ladder's ceiling agreeing with v_ladder_ceiling
@@ -83,17 +95,18 @@ async function failRun(p, program = [{ t: 'cmd', cmd: 'up' }]) {
   await p.waitForTimeout(400);
 }
 
-async function newSession(p, grade, query = 'debug') {
+/** The setup in one tap (division A first; `captions`: the setup's on-screen text choice, auto by default). */
+async function newSession(p, grade, query = 'debug', captions = null) {
   await p.goto(`${base}?${query}#/piloto`);
   await p.waitForSelector('.pp-setup');
-  await p.getByRole('button', { name: grade, exact: true }).click();
+  ok(!(await p.getByRole('checkbox').count()), `${grade}: no consent tick at setup`);
   await p.getByRole('button', { name: 'A', exact: true }).click();
-  await p.getByRole('checkbox').click();
-  await p.getByRole('button', { name: 'Empezar' }).click();
-  const code = await p.locator('.pp-code-word').getAttribute('data-code');
-  const sid = await p.evaluate(() => window.__piloto.session().id);
-  await p.getByRole('button', { name: 'Empezar' }).click();
+  if (captions) await p.locator(`[data-captions="${captions}"]`).click();
+  await p.locator(`.pp-grade-card[aria-label="${grade}"]`).click();
   await p.waitForSelector('.choice-row');
+  const sid = await p.evaluate(() => window.__piloto.session().id);
+  const code = await p.evaluate(() => window.__piloto.session().code);
+  ok(!(await p.locator('.pp-code-word').count()) && !(await p.evaluate((c) => document.body.innerText.includes(c), code)), `${grade}: one tap on the grade started; the code is shown nowhere`);
   await p.waitForTimeout(500);
   await p.locator('[data-choice-char="mina"]').click();
   await p.waitForTimeout(600);
@@ -132,24 +145,28 @@ console.log('--- 1ro');
 const one = await page();
 let p = one.p;
 const s1 = await newSession(p, '1ro', 'debug&teclas=0.5');
-ok(/^\p{Lu}\p{Ll}+ [1-9]\d$/u.test(s1.code), `session code "${s1.code}"`);
+ok(/^\p{Lu}\p{Ll}+ [1-9]\d$/u.test(s1.code), `the session keeps an internal code for the admin page ("${s1.code}")`);
 await p.locator('.doors-next').click({ force: true });
 
-// the tool check, gesture by gesture
+// the tool check, gesture by gesture: any equivalent gesture counts
 await onLevel(p, 'tool-1');
+ok(!(await p.locator('.pp-cap').count()) && await p.locator('.level-bar .pp-cap-toggle[aria-pressed="false"]').count() === 1, '1ro: no on-screen text by default; 💬 (off) in the bar');
+ok(!(await p.locator('.level-bar .bar-door, .level-bar .bar-boss, .level-bar .tramo-page').count()), 'the bar has no page icons, doors or boss');
+const toolStart = Date.now();
 await p.waitForTimeout(1200);
-await p.locator('.zone-palette [data-cmd="right"]').first().click(); // tap
-await p.waitForTimeout(1200);
+await drag(p, 'right'); // asked: a tap; a drag puts the block in too
+await p.waitForTimeout(1000);
+ok(await p.locator('.level-bar .pp-go-on').count() === 1, 'the first gesture done: "seguir" is in the bar');
 await p.locator('.btn-play').click(); // ▶
 await onLevel(p, 'tool-2');
 await p.waitForTimeout(1300);
-await drag(p, 'right'); // drag
+await p.locator('.zone-palette [data-cmd="right"]').first().click(); // asked: a drag; a tap does too
 await p.waitForTimeout(1200);
-await p.locator('.btn-restart').click(); // ↺
+await p.locator('.btn-restart').click(); // ↺, while it is shown
 await p.waitForTimeout(1200);
-await p.locator('.level-bar .help').click(); // ✋
+await p.locator('.level-bar .help').click(); // ✋, while it is shown
 await p.waitForSelector('[data-interlude="walk"]', { timeout: 15_000 });
-ok(true, 'the tool check walks on to the ladder');
+ok(Date.now() - toolStart < 30_000, `the tool check walks on to the ladder (${Math.round((Date.now() - toolStart) / 1000)} s)`);
 
 // ladder: rung 1 and rung 2 solved
 await onLevel(p, '1ro-h1-2');
@@ -180,25 +197,35 @@ ok(offline.pending > 5 && offline.failures > 0, `offline: ${offline.pending} eve
 await one.ctx.setOffline(false);
 await p.locator('.pp-cheer-next').click({ force: true });
 
-// free play: the menu, the sheet (three core pages, a door, its extra), back to the menu, the music recess (one song), back
+// free play: 💬 on, the menu, the sheet (four core pages, "¿Cómo seguís?": más fácil, its extra, otro juego), the music recess (one song), back
 await p.waitForSelector('.pp-menu');
+await p.locator('.level-bar .pp-cap-toggle').click();
+await p.waitForTimeout(300);
+await p.locator('.level-bar .speak').click();
+await p.waitForSelector('.level-bar .pp-cap', { timeout: 5000 });
+ok((await p.locator('.level-bar .pp-cap').innerText()).includes('¿A qué querés jugar?'), '💬 turned on: the spoken line shows in a bubble in the bar');
 const cards = await p.locator('.pp-fp-card').evaluateAll((els) => els.map((e) => e.dataset.activity));
 ok(cards.join(',') === 'sheet,recess,guardas,editor', `1ro menu: ${cards.join(',')}`);
 await p.waitForTimeout(800);
 await p.locator('.pp-fp-card[data-activity="sheet"]').click();
 await onLevel(p, '1ro-h6-1');
 ok((await p.locator('.level-bar .adult-title').innerText()).includes('Escalones'), 'the sheet page\'s own title in the bar');
-for (const id of ['1ro-h6-1', '1ro-h6-2', '1ro-h6-3']) { await onLevel(p, id); await solve(p); }
-await onLevel(p, '1ro-h6-4');
+ok(await p.locator('.level-bar .pp-progress').count() === 1 && !(await p.locator('.level-bar .bar-door').count()), 'the sheet page\'s bar: a simple progress, no doors');
+for (const id of ['1ro-h6-1', '1ro-h6-2', '1ro-h6-3', '1ro-h6-4']) { await onLevel(p, id); await solve(p); }
+await p.waitForSelector('.pp-next');
+const nextPicks = await p.locator('.pp-next-card').evaluateAll((els) => els.map((e) => e.dataset.pick));
+ok(nextPicks.join(',') === 'easy,medium,hard,boss,menu', `after the core pages, "¿Cómo seguís?": ${nextPicks.join(',')}`);
 await p.waitForTimeout(600);
-await p.locator('.level-bar .bar-door[data-door="easy"]').click();
+await p.locator('.pp-next-card[data-pick="easy"]').click();
 await onLevel(p, '1ro-h6-easy-1');
-ok(true, 'the easy door (a link in the bar) opened its first extra page');
+ok(true, '"más fácil" opened the easy way\'s first extra page');
 await solve(p);
-await p.waitForTimeout(800);
-await p.locator('.pp-menu-back').click();
+await p.waitForSelector('.pp-next');
+ok(true, 'after the extra page, "¿Cómo seguís?" again');
+await p.waitForTimeout(500);
+await p.locator('.pp-next-card[data-pick="menu"]').click();
 await p.waitForSelector('.pp-menu');
-ok(true, 'back to the menu');
+ok(true, '"otro juego": back to the menu');
 await p.waitForTimeout(600);
 await p.locator('.pp-fp-card[data-activity="recess"]').click();
 await onLevel(p, '1ro-h9-1');
@@ -250,7 +277,7 @@ ok(!locked.includes('bufanda') && !locked.includes('hongo') && locked.includes('
 for (const id of ['bufanda', 'hongo', 'hongo', 'corona']) { await p.locator(`[data-prenda="${id}"]`).click(); await p.waitForTimeout(700); }
 await p.locator('.wardrobe-next').click({ force: true });
 
-// the survey, the goodbye, the adult form
+// the survey, the goodbye, the adult's comment from the corner menu, "jugar otra vez"
 await p.waitForSelector('.pp-survey');
 for (const [q, a] of [['liked', 'yes'], ['difficulty', 'mid']]) {
   await p.waitForSelector(`[data-question="${q}"]`);
@@ -269,12 +296,18 @@ const byeSeeds = Number(await p.locator('.pp-garden-svg').getAttribute('data-see
 const planted = await p.locator('.pp-garden-plant').count();
 ok(byeSeeds === planted && byeSeeds >= seedsFree + 1 && byeSeeds >= 9, `the goodbye garden grows the session's ${byeSeeds} seeds (${planted} plants; the tool check, the ladder, free play and the typing game)`);
 ok(await p.locator('.pp-garden-svg .garden-me').count() === 1, 'the character stands in the goodbye garden');
-await p.locator('.pp-for-adult').click();
+ok(!(await p.locator('.pp-for-adult, .pp-bye-code').count()), 'the goodbye shows no code and no adult step');
+await hold(p, 18, 18, 1700);
+await p.locator('[data-act="adult-form"]').click();
 await p.locator('[data-value="high"]').click();
 await p.locator('[data-value="some"]').click();
 await p.fill('.pp-comment textarea', 'Probó arrastrar sin ayuda.');
-await p.getByRole('button', { name: 'Guardar' }).click();
+await p.locator('[data-act="save-form"]').click();
+await p.locator('.pp-adult-close').click();
 await drain(p);
+await p.locator('.pp-again').click();
+await p.waitForSelector('.pp-setup');
+ok(true, '"jugar otra vez": the next child\'s setup');
 ok((await p.evaluate(() => localStorage.getItem('camino.progress.v1'))) === null, 'the demo\'s camino.progress.v1 was never written');
 await one.ctx.close();
 
@@ -284,15 +317,18 @@ const five = await page();
 p = five.p;
 const s5 = await newSession(p, '5to', 'debug&tactil&teclas=1');
 await p.locator('.doors-next').click({ force: true });
-// the tool check: the tap never comes; the ghost shows it at 20 s, the check moves on at 40 s; ▶ on an empty notebook still counts
+// the tool check: the arrow never comes; the ghost shows it at 8 s, the check moves on at 15 s; ▶ on an empty notebook still counts; "seguir" skips the rest
 await onLevel(p, 'tool-1');
-await p.waitForTimeout(21_500);
-ok(await p.locator('.ghost-layer svg').count() > 0, 'no tap in 20 s: the ghost hand shows it');
-await p.waitForFunction(() => document.querySelector('.pp-cue') && document.querySelector('.pp-cue').getBoundingClientRect().left > 300, null, { timeout: 30_000 });
-ok(true, 'at 40 s the check moved on to ▶ (the ring is on Probar)');
+await p.waitForSelector('.level-bar .pp-cap', { timeout: 5000 });
+ok((await p.locator('.level-bar .pp-cap').innerText()).includes('Tocá la flecha'), '5to: on-screen text on by default (the line in the bar)');
+await p.waitForTimeout(9_000);
+ok(await p.locator('.ghost-layer svg').count() > 0, 'no arrow in 8 s: the ghost hand shows it');
+await p.waitForFunction(() => document.querySelector('.pp-cue') && document.querySelector('.pp-cue').getBoundingClientRect().left > 300, null, { timeout: 15_000 });
+ok(true, 'at 15 s the check moved on to ▶ (the ring is on Probar)');
 await p.locator('.btn-play').click();
-await onLevel(p, 'tool-2');
-await p.evaluate(() => window.__piloto.jump('ladder'));
+await p.locator('.level-bar .pp-go-on').click({ timeout: 5000 });
+await p.waitForSelector('[data-interlude="walk"]', { timeout: 10_000 });
+ok(true, '"seguir" left the rest of the tool check');
 await onLevel(p, '2do-1');
 ok(true, '5to enters the ladder at rung 9 (2do-1, the fog)');
 await p.waitForTimeout(900);
@@ -349,7 +385,7 @@ console.log('--- 3ro');
 const three = await page();
 p = three.p;
 // no first-entry demo (it would press ▶ itself); straight to the ladder's rule game
-const s3b = await newSession(p, '3ro', 'debug&nointro');
+const s3b = await newSession(p, '3ro', 'debug&nointro', 'off');
 await p.evaluate(() => window.__piloto.jump('ladder'));
 await p.waitForSelector('main.level');
 await p.evaluate(() => window.__ladder.go(11));
@@ -363,6 +399,11 @@ await p.evaluate(() => window.__camino.setRules([{ hat: 'key:right', actions: ['
 await p.locator('.btn-play').click(); await p.waitForTimeout(500);
 for (const k of ['ArrowRight', 'ArrowRight']) { await p.keyboard.press(k); await p.waitForTimeout(700); }
 await p.locator('.btn-play').click(); await p.waitForTimeout(500);
+ok(!(await p.locator('.pp-cap').count()), '3ro with on-screen text forced off at setup: no bubble');
+// the hand raised (✋ held), nobody comes; the child wins: it goes down by itself
+const [h3x, h3y] = await center(p, '.level-bar .help');
+await hold(p, h3x, h3y, 1300);
+ok(await p.locator('.pp-hand').isVisible(), 'the hand is up');
 // the reference rules and the way to the seed
 await p.evaluate(() => window.__camino.setRules(window.__camino.level.realtime.solution));
 await p.locator('.btn-play').click(); await p.waitForTimeout(500);
@@ -370,6 +411,7 @@ for (const k of ['Up', 'Up', 'Right', 'Right', 'Right', 'Down', 'Right', 'Right'
 await p.locator('.next-page').click({ force: true, timeout: 15_000 });
 await p.waitForSelector('[data-interlude="walk"]');
 ok(true, 'the rule game was won by the arrows and the page turned');
+ok(!(await p.locator('.pp-hand').count()), 'solved with the hand up: the hand went down by itself');
 await drain(p);
 await three.ctx.close();
 
@@ -385,13 +427,15 @@ for (const [name, s] of [['1ro', s1], ['5to', s5], ['3ro', s3b]]) {
 // free play
 const picks = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'choice' and payload->>'activity' <> 'character' order by seq`)).map((x) => x.p);
 ok(picks.map((x) => x.door ? `door:${x.door}` : `${x.activity}#${x.visit}`).join(' ') === 'sheet#1 door:easy recess#2', `free-play choices: ${JSON.stringify(picks)}`);
+const nexts = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'next_choice' order by seq`)).map((x) => x.p);
+ok(nexts.map((x) => `${x.pick}#${x.n}`).join(' ') === 'easy#1 menu#2' && nexts.every((x) => x.sheet === 6 && x.time_ms >= 0), `next_choice rows: ${JSON.stringify(nexts)}`);
 const fpEnds = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'activity_end' order by seq`)).map((x) => x.p);
 ok(fpEnds.length === 2 && fpEnds.every((x) => x.reason === 'menu' && x.time_ms > 0), `activity_end rows: ${JSON.stringify(fpEnds)}`);
-// 6-1, 6-2, 6-3 solved, 6-4 left by the door, the easy extra solved, the next extra left by the menu button
-ok(fpEnds[0]?.activity === 'sheet' && fpEnds[0]?.levels === 6 && fpEnds[0]?.wins === 4 && fpEnds[0]?.extras === 1, `the sheet visit counts its pages, wins and the extra solved: ${JSON.stringify(fpEnds[0])}`);
+// 6-1 … 6-4 solved, the easy extra solved, then "otro juego"
+ok(fpEnds[0]?.activity === 'sheet' && fpEnds[0]?.levels === 5 && fpEnds[0]?.wins === 5 && fpEnds[0]?.extras === 1, `the sheet visit counts its pages, wins and the extra solved: ${JSON.stringify(fpEnds[0])}`);
 const sheetEnds = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'level_end' and payload->>'activity' = 'sheet' order by seq`)).map((x) => x.p);
 ok(sheetEnds.some((x) => x.page === 'extra' && x.door === 'easy' && x.outcome === 'win' && x.sheet === 6), 'the door\'s extra page: level_end with page extra, door easy, won');
-ok(sheetEnds.filter((x) => x.page === 'core' && x.outcome === 'win').length === 3, 'three core pages won in the sheet');
+ok(sheetEnds.filter((x) => x.page === 'core' && x.outcome === 'win').length === 4, 'four core pages won in the sheet');
 const recessStart = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'level_start' and payload->>'activity' = 'recess' order by seq`)).map((x) => x.p);
 ok(recessStart[0]?.level_id === '1ro-h9-1' && recessStart[0]?.sheet === 9, `the recess page's level_start: ${JSON.stringify(recessStart[0])}`);
 ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'run' and payload->>'level_id' = '1ro-h9-1';`)) >= 1, 'the song\'s run was logged');
@@ -406,11 +450,11 @@ ok(ward[4]?.outfit_id === 'corona' && ward[4]?.needs === 16, `a locked piece say
 const close = ward[5];
 ok(close?.reason === 'done' && close?.outfit?.neck === 'bufanda' && !close?.outfit?.head && close?.duration_ms > 1000 && close?.taps === 4, `the outfit kept: ${JSON.stringify(close)}`);
 const gv = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'garden_view'`))[0]?.p;
-ok(gv?.seeds === byeSeeds && gv?.duration_ms > 500 && gv?.outfit?.neck === 'bufanda', `garden_view: ${JSON.stringify(gv)}`);
+ok(gv?.seeds === byeSeeds && gv?.duration_ms > 500 && gv?.outfit?.neck === 'bufanda' && gv?.left === 'again', `garden_view: ${JSON.stringify(gv)}`);
 ok(Number(times.wardrobe ?? 0) === 0, 'the wardrobe is not a free-play activity in v_activity_time');
 const types = sql(`select type || ':' || count(*) from events where session_id = '${s1.sid}' group by type order by type;`).split('\n');
 console.log(`     1ro: ${types.join(' ')}`);
-for (const t of ['step', 'choice', 'tool_check', 'level_start', 'run', 'level_end', 'help', 'ghost_demo', 'speak', 'tap_add', 'drag', 'call_adult', 'adult_help', 'ladder_step', 'ladder_end', 'activity_end', 'typing', 'typing_end', 'wardrobe', 'survey_answer', 'garden_view']) {
+for (const t of ['step', 'choice', 'tool_check', 'level_start', 'run', 'level_end', 'help', 'ghost_demo', 'speak', 'tap_add', 'drag', 'call_adult', 'call_adult_end', 'adult_help', 'ladder_step', 'ladder_end', 'activity_end', 'next_choice', 'captions', 'typing', 'typing_end', 'wardrobe', 'survey_answer', 'garden_view', 'adult_form']) {
   ok(types.some((x) => x.startsWith(`${t}:`)), `1ro has ${t}`);
 }
 
@@ -449,13 +493,15 @@ ok(vg.length === 2 && JSON.stringify(vg) === JSON.stringify(direct), `v_typing_b
 ok(vg[0]?.attempts >= ty1.length && vg[1]?.touch_attempts >= 1 && vg[0]?.liked_yes >= 1 && vg[1]?.liked_mid >= 1, 'the view has this run\'s 1ro keys, 5to\'s tapped key and both answers');
 
 // the tool check
-const tools = JSON.parse(json(`select payload->>'gesture' g, (payload->>'done')::boolean done, (payload->>'attempts')::int attempts, (payload->>'shown_by_ghost')::boolean ghost, payload->>'level_id' lv, (payload->>'time_ms')::int ms from events where session_id = '${s1.sid}' and type = 'tool_check' order by seq`));
+const tools = JSON.parse(json(`select payload->>'gesture' g, (payload->>'done')::boolean done, (payload->>'asked')::boolean asked, payload->>'via' via, (payload->>'attempts')::int attempts, (payload->>'shown_by_ghost')::boolean ghost, payload->>'level_id' lv, (payload->>'time_ms')::int ms from events where session_id = '${s1.sid}' and type = 'tool_check' order by seq`));
 ok(tools.map((x) => x.g).join(',') === 'tap,play,drag,reset,help', `tool_check gestures in order: ${tools.map((x) => x.g).join(',')}`);
-ok(tools.every((x) => x.done && !x.ghost && x.attempts >= 1 && x.ms > 0), `every gesture done, alone: ${JSON.stringify(tools)}`);
+ok(tools.every((x) => x.done && x.attempts >= 1 && x.ms > 0), `every gesture done: ${JSON.stringify(tools)}`);
+ok(tools[0].via === 'drag' && tools[2].via === 'tap', 'a drag answered the tap and a tap the drag (both done: the round-1 bug is gone)');
+ok(tools.map((x) => x.asked).join(',') === 'true,true,true,false,false' && !tools[0].ghost && tools[3].ghost && tools[4].ghost, '↺ and ✋ are only shown (by the ghost), the three asked ones were done alone');
 ok(tools.slice(0, 2).every((x) => x.lv === 'tool-1') && tools.slice(2).every((x) => x.lv === 'tool-2'), 'gestures on their pages');
-const drags = JSON.parse(json(`select payload->>'level_id' lv, payload->>'phase' ph, payload->>'success' ok from events where session_id = '${s1.sid}' and type = 'drag' and payload->>'level_id' = 'tool-2'`));
-ok(drags.some((d) => d.ph === 'drop' && d.ok === 'true'), 'the tool check\'s drag is also a drag event (drop, success)');
-ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'tap_add' and payload->>'level_id' = 'tool-1';`)) === 1, 'the tool check\'s tap is a tap_add event');
+const drags = JSON.parse(json(`select payload->>'level_id' lv, payload->>'phase' ph, payload->>'success' ok from events where session_id = '${s1.sid}' and type = 'drag' and payload->>'level_id' = 'tool-1'`));
+ok(drags.some((d) => d.ph === 'drop' && d.ok === 'true'), 'the tool check\'s drag (on the first page) is also a drag event (drop, success)');
+ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'tap_add' and payload->>'level_id' = 'tool-2';`)) === 1, 'the tool check\'s tap (on the second page) is a tap_add event');
 
 // the 1ro ladder
 const steps1 = JSON.parse(json(`select (payload->>'rung')::int rung, payload->>'item' item, payload->>'concept' concept, payload->>'check' chk, payload->>'result' result, payload->>'next' nxt, (payload->>'help_levels')::int help, (payload->>'adult_helped')::boolean adult, (payload->>'attempts')::int attempts from events where session_id = '${s1.sid}' and type = 'ladder_step' order by seq`));
@@ -471,11 +517,22 @@ const lvEnd3 = JSON.parse(json(`select payload p from events where session_id = 
 ok(lvEnd3?.outcome === 'fail' && lvEnd3?.adult_helped === true && lvEnd3?.rung === 3, `the fix page's level_end: ${lvEnd3?.outcome}, adult_helped ${lvEnd3?.adult_helped}`);
 ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'run' and (payload->>'after_ghost')::boolean;`)) >= 1, 'a run after the ghost demo is marked after_ghost');
 const sess = JSON.parse(sql(`select row_to_json(s) from (select code, grade, division, consent, ended_at is not null as ended, end_reason, survey, adult_form from sessions where id = '${s1.sid}') s;`));
-ok(sess.code === s1.code && sess.division === 'A' && sess.consent === true, `session ${sess.code}, grade ${sess.grade}, division ${sess.division}`);
+ok(sess.code === s1.code && sess.division === 'A' && sess.consent === null, `session ${sess.code}, grade ${sess.grade}, division ${sess.division}, consent ${sess.consent}`);
 ok(sess.ended && sess.end_reason === 'completed', `ended, end_reason ${sess.end_reason}`);
 ok(sql(`select end_reason from sessions where id = '${s5.sid}';`) === 'adult_ended', '5to: end_reason adult_ended');
 ok(sess.survey?.liked === 'yes' && sess.survey?.favorite_activity === 'ladder' && sess.survey?.play_again === 'yes', `survey ${JSON.stringify(sess.survey)}`);
-ok(sess.adult_form?.engagement === 'high' && sess.adult_form?.help_needed === 'some', `adult form ${JSON.stringify(sess.adult_form)}`);
+ok(sess.adult_form?.engagement === 'high' && sess.adult_form?.help_needed === 'some' && sess.adult_form?.step === 'goodbye', `adult form ${JSON.stringify(sess.adult_form)}`);
+ok(!Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'step' and payload->>'to' in ('code', 'adult_form');`)), 'no code or adult_form step');
+const hands1 = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'call_adult_end'`)).map((x) => x.p);
+ok(hands1.length === 1 && hands1[0].resolved_by === 'adult' && hands1[0].level_id === '1ro-h3-3', `the adult answered the hand: ${JSON.stringify(hands1)}`);
+const dev = JSON.parse(sql(`select device from sessions where id = '${s1.sid}';`));
+const cap1 = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'captions'`)).map((x) => x.p);
+ok(dev.captions === true && dev.captions_set === 'grade' && cap1.length === 1 && cap1[0].on === true && cap1[0].where === 'bar', `1ro: captions off by the grade, turned on in the bar: device ${JSON.stringify({ captions: dev.captions, set: dev.captions_set })}, ${JSON.stringify(cap1)}`);
+const dev5 = JSON.parse(sql(`select device from sessions where id = '${s5.sid}';`));
+const dev3 = JSON.parse(sql(`select device from sessions where id = '${s3b.sid}';`));
+ok(dev5.captions === true && dev5.captions_set === 'grade' && dev3.captions === false && dev3.captions_set === 'setup', `5to captions on by the grade, 3ro off by the setup: ${JSON.stringify([dev5.captions, dev5.captions_set, dev3.captions, dev3.captions_set])}`);
+const hands3 = JSON.parse(json(`select payload p from events where session_id = '${s3b.sid}' and type = 'call_adult_end'`)).map((x) => x.p);
+ok(hands3.length === 1 && hands3[0].resolved_by === 'self' && hands3[0].level_id === '3ro-1', `3ro solved it with the hand up: ${JSON.stringify(hands3)}`);
 
 // the 5to ladder
 const steps5 = JSON.parse(json(`select (payload->>'rung')::int rung, payload->>'check' chk, payload->>'result' result, payload->>'next' nxt, (payload->>'attempts')::int attempts from events where session_id = '${s5.sid}' and type = 'ladder_step' order by seq`));
@@ -486,9 +543,10 @@ ok(sql(`select ladder_ceiling_rung from v_session_summary where session_id = '${
 const fogRuns = JSON.parse(json(`select payload->>'result' r from events where session_id = '${s5.sid}' and type = 'run' and payload->>'level_id' = '2do-1' order by seq`));
 ok(fogRuns.length === 2 && fogRuns.every((x) => x.r !== 'win'), `the fog page's two runs: ${fogRuns.map((x) => x.r).join(',')}`);
 
-const tools5 = JSON.parse(json(`select payload->>'gesture' g, (payload->>'done')::boolean done, (payload->>'shown_by_ghost')::boolean ghost, (payload->>'time_ms')::int ms from events where session_id = '${s5.sid}' and type = 'tool_check' order by seq`));
-ok(tools5[0]?.g === 'tap' && tools5[0].done === false && tools5[0].ghost === true && tools5[0].ms >= 40_000, `5to tap not done, shown by the ghost: ${JSON.stringify(tools5[0])}`);
+const tools5 = JSON.parse(json(`select payload->>'gesture' g, (payload->>'done')::boolean done, (payload->>'skipped')::boolean skipped, (payload->>'shown_by_ghost')::boolean ghost, (payload->>'time_ms')::int ms from events where session_id = '${s5.sid}' and type = 'tool_check' order by seq`));
+ok(tools5[0]?.g === 'tap' && tools5[0].done === false && tools5[0].ghost === true && tools5[0].ms >= 15_000 && tools5[0].ms < 20_000, `5to tap not done, shown by the ghost, on at 15 s: ${JSON.stringify(tools5[0])}`);
 ok(tools5[1]?.g === 'play' && tools5[1].done === true && tools5[1].ghost === false, `5to ▶ done: ${JSON.stringify(tools5[1])}`);
+ok(tools5.slice(2).map((x) => `${x.g}:${x.skipped}`).join(',') === 'drag:true,reset:true,help:true', `"seguir" logged the rest as skipped: ${JSON.stringify(tools5.slice(2))}`);
 ok(Number(sql(`select count(*) from events where session_id = '${s5.sid}' and type = 'ghost_demo' and payload->>'kind' = 'tool';`)) === 1, 'one ghost_demo of kind tool');
 
 // the rule game's runs

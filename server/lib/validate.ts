@@ -46,8 +46,9 @@ function validateSession(input: unknown): SessionInput | string {
     return 'session.division must be null or one letter';
   }
 
-  const consent = input.consent;
-  if (typeof consent !== 'boolean') return 'session.consent must be a boolean';
+  // null since round 2 (the setup asks no tick); older clients still send true
+  const consent = input.consent ?? null;
+  if (consent !== null && typeof consent !== 'boolean') return 'session.consent must be a boolean or null';
 
   const started_at = input.started_at;
   if (!isParseableDate(started_at)) return 'session.started_at must be a parseable date';
@@ -80,7 +81,7 @@ function validateSession(input: unknown): SessionInput | string {
     code,
     grade,
     division: division as string | null,
-    consent,
+    consent: consent as boolean | null,
     started_at,
     ended_at: ended_at as string | null,
     end_reason: end_reason as string | null,

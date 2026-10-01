@@ -24,18 +24,18 @@ One row per playtest session (one child, one sitting).
 | Column | Type | Meaning | Research question |
 |---|---|---|---|
 | `id` | uuid, PK | Client-generated session id. | — |
-| `code` | text | The anonymous session code shown to the adult (e.g. "Zorro 27"), for matching with the adult's paper notes. | 3 |
+| `code` | text | An anonymous session code (e.g. "Zorro 27"). Round 1 showed it to the adult for paper notes; since round 2 (2026-10-01) the kid app never shows it: it is only for the admin page (telling sessions apart, "Borrar"). | 3 |
 | `grade` | smallint 1–5 | Grade (1ro–5to). | all, as the grouping dimension |
 | `division` | text, 1 letter or null | Optional division letter. | grouping only |
-| `consent` | boolean | Adult confirmed the session at setup. | — |
+| `consent` | boolean, nullable | Round 1: `true`, the adult ticked "La escuela autorizó esta prueba" at setup. Since round 2 the setup asks no tick (the school's authorization is kept outside the app, and nothing here names a child): new sessions write `NULL` (migration `006_consent_nullable.sql`). | — |
 | `started_at` | timestamptz | When the session began. | 5 (duration, idle) |
 | `ended_at` | timestamptz, nullable | When the session ended (set on goodbye or an adult end-session gesture). | 5 |
 | `end_reason` | text, nullable | `'completed'` (the child reached the goodbye), `'adult_ended'` (the adult's hidden "end the session"; the survey still follows), `'abandoned'` (set by the client when a new session starts on the device while this one never ended, e.g. the adult set up a new child without ending the last one, or a tab reloaded more than 2 hours after its last save; `ended_at` is then its last event's time). A reload within a session no longer abandons it: the session carries on (see `resume`). | 5 |
 | `app_version` | text, nullable | Front-end build version at the time of the session. | — |
-| `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language. | 1 (device capability vs. tool failures) |
+| `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang, captions?, captions_set?}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language; since round 2 `captions` (on-screen text on now: set at the start and updated by every 💬 toggle, see `captions`) and `captions_set` (`'grade'`: the default, on from 3ro; `'setup'`: forced on or off at setup). | 1 (device capability vs. tool failures), 3 (captions) |
 | `survey` | jsonb, nullable | See "survey_answer" below; the final answers, keyed by question. | 9 |
-| `adult_form` | jsonb, nullable | The adult's post-session form: `{engagement: 'low'|'mid'|'high', help_needed: 'none'|'some'|'a_lot', comment?: string}`. | 3, 5 |
-| `current_step` | text, nullable | Last known flow step (`'setup'`, `'code'`, `'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, `'adult_form'`), for the admin page's live "where is each child" view. | 5 |
+| `adult_form` | jsonb, nullable | The adult's form: `{engagement: 'low'|'mid'|'high'|null, help_needed: 'none'|'some'|'a_lot'|null, comment?: string, step?: string}`. Round 1: a step after the goodbye, both answers required. Since round 2 it is optional, from the corner menu ("Comentario del adulto") at any time of the session; any answer may be left out (`null`), saving again replaces it, and `step` is the flow step it was saved on (see the `adult_form` event). Most round-2 sessions will have none. | 3, 5 |
+| `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`; round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. | 5 |
 | `created_at` | timestamptz | First time this session row was written. | — |
 | `last_seen_at` | timestamptz | Updated on every sync; drives the admin page's "active now" indicator. | 5 |
 
@@ -57,26 +57,42 @@ One row per instrumented event, append-only.
 Every payload is a plain JSON object. Optional fields are marked `?`.
 
 ### `tool_check`
-One gesture of the tool check (1–2 min, before the ladder): two tiny pages
-built with the real engine and 1ro's arrow (`tool-1`: 2×2, one step to the
-seed; `tool-2`: 4×2, three steps), five gestures asked aloud one at a time,
-each circled with a blue pen ring: `tap` (tap the arrow in the palette:
-tap-to-add), `play` (▶ Probar), then `drag` (drag the arrow into the
-notebook), `reset` (↺ Volver a empezar), `help` (✋ once). A gesture not done
-in 20 s is shown once by the ghost hand (`ghost_demo` kind `tool`) and said
-again; 20 s later the check moves on (`done: false`). One event per gesture,
-in that order. **RQ 1.**
+One gesture of the tool check (before the ladder): two tiny pages built
+with the real engine and 1ro's arrow (`tool-1`: 2×2, one step to the seed;
+`tool-2`: 4×2, three steps), five gestures one at a time, each circled with
+a blue pen ring and said aloud. **RQ 1.**
+
+Round 2 (2026-10-01; the first try waited 40 s on ✋ and logged a drag as
+"tap not done"): three gestures are *asked*: `tap` (put the arrow in the
+notebook), `play` (▶ Probar), `drag` (put an arrow in again, "también podés
+arrastrarla"); **any equivalent gesture answers them** (a tap or a drag both
+put the block in: `via` says which). Not done in 8 s, the ghost hand shows
+it (`ghost_demo` kind `tool`) and it is said again; 15 s after it was asked
+the check moves on (`done: false`). Two gestures are only *shown*
+(`asked: false`): `reset` (↺) and `help` (✋): the ghost hand points at each
+at once while it is said what it does, for 5 s; a press in that time is
+`done: true`, nothing waits for it. From the first gesture done, a drawn
+"seguir" arrow in the bar ends the check at once: the gestures not reached
+are logged then, `done: false, skipped: true`. The whole check takes ~30 s
+for a child who knows the tool, ~70 s at most. One event per gesture, in
+order.
 ```
 {
   gesture: 'tap' | 'play' | 'drag' | 'reset' | 'help',
-  done: boolean,            // the gesture asked was done (false: moved on after 40 s, or see `via`)
+  done: boolean,            // done by the child (false: moved on, only shown, or skipped)
+  asked?: boolean,          // round 2: true for tap/play/drag (waited for), false for reset/help (only shown)
   time_ms: number,          // from the moment it was asked to the moment it was seen (for `play`, the run's end)
-  attempts: number,         // tries that answered it: taps, runs, drag drops (dropped nowhere included), ↺ and ✋ presses
-  shown_by_ghost: boolean,  // the ghost hand showed it (20 s without it)
+  attempts: number,         // tries that answered it: block adds (tap or drag; drags dropped nowhere included), runs, ↺ and ✋ presses
+  shown_by_ghost: boolean,  // the ghost hand showed it (an asked gesture after 8 s; a shown one always)
   level_id: 'tool-1' | 'tool-2',
-  via?: 'drag' | 'tap'      // the block got in the other way: a drag when a tap was asked (moves on, done false); a tap when a drag was asked (keeps waiting)
+  via?: 'drag' | 'tap',     // how the block got in (tap, drag); round 1: only when it came the "other" way
+  skipped?: true            // round 2: "seguir" pressed before this gesture came
 }
 ```
+Round-1 rows (no `asked`): `tap` was answered by a drag too but logged
+`done: false, via: 'drag'` (the bug the first try showed: read it as done);
+`drag` waited for a real drag; all five waited 20 s + 20 s.
+
 The pages' own `drag` (start/drop, success, from) and `tap_add` events are
 logged as everywhere (`level_id` `tool-1`/`tool-2`), so drag attempts vs
 successes and taps are read from them too. `level_start`/`level_end` carry
@@ -184,13 +200,14 @@ raises the character's hand (`call_adult`).
 ### `ghost_demo`
 A demonstration played on the page. **RQ 3.**
 ```
-{ level_id: string, kind: 'hint' | 'footprints' | 'intro' | 'tool' }
+{ level_id: string, kind: 'hint' | 'footprints' | 'intro' | 'tool', gesture?: string }
 ```
 `hint`: ✋ step 2 (or step 3's fallback), the ghost hand shows the next
 thing to do; `footprints`: ✋ step 3, the solution's way on the board;
 `intro`: the concept demo the page plays by itself (a new idea, after a full
 notebook or a failed run; the 3ro rule game's first-page demo too); `tool`:
-the tool check showing a gesture not done in 20 s. Events are append-only,
+the tool check showing a gesture (round 2: `gesture` says which; an asked
+one after 8 s, ↺ and ✋ always). Events are append-only,
 so "does the demo lead
 to success" is read from the next `run` on the same level, which carries
 `after_ghost: true`.
@@ -204,6 +221,19 @@ The child called the adult: the character raises its hand on screen. **RQ 3.**
 the third automatic help. `help_step` is the automatic help reached on the
 level (0–3). Several calls in a row keep one hand up (`hand_up: true` on
 the repeats).
+
+### `call_adult_end`
+Round 2: the raised hand went down. **RQ 3** (does the child depend on the
+adult: how many calls were answered, and how many the child got past alone).
+```
+{ level_id?: string, resolved_by: 'adult' | 'self' | 'moved_on', duration_ms: number }
+```
+`adult`: the adult answered (long press on the hand → what they did; an
+`adult_help` with `prompted: true` comes just before); `self`: the child
+solved the page with the hand up; `moved_on`: the child (or the flow) left
+the page, item, probe phase or step with the hand up and nobody came.
+`duration_ms` is the time since the hand went up. Round-1 sessions have no
+such event (the hand stayed up until the adult answered or the survey).
 
 ### `adult_help`
 The adult resolved a call (long press on the raised hand, which lowers
@@ -240,6 +270,22 @@ logged. **RQ 1.**
 { level_id: string }
 ```
 
+### `next_choice`
+Round 2: a tap on "¿Cómo seguís?", the screen a sheet shows in free play
+after its core pages (instead of the year's three doors and boss), and again
+after every extra page and after the challenge. Five drawn choices, said
+aloud: three ways on (a gentle hill "más fácil" = door `easy`, a flat path
+"igual" = `medium`, a steep hill "más difícil" = `hard`), the challenge
+(the boss page) and "otro juego" (back to the menu). **RQ 5, 6.**
+```
+{ sheet: number, pick: 'easy' | 'medium' | 'hard' | 'boss' | 'menu', n: number, time_ms: number }
+```
+`n`: how many times the screen was shown in this visit (1 = right after the
+core pages); `time_ms`: from the screen to the tap. A way on then opens the
+next page behind that door and logs the round-1 `choice` {activity, door,
+sheet} as before (now on every pick, since the child comes back to the
+choice between pages), so door choices stay comparable across rounds.
+
 ### `choice`
 A free-choice made by the child. **RQ 5, 6.**
 ```
@@ -252,8 +298,9 @@ their mind; the last one counts); a character changed in the wardrobe logs
 the same with `where: 'wardrobe'`. A free-play pick is `{activity, visit}`
 (`visit`: 1, 2, 3… the activities picked so far, the same number as its
 `activity_end`); a door chosen is `{activity: 'sheet', door, sheet}` (logged
-when the child opens a page behind another door than the page before: from
-the doors page or the bar). A probe opened from the adult's corner menu
+when the child opens a page behind another door than the page before: round
+1 from the doors page or the bar; round 2 from "¿Cómo seguís?", which comes
+between pages, so every pick of a way on logs one). A probe opened from the adult's corner menu
 ("Abrir «Hacé tu juego»", any grade) is a pick with `by: 'adult'`.
 Wardrobe pieces are in `wardrobe` events.
 
@@ -451,8 +498,12 @@ playtest plants one: the tool check's, the ladder's, free play's; the
 typing minigame plants one every few catches), what a boss sent if one was won in free play, and the
 character in the outfit kept in the wardrobe; logged when it closes. **RQ 6.**
 ```
-{ duration_ms: number, seeds: number, critters?: string[], plants?: string[], outfit?: {slot: id} }
+{ duration_ms: number, seeds: number, critters?: string[], plants?: string[], outfit?: {slot: id}, left?: 'again' | 'time' }
 ```
+Round 2: the goodbye starts the next session by itself after 45 s (paused
+while the adult's corner menu is open), or at once with its big drawn "jugar
+otra vez" button; `left` says which. The session was already closed as
+`completed` on reaching the goodbye. No code is shown.
 
 ### Free play
 
@@ -471,8 +522,10 @@ menu opens and when the card is held (a tap picks it). **RQ 5.**
 `rule_game` plays `3ro-1`, `3ro-2` (a page already solved is skipped) and
 then `pp-reglas`: the child's own game (every key, move and the point, no
 rules to start with, eight seeds to catch). The activities are the year's
-own screens with the session's progress: the doors open after the sheet's
-pages with a red ribbon, the boss after the core pages, a boss won sends its
+own screens with the session's progress (round 2: the bar shows no page
+icons, doors or boss, only a simple progress; after the core pages
+"¿Cómo seguís?" replaces the doors page, see `next_choice`): the extra pages
+open after the sheet's pages with a red ribbon, the boss after the core pages, a boss won sends its
 critter or plant to the goodbye garden. Per pick: `choice` {activity,
 visit}, the pages' events with `activity` (and `sheet`, `page`, `door`), a
 door's `choice`, and `activity_end`.
@@ -481,8 +534,8 @@ Time: `FREE_PLAY_BUDGET_MS` = 12 minutes for every grade (`?libre=<minutes>`
 in the URL sets another, 1–30). A level is never cut: when the time is over,
 free play moves on from the menu at once, after the level on screen ends
 (the child turns it, or moves to another page), or, on a page that is not a
-level (the doors, the editor, the corkboard), at the next page or after two
-minutes. Then the character cheers "¡Ahora vamos a otro juego!" and the next
+level (the editor, the corkboard), at the next page or after two
+minutes; on "¿Cómo seguís?" at once, like the menu. Then the character cheers "¡Ahora vamos a otro juego!" and the next
 step comes. The adult's corner menu can skip the step at any time (the open
 activity's `activity_end` says `left`).
 
@@ -762,6 +815,30 @@ The session moved to another flow step (the same change also updates
 ```
 `skip` is the adult skipping a step (or a step with nothing to show);
 `end_now` is the adult's "end the session" gesture (straight to the survey).
+Round 2: the first `step` goes from `setup` straight to `character` (no
+`code` step), and the last one reaches `goodbye` (no `adult_form` step).
+
+### `captions`
+Round 2: the on-screen text was turned on or off with the 💬 toggle (in the
+top bar, or at the top of a screen without one). Every spoken line of the
+playtest (instructions, help, the ghost's lines, walks, survey questions,
+typing prompts, probes) also shows as text while captions are on: in a
+speech bubble in the bar beside the character, never over the board or the
+palette; a tap on it says the line again. On by default from 3ro (most rooms
+have no headphones for them), off for 1ro and 2do; the setup can force it.
+The state is also kept on `sessions.device.captions`. **RQ 3.**
+```
+{ on: boolean, where: 'bar' | 'corner' }
+```
+
+### `adult_form`
+Round 2: the adult saved "Comentario del adulto" from the corner menu (the
+answers themselves go on `sessions.adult_form`). **RQ 3, 5.**
+```
+{ step: string, engagement: 'low' | 'mid' | 'high' | null, help_needed: 'none' | 'some' | 'a_lot' | null, comment: boolean }
+```
+`comment` only says whether a comment was written (its text is on the
+session, never in an event).
 
 ### `resume`
 The tab reloaded (a stray F5, a Chromebook discarding the tab, the adult

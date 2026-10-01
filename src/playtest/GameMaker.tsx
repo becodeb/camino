@@ -175,7 +175,8 @@ function Workshop({ phase, game, gameRef, setGame, onDone }: {
       ghostRun.current = playGhost(rootRef.current, [{ do: 'point', at: ['.gm-card[data-card="seed:1"] [data-chip="seed:1:0"]'] }, { do: 'wait', ms: 600 }]);
       log('ghost_demo', { level_id: LEVEL_ID, kind: 'intro', phase });
     }, 5200) : 0;
-    return () => { off(); clearInterval(t); clearTimeout(g); ghostRun.current?.cancel(); board.current?.stop(); };
+    // the next phase: a hand nobody answered goes down (the child moved on)
+    return () => { off(); clearInterval(t); clearTimeout(g); ghostRun.current?.cancel(); board.current?.stop(); apiRef.current.lowerHand('moved_on'); };
     // once per phase
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

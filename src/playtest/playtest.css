@@ -1,5 +1,5 @@
-/* The pilot playtest's own pages (setup, code, placeholders, survey,
-   goodbye, adult form), the raised hand and the adult's sheets. Same paper,
+/* The pilot playtest's own pages (setup, survey, goodbye), on-screen text,
+   the raised hand and the adult's sheets (menu, help, comment). Same paper,
    ink and cut-paper primitives as the rest (notebook.css, camino.css). */
 
 .piloto { min-height: 100dvh; -webkit-touch-callout: none; user-select: none; }
@@ -24,52 +24,110 @@
 .pp-adult-title small { display: block; font-weight: 400; font-size: 16px; color: var(--ink-2); }
 .pp-adult-note { margin: 0; font: 400 18px/1.35 var(--body); color: var(--ink-2); text-align: center; }
 
-/* ------------------------------------------------ setup */
-.pp-field { border: 0; margin: 0; padding: 0; display: grid; justify-items: center; gap: 10px; }
-.pp-field legend { font: 700 18px var(--body); color: var(--ink); padding: 0; margin-bottom: 6px; text-align: center; width: 100%; }
-.pp-field legend small { font-weight: 400; color: var(--ink-2); }
-.pp-grades, .pp-divisions { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
-.pp-grade {
-  --r-cut: 16px 12px 18px 11px / 12px 17px 11px 16px;
-  width: 104px; height: 78px;
-  font: 700 28px var(--body);
+/* ------------------------------------------------ setup: "¿En qué grado estás?", five big cards, the adult's small options */
+.pp-setup { place-items: center; align-content: center; gap: clamp(14px, 4dvh, 40px); }
+.pp-setup-q { display: flex; align-items: center; gap: 14px; }
+.pp-setup-q h1 { margin: 0 0 0 4px; font: 700 clamp(30px, 4.4vw, 46px)/1.1 var(--body); color: var(--ink); }
+.pp-setup-q .bar-face { width: 62px; height: 70px; }
+.pp-grade-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(12px, 2vw, 26px); }
+.pp-grade-cards > li { rotate: var(--tilt, 0deg); }
+.pp-grade-card {
+  --r-cut: 18px 13px 20px 12px / 13px 19px 12px 18px;
+  width: clamp(130px, 15vw, 210px);
+  height: clamp(150px, min(30dvh, 19vw), 250px);
+  display: grid; grid-template-rows: 1fr auto; justify-items: center; align-items: center;
+  padding: 10px 10px 12px;
+  touch-action: manipulation;
+  transition: transform 0.16s ease-out;
 }
-.pp-grade.g1 { --fill: #cfdcaa; }
-.pp-grade.g2 { --fill: #bcd0e6; }
-.pp-grade.g3 { --fill: #f2c29f; }
-.pp-grade.g4 { --fill: #f1c9c6; }
-.pp-grade.g5 { --fill: #f5e2a6; }
-.pp-grade .pen-ring, .pp-div .pen-ring { position: absolute; inset: -9px -10px; width: calc(100% + 20px); height: calc(100% + 18px); overflow: visible; pointer-events: none; }
+.pp-grade-card:hover { transform: translateY(-6px); }
+.pp-grade-card:active { transform: translate(2px, 3px); }
+.pp-grade-card.g1 { --fill: #cfdcaa; }
+.pp-grade-card.g2 { --fill: #bcd0e6; }
+.pp-grade-card.g3 { --fill: #f2c29f; }
+.pp-grade-card.g4 { --fill: #f1c9c6; }
+.pp-grade-card.g5 { --fill: #f5e2a6; }
+.pp-grade-n { font: 700 clamp(40px, 5vw, 64px)/1 var(--body); color: var(--ink); }
+.pp-grade-art { width: 100%; height: 100%; max-height: 54%; overflow: visible; }
+.pp-setup-adult { display: grid; gap: 8px; justify-items: center; padding: 10px 18px; border-top: 2px dashed rgba(43, 38, 34, 0.25); }
+.pp-setup-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; }
+.pp-setup-label { display: inline-flex; align-items: center; gap: 6px; font: 700 16px var(--body); color: var(--ink-2); }
+.pp-setup-label small { font-weight: 400; }
+.pp-setup-label .pp-cap-icon { width: 34px; height: 31px; }
+.pp-divisions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .pp-div {
   --r-cut: 12px 10px 13px 9px / 10px 13px 9px 12px;
-  width: 58px; height: 54px;
-  font: 700 22px var(--body);
+  min-width: 48px; height: 48px; padding: 0 10px;
+  font: 700 19px var(--body);
 }
 .pp-div.is-on { --fill: #dce6f0; outline: 3px solid var(--blue-ink); outline-offset: 3px; border-radius: 12px; }
-.pp-consent {
-  --r-cut: 12px 16px 11px 15px / 15px 11px 16px 12px;
-  display: flex; align-items: center; gap: 14px;
-  min-height: 64px; max-width: 560px;
-  padding: 10px 18px;
-  font: 400 18px/1.3 var(--body); text-align: left;
-}
-.pp-check { flex: none; width: 34px; height: 34px; border: 2.6px solid var(--ink); border-radius: 7px 9px 6px 8px; background: var(--sheet); display: grid; place-items: center; }
-.pp-check svg { width: 28px; height: 28px; overflow: visible; }
-.pp-consent.is-on { --fill: #e9efd8; }
+.pp-cap-choice { font-size: 16px; font-weight: 400; }
 .pp-start { margin-top: 4px; }
 
-/* ------------------------------------------------ the session code */
-.pp-code-word {
+/* ------------------------------------------------ on-screen text: the line as a bubble in the bar (or floating), and 💬 */
+.piloto .level-bar > * { order: 4; }
+.piloto .level-bar > .speak { order: 0; }
+.piloto .level-bar > .drawn-task, .piloto .level-bar > .bar-face { order: 1; }
+.piloto .level-bar > .adult-title, .piloto .level-bar > .pp-survey-adult { order: 2; }
+.piloto .level-bar > .pp-cap { order: 3; }
+.piloto .level-bar > .pp-cap-toggle { order: 6; }
+.piloto .level-bar > .pp-menu-back { order: 7; }
+.piloto .level-bar > .help { order: 8; }
+/* the bubble takes the small title's place */
+.piloto .level-bar:has(> .pp-cap) > .adult-title, .piloto .level-bar:has(> .pp-cap) > .pp-survey-adult { display: none; }
+.pp-cap {
   position: relative;
-  margin: 8px 0 4px;
-  font: 700 clamp(56px, 7.4vw, 100px)/1 var(--body);
-  white-space: nowrap;
-  color: var(--ink);
-  letter-spacing: 0.01em;
-  text-align: center;
+  flex: 1; min-width: 0; align-self: center;
+  margin: 0 4px 0 14px; padding: 5px 14px;
+  min-height: 48px; max-height: 84px;
+  background: var(--sheet);
+  border: 2.6px solid var(--ink);
+  border-radius: 18px 14px 20px 13px / 14px 19px 13px 18px;
+  font: 400 19px/1.22 var(--body); color: var(--ink); text-align: left;
+  cursor: pointer;
+  animation: pp-cap-in 220ms ease-out both;
 }
-.pp-code-n { color: var(--blue-ink); }
-.pp-code-under { position: absolute; left: 2%; right: 2%; bottom: -16px; width: 96%; height: 20px; overflow: visible; }
+/* the tail, toward the character */
+.pp-cap::before, .pp-cap::after { content: ""; position: absolute; top: 50%; width: 0; height: 0; border-style: solid; }
+.pp-cap::before { left: -16px; margin-top: -9px; border-width: 9px 16px 9px 0; border-color: transparent var(--ink) transparent transparent; }
+.pp-cap::after { left: -11px; margin-top: -6px; border-width: 6px 12px 6px 0; border-color: transparent var(--sheet) transparent transparent; }
+.pp-cap-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+.pp-cap.is-long { font-size: 17px; }
+.pp-cap.is-longer { font-size: 15px; line-height: 1.18; }
+.pp-cap:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset: 3px; }
+@keyframes pp-cap-in { from { opacity: 0; translate: -6px 0; } to { opacity: 1; translate: 0 0; } }
+.pp-cap-toggle {
+  --r-cut: 12px 10px 13px 9px / 10px 13px 9px 12px;
+  --fill: #efe7d6;
+  flex: none; width: 52px; height: 52px; padding: 4px;
+  display: grid; place-items: center;
+}
+.pp-cap-toggle.is-on { --fill: #fff4cf; }
+.pp-cap-toggle .pp-cap-icon { width: 40px; height: 37px; overflow: visible; }
+/* no bar on screen (the walks between steps, the goodbye): at the top */
+.pp-cap-float { position: fixed; top: 10px; left: 76px; right: 12px; z-index: 75; display: flex; justify-content: flex-end; align-items: flex-start; gap: 10px; pointer-events: none; }
+.pp-cap-float > * { pointer-events: auto; }
+.pp-cap-float .pp-cap { flex: 0 1 auto; max-width: min(820px, 100%); margin: 0 auto; box-shadow: 5px 6px 0 var(--shadow); }
+.pp-cap-float .pp-cap::before, .pp-cap-float .pp-cap::after { display: none; }
+/* ------------------------------------------------ the playtest's bar (round 2): no page icons, doors or boss; a simple progress */
+.piloto .level-bar .sheet-pages:not(.work-pages), .piloto .level-bar .tramo { display: none; }
+.pp-progress { flex: none; display: flex; align-items: center; }
+.pp-progress-art { height: 40px; overflow: visible; }
+.pp-progress.is-path .pp-path-mini { width: 74px; height: 46px; overflow: visible; }
+.pp-go-on {
+  --r-cut: 14px 11px 15px 10px / 11px 15px 10px 14px;
+  --fill: #fff4cf;
+  flex: none; width: 76px; height: 58px; padding: 2px;
+  display: grid; place-items: center;
+}
+.pp-go-on .pp-go-art { width: 62px; height: 50px; overflow: visible; }
+.piloto .level-bar > .pp-go-on { order: 7; }
+.pp-go-on:hover { transform: translateX(3px); }
+
+/* a bubble in the bar may take a third line: the board leaves it room */
+.piloto .level.mode-program:has(.level-bar > .pp-cap) { --board-h: calc((100dvh - 236px - (var(--n, 1) - 1) * 12px) / var(--n, 1) - 22px); }
+.piloto .level.mode-realtime:has(.level-bar > .pp-cap) { --board-h: calc(100dvh - 296px); }
+@media (prefers-reduced-motion: reduce) { .pp-cap { animation: none; } }
 
 /* ------------------------------------------------ the adult's sheets */
 .pp-adult-veil {
@@ -148,7 +206,6 @@
 .pp-garden-svg { display: block; width: 100%; aspect-ratio: 2; overflow: hidden; }
 .pp-garden-plant { animation: pop-in 460ms ease-out both; transform-box: fill-box; transform-origin: 50% 100%; }
 .pp-bye-seeds { position: absolute; left: 24px; top: 18px; margin: 0; display: flex; align-items: center; gap: 4px; padding: 4px 12px 4px 6px; border-radius: 12px; background: rgba(251, 247, 238, 0.86); font: 700 26px var(--body); color: var(--ink); }
-.pp-bye-code { position: absolute; right: 26px; bottom: 16px; margin: 0; padding: 2px 10px; border-radius: 10px; background: rgba(251, 247, 238, 0.86); font: 700 22px var(--body); color: var(--ink-2); }
 @media (prefers-reduced-motion: reduce) { .pp-garden-plant { animation: none; } }
 
 /* ------------------------------------------------ the survey */
@@ -182,16 +239,23 @@
 .pp-option.is-picked { --fill: #e9efd8; }
 .pp-option.is-other { opacity: 0.35; }
 
-/* ------------------------------------------------ goodbye */
-.pp-for-adult {
-  position: fixed; right: 12px; bottom: 6px;
-  min-height: 48px; padding: 8px 12px;
-  border: 0; background: none; cursor: pointer;
-  font: 400 18px var(--hand); color: var(--ink-2); opacity: 0.6;
-  text-decoration: underline wavy;
+/* ------------------------------------------------ goodbye: "jugar otra vez" */
+.pp-again {
+  --r-cut: 18px 13px 20px 12px / 13px 19px 12px 18px;
+  --fill: #fff4cf;
+  position: fixed; right: 18px; bottom: 16px; z-index: 60;
+  width: 112px; height: 96px; padding: 6px;
+  display: grid; place-items: center;
+  animation: pop-in 420ms ease-out 1.2s both;
 }
+.pp-again .pp-again-art { width: 96px; height: 80px; overflow: visible; }
+.pp-again:hover { transform: translateY(-4px) rotate(-2deg); }
 
-/* ------------------------------------------------ the adult form */
+/* ------------------------------------------------ the adult's comment (in the corner menu) */
+.pp-adult-form { display: grid; gap: 14px; justify-items: center; }
+.pp-field { border: 0; margin: 0; padding: 0; display: grid; justify-items: center; gap: 10px; }
+.pp-field legend { font: 700 18px var(--body); color: var(--ink); padding: 0; margin-bottom: 6px; text-align: center; width: 100%; }
+.pp-grades { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
 .pp-choice { width: auto; min-width: 118px; padding: 0 18px; font-size: 20px; }
 .pp-comment { display: grid; gap: 6px; width: min(560px, 100%); font: 700 18px var(--body); color: var(--ink); }
 .pp-comment small { font-weight: 400; color: var(--ink-2); }
@@ -262,6 +326,42 @@
 .pp-activity-card { display: block; }
 .pp-activity-card .pp-fp-art { height: 100%; width: 100%; max-width: none; }
 
+/* ------------------------------------------------ free play: "¿Cómo seguís?" (round 2, instead of the doors) */
+.level.pp-next {
+  height: 100dvh;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "bar" "stage";
+}
+.pp-next-task { display: block; width: 62px; height: 40px; }
+.pp-next-task .pp-path-mini { width: 100%; height: 100%; overflow: visible; }
+.pp-next-stage { grid-area: stage; min-height: 0; display: grid; place-items: center; }
+.pp-next-sheet { --art-h: clamp(96px, calc((100dvh - 330px) / 2), 210px); max-width: 100%; padding: 20px 26px 18px; }
+.pp-next-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 14px 26px; max-width: calc(var(--art-h) * 240 / 170 * 3 + 3 * 32px + 2 * 26px); }
+.pp-next-cards > li { rotate: var(--tilt, 0deg); }
+.pp-next-card {
+  --r-cut: 16px 12px 18px 11px / 12px 17px 11px 16px;
+  --fill: #fdfaf2;
+  position: relative;
+  display: grid; justify-items: center; gap: 0;
+  padding: 8px 14px 6px;
+  touch-action: manipulation;
+  transition: transform 0.16s ease-out;
+}
+.pp-next-card .pp-path-art { display: block; height: var(--art-h); width: auto; aspect-ratio: 240 / 170; overflow: visible; }
+.pp-next-card.is-easy { --fill: #eef3dc; }
+.pp-next-card.is-hard { --fill: #f7e6d6; }
+.pp-next-card.is-boss { --fill: #fff4cf; }
+.pp-next-menu-art { display: grid; place-items: center; height: var(--art-h); aspect-ratio: 240 / 170; }
+.pp-next-menu-art .pp-menu-back-art { width: 64%; height: 80%; overflow: visible; }
+.pp-next-card:hover { transform: translateY(-5px); }
+.pp-next-card:active { transform: translate(2px, 3px); }
+.pp-next-card.is-lit { transform: translateY(-7px) rotate(-1deg); }
+.pp-next-card.is-shut { opacity: 0.45; }
+.pp-next-card .pen-ring { position: absolute; inset: -10px; width: calc(100% + 20px); height: calc(100% + 20px); overflow: visible; pointer-events: none; }
+.pp-next-caption { font: 400 26px/1.05 var(--hand); color: var(--ink-2); text-align: center; }
+.pp-next-stamp { position: absolute; right: 10px; top: 8px; width: 64px; height: 64px; rotate: -12deg; }
+
 /* ------------------------------------------------ free play: an activity */
 /* the way back to the menu, drawn: in the page's bar just before ✋ (a page without a bar: the bottom-left corner) */
 .pp-menu-back {
@@ -274,8 +374,7 @@
 }
 .pp-menu-back .pp-menu-back-art { width: 58px; height: 50px; overflow: visible; }
 .pp-menu-back:hover { transform: translateY(-3px); }
-.pp-menu-back.in-bar { position: relative; left: auto; bottom: auto; z-index: auto; flex: none; order: 2; margin: 0 4px 0 6px; }
-.pp-fp-activity .level-bar .help { order: 3; }
+.pp-menu-back.in-bar { position: relative; left: auto; bottom: auto; z-index: auto; flex: none; margin: 0 4px 0 6px; }
 /* the year's pages that are not levels (the doors, the editor, the corkboard) print "Hoja 7 · taller" for the teacher: the playtest keeps only their title */
 .pp-fp-activity .adult-title b { display: none; }
 
@@ -357,4 +456,18 @@ button.pp-key:focus-visible { outline: 3px dashed var(--blue-ink); outline-offse
 .pp-tk-liked-icon { display: flex; flex: none; }
 @media (prefers-reduced-motion: reduce) {
   .tk-sway, .tk-pop, .pp-key.is-expected, .tk-ring, .pp-kb.is-help .pp-key.is-expected { animation: none; }
+}
+
+/* ------------------------------------------------ the wardrobe fits the window (round 2: at 1920×911 the mirror ran off the bottom) */
+/* the mirror's cell has a definite height, so the mirror and the character scale down into it; the wardrobe's hooks scroll inside it if they must */
+.piloto .mode-wardrobe .wardrobe-stage { grid-template-rows: minmax(0, 1fr); }
+.piloto .mode-wardrobe .mirror { grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+.piloto .mode-wardrobe .mirror > svg { min-height: 0; min-width: 0; }
+.piloto .mode-wardrobe .ropero { overflow: hidden; }
+.piloto .mode-wardrobe .hooks { overflow-y: auto; grid-auto-rows: minmax(64px, 1fr); }
+.piloto .mode-wardrobe .cast { min-height: 0; overflow-y: auto; }
+@media (max-height: 700px) {
+  .piloto .mode-wardrobe .cast-btn { width: 84px; height: 84px; }
+  .piloto .mode-wardrobe .cast-btn .cast-face { width: 76px; height: 76px; }
+  .piloto .mode-wardrobe .wardrobe-stage { grid-template-columns: 92px minmax(0, 1fr) minmax(0, 400px) auto; }
 }

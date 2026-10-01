@@ -34,9 +34,21 @@ export function setSpeechFilter(f: ((text: string) => string) | null): void {
   filter = f;
 }
 
+/**
+ * Hears every line as it is said (or queued until the first tap), already
+ * filtered, and null when speech is stopped: the pilot playtest shows the
+ * line as on-screen text. Null (the demo): nothing is listened to.
+ */
+type SpeechListener = (text: string | null) => void;
+let listener: SpeechListener | null = null;
+export function setSpeechListener(f: SpeechListener | null): void {
+  listener = f;
+}
+
 export function speak(text: string): void {
-  if (!speechAvailable()) return;
   if (filter) text = filter(text);
+  listener?.(text);
+  if (!speechAvailable()) return;
   if (chosen === undefined) chosen = pickVoice();
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
@@ -48,6 +60,7 @@ export function speak(text: string): void {
 }
 
 export function stopSpeaking(): void {
+  listener?.(null);
   if (speechAvailable()) speechSynthesis.cancel();
 }
 
@@ -59,6 +72,8 @@ export function stopSpeaking(): void {
 export function speakWhenAllowed(text: string): () => void {
   const ua = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
   if (!ua || ua.hasBeenActive) { speak(text); return () => {}; }
+  // the line shows at once (on-screen text); its voice waits for the tap
+  listener?.(filter ? filter(text) : text);
   const off = () => window.removeEventListener('pointerdown', go, true);
   const go = () => { off(); speak(text); };
   window.addEventListener('pointerdown', go, true);

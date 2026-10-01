@@ -35,6 +35,8 @@ import { withName } from './characterName';
 import { usePlaytest, type LevelTrack } from './context';
 import { showFootprints } from './footprints';
 import { blocksOf, isFailedRun, optimalBlocks, programText, ruleBlocksOf, rulesText } from './levels';
+import { BarProgressView } from './barProgress';
+import { SeedPouch } from '../screens/yearKit';
 
 export type LevelOutcome = 'win' | 'fail' | 'skipped';
 
@@ -137,6 +139,8 @@ function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs
       ...props.current.extra,
     };
     log('level_end', payload);
+    // a hand raised on this page and never answered: the child moved on
+    apiRef.current.lowerHand('moved_on', level.id);
     if (apiRef.current.level.current === t) apiRef.current.level.current = null;
     if (notify) props.current.onEnd(payload);
   };
@@ -178,12 +182,17 @@ function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs
 
   const nav = useMemo<LevelNav>(() => ({
     ...base,
-    pages: base ? base.pages : () => null,
+    // round 2: no page icons, doors or boss in the bar, only the activity's simple progress (barProgress.tsx)
+    pages: () => <BarProgressView />,
+    // every playtest page shows the seed pouch
+    aside: base?.aside ?? <SeedPouch />,
     // a child may read it: the page's own title, never an id, with the chosen character's name
     title: (l) => withName(l.title, progress.get().character),
     won: (l, program) => {
       stats.current.won = true;
       stats.current.wins++;
+      // solved with the hand up and nobody came: it goes down
+      apiRef.current.lowerHand('self', level.id);
       const line = base?.won(l, program);
       // every page solved plants a seed (a gold challenge's page was stamped by its own nav: no seed, as in the year)
       if (!base?.className?.includes('is-gold')) progress.update((p) => solve(p, l.id));

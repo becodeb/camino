@@ -2,11 +2,14 @@
 // moving on, skipping a step, the adult's "end now" (straight to the
 // survey), the time budget of each step (recorded, not enforced yet) and the
 // activities the child actually did (the survey's "¿Qué te gustó más?" shows
-// only those). The screen (PlaytestScreen.tsx) renders the step and turns
+// only those). Round 2 dropped the session-code screen and the adult form
+// step: the grade's tap starts the child's part, the goodbye starts the next
+// session by itself, and the adult's comment is optional, from the corner
+// menu (AdultControls.tsx). The screen (PlaytestScreen.tsx) renders the step and turns
 // each change into a `step` event and the session's `current_step`.
 
 export const STEPS = [
-  'setup', 'code', 'character', 'tool_check', 'ladder', 'free_play', 'typing', 'wardrobe', 'survey', 'goodbye', 'adult_form',
+  'setup', 'character', 'tool_check', 'ladder', 'free_play', 'typing', 'wardrobe', 'survey', 'goodbye',
 ] as const;
 export type StepId = typeof STEPS[number];
 
@@ -15,8 +18,7 @@ export const CHILD_STEPS: readonly StepId[] = ['character', 'tool_check', 'ladde
 
 /** Planned time per step (the brief's minutes), recorded with each step change; nothing is cut when it runs out. */
 export const BUDGET_MS: Partial<Record<StepId, number>> = {
-  setup: 60_000,
-  code: 60_000,
+  setup: 30_000,
   character: 60_000,
   tool_check: 2 * 60_000,
   ladder: 12 * 60_000,
