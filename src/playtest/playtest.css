@@ -474,6 +474,9 @@ button.pp-key:focus-visible { outline: 3px dashed var(--blue-ink); outline-offse
 
 /* ------------------------------------------------ short windows (≤ 720 px high, e.g. 1366×650 not fullscreen) */
 @media (max-height: 720px) {
+  /* the adult's sheets (the comment form is the tallest) scroll inside the veil instead of running off the window */
+  .pp-adult-veil { overflow-y: auto; align-items: safe center; }
+  .pp-adult-sheet, .pp-adult-form { gap: 10px; }
   /* the rule game's palette (eight blocks or more) holds on the paper: drawn a little smaller */
   .piloto .level.mode-realtime .zone-palette { zoom: 0.8; }
 }
