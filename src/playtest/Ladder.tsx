@@ -13,7 +13,7 @@ import { usePlaytest } from './context';
 import { BarProgressContext } from './barProgress';
 import { Cheer, WalkOn } from './interlude';
 import {
-  ceiling, decide, firstItem, itemResult, itemVerdict, newItemMemo, record, rungOf, startLadder,
+  capsFrom, ceiling, decide, firstItem, itemResult, itemVerdict, newItemMemo, record, rungOf, startLadder,
   type Check, type LadderState, type StopReason,
 } from './ladder';
 import { pilotLevel } from './levels';
@@ -34,12 +34,15 @@ type View =
 
 interface SavedLadder { state: LadderState; ended: boolean }
 
+/** The caps (`?caps=fast` for the scripted checks). */
+const CAPS_NOW = capsFrom(typeof location !== 'undefined' ? location.search : '');
+
 export function Ladder() {
   const { session, next, log } = usePlaytest();
   const [start] = useState(() => {
     const saved = resumedPart<SavedLadder>('ladder');
     if (saved?.state && Array.isArray(saved.state.items)) {
-      const d = saved.ended ? null : decide(saved.state, Date.now());
+      const d = saved.ended ? null : decide(saved.state, Date.now(), CAPS_NOW);
       const view: View = !d || 'stop' in d ? { kind: 'end' } : { kind: 'item', rung: d.rung, check: d.check, n: saved.state.items.length };
       return { s: saved.state, view, ended: saved.ended, stop: d && 'stop' in d ? d.stop : null };
     }
@@ -105,7 +108,7 @@ export function Ladder() {
     const s = record(state.current, { rung: r.rung, check: view.check, result });
     state.current = s;
     rememberPart('ladder', { state: s, ended: false } satisfies SavedLadder);
-    const d = decide(s, Date.now());
+    const d = decide(s, Date.now(), CAPS_NOW);
     log('ladder_step', {
       concept: r.concept,
       rung: r.rung,
@@ -119,6 +122,7 @@ export function Ladder() {
       adult_helped: end.adult_helped,
       attempts: end.attempts,
       outcome: end.outcome,
+      end_reason: end.end_reason ?? (end.outcome === 'win' ? 'solved' : 'left'),
     });
     if ('stop' in d) endLadder(d.stop);
     const after: View = 'stop' in d ? { kind: 'end' } : { kind: 'walk', rung: d.rung, check: d.check, n: view.n + 1 };
@@ -134,7 +138,10 @@ export function Ladder() {
         level={level}
         activity="ladder"
         extra={{ concept: r.concept, rung: r.rung, item: r.item, check: view.check }}
-        watch={(stats) => itemVerdict(stats, memo.current, Date.now())}
+        watch={(stats) => {
+          const reason = itemVerdict(stats, memo.current, Date.now(), { caps: CAPS_NOW, ladderStart: state.current.startedAt });
+          return reason ? { outcome: 'fail', reason } : null;
+        }}
         autoNextMs={AUTO_NEXT_MS}
         onEnd={onEnd}
       />

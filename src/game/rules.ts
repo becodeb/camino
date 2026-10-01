@@ -46,6 +46,13 @@ export interface RealtimeDef {
   maxActions: number;
   /** The first time the page opens, the ghost hand builds this rule and presses its key (the idea, not the answer). */
   intro?: Rule;
+  /**
+   * Said once the intro has played (the pilot's ladder: what to do now, e.g.
+   * "tocá las flechas…"). Absent in the demo: nothing is said.
+   */
+  afterIntro?: string;
+  /** Said the first time a key without a rule is pressed in a game (the pilot's ladder). */
+  noRule?: string;
 }
 
 /** One tick of the world, in ms (the view steps the engine on a timer). */

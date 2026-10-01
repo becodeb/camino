@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { formatOf } from '../game/formats';
 import {
-  ENTRY, FAILED_RUNS, ITEM_MS, LADDER, MAX_ITEMS, MAX_MS, TOP, ceiling, decide, entryRung, firstItem, itemResult,
-  itemVerdict, newItemMemo, record, startLadder, type Attempt, type LadderState,
+  CAPS, ENTRY, FAILED_RUNS, FAST_CAPS, HARD_MS, IDLE_MS, ITEM_MS, LADDER, LADDER_ROUND1, MAX_ITEMS, MAX_MS, TOP, capsFrom, ceiling, decide,
+  entryRung, firstItem, itemResult, itemVerdict, newItemMemo, record, startLadder, type Attempt, type LadderState,
 } from './ladder';
 import { pilotLevel } from './levels';
 import type { LevelStats } from './PlaytestLevel';
@@ -18,6 +18,16 @@ describe('the item bank', () => {
     expect(TOP).toBe(12);
     for (const r of LADDER) expect(pilotLevel(r.item), r.item).not.toBeNull();
     expect(new Set(LADDER.map((r) => r.concept)).size).toBe(12);
+    expect(LADDER.map((r) => r.item)).toEqual(LADDER.map((r) => `pp-l${r.rung}`));
+  });
+
+  it('keeps the same twelve concepts as round 1, rung by rung, and round 1\'s pages still open', () => {
+    expect(LADDER.map((r) => r.concept)).toEqual([
+      'sequence', 'long_sequence', 'fix', 'predict', 'repeat', 'repeat_count',
+      'repeat_pattern', 'before_after_repeat', 'fog_si', 'three_worlds', 'events_rules', 'rules_score',
+    ]);
+    expect(LADDER_ROUND1).toHaveLength(12);
+    for (const id of LADDER_ROUND1) expect(pilotLevel(id), id).not.toBeNull();
   });
 
   it('uses the right format and kind of page on each rung', () => {
@@ -90,6 +100,7 @@ describe('where the ladder goes', () => {
     const s = play(startLadder(2, T0), pass(2), pass(3));
     expect(decide(s, T0 + MAX_MS - 1)).toEqual({ rung: 4, check: 'climb' });
     expect(decide(s, T0 + MAX_MS)).toEqual({ stop: 'max_time' });
+    expect(decide(s, T0 + FAST_CAPS.ladderMs, FAST_CAPS)).toEqual({ stop: 'max_time' });
   });
 
   it('the caps win over the floor check', () => {
@@ -113,22 +124,23 @@ describe('an item\'s result', () => {
 
 describe('when an item ends', () => {
   const stats = (o: Partial<LevelStats> = {}): LevelStats => ({
-    level_id: 'x', startedAt: T0, runs: 0, fails: 0, wins: 0, lastResult: null, helpStep: 0, adultHelped: false, won: false, ...o,
+    level_id: 'x', startedAt: T0, runs: 0, fails: 0, wins: 0, lastResult: null, helpStep: 0, adultHelped: false, won: false, lastInputAt: T0, ...o,
   });
 
   it('keeps going on one failed run, ends on the second', () => {
     const m = newItemMemo();
     expect(itemVerdict(stats({ runs: 1, fails: 1, lastResult: 'bump' }), m, T0)).toBeNull();
-    expect(itemVerdict(stats({ runs: 3, fails: FAILED_RUNS, lastResult: 'short' }), m, T0)).toBe('fail');
+    expect(itemVerdict(stats({ runs: 3, fails: FAILED_RUNS, lastResult: 'short' }), m, T0)).toBe('runs');
   });
 
   it('ignores runs that ran nothing', () => {
     expect(itemVerdict(stats({ runs: 4, fails: 0, lastResult: 'empty' }), newItemMemo(), T0)).toBeNull();
   });
 
-  it('ends after ITEM_MS without solving, never a solved page', () => {
-    expect(itemVerdict(stats(), newItemMemo(), T0 + ITEM_MS)).toBe('fail');
-    expect(itemVerdict(stats(), newItemMemo(), T0 + ITEM_MS - 1)).toBeNull();
+  it('ends after ITEM_MS without solving, even with input all along, never a solved page', () => {
+    const busy = (now: number) => stats({ lastInputAt: now - 1000, runs: 1, lastResult: 'empty' });
+    expect(itemVerdict(busy(T0 + ITEM_MS), newItemMemo(), T0 + ITEM_MS)).toBe('time_cap');
+    expect(itemVerdict(busy(T0 + ITEM_MS - 1), newItemMemo(), T0 + ITEM_MS - 1)).toBeNull();
     expect(itemVerdict(stats({ won: true, fails: 5 }), newItemMemo(), T0 + ITEM_MS * 2)).toBeNull();
     expect(itemVerdict(stats({ lastResult: 'win', fails: 1 }), newItemMemo(), T0 + ITEM_MS)).toBeNull();
   });
@@ -137,12 +149,46 @@ describe('when an item ends', () => {
     const m = newItemMemo();
     expect(itemVerdict(stats({ helpStep: 3, fails: 1 }), m, T0)).toBeNull();
     expect(itemVerdict(stats({ helpStep: 3, fails: 1, runs: 2, lastResult: 'empty' }), m, T0)).toBeNull();
-    expect(itemVerdict(stats({ helpStep: 3, fails: 2, runs: 3, lastResult: 'bump' }), m, T0)).toBe('fail');
+    expect(itemVerdict(stats({ helpStep: 3, fails: 2, runs: 3, lastResult: 'bump' }), m, T0)).toBe('solution_hint');
   });
 
   it('after an adult\'s help the same', () => {
     const m = newItemMemo();
     expect(itemVerdict(stats({ adultHelped: true }), m, T0)).toBeNull();
-    expect(itemVerdict(stats({ adultHelped: true, fails: 1, runs: 1, lastResult: 'short' }), m, T0)).toBe('fail');
+    expect(itemVerdict(stats({ adultHelped: true, fails: 1, runs: 1, lastResult: 'short' }), m, T0)).toBe('adult');
+  });
+
+  it('ends after IDLE_MS with no input at all, counted from the page\'s start or the last input', () => {
+    expect(IDLE_MS).toBe(90_000);
+    expect(itemVerdict(stats(), newItemMemo(), T0 + IDLE_MS - 1)).toBeNull();
+    expect(itemVerdict(stats(), newItemMemo(), T0 + IDLE_MS)).toBe('idle_cap');
+    // a tap 60 s in: the idle clock starts again
+    expect(itemVerdict(stats({ lastInputAt: T0 + 60_000 }), newItemMemo(), T0 + IDLE_MS + 30_000)).toBeNull();
+    expect(itemVerdict(stats({ lastInputAt: T0 + 60_000 }), newItemMemo(), T0 + 60_000 + IDLE_MS)).toBe('idle_cap');
+  });
+
+  it('the caps hold on wall time however late the check runs (a hidden tab)', () => {
+    // round 1: a rule-game item checked only at 234 s, no input since 66 s
+    expect(itemVerdict(stats({ lastInputAt: T0 + 66_000 }), newItemMemo(), T0 + 234_000)).toBe('time_cap');
+    expect(itemVerdict(stats({ lastInputAt: T0 + 66_000 }), newItemMemo(), T0 + 160_000)).toBe('idle_cap');
+  });
+
+  it('an item started late ends by the ladder\'s hard time (~13 min), whatever its own clock', () => {
+    const late = T0 + MAX_MS - 10_000;
+    const s = stats({ startedAt: late, lastInputAt: late + HARD_MS - MAX_MS + 5_000 });
+    expect(HARD_MS - MAX_MS).toBe(60_000);
+    expect(itemVerdict(s, newItemMemo(), T0 + HARD_MS - 1, { ladderStart: T0 })).toBeNull();
+    expect(itemVerdict(s, newItemMemo(), T0 + HARD_MS, { ladderStart: T0 })).toBe('ladder_time');
+    // without the ladder's start, only the item's own clock
+    expect(itemVerdict(s, newItemMemo(), T0 + HARD_MS)).toBeNull();
+  });
+
+  it('?caps=fast shortens every cap for the scripted checks', () => {
+    expect(capsFrom('')).toBe(CAPS);
+    expect(capsFrom('?debug&caps=fast')).toBe(FAST_CAPS);
+    expect(capsFrom('?capsule')).toBe(CAPS);
+    expect(FAST_CAPS.idleMs).toBeLessThan(FAST_CAPS.itemMs);
+    expect(itemVerdict(stats(), newItemMemo(), T0 + FAST_CAPS.idleMs, { caps: FAST_CAPS })).toBe('idle_cap');
+    expect(itemVerdict(stats({ lastInputAt: T0 + FAST_CAPS.itemMs - 1 }), newItemMemo(), T0 + FAST_CAPS.itemMs, { caps: FAST_CAPS })).toBe('time_cap');
   });
 });

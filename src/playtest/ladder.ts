@@ -8,11 +8,14 @@
 // - The first non-pass: if the rung below was not passed in this ladder, try
 //   it once (the floor check) and stop whatever happens; if it was passed
 //   (or there is none), stop.
-// - At most MAX_ITEMS items or MAX_MS: then stop (checked between items).
+// - At most MAX_ITEMS items or MAX_MS: then stop (checked between items);
+//   an item open at MAX_MS still ends by HARD_MS (its own cap, `ladder_time`).
+// - An item ends as a fail on its own caps (itemVerdict, with a reason).
 // The ceiling is the highest rung passed (v_ladder_ceiling /
 // v_session_summary.ladder_ceiling_rung read the same from `ladder_step`).
 
 import type { LevelStats } from './PlaytestLevel';
+import { LADDER_ITEMS } from './ladderItems';
 
 export interface Rung {
   rung: number;
@@ -22,20 +25,17 @@ export interface Rung {
   item: string;
 }
 
-/** The item bank, easiest first. */
-export const LADDER: readonly Rung[] = [
-  { rung: 1, concept: 'sequence', item: '1ro-h1-2' },
-  { rung: 2, concept: 'long_sequence', item: '1ro-h2-1' },
-  { rung: 3, concept: 'fix', item: '1ro-h3-3' },
-  { rung: 4, concept: 'predict', item: '1ro-h3-4' },
-  { rung: 5, concept: 'repeat', item: '1ro-h4-1' },
-  { rung: 6, concept: 'repeat_count', item: '1ro-h5-1' },
-  { rung: 7, concept: 'repeat_pattern', item: '1ro-h6-2' },
-  { rung: 8, concept: 'before_after_repeat', item: '1ro-h13-2' },
-  { rung: 9, concept: 'fog_si', item: '2do-1' },
-  { rung: 10, concept: 'three_worlds', item: '2do-2' },
-  { rung: 11, concept: 'events_rules', item: '3ro-1' },
-  { rung: 12, concept: 'rules_score', item: '3ro-2' },
+const CONCEPTS = [
+  'sequence', 'long_sequence', 'fix', 'predict', 'repeat', 'repeat_count',
+  'repeat_pattern', 'before_after_repeat', 'fog_si', 'three_worlds', 'events_rules', 'rules_score',
+] as const;
+
+/** The item bank, easiest first: round 2's own pages (ladderItems.ts), one per concept. */
+export const LADDER: readonly Rung[] = CONCEPTS.map((concept, i) => ({ rung: i + 1, concept, item: LADDER_ITEMS[i].id }));
+
+/** Round 1's bank (sheet and demo pages), kept for reading round 1's data: same rungs and concepts. */
+export const LADDER_ROUND1: readonly string[] = [
+  '1ro-h1-2', '1ro-h2-1', '1ro-h3-3', '1ro-h3-4', '1ro-h4-1', '1ro-h5-1', '1ro-h6-2', '1ro-h13-2', '2do-1', '2do-2', '3ro-1', '3ro-2',
 ];
 
 export const TOP = LADDER.length;
@@ -47,8 +47,18 @@ export const entryRung = (grade: number) => ENTRY[grade] ?? 1;
 
 export const MAX_ITEMS = 10;
 export const MAX_MS = 12 * 60_000;
-/** An item not solved in this time ends as a fail. */
+/** An item open when the ladder's time is over ends by then, whatever its own clock says. */
+export const HARD_MS = 13 * 60_000;
+/** An item not solved in this time (wall time: a hidden tab counts too) ends as a fail. */
 export const ITEM_MS = 3 * 60_000;
+/** An item with no input at all (no tap, no drag, no key) for this long ends as a fail. */
+export const IDLE_MS = 90_000;
+
+export interface Caps { itemMs: number; idleMs: number; ladderMs: number; hardMs: number }
+export const CAPS: Caps = { itemMs: ITEM_MS, idleMs: IDLE_MS, ladderMs: MAX_MS, hardMs: HARD_MS };
+/** `?caps=fast` (scripted checks, a quick look): the same rules in seconds. */
+export const FAST_CAPS: Caps = { itemMs: 30_000, idleMs: 12_000, ladderMs: 60_000, hardMs: 70_000 };
+export const capsFrom = (search: string): Caps => (/[?&]caps=fast\b/.test(search) ? FAST_CAPS : CAPS);
 /** Failed runs (levels.ts `isFailedRun`) that end an item. */
 export const FAILED_RUNS = 2;
 
@@ -56,6 +66,12 @@ export type ItemResult = 'pass' | 'fail';
 /** `climb`: a step of the way up (the entry included); `floor`: the one easier item after the first non-pass. */
 export type Check = 'climb' | 'floor';
 export type StopReason = 'top' | 'ceiling' | 'floor' | 'bottom' | 'max_items' | 'max_time';
+/**
+ * Why an item ended as a fail (`level_end.end_reason`, `ladder_step.end_reason`):
+ * two failed runs; a failed run after the solution hint or after an adult's
+ * help; the item's time; no input at all; the ladder's own time.
+ */
+export type EndReason = 'runs' | 'solution_hint' | 'adult' | 'time_cap' | 'idle_cap' | 'ladder_time';
 
 export interface Attempt { rung: number; check: Check; result: ItemResult }
 
@@ -83,12 +99,12 @@ export function itemResult(end: { outcome: string; help_levels: number; adult_he
 const passed = (s: LadderState, rung: number) => s.items.some((a) => a.rung === rung && a.result === 'pass');
 
 /** Where the ladder goes after its last item (`now`: for the time cap). */
-export function decide(s: LadderState, now: number): Decision {
+export function decide(s: LadderState, now: number, caps: Caps = CAPS): Decision {
   const last = s.items[s.items.length - 1];
   if (!last) return firstItem(s);
   if (last.check === 'floor') return { stop: 'floor' };
   if (s.items.length >= MAX_ITEMS) return { stop: 'max_items' };
-  if (now - s.startedAt >= MAX_MS) return { stop: 'max_time' };
+  if (now - s.startedAt >= caps.ladderMs) return { stop: 'max_time' };
   if (last.result === 'pass') return last.rung >= TOP ? { stop: 'top' } : { rung: last.rung + 1, check: 'climb' };
   const below = last.rung - 1;
   if (below < 1) return { stop: 'bottom' };
@@ -107,20 +123,26 @@ export interface ItemMemo { failsAtHelp: number | null }
 export const newItemMemo = (): ItemMemo => ({ failsAtHelp: null });
 
 /**
- * Ends an item as a fail (PlaytestLevel's `watch`, after every run, every
- * help and every few seconds): two failed runs; ITEM_MS without solving it;
- * or, once the solution hint was shown or an adult helped (the result is
- * already a fail), the next failed run: the child gets one more try with
- * that help, never an endless page. A solved page is never cut: the child
- * turns it.
+ * Ends an item as a fail, with the reason (PlaytestLevel's `watch`, after
+ * every run, every help, every input, when the tab shows again and every few
+ * seconds): two failed runs (`runs`); once the solution hint was shown or an
+ * adult helped (the result is already a fail), the next failed run
+ * (`solution_hint`, `adult`): one more try with that help, never an endless
+ * page; the item's wall time (`time_cap`); no input at all for idleMs since
+ * the page opened or the last input (`idle_cap`); the ladder's hard time
+ * (`ladder_time`, from `ladderStart`). A solved page is never cut: the child
+ * turns it (or it turns by itself).
  */
-export function itemVerdict(stats: LevelStats, memo: ItemMemo, now: number): 'fail' | null {
+export function itemVerdict(stats: LevelStats, memo: ItemMemo, now: number, o: { caps?: Caps; ladderStart?: number } = {}): EndReason | null {
+  const caps = o.caps ?? CAPS;
   if (stats.won || stats.lastResult === 'win') return null;
-  if (stats.fails >= FAILED_RUNS) return 'fail';
-  if (now - stats.startedAt >= ITEM_MS) return 'fail';
   if (stats.helpStep >= 3 || stats.adultHelped) {
     if (memo.failsAtHelp == null) memo.failsAtHelp = stats.fails;
-    else if (stats.fails > memo.failsAtHelp) return 'fail';
+    else if (stats.fails > memo.failsAtHelp) return stats.helpStep >= 3 ? 'solution_hint' : 'adult';
   }
+  if (stats.fails >= FAILED_RUNS) return 'runs';
+  if (o.ladderStart != null && now - o.ladderStart >= caps.hardMs) return 'ladder_time';
+  if (now - stats.startedAt >= caps.itemMs) return 'time_cap';
+  if (now - Math.max(stats.startedAt, stats.lastInputAt ?? 0) >= caps.idleMs) return 'idle_cap';
   return null;
 }

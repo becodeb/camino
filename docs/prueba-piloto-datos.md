@@ -151,12 +151,15 @@ a failed run) or `no_play` (stopped before any arrow: not a failed run, like
 touch:seed(score)`), `blocks_used` their cards (each hat and each action),
 plus `keys` (arrows the child pressed while it ran; the ghost hand's do not
 count) and `score` (points in the jar). A game still running when the page
-ends logs no `run`.
+ends logs no `run`, except on a page the ladder ended (its caps, round 2):
+a game the child pressed arrows in is logged then as `result: 'unfinished'`
+(an attempt, not a failed run), so a child who played without ever
+stopping the game still has a first attempt.
 ```
 { …, keys?: number, score?: number }   // rule game only
 ```
 A failed run (the ladder's "two failed runs") is a run that ran and did not
-win: not `empty`, `incomplete`, `no_guess` or `no_play`, and not the given
+win: not `empty`, `incomplete`, `no_guess`, `no_play` or `unfinished`, and not the given
 program run unchanged on a fix page (seeing the mistake is part of fixing it).
 
 ### `level_end`
@@ -171,7 +174,8 @@ Closes a level. **RQ 2, 4, 5.**
   help_levels: number,          // how many of the 3 automatic help steps were shown
   blocks_used?: number,
   blocks_optimal?: number,
-  adult_helped: boolean          // true if an adult_help happened during this level
+  adult_helped: boolean,         // true if an adult_help happened during this level
+  end_reason?: string            // a ladder item the ladder ended: why (see ladder_step)
 }
 ```
 `v_session_summary.levels_won` counts `outcome = 'win'`. `help_levels` is the
@@ -181,9 +185,9 @@ cards; `blocks_optimal` the page's reference solution's cards. `outcome` is
 adult's end-session or skip). A level_end also carries whatever the step
 merges in (`extra`: the ladder's `concept`, `rung`, `item`, `check`);
 `level_start` carries the same. On a ladder item `outcome` is `fail` when the
-ladder ended the item (two failed runs, three minutes, or a failed run after
-the solution hint or an adult's help); a solved page the child does not turn
-turns by itself after 8 s. `blocks_optimal` of a rule game counts its
+ladder ended the item, and `end_reason` says why (`runs`, `solution_hint`,
+`adult`, `time_cap`, `idle_cap`, `ladder_time`; see `ladder_step`); a solved
+page the child does not turn turns by itself after 8 s. `blocks_optimal` of a rule game counts its
 reference rules' cards.
 
 ### `help`
@@ -320,11 +324,48 @@ logged when the item ends. **RQ 2, 3, 4.**
   help_levels: number,      // automatic help steps shown (0–3)
   adult_helped: boolean,
   attempts: number,         // presses of ▶ (level_end's)
-  outcome: 'win' | 'fail' | 'skipped'  // level_end's
+  outcome: 'win' | 'fail' | 'skipped', // level_end's
+  end_reason: 'solved' | 'runs' | 'solution_hint' | 'adult' | 'time_cap' | 'idle_cap' | 'ladder_time' | 'left'
 }
 ```
+`end_reason` (round 2): `solved` the page was won (then `result` is `pass`
+unless the solution hint or an adult's help was used); `runs` two failed
+runs; `solution_hint` / `adult` a failed run after the solution hint / after
+an adult's help; `time_cap` 3 minutes of wall time on the item, input or
+not (a hidden tab counts: the check also runs when the tab shows again);
+`idle_cap` 90 s with no input at all (no tap, drag or key on the page,
+counted from the page's start or the last input; the ghost hand's moves are
+not input); `ladder_time` the item was still open 13 minutes into the
+ladder; `left` the page ended another way (rare). Round-1 rows have no
+`end_reason`.
 
-The item bank (the same pages for every child):
+The item bank, round 2 (from 2026-10-01; the same pages for every child,
+hand-designed for the ladder in `src/playtest/ladderItems.ts`, every item
+different from its neighbours in board size, what is on the board, the goal
+cell and its twist; same rungs and concepts as round 1):
+
+| Rung | Concept | Format | Item | What makes it distinct |
+|---|---|---|---|---|
+| 1 | `sequence` (short) | solve | `pp-l1` Rodear los charcos | forest 4×3, two puddles across the middle, the seed up on the right; 5 lines |
+| 2 | `long_sequence` | solve | `pp-l2` Dos semillas y la maceta | forest 6×4, a corridor of rocks: right to the first seed, down to the second, right to the pot (8 lines, a turn, things in order) |
+| 3 | `fix` | fix | `pp-l3` Una flecha se mete al agua | the river (6×3): a ford of two stepping stones; one ↑ walks into the water |
+| 4 | `predict` | predict | `pp-l4` ¿Dónde se queda Brote? | a tall forest board (4×5), ↑↑↑ →→ ↓: two turns |
+| 5 | `repeat` | solve (ghost-hand intro) | `pp-l5` Cruzar el río para el otro lado | the river 8×3, walking LEFT across six stones; 2 lines |
+| 6 | `repeat_count` | complete (the count) | `pp-l6` ¿Cuántas veces para arriba? | a stone chimney (3×6): repeat ? ↑, then → →; only the number is missing |
+| 7 | `repeat_pattern` | solve | `pp-l7` La escalera de piedras | stepping stones climbing a river staircase ↑→ (5×5) |
+| 8 | `before_after_repeat` | solve | `pp-l8` Caminar, bajar la escalera y un paso más | a second, different staircase (stone, going down, 6×5): → →, repeat 3 ↓→, ↓ (lines before and after the repeat) |
+| 9 | `fog_si` | solve (ghost-hand intro) | `pp-l9` Niebla en la orilla | a sandy bank (7×1) in fog, two rocks |
+| 10 | `three_worlds` | solve | `pp-l10` Tres caminos cortos, un programa | three short forest paths (6, 5, 6), one with a rock right at the start (look before stepping) |
+| 11 | `events_rules` | rule game | `pp-l11` Un juego: cada flecha mueve a Brote | 5×4 with puddles and a rock; the ghost makes "cuando aprieto → → derecha", presses ▶ and →, the game keeps running; the way also needs ↑ (on-screen ↑ and → keys) |
+| 12 | `rules_score` | rule game | `pp-l12` Un juego: semillas que suman puntos | a sandy 7×4, seeds fall; ← → given; the ghost presses ▶ and →; four points with a new touch rule |
+
+The rule games (round 2) start with the ghost's demo (the rule built if
+missing, ▶, its key pressed), then say and caption "Ahora vos: tocá las
+flechas del teclado o de la pantalla para mover a <character>…"; rung 11
+also says, the first time a key without a rule is pressed, "Esa flecha
+todavía no tiene regla. Armala…". The intro is `ghost_demo` kind `intro`.
+
+Round 1's bank (2026-09-30 to 2026-10-01 sessions; `ladder.ts` `LADDER_ROUND1`):
 
 | Rung | Concept | Format | Item |
 |---|---|---|---|
@@ -344,20 +385,26 @@ The item bank (the same pages for every child):
 Rules: entry by grade (1ro rung 1, 2do 2, 3ro 5, 4to 7, 5to 9). `pass` =
 solved with fewer than 3 help steps (the solution hint never shown) and no
 adult help during it; anything else is `fail`: the solution hint or adult
-help was used, two failed runs, or three minutes without solving it (after
-the solution hint or an adult's help the child keeps one more try: the next
-failed run ends the item). After a pass, one rung up (a pass on rung 12
+help was used, two failed runs, three minutes without solving it, or 90 s
+with no input at all (after the solution hint or an adult's help the child
+keeps one more try: the next failed run ends the item). After a pass, one rung up (a pass on rung 12
 stops). After the first non-pass: if the rung below was not passed in this
 ladder, it is tried once (`check: 'floor'`) and the ladder stops whatever
 happens; if it was passed, or there is none (rung 1), the ladder stops. At
-most 10 items or 12 minutes (checked between items, so an item open at 12
-minutes finishes). The child never sees a result: between items the
+most 10 items or 12 minutes (checked between items; an item open at 12
+minutes still ends by 13 minutes, `end_reason: 'ladder_time'`). The caps
+are wall time; round 1's rule-game item ran 234 s because the tab was
+hidden and the browser delayed the 5-second check (round 2 also checks when
+the tab shows again, and on every input). `?caps=fast` in the URL shortens
+them for scripted checks (item 30 s, no input 12 s, ladder 60 s, hard 70 s;
+`tools/check-caps.mjs`). The child never sees a result: between items the
 character walks on to the next page, and at the end it cheers ("¡Muy bien!
 Vamos a jugar").
 
-A rule game (rungs 11–12) is solved when the game is won (`3ro-1`: Brote
-reaches the seed with the arrows; `3ro-2`: five points in the jar); a failed
-run there is a game stopped (■ or ↺) after the child pressed an arrow.
+A rule game (rungs 11–12) is solved when the game is won (rung 11: the
+character reaches the seed with the arrows; rung 12: four points in the jar;
+round 1: `3ro-1`, `3ro-2` with five); a failed run there is a game stopped
+(■ or ↺) after the child pressed an arrow.
 
 The ceiling is the highest rung passed. `v_ladder_ceiling` takes the max
 `rung` with `result = 'pass'` per `(session_id, concept)` (one rung per

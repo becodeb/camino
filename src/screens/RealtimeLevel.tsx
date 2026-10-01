@@ -83,18 +83,26 @@ export function RealtimeLevel({ level }: { level: LevelDef }) {
   const game = useRef<{ keys: number } | null>(null);
 
   /** One game ended (the win, ■ or ↺): the playtest logs it as a run; the demo has no hook and nothing changes. */
-  const report = (result: 'win' | 'stopped') => {
+  const report = (result: 'win' | 'stopped' | 'unfinished') => {
     const g = game.current;
     game.current = null;
     if (!g || !nav.onRunReport) return;
     nav.onRunReport({
-      result: result === 'stopped' && !g.keys ? 'no_play' : result,
+      result: result !== 'win' && !g.keys ? 'no_play' : result,
       program: [],
       rules: cloneRules(rulesRef.current),
       keys: g.keys,
       score: sim.current.score,
     });
   };
+
+  // the page ends from outside (the pilot's caps): a game the child played in counts as a run
+  useEffect(() => nav.onEnding?.(() => {
+    if (game.current?.keys) report('unfinished');
+  }), [nav]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** The pilot's "that key has no rule yet" line, said once per page. */
+  const noRuleSaid = useRef(false);
 
   // the jar and the speed of the rain
   useEffect(() => {
@@ -117,6 +125,7 @@ export function RealtimeLevel({ level }: { level: LevelDef }) {
       case 'shrug':
         v.shrug(e.key);
         api?.wiggle(hatOfKey(e.key));
+        if (def.noRule && !noRuleSaid.current && !demoRef.current) { noRuleSaid.current = true; speak(def.noRule); }
         break;
       case 'move': lastMove.current = v.rtMove(e.step, e.dir, MOVE_TICKS * TICK_MS); break;
       case 'spawn': v.addFaller(e.id, e.c, e.y); break;
@@ -269,11 +278,11 @@ export function RealtimeLevel({ level }: { level: LevelDef }) {
   };
 
   // ---------------------------------------------------------------- the ghost hand
-  const demo = (steps: DemoStep[], pace?: number) => {
+  const demo = (steps: DemoStep[], pace?: number, after?: () => void) => {
     demoRef.current = true;
     setDemoing(true);
     const run = ghost(steps, { pace });
-    const end = () => { demoRef.current = false; setDemoing(false); };
+    const end = () => { demoRef.current = false; setDemoing(false); after?.(); };
     if (run) void run.then(end); else end();
   };
 
@@ -299,7 +308,8 @@ export function RealtimeLevel({ level }: { level: LevelDef }) {
   /** First entry of page 1: one arrow rule is built, ▶, and its key is pressed. The idea, not the answer (≤ 8 s). */
   const playIntro = () => {
     const r = def.intro;
-    if (!r || demoRef.current || wonRef.current || rulesRef.current.some((x) => x.hat === r.hat)) return;
+    // (a rule the page starts with is only played: ▶ and its key)
+    if (!r || demoRef.current || wonRef.current || (rulesRef.current.some((x) => x.hat === r.hat) && !def.initial.some((x) => x.hat === r.hat))) return;
     introPlayed.add(level.id);
     nav.onIntro?.(level);
     const k = keyOf(r.hat);
@@ -308,7 +318,7 @@ export function RealtimeLevel({ level }: { level: LevelDef }) {
       { do: 'tap', at: '.btn-play', apply: start },
       ...(k ? [{ do: 'tap' as const, at: `.key-btn[data-dir="${k}"]`, apply: () => press(k) }] : []),
     ];
-    demo(steps, 0.7);
+    demo(steps, 0.7, () => { if (def.afterIntro && !wonRef.current && rootRef.current?.isConnected) speak(def.afterIntro); });
   };
 
   useEffect(() => {

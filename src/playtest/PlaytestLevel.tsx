@@ -54,6 +54,8 @@ export interface LevelStats {
   adultHelped: boolean;
   /** The page was solved (the child may not have turned it yet). */
   won: boolean;
+  /** The child's last input on the page (a tap, a drag, a key), or the page's start. */
+  lastInputAt: number;
 }
 
 /** The `level_end` payload (docs/prueba-piloto-datos.md). */
@@ -67,6 +69,8 @@ export interface LevelEnd {
   blocks_used?: number;
   blocks_optimal: number;
   adult_helped: boolean;
+  /** Why `watch` ended it (the ladder's caps, ladder.ts EndReason); absent otherwise. */
+  end_reason?: string;
   [extra: string]: unknown;
 }
 
@@ -83,8 +87,13 @@ export interface InstrumentProps {
   /** Merged into level_start and level_end (the ladder's concept, rung and item). */
   extra?: Record<string, unknown>;
   onEnd(result: LevelEnd): void;
-  /** Return an outcome to end the level now (the ladder's floor rule); null keeps it open. */
-  watch?(stats: LevelStats): LevelOutcome | null;
+  /**
+   * Return an outcome (or an outcome and its reason, logged as `end_reason`)
+   * to end the level now (the ladder's floor rule and caps); null keeps it
+   * open. Runs after every run, help and input, when the tab shows again,
+   * and every few seconds.
+   */
+  watch?(stats: LevelStats): LevelOutcome | { outcome: LevelOutcome; reason: string } | null;
   /** Every event the page logs, as it is logged. */
   listen?(type: string, payload: Record<string, unknown>): void;
   /** Once solved, the page turns by itself after this long. */
@@ -114,16 +123,23 @@ function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs
   apiRef.current = api;
   const props = useRef({ activity, extra, onEnd, watch, listen });
   props.current = { activity, extra, onEnd, watch, listen };
-  const stats = useRef<LevelStats>({ level_id: level.id, startedAt: Date.now(), runs: 0, fails: 0, wins: 0, lastResult: null, helpStep: 0, adultHelped: false, won: false });
+  const stats = useRef<LevelStats>((() => {
+    const now = Date.now();
+    return { level_id: level.id, startedAt: now, runs: 0, fails: 0, wins: 0, lastResult: null, helpStep: 0, adultHelped: false, won: false, lastInputAt: now };
+  })());
+  /** What the page reports before it ends from outside (a rule game still running). */
+  const flushers = useRef(new Set<() => void>());
   /** The last run's cards. */
   const lastBlocks = useRef<number | null>(null);
   const ghostSinceRun = useRef(false);
   const ended = useRef(false);
   const track = useRef<LevelTrack>({ id: level.id, helpStep: 0, adultHelped: false });
 
-  const end = (outcome: LevelOutcome, notify = true) => {
+  const end = (outcome: LevelOutcome, notify = true, reason?: string) => {
     if (ended.current) return;
     ended.current = true;
+    // a game still running counts as a run before the page's numbers are taken
+    for (const f of [...flushers.current]) f();
     const s = stats.current;
     const t = track.current;
     const payload: LevelEnd = {
@@ -136,6 +152,7 @@ function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs
       ...(lastBlocks.current != null ? { blocks_used: lastBlocks.current } : {}),
       blocks_optimal: optimalBlocks(level),
       adult_helped: t.adultHelped,
+      ...(reason ? { end_reason: reason } : {}),
       ...props.current.extra,
     };
     log('level_end', payload);
@@ -155,7 +172,9 @@ function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs
     const s = stats.current;
     s.adultHelped = track.current.adultHelped;
     const verdict = props.current.watch?.(s);
-    if (verdict) end(verdict);
+    if (!verdict) return;
+    if (typeof verdict === 'string') end(verdict);
+    else end(verdict.outcome, true, verdict.reason);
   };
 
   useEffect(() => {
@@ -169,12 +188,27 @@ function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // a time limit: the step's watch also runs every few seconds
+  // a time limit: the step's watch also runs every few seconds, and at once
+  // when the tab shows again (a hidden tab's timers are throttled: round 1's
+  // rule-game item ran 234 s in a background tab before its 3-minute check fired)
   useEffect(() => {
     if (!props.current.watch) return;
     const id = setInterval(check, WATCH_TICK_MS);
-    return () => clearInterval(id);
+    const onShow = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onShow);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onShow); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // the child's input (any tap, drag or key on the page; the ghost hand's moves are not events): the idle cap's clock
+  useEffect(() => {
+    const on = (e: Event) => {
+      if (!e.isTrusted) return;
+      stats.current.lastInputAt = Date.now();
+    };
+    window.addEventListener('pointerdown', on, true);
+    window.addEventListener('keydown', on, true);
+    return () => { window.removeEventListener('pointerdown', on, true); window.removeEventListener('keydown', on, true); };
   }, []);
 
   // holding ✋ for a second raises the hand at once (the click that ends the hold does not count as a help)
@@ -231,6 +265,10 @@ function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs
     onTapAdd: (l) => log('tap_add', { level_id: l.id }),
     onDrag: (phase, info) => log('drag', { level_id: level.id, phase, ...(info ? { success: info.success, outcome: info.outcome, from: info.from } : {}) }),
     onIntro: (l) => { ghostSinceRun.current = true; log('ghost_demo', { level_id: l.id, kind: 'intro' }); },
+    onEnding: (flush) => {
+      flushers.current.add(flush);
+      return () => { flushers.current.delete(flush); };
+    },
     help: (l, show) => {
       const a = apiRef.current;
       const s = stats.current;

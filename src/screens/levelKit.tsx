@@ -116,6 +116,12 @@ export interface LevelNav {
   onDrag?(phase: 'start' | 'drop', info?: { success: boolean; outcome: string; from: 'palette' | 'program' }): void;
   /** The ghost hand's concept demo played by itself (a new idea, after a full notebook or a failed run). */
   onIntro?(level: LevelDef): void;
+  /**
+   * The page registers what to report before it ends from outside (the
+   * ladder's caps): a rule game still running reports its game as a run.
+   * Returns the unregister function.
+   */
+  onEnding?(flush: () => void): () => void;
 }
 
 /**
@@ -125,7 +131,9 @@ export interface LevelNav {
  * with a line or a count missing), 'no_guess' (predict, ▶ before a guess).
  * A rule game (3ro) reports one game, from ▶ to ■, ↺ or the win: 'win',
  * 'stopped' (stopped after the child pressed an arrow) or 'no_play'
- * (stopped before any arrow), with its rules, keys and score.
+ * (stopped before any arrow), with its rules, keys and score; or
+ * 'unfinished' (the page ended from outside, `onEnding`, while a game the
+ * child pressed arrows in was still running).
  */
 export interface RunReport {
   result: string;

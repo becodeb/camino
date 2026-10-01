@@ -7,6 +7,7 @@ import { sheetByN } from '../curriculum/primer';
 import { levelById, type LevelDef } from '../game/levels';
 import { isHole, type Program } from '../game/model';
 import type { Rule } from '../game/rules';
+import { ladderItem } from './ladderItems';
 
 /**
  * Free play's last rule-game page: 3ro page 2's falling seeds with every
@@ -30,6 +31,8 @@ export const RULE_GAME_PAGES = ['3ro-1', '3ro-2', FREE_RULES.id] as const;
 
 export function pilotLevel(id: string): LevelDef | null {
   if (id === FREE_RULES.id) return FREE_RULES;
+  const own = ladderItem(id);
+  if (own) return own;
   const m = id.match(/^1ro-h(\d+)-(\d+)$/);
   if (m) return sheetByN(Number(m[1]))?.core[Number(m[2]) - 1]?.level ?? null;
   return levelById(id) ?? null;
@@ -66,6 +69,8 @@ export const optimalBlocks = (level: LevelDef) => (level.realtime ? ruleBlocksOf
 
 /** ▶ pressed but nothing ran: an empty or incomplete notebook, no guess yet, a game stopped before any key was pressed. */
 const NOT_RUN = new Set(['empty', 'incomplete', 'no_guess', 'no_play']);
+/** Not a failed try either: a game cut by the page's end (a cap) while the child was playing. */
+const NOT_FAILED = new Set(['unfinished']);
 
 /**
  * A run that counts as a failed try (the ladder's "two failed runs"): it ran
@@ -73,7 +78,7 @@ const NOT_RUN = new Set(['empty', 'incomplete', 'no_guess', 'no_play']);
  * program run unchanged on a fix page (seeing the mistake is part of fixing it).
  */
 export function isFailedRun(level: LevelDef, result: string, program: Program): boolean {
-  if (result === 'win' || NOT_RUN.has(result)) return false;
+  if (result === 'win' || NOT_RUN.has(result) || NOT_FAILED.has(result)) return false;
   if (level.format === 'fix' && level.given && programText(program) === programText(level.given)) return false;
   return true;
 }
