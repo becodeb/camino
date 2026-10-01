@@ -69,7 +69,7 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 - [x] T9 Verification and final deploy: screenshot tours (1ro, 3ro, 5to at both sizes), scripted full 1ro and 5to sessions with an offline stretch confirming DB rows and export, locally and live.
 
 - [x] T10 Round-2 flow (user feedback 2026-10-01): no consent tick and no session code shown anywhere in the kid app; less dependence on the adult (grade chosen in one tap, the adult form optional from the corner menu, the goodbye restarts by itself); a fast, non-forcing tool check (any equivalent gesture counts, short waits, ✋ only shown); on-screen text for every spoken line (default on from 3ro, toggle on setup and in the bar); a simpler top bar in the playtest (no page icons, doors or boss frame); a clear spoken choice screen after a sheet's core instead of the doors; the wardrobe fits the viewport (also non-fullscreen, e.g. 1920×911, 1366×650).
-- [ ] T11 Round-2 ladder: a varied fixed item bank (no two near-identical items; e.g. one staircase then a different one, steps before a repeat), per-item caps really enforced (the rule-game item ran 234 s with no attempt), a clearer rule-game item.
+- [x] T11 Round-2 ladder: a varied fixed item bank (no two near-identical items; e.g. one staircase then a different one, steps before a repeat), per-item caps really enforced (the rule-game item ran 234 s with no attempt), a clearer rule-game item.
 - [ ] T12 Round-2 typing game: a visible goal and progress (how long, how much is left, that you are earning), rounds that get harder on purpose instead of speed tied to typing speed, more fun.
 - [ ] T13 Round-2 verification and redeploy (production emptied again after the user's next try if asked).
 
@@ -396,6 +396,46 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
   - `lowerHand('self' | 'moved_on', levelId?)` on the playtest API lowers a raised hand nobody answered (call it when a typing round or item ends).
   - The typing bar has no `aside` (no pouch): T12 can add `<SeedPouch />` and a progress.
 
+- 2026-10-01: T11 done (route: delegated direct, one writer; 2+ non-trivial files). Work-unit commits on `feat/prueba-piloto` (not pushed, not deployed):
+  - `a5fd0f2` the round-2 item bank (`src/playtest/ladderItems.ts`, twelve hand-designed `LevelDef`s `pp-l1`…`pp-l12`; `ladder.ts` builds `LADDER` from it and keeps round 1's ids as `LADDER_ROUND1`), the caps (`itemVerdict` returns an `EndReason`; `PlaytestLevel` tracks the child's last input, checks on `visibilitychange`, logs `level_end.end_reason`, and flushes a rule game still running through a new `LevelNav.onEnding`; `RealtimeLevel` reports it as `unfinished`), the rule games' start (`RealtimeDef.afterIntro`/`noRule`, an intro on a rule the page starts with plays ▶ and its key), `?caps=fast`, the dictionary.
+  - `ab276f7` the scripted checks: `check-piloto`, `check-session`, `check-session-data` on the new items and `end_reason`; new `tools/check-caps.mjs`; `shots-piloto.mjs` `pp-l<n>-start` / `pp-l<n>-prints` (`-intro` for the games), each rung opened by the grade that meets it first.
+
+  Item bank (round 2; also in the dictionary; same rungs, concepts and entry points):
+
+  | Rung | Concept | Item | What makes it distinct |
+  |---|---|---|---|
+  | 1 | sequence | `pp-l1` Rodear los charcos | forest 4×3, two puddles, seed top right, 5 lines |
+  | 2 | long_sequence | `pp-l2` Dos semillas y la maceta | forest 6×4, rock corridor: seed, turn down, seed, pot (8 lines) |
+  | 3 | fix | `pp-l3` Una flecha se mete al agua | river 6×3, two-stone ford, one ↑ into the water |
+  | 4 | predict | `pp-l4` ¿Dónde se queda Brote? | tall forest 4×5, ↑↑↑→→↓ |
+  | 5 | repeat | `pp-l5` Cruzar el río para el otro lado | river 8×3, walking LEFT over six stones, 2 lines, ghost intro |
+  | 6 | repeat_count | `pp-l6` ¿Cuántas veces para arriba? | stone chimney 3×6: repeat ? ↑, → → (only the number) |
+  | 7 | repeat_pattern | `pp-l7` La escalera de piedras | river staircase ↑→ ×4 (5×5) |
+  | 8 | before_after_repeat | `pp-l8` Caminar, bajar la escalera y un paso más | a second, different staircase (stone, down, 6×5): → →, repeat 3 ↓→, ↓ |
+  | 9 | fog_si | `pp-l9` Niebla en la orilla | sandy bank 7×1 in fog, two rocks, ghost intro |
+  | 10 | three_worlds | `pp-l10` Tres caminos cortos, un programa | three forest paths 6/5/6, one with a rock at the start |
+  | 11 | events_rules | `pp-l11` Un juego: cada flecha mueve a Brote | 5×4 puddles + rock; ghost builds → and presses ▶ →; needs ↑ too; on-screen ↑ → |
+  | 12 | rules_score | `pp-l12` Un juego: semillas que suman puntos | sandy 7×4, falling seeds, ← → given, four points with a new touch rule |
+
+  Why the round-1 rule-game item ran 234 s: the user's export shows the tab hidden from 66 s on (`visibility` events) with the game the ghost had started still running; the browser throttled the hidden tab's 5-second `watch` timer, so the 3-minute check fired at 234 s (the cap was wall time, but nothing ran it). The 0 attempts: a rule-game run was only logged at ■/↺/win, and the game the ghost started was never stopped. Now: `watch` also runs when the tab shows again and on every input; a 90 s idle cap; the open game is logged as an `unfinished` run (an attempt, not a failed run).
+
+  Evidence:
+  - `npm run typecheck` clean; `npm test` 37 files, 1047 tests (new `ladderItems.test.ts` 16: every program item solved by its solution on the real engine, flat items' lines = shortest plan, the fix bumps and differs in one line, predict has no goal and ends where expected, repeat items need the loop, rung 8 has lines before and after its repeat and the repeat alone does not reach, rung 10 has a world where "walk then look" bumps, rung 11's way needs ↑ and → and → alone does not win, rung 12 wins at four by chasing and never without the touch rule, no two consecutive items share board size, board contents or goal cell, no two consecutive same solutions (9→10 excepted on purpose), kid-safe titles; `ladder.test.ts` extended: idle cap from start or last input, time cap with input, the round-1 case (checked at 234 s → `time_cap`), the hard ladder time, `?caps=fast`, reasons `runs`/`solution_hint`/`adult`); `npm run build` ok (also `VITE_PLAYTEST=1`); `npm run test:api` 26/26 (disposable `camino-prueba-t11db` on 54340, database `apitest`; no view changed).
+  - `tools/check-caps.mjs` (vite 8811 → API 8810 → Postgres 54340), all checks passed: 2do no input → rung 2 ended at the idle cap (15 s with fast caps; `idle_cap`, 0 attempts), the floor check with palette taps every 3 s and no run → `time_cap` at 30 s, `ladder_end` floor; 5to rung 11: the line after the intro on screen in 9.7 s with the character's name, the game left running, two on-screen keys, ↑ without a rule → the "no tiene regla" line, → pressed, never stopped → `time_cap` at 30 s with `run` `unfinished` (7 keys) and `attempts: 1`; 3ro rungs 5 and 6 solved, rung 7 opened at 54 s → `ladder_time` 22 s in (before its own 30 s), `ladder_end` `max_time` at 74 s.
+  - `tools/check-piloto.mjs`: 157 ok, all passed (end reasons `solved,solved,solution_hint` for 1ro, `runs`/`solved` for the 5to floor check; rule game runs `no_play,stopped,win` on `pp-l11`). One earlier run lost the browser mid-run (chromium closed on this Pi; a rerun passed unchanged).
+  - `tools/check-session.mjs http://127.0.0.1:8810/ 1ro 5to 3ro` against a `VITE_PLAYTEST=1` build served by the local API: all passed (1ro 163 s, 5to 162 s, 3ro 191 s); export with a throwaway `HOME` + `tools/check-session-data.mjs`: 60 ok, all passed (every `ladder_step.item` is `pp-l<rung>`, every `end_reason` valid and consistent with `result`); export files deleted.
+  - Demo regressions against 8811: `check-primer` 0 FAIL, `check-3ro` exit 0, no console errors.
+  - Screenshots (`SIZES=1920x911,1366x768 tools/shots-piloto.mjs … pp-l`): every rung as it opens and with ✋ 3's footprints (the games: after the intro), reviewed with the Read tool. Fixed from them: the 2×6 chimney (rung 6) squeezed the stage so ↺ was clipped at 1366 (now 3×6 with two steps out); shots opened every rung as 1ro, so captions never showed (each rung now opened by the grade that meets it first: the bubble with the instruction, the name and the after-intro line checked at 1920 and 1366).
+
+  Decisions and deviations:
+  - Rungs, concepts and entry points unchanged (round-1 data stays comparable rung by rung; `v_ladder_ceiling`/`v_session_summary` untouched). A separate "two repeats in a row" rung was considered and not added: it would shift 4to/5to entries or the twelve concepts; instead rung 7 (one staircase, up) is followed by rung 8 (a different staircase, down, with lines before and after the repeat), the teacher's "una escalera y después otra" across consecutive items.
+  - Idle cap = 90 s since the page opened or the last input (any trusted pointerdown/keydown on the page, ✋ and the adult's corner included; the ghost's moves are not events). The watch tick stays 5 s, so caps fire up to 5 s late in a visible tab.
+  - A seventh reason `ladder_time` (the item open at 13 min) besides the five asked for, and `solved`/`left` for items not cut by a cap.
+  - The rule-game intro now leaves the game running after its demo (as before) and the child's arrows count into that game; `unfinished` is an attempt but not a failed run. Arrows pressed before ▶ still only wiggle ▶ (no attempt).
+  - `?caps=fast` is honoured in any build (like `?libre`): item 30 s, idle 12 s, ladder 60 s, hard 70 s.
+
+  Open: never tried with children; the on-screen keys of rung 11 (↑ and → only) sit as a broken inverted T above the board's top-right corner (readable, not pretty); rung 9's fog strip is small inside its sky frame at 1366 (as round 1's `2do-1`); help step 3 on the predict item shows the path (pre-existing for predict pages); a hidden tab still delays the caps until it shows again (the reason and wall time are right, the event comes late). Engram mirror still pending.
+
 ## Next step
 
-T11.
+T12.
