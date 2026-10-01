@@ -11,8 +11,8 @@ const [out = '.', base = 'http://127.0.0.1:8811/', only = ''] = process.argv.sli
 // SIZES=1920x911,1366x650 for other windows (round 2: the user's browser was 1920×911, not fullscreen)
 const SIZES = (process.env.SIZES ?? '1366x768,1280x800').split(',').map((x) => x.split('x').map(Number));
 
-/** The setup, by the real UI (round 2): the division, then one tap on the grade starts. */
-async function setup(p, grade = '1ro', division = 'B') {
+/** The setup, by the real UI: one tap on the grade starts (T14: no division on the setup any more). */
+async function setup(p, grade = '1ro', division = null) {
   if (division) await p.getByRole('button', { name: division, exact: true }).click();
   await p.getByRole('button', { name: grade, exact: true }).click();
   await p.waitForSelector('.choice-row');
@@ -102,25 +102,17 @@ async function pickCard(p, id, wait = 'main') {
   await p.waitForSelector(`.pp-fp-activity[data-activity="${id}"] ${wait}`);
   await p.waitForTimeout(1600);
 }
-/** Free play of 4to, the game maker's card, and (?debug hook) a later stage of it. */
-async function toGameMaker(p, stage = 'play', who = 'mina') {
+/** Free play of 4to, the game maker's card, and (?debug hook) a later step of it (the steps before it built). */
+async function toGameMaker(p, stage = 'move', who = 'mina') {
   await toFreePlay(p, '4to', who);
   await pickCard(p, 'game_maker', 'main');
-  if (stage !== 'play') { await pil(p, (s) => window.__gm.go(s), stage); await p.waitForTimeout(1200); }
+  if (stage !== 'move') { await pil(p, (s) => window.__gm.go(s), stage); await p.waitForTimeout(1200); }
 }
 /** Free play of 5to, the text probe's card; `item`: an item of the probe (the debug hook), after the tour. */
 async function toText(p, item = null, who = 'mina') {
   await toFreePlay(p, '5to', who);
   await pickCard(p, 'text_probe', 'main');
   if (item != null) { await pil(p, (i) => window.__tx.item(i), item); await p.waitForTimeout(1400); }
-}
-/** Plays the ready game for a while: the arrows towards the seed. */
-async function playChase(p, n) {
-  for (let i = 0; i < n; i++) {
-    const d = await pil(p, () => { const s = window.__gmw.state(); const me = s.sprites.me, seed = s.sprites.seed; return seed.c > me.c ? 'Right' : seed.c < me.c ? 'Left' : null; });
-    if (d) await p.keyboard.press(`Arrow${d}`);
-    await p.waitForTimeout(260);
-  }
 }
 /** Solves the level page on screen with its reference solution and turns it. */
 async function solveTurn(p) {
@@ -475,17 +467,37 @@ const SCENARIOS = [
       await p.waitForSelector('[data-interlude="cheer"]'); await p.waitForTimeout(2000);
     },
   },
-  // ---------------------------------------------------------------- T7: "Hacé tu juego" (4to)
+  // ---------------------------------------------------------------- T7/T15: "Hacé tu juego" (4to), built step by step
   { name: 'pp-gm-menu-4to', run: async (p) => { await toFreePlay(p, '4to'); } },
-  { name: 'pp-gm-play', run: async (p) => { await toGameMaker(p); await p.click('.gm-root .btn-play'); await playChase(p, 14); } },
-  { name: 'pp-gm-play-stone', run: async (p) => { await toGameMaker(p); await pil(p, () => window.__gmw.select('stone')); await p.waitForTimeout(400); } },
-  { name: 'pp-gm-change', run: async (p) => { await toGameMaker(p, 'change'); await p.waitForTimeout(7500); } },
-  { name: 'pp-gm-change-done', run: async (p) => { await toGameMaker(p, 'change'); await p.click('[data-chip="seed:1:0"]'); await p.waitForTimeout(500); } },
-  { name: 'pp-gm-game-tab', run: async (p) => { await toGameMaker(p, 'make'); await p.click('.gm-tab[data-obj="game"]'); await p.waitForTimeout(500); } },
+  { name: 'pp-gm-move', run: async (p) => { await toGameMaker(p); } },
+  {
+    name: 'pp-gm-move-done',
+    run: async (p) => {
+      await toGameMaker(p);
+      for (const b of ['key:right', 'move:right', 'key:left', 'move:left']) { await p.click(`.gm-palette [data-block="${b}"]`); await p.waitForTimeout(200); }
+      await p.keyboard.press('ArrowRight'); await p.waitForTimeout(400); await p.keyboard.press('ArrowLeft');
+      await p.waitForSelector('.gm-root.is-done'); await p.waitForTimeout(900);
+    },
+  },
+  { name: 'pp-gm-stone', run: async (p) => { await toGameMaker(p, 'stone'); } },
+  {
+    name: 'pp-gm-stone-stuck',
+    run: async (p) => {
+      await toGameMaker(p, 'stone');
+      for (const b of ['tick', 'move:down']) { await p.click(`.gm-palette [data-block="${b}"]`); await p.waitForTimeout(200); }
+      await p.click('.gm-root .btn-play');
+      await p.waitForFunction(() => window.__gmw.flags().stoneStuck, null, { timeout: 20_000 }); await p.waitForTimeout(700);
+    },
+  },
+  { name: 'pp-gm-seed', run: async (p) => { await toGameMaker(p, 'seed_read'); await p.waitForTimeout(1500); } },
+  { name: 'pp-gm-seed-read', run: async (p) => { await toGameMaker(p, 'seed_read'); await p.click('.gm-tab[data-obj="seed"]', { force: true }); await p.waitForTimeout(900); } },
+  { name: 'pp-gm-touch', run: async (p) => { await toGameMaker(p, 'touch_rules'); } },
+  { name: 'pp-gm-win-step', run: async (p) => { await toGameMaker(p, 'win'); } },
+  { name: 'pp-gm-free', run: async (p) => { await toGameMaker(p, 'free'); } },
   {
     name: 'pp-gm-broadcast',
     run: async (p) => {
-      await toGameMaker(p, 'make');
+      await toGameMaker(p, 'free');
       await pil(p, () => window.__gm.setGame([
         { id: 'me', rules: [{ hat: 'key:left', actions: ['move:left'] }, { hat: 'key:right', actions: ['move:right'] }, { hat: 'key:up', actions: ['send:yum', 'say:mia'] }] },
         { id: 'seed', rules: [{ hat: 'tick', actions: ['move:down'] }, { hat: 'touch:ground', actions: ['top'] }] },
@@ -502,7 +514,7 @@ const SCENARIOS = [
   {
     name: 'pp-gm-win',
     run: async (p) => {
-      await toGameMaker(p, 'make');
+      await toGameMaker(p, 'free');
       await pil(p, () => window.__gm.setGame([
         { id: 'me', rules: [{ hat: 'key:right', actions: ['score:1'] }] }, { id: 'seed', rules: [] }, { id: 'stone', rules: [] },
         { id: 'game', rules: [{ hat: 'points:3', actions: ['win'] }] },
@@ -515,7 +527,7 @@ const SCENARIOS = [
   {
     name: 'pp-gm-lose',
     run: async (p) => {
-      await toGameMaker(p, 'make');
+      await toGameMaker(p, 'free');
       await pil(p, () => window.__gm.setGame([
         { id: 'me', rules: [{ hat: 'key:right', actions: ['lives:-1'] }] }, { id: 'seed', rules: [] }, { id: 'stone', rules: [] },
         { id: 'game', rules: [{ hat: 'lives0', actions: ['lose'] }] },
@@ -525,17 +537,8 @@ const SCENARIOS = [
       await p.waitForSelector('.gm-end[data-end="lose"]'); await p.waitForTimeout(1400);
     },
   },
-  { name: 'pp-gm-help-make', run: async (p) => { await toGameMaker(p, 'make'); for (let i = 0; i < 3; i++) { await p.click('.gm-root .level-bar .help'); await p.waitForFunction(() => !document.querySelector('.gm-root.is-demo'), null, { timeout: 30_000 }); await p.waitForTimeout(i < 2 ? 2500 : 600); } await p.click('.gm-tab[data-obj="bird"]'); await p.waitForTimeout(500); } },
-  { name: 'pp-gm-predict-1', run: async (p) => { await toGameMaker(p, 'predict'); } },
-  { name: 'pp-gm-predict-2', run: async (p) => { await toGameMaker(p, 'predict'); await p.click('[data-answer="right"]'); await p.waitForSelector('.gm-predict[data-item="star"]'); await p.waitForTimeout(900); } },
-  {
-    name: 'pp-gm-predict-3',
-    run: async (p) => {
-      await toGameMaker(p, 'predict');
-      await p.click('[data-answer="right"]'); await p.waitForSelector('.gm-predict[data-item="star"]'); await p.waitForTimeout(500);
-      await p.click('[data-answer="life_lost"]'); await p.waitForSelector('.gm-predict[data-item="broadcast"]'); await p.waitForTimeout(900);
-    },
-  },
+  { name: 'pp-gm-help-2', run: async (p) => { await toGameMaker(p); for (let i = 0; i < 2; i++) { await p.click('.gm-root .level-bar .help'); await p.waitForTimeout(i ? 900 : 1500); } } },
+  { name: 'pp-gm-help-move', run: async (p) => { await toGameMaker(p); for (let i = 0; i < 3; i++) { await p.click('.gm-root .level-bar .help'); await p.waitForFunction(() => !document.querySelector('.gm-root.is-demo'), null, { timeout: 30_000 }); await p.waitForTimeout(i < 2 ? 2500 : 600); } } },
   { name: 'pp-gm-liked', run: async (p) => { await toGameMaker(p, 'liked'); } },
   // T8: "Del bloque al texto" (5to)
   { name: 'pp-tx-menu-5to', run: async (p) => { await toFreePlay(p, '5to'); } },

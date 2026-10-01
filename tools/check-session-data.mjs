@@ -42,7 +42,7 @@ const COMMON = ['step', 'choice', 'tool_check', 'tap_add', 'drag', 'help', 'leve
 const BY_GRADE = {
   1: ['ghost_demo', 'speak', 'call_adult', 'call_adult_end', 'adult_help', 'resume'],
   3: [],
-  5: ['resume', 'text_item', 'text_run', 'probe_end', 'rule_edit', 'game_run', 'scratch_predict'],
+  5: ['resume', 'text_item', 'text_run', 'probe_end', 'probe_phase', 'rule_edit', 'game_run'],
 };
 
 for (const id of ids) {
@@ -101,7 +101,9 @@ for (const id of ids) {
   if (s.grade === 5) {
     ok(of('resume')[0]?.step === 'free_play', `5° ${s.code}: resume after the offline reload on free play`);
     ok(of('level_end').some((x) => x.sheet === 15 && x.page === 'test' && x.outcome === 'win'), `5° ${s.code}: the workshop's test page (sheet 15) won`);
-    ok(of('text_item').length >= 3 && of('scratch_predict').length === 3, `5° ${s.code}: text items ${of('text_item').length}, Scratch predictions ${of('scratch_predict').length}`);
+    ok(of('text_item').length >= 3, `5° ${s.code}: text items ${of('text_item').length}`);
+    const gmSteps = of('probe_phase').filter((x) => x.probe === 'game_maker').map((x) => `${x.phase}:${x.completed}`).join(',');
+    ok(gmSteps === 'move:true,free:false' && of('scratch_predict').length === 0, `5° ${s.code}: game maker steps ${gmSteps}, no Scratch predictions`);
     ok(of('choice').some((x) => x.activity === 'game_maker' && x.by === 'adult'), `5° ${s.code}: the game maker opened by the adult`);
     ok(of('activity_end').map((x) => x.activity).join(',') === 'editor,text_probe,game_maker', `5° ${s.code}: activity_end ${of('activity_end').map((x) => x.activity).join(',')}`);
   }
@@ -139,10 +141,10 @@ if (process.env.PSQL && ids.length) {
   ok(gradesHere.every((g) => rounds.some((r) => r.grade === g && r.round === 1 && r.sessions > 0)), `v_typing_rounds_by_grade: round 1 for grades ${gradesHere.join(',')}`);
   const five = allSessions.filter((s) => ids.includes(s.id) && s.grade === 5).map((s) => s.id);
   if (five.length) {
-    const gm = rows(`select grade, rule_edits, games_run, predictions, predictions_correct, liked, end_reason from v_probe_game_maker where session_id = '${five[0]}'`);
+    const gm = rows(`select grade, move_result, free_reached, rule_edits, free_edits, games_run, liked, end_reason from v_probe_game_maker where session_id = '${five[0]}'`);
     console.log(`     v_probe_game_maker: ${JSON.stringify(gm)}`);
-    ok(gm.length === 1 && gm[0].predictions === 3 && gm[0].rule_edits >= 1 && gm[0].liked === 'mid', 'v_probe_game_maker: the 5to session\'s edits, predictions and liking');
-    const gmg = rows('select grade, sessions, predictions, predictions_correct from v_probe_game_maker_by_grade where grade = 5');
+    ok(gm.length === 1 && gm[0].move_result === 'alone' && gm[0].free_reached && gm[0].free_edits === 1 && gm[0].rule_edits === 5 && gm[0].liked === 'mid', 'v_probe_game_maker: the 5to session\'s step 1 alone, a free edit and liking');
+    const gmg = rows('select grade, sessions, move_alone, free_reached from v_probe_game_maker_by_grade where grade = 5');
     ok(gmg.length === 1 && gmg[0].sessions >= 1, `v_probe_game_maker_by_grade (5): ${JSON.stringify(gmg)}`);
     const tx = rows(`select grade, items_tried, items_correct, predict_tried, number_correct, runs, runs_won, liked from v_probe_text where session_id = '${five[0]}'`);
     console.log(`     v_probe_text: ${JSON.stringify(tx)}`);

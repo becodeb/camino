@@ -542,33 +542,30 @@ const SESSIONS = {
     await hold(p, 12, 12, 1700);
     await shot(p, 'adult-menu', 300);
     await p.locator('[data-act="open-game-maker"]').click();
-    await p.waitForSelector('.gm-root[data-phase="play"]');
+    await p.waitForSelector('.gm-root[data-phase="move"]');
     await shot(p, 'fp-game-maker', 800);
-    await p.click('.gm-root .btn-play');
-    for (let i = 0; i < 12; i++) {
-      const d = await p.evaluate(() => { const s = window.__gmw.state(); const me = s.sprites.me, seed = s.sprites.seed; return seed.c > me.c ? 'Right' : seed.c < me.c ? 'Left' : null; });
-      if (d) await p.keyboard.press(`Arrow${d}`);
-      await p.waitForTimeout(220);
-    }
-    if (!(await p.locator('.gm-end').count())) await p.click('.gm-root .btn-play');
-    await p.evaluate(() => window.__gm.go('change'));
-    await p.waitForSelector('.gm-root[data-phase="change"]');
+    // step 1 for real (taps and the arrows), then the free step (the debug jump) with one chip changed
+    for (const b of ['key:right', 'move:right', 'key:left', 'move:left']) { await p.click(`.gm-palette [data-block="${b}"]`); await p.waitForTimeout(250); }
+    await p.keyboard.press('ArrowRight'); await p.waitForTimeout(400);
+    await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(400);
+    await p.waitForSelector('.gm-root.is-done', { timeout: 10_000 });
+    await shot(p, 'fp-game-maker-moved', 300);
+    await p.locator('.gm-next').click({ force: true });
+    await p.waitForSelector('.gm-root[data-phase="stone"]');
+    await p.evaluate(() => window.__gm.go('free'));
+    await p.waitForSelector('.gm-root[data-phase="free"]');
     await p.waitForTimeout(600);
-    await p.click('[data-chip="seed:1:0"]');
+    await p.click('.gm-tab[data-obj="seed"]');
     await p.waitForTimeout(300);
-    await shot(p, 'fp-game-maker-change', 300);
-    await p.evaluate(() => window.__gm.go('predict'));
-    for (const [item, answer] of [['key', 'right'], ['star', 'star_points'], ['broadcast', 'bird_says']]) {
-      await p.waitForSelector(`.gm-predict[data-item="${item}"]`);
-      await p.waitForTimeout(400);
-      await shot(p, `fp-game-maker-predict-${item}`, 300);
-      await p.click(`[data-answer="${answer}"]`);
-    }
+    await p.click('[data-chip="seed:0:0"]');
+    await p.waitForTimeout(300);
+    await shot(p, 'fp-game-maker-free', 300);
+    await p.evaluate(() => window.__gmw.turn());
     await p.waitForSelector('[data-question="game_maker_liked"]');
     await shot(p, 'fp-game-maker-liked');
     await p.click('[data-answer="mid"]');
     await p.waitForSelector('.pp-menu', { timeout: 30_000 });
-    ok(true, 'offline, game maker (the adult\'s menu): a game, a rule changed, three predictions, the liking answer');
+    ok(true, 'offline, game maker (the adult\'s menu): step 1 built and played, a rule changed in the free step, the liking answer');
     const off = await p.evaluate(() => window.__piloto.status());
     ok(off.pending > 5 && off.failures > 0, `offline: ${off.pending} events wait, ${off.failures} failed posts`);
     await ctx.setOffline(false);
