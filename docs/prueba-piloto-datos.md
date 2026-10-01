@@ -681,68 +681,99 @@ activity's `activity_end` says `left`).
 ### The game maker probe, "Hacé tu juego" (4to)
 
 A probe of free play (`src/playtest/GameMaker.tsx`; engine
-`src/game/gameMaker.ts`; phases and prediction items
-`src/playtest/gameMakerProbe.ts`), about ten minutes. **RQ 8** (and 5, 3).
-It is a card of 4to's menu; the adult's corner menu opens it for any grade
-during free play (`choice.by: 'adult'`). Its events carry `probe:
+`src/game/gameMaker.ts`; the steps, their blocks and when each counts as
+done `src/playtest/gameMakerProbe.ts`), about ten minutes. **RQ 8** (and 5,
+3). It is a card of 4to's menu; the adult's corner menu opens it for any
+grade during free play (`choice.by: 'adult'`). Its events carry `probe:
 'game_maker'`; its `help`, `speak` and `ghost_demo` carry `level_id:
-'game_maker'` and `phase`. It logs no `level_start`/`level_end`: free play
-counts the whole visit in `activity_end` (one `levelEnded` at the end, win
-when phase 3 was completed). For free play's time the whole probe is one
-page: the budget never cuts it; free play moves on when it ends.
+'game_maker'` and `phase` (the step). It logs no `level_start`/`level_end`:
+free play counts the whole visit in `activity_end` (one `levelEnded` at the
+end, win when the five build steps were completed). For free play's time the
+whole probe is one page: the budget never cuts it; free play moves on when it
+ends.
 
-Phases on one screen (palette | rule cards with "La Traductora", the same
-rule as a Scratch script, beside each card | the board, 7 × 6):
+**Round 2 (T15, the teacher's feedback):** the game is built step by step,
+playing after each step, so the child knows what each rule does because they
+put it there. Round 1 (T7: a ready-made game, "change one rule", "make your
+own", the Scratch column "La Traductora" and three Scratch predictions) is
+gone; its rows (`probe_phase` play/change/make, `scratch_predict`) may still
+be in round-1 data.
 
-1. `play`: a ready-made game (the child's character catches falling seeds
-   with the arrows; a stone takes a life; 5 points win, 0 lives lose). The
-   rules are shown but cannot be edited. Completed: one game played with
-   at least one arrow. The next page shows after a game ends or 45 s after
-   the first ▶ (or at 90 s anyway).
-2. `change`: change one rule ("que cada semilla valga 2 puntos": tap the
-   number) and play again. Completed: an edit, then a game started after
-   it (the next page shows then, or at 3 minutes anyway).
-3. `make`: your own variant: add or change rules, add the bird, "avisar"
-   (broadcast), the win condition. Completed as phase 2 (4 minutes anyway).
-4. `predict`: three fixed Scratch scripts, "¿Qué pasa…?", three drawn
-   answers each (`scratch_predict`), never marked right or wrong.
-5. "¿Te gustó hacer tu juego?": `survey_answer` {question:
-   'game_maker_liked'}.
+One screen: the palette (only the step's blocks) | the notebook (the step's
+goal on a taped note; one object's cards at a time, tabs for the objects on
+the board) | the board (7 × 6), big, with ▶, ↺ and the arrow keys above it.
+An arrow pressed while the game is stopped starts it. Each step's goal is
+said, captioned and drawn (the bar's picture, the note); the bar shows the
+six steps as stones. A done step says so, stamps its note and turns by itself
+after 10 s (or the arrow). After 90 s of trying a step that is not done, a
+"seguir" arrow shows in the bar: the step's rules are left built (logged as
+`rule_edit` {ghost, filled}) so the next step works, and the page turns.
+
+| # | Step (`phase`) | Object | Blocks in the palette | Done when (seen by the engine) |
+|---|---|---|---|---|
+| 1 | `move` | the character | cuando aprieto → / ←, mover → / ← | the character moved left and right with the arrows |
+| 2 | `stone` | the stone (appears) | siempre, cuando toco el suelo, mover ↓, volver arriba | the stone fell and came back up |
+| 3 | `seed_read` | the seed (appears, already programmed: siempre → mover ↓; cuando toco el suelo → volver arriba) | none (an example to read) | the child tapped the seed (its tab or the board) and saw its cards |
+| 4 | `touch_rules` | the character (points and lives appear) | cuando toco a 🪨 / 🌱, perder 1 vida, sumar 1 punto | a life was lost and a point won while playing |
+| 5 | `win` | the game (the trophy appears; its card already has "si las vidas llegan a 0 → perdés") | si los puntos llegan a [5], ganás | a game ended (won or lost) with a way to win in the rules |
+| 6 | `free` | any (the bird can be added) | every block | never: the arrow to finish shows after 45 s, the step ends after 5 minutes |
+
+Then "¿Te gustó hacer tu juego?": `survey_answer` {question:
+'game_maker_liked'}. `?caps=fast` (the scripted checks) shortens the waits
+("seguir" after 8 s, the free step's arrow after 4 s, its end after 40 s).
+
+The first time on step 1, if nothing is placed in 9 s, the ghost hand shows
+the drag of the first block once (`ghost_demo` kind `intro`; nothing is
+built). On step 3 it points at the seed after 6.5 s (`intro`).
 
 Blocks are strings `kind:param` (the param is the block's chip, a tap cycles
-it like a Scratch dropdown). Hats: `start` (al empezar), `key:<dir>`
-(cuando aprieto), `tick` (siempre: each object at its own pace),
-`touch:<me|seed|stone|bird|ground|edge>` (cuando toco a), `recv:<yum|ouch|party>`
-(cuando recibo ¡ñam! / ¡ay! / ¡fiesta!), and on the whole game's card
-(`game`, the trophy) `points:<3|5|10|15>` (si los puntos llegan a) and
-`lives0` (si las vidas llegan a 0). Actions: `move:<dir|ahead>`, `turn`,
-`top` (volver arriba, a random column), `score:<1|2|3|-1>`, `lives:<-1|1>`,
-`say:<mia|ay|pio|bien>`, `send:<msg>` (avisar: heard by every object with
-that `recv` on the next tick), `vis:<hide|show>`, `win`, `lose`. Objects:
-`me` (the child's character), `seed`, `stone`, `bird` (added by the child),
-`game`. Lives start at 3; a game that ends shows a drawn card ("¡Ganaste!",
-or "¡Se acabaron las vidas!" with the hearts filling again) and "¡Otra vez!".
+it). Hats: `start` (al empezar), `key:<dir>` (cuando aprieto), `tick`
+(siempre: each object at its own pace), `touch:<me|seed|stone|bird|ground|edge>`
+(cuando toco a / el), `recv:<yum|ouch|party>` (cuando recibo ¡ñam! / ¡ay! /
+¡fiesta!), and on the game's card (`game`, the trophy) `points:<3|5|10|15>`
+(si los puntos llegan a) and `lives0` (si las vidas llegan a 0). Actions:
+`move:<dir|ahead>`, `turn`, `top` (volver arriba, a random column),
+`score:<1|2|3|-1>` (sumar / restar), `lives:<-1|1>` (perder / ganar una
+vida), `say:<mia|ay|pio|bien>`, `send:<msg>` (avisar: heard by every object
+with that `recv` on the next tick), `vis:<hide|show>`, `win`, `lose`.
+Objects: `me` (the child's character), `seed`, `stone`, `bird` (added by the
+child in the free step), `game`. Lives start at 3; a game that ends shows a
+drawn card ("¡Ganaste!", or "¡Se acabaron las vidas!" with the hearts filling
+again) and "¡Otra vez!".
 
-✋: 1 the phase's line again and its target wiggles; 2 the ghost hand points
-(▶ and the arrows; the seed's number; a drag of "avisar" to the notebook);
-3 the ghost hand shows a working rule for real (plays a few arrows; makes a
-seed worth 2; adds the bird with "cuando recibo ¡ñam! → decir ¡Pío!" and
-"avisar ¡ñam!" on the seed's catch rule): these edits carry `ghost: true`
-and never complete a phase. A fourth press or a held ✋ raises the hand.
+✋ per step: 1 the step's line again and the block it needs next wiggles (▶
+when the rules are there); 2 the ghost hand drags that block to where it goes
+(points at the seed on step 3, at ▶ and the arrows when nothing is missing);
+3 the ghost hand builds the step's missing rules for real (`rule_edit`
+{ghost: true}; on step 3 it taps the seed; in the free step it adds the bird
+flying "siempre → mover →"); when nothing is missing it starts the game and
+points at the arrows. A fourth press or a held ✋ raises the hand.
 
 #### `probe_phase`
-A phase ended (the child turned the page).
+A step ended (done and turned, skipped, or the free step left).
 ```
-{ probe: 'game_maker', phase: 'play' | 'change' | 'make', completed: boolean, time_ms: number, runs: number, edits: number, help_levels: number }
+{
+  probe: 'game_maker',
+  phase: 'move' | 'stone' | 'seed_read' | 'touch_rules' | 'win' | 'free',
+  completed: boolean,     // the step's goal was seen (always false for 'free')
+  skipped: boolean,       // "seguir" after the wait (its rules were left built)
+  time_ms: number,        // from the step on screen to the page turning
+  help_levels: number,    // ✋ presses in the step (0–3)
+  ghost_built: boolean,   // ✋ 3 built (or tapped) something for the child
+  runs: number,           // games started in the step
+  edits: number,          // the child's own edits in the step
+  adds?: number, cards_added?: number, used_send?: boolean  // the free step only
+}
 ```
-`runs`: games in the phase; `edits`: the child's own edits; `help_levels`:
-✋ presses in the phase (0–3).
+Done alone = `completed` with `help_levels` 0 and no `ghost_built`.
+Round 1 (T7) logged `phase: 'play' | 'change' | 'make'` with `completed,
+time_ms, runs, edits, help_levels`.
 
 #### `rule_edit`
 One edit of the rules.
 ```
 {
-  probe: 'game_maker', phase: 'change' | 'make',
+  probe: 'game_maker', phase: <step>,
   object: 'me' | 'seed' | 'stone' | 'bird' | 'game',
   hat: string | null,       // the card's hat (null: the object itself was added)
   action: string | null,    // the action concerned (null: a whole card)
@@ -750,7 +781,8 @@ One edit of the rules.
   from?: string, to?: string,  // a chip tapped: the block before and after
   rules: number,            // cards in the whole game after the edit
   running: boolean,         // edited while the game was playing (rules apply at once)
-  ghost?: true              // done by the help's ghost hand, not the child
+  ghost?: true,             // done by the help's ghost hand or a skip, not the child
+  filled?: true             // left built by a skipped step
 }
 ```
 The bird added is `{op: 'add', object: 'bird', hat: null, action: null}`.
@@ -758,10 +790,10 @@ Removing is a drag out of the notebook, or a tap on an action; a card goes
 with its hat dragged out.
 
 #### `game_run`
-One game, from ▶ to its end.
+One game, from ▶ (or an arrow pressed while stopped) to its end.
 ```
 {
-  probe: 'game_maker', phase: 'play' | 'change' | 'make',
+  probe: 'game_maker', phase: <step>,
   result: 'win' | 'lose' | 'stopped',  // stopped: ■, ↺, the page turned or left
   duration_ms: number, score: number, lives: number,
   keys: number,              // arrows the child pressed (not the ghost's)
@@ -773,22 +805,17 @@ One game, from ▶ to its end.
 }
 ```
 
-#### `scratch_predict`
-One item of the prediction task (fixed, the same for every child).
-```
-{ item: 'key' | 'star' | 'broadcast', answer: string, correct: boolean, position: number, time_ms: number }
-```
-| Item | Script | Question | Answers (in order; right one marked) |
-|---|---|---|---|
-| `key` | al presionar tecla flecha derecha / cambiar x en 40 | ¿Qué pasa cuando apretás la flecha derecha? | `up`, **`right`**, `say_hola` |
-| `star` | Estrella: al hacer clic en 🏴 / por siempre / si ¿tocando <character>? entonces / sumar 1 a puntos / esconder | ¿Qué pasa cuando <character> toca la estrella? | **`star_points`**, `star_says`, `life_lost` |
-| `broadcast` | Piedra: … si ¿tocando <character>? entonces enviar ¡ay!; Pájaro: al recibir ¡ay! / decir ¡Cuidado! por 2 segundos | Cuando la piedra toca a <character>, ¿quién habla? | `stone_says`, `nobody`, **`bird_says`** |
-
-`time_ms` from the item on screen to the tap; `position` 0–2.
+#### `scratch_predict` (round 1 only)
+Round 1 (T7) asked three fixed Scratch scripts after the game; round 2 does
+not. Kept for reading round-1 data:
+`{ item: 'key' | 'star' | 'broadcast', answer: string, correct: boolean, position: number, time_ms: number }`
+(answers: key `up`/**`right`**/`say_hola`; star **`star_points`**/`star_says`/`life_lost`;
+broadcast `stone_says`/`nobody`/**`bird_says`**). No view reads it any more.
 
 #### `probe_end`
-The probe was left: `{ probe: 'game_maker', reason: 'done' | 'left', time_ms: number, runs?: number, edits?: number, rules?: string }`
-(`left`: back to the menu, the time or the adult ended it before the end).
+The probe ended: `{ probe: 'game_maker', reason: 'done' | 'left', time_ms: number, steps_completed?: number, runs?: number, edits?: number, rules: string }`
+(`left`: back to the menu, the time or the adult ended it before the end;
+`steps_completed`: build steps done, alone or with help).
 
 ### The text probe, "Del bloque al texto" (5to)
 
@@ -1095,7 +1122,7 @@ for a session therefore mean a 400-dropped batch, never a network failure.
 
 ## SQL views
 
-Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`, `004_game_maker.sql`, `005_text_probe.sql`, `007_typing_rounds.sql`), always available for ad hoc
+Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`, `004_game_maker.sql`, `005_text_probe.sql`, `007_typing_rounds.sql`, `009_game_maker_steps.sql`), always available for ad hoc
 analysis (`psql`, or any tool that can read Postgres directly).
 
 Since T14 (`008_class_control.sql`) every view reads only real sessions:
@@ -1140,21 +1167,23 @@ too; the tables themselves still hold the demo rows until they are deleted.
   `median_correct_latency_ms`. Round-1 sessions of the pilot (no rounds) are
   not in it. `server/migrations/007_typing_rounds.sql`. Feeds RQ 7.
 - **`v_probe_game_maker`** — one row per session that opened "Hacé tu
-  juego": `phases_reached`, `phases_completed`, `play_done`, `change_done`,
-  `make_done`, `make_seconds`; the child's own `rule_edits` (`adds`,
-  `removes`, `changes`, `make_edits`; ghost edits left out), `bird_added`,
-  `broadcast_edits` (avisar / cuando recibo placed or changed),
-  `win_condition_edits`, `lose_condition_edits`; `games_run`,
-  `games_played` (with an arrow), `wins`, `losses`, `games_with_broadcast`,
-  `messages_heard`, `make_game_can_win`; `predictions`,
-  `predictions_correct`, `prediction_answers` ("key:right,star:…");
-  `liked`; `end_reason`, `probe_seconds`; `last_rules` (the last game's
-  rules). `server/migrations/004_game_maker.sql`. Feeds RQ 8.
-- **`v_probe_game_maker_by_grade`** — RQ 8 per grade: `sessions`,
-  `play_done`, `change_done`, `make_done`, `median_rule_edits`,
-  `used_broadcast`, `played_a_broadcast`, `set_win_condition`,
-  `added_the_bird`, `predictions_correct` / `predictions`, `liked_yes`,
-  `liked_mid`, `liked_no`.
+  juego" (T15's steps; redefined in `server/migrations/009_game_maker_steps.sql`,
+  on `real_events`/`real_sessions`): `steps_reached` (build steps 1–5),
+  `steps_alone`, `steps_with_help`, `steps_skipped`; per step
+  `<step>_result` (`alone` | `help` | `skipped` | null = not reached) and
+  `<step>_seconds` for `move`, `stone`, `seed_read`, `touch_rules`, `win`;
+  `free_reached`, `free_seconds`; the child's own edits (ghost and skip
+  edits left out) `rule_edits`, `free_edits`, `free_rules_added` (new cards
+  in the free step), `free_actions_added`, `used_avisar` (an "avisar" or
+  "cuando recibo" placed), `bird_added`; `games_run`, `games_played` (with an
+  arrow), `games_won`, `games_lost`, `free_games`, `messages_heard`; `liked`;
+  `end_reason`, `probe_seconds`; `last_rules` (the last game's rules).
+  Round-1 sessions get a row with empty step columns. Feeds RQ 8.
+- **`v_probe_game_maker_by_grade`** — RQ 8 per grade: `sessions`; for each
+  build step `<step>_alone`, `<step>_help`, `<step>_skipped`,
+  `<step>_median_s`; `free_reached`, `free_median_s`,
+  `median_free_rules_added`, `changed_in_free`, `used_avisar`,
+  `added_the_bird`, `won_a_game`, `liked_yes`, `liked_mid`, `liked_no`.
 
 - **`v_probe_text`** — one row per session that opened "Del bloque al
   texto": the tour (`tour_done`, `tour_runs`, `tour_links`); the items, one
