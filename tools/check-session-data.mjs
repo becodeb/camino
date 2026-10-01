@@ -60,6 +60,13 @@ for (const id of ids) {
   const end = of('ladder_end')[0];
   const ceiling = { 1: 2, 3: 6, 5: 10 }[s.grade];
   ok(end?.ceiling_rung === ceiling && end?.reason === 'ceiling', `${tag}: ladder_end ceiling ${end?.ceiling_rung} (${end?.reason})`);
+  // round 2's own item bank (pp-l<rung>), and why each item ended
+  const ladder = of('ladder_step');
+  ok(ladder.every((x) => x.item === `pp-l${x.rung}`), `${tag}: the round-2 items ${ladder.map((x) => x.item).join(' ')}`);
+  const REASONS = ['solved', 'runs', 'solution_hint', 'adult', 'time_cap', 'idle_cap', 'ladder_time', 'left'];
+  ok(ladder.every((x) => REASONS.includes(x.end_reason) && (x.result === 'pass') === (x.end_reason === 'solved' && x.help_levels < 3 && !x.adult_helped)), `${tag}: end reasons ${ladder.map((x) => `${x.rung}:${x.end_reason}`).join(' ')}`);
+  const ladderEnds = of('level_end').filter((x) => x.activity === 'ladder');
+  ok(ladderEnds.filter((x) => x.outcome === 'fail').every((x) => REASONS.includes(x.end_reason)), `${tag}: every failed ladder page's level_end has its end_reason`);
   ok(of('survey_answer').some((x) => x.question === 'typing_liked') && of('typing_end').length === 1, `${tag}: the typing game ended and was rated`);
   ok(of('wardrobe').some((x) => x.action === 'close'), `${tag}: the wardrobe closed with an outfit`);
   if (s.grade === 1) {

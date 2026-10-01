@@ -5,7 +5,9 @@
 // code screen), the tool check takes any equivalent gesture and only shows
 // ↺ and ✋, every spoken line can show as text (💬), the bar has no doors,
 // "¿Cómo seguís?" follows a sheet's core pages, the adult's comment is in
-// the corner menu and the goodbye starts the next session.
+// the corner menu and the goodbye starts the next session. T11: the ladder
+// plays round 2's own items (pp-l<rung>) and every item's end_reason is
+// checked; tools/check-caps.mjs covers the caps themselves.
 //
 // 1ro — setup (division A), character; the real tool check (the arrow put in
 //   by a DRAG when a tap is asked, ▶, the arrow put in by a TAP when a drag is
@@ -44,7 +46,7 @@
 // PW=<dir with playwright> node tools/check-piloto.mjs [base]
 //   base: the app with /api (vite dev on 8811 proxying to the API, or the API serving dist/), default http://127.0.0.1:8811/
 //   PSQL: the command that runs psql against the API's database, default
-//         "docker exec -i camino-prueba-t5db psql -U postgres -tA"
+//         "docker exec -i camino-prueba-t5db psql -U postgres -tA" (T11 used camino-prueba-t11db)
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 
@@ -169,12 +171,12 @@ await p.waitForSelector('[data-interlude="walk"]', { timeout: 15_000 });
 ok(Date.now() - toolStart < 30_000, `the tool check walks on to the ladder (${Math.round((Date.now() - toolStart) / 1000)} s)`);
 
 // ladder: rung 1 and rung 2 solved
-await onLevel(p, '1ro-h1-2');
+await onLevel(p, 'pp-l1');
 await solve(p);
 await p.waitForSelector('[data-interlude="walk"]');
-await onLevel(p, '1ro-h2-1');
+await onLevel(p, 'pp-l2');
 await solve(p);
-await onLevel(p, '1ro-h3-3');
+await onLevel(p, 'pp-l3');
 await p.waitForTimeout(900);
 
 // rung 3 offline: the helps, the hand, the adult's answer, then a failed run ends it
@@ -329,12 +331,12 @@ await p.locator('.btn-play').click();
 await p.locator('.level-bar .pp-go-on').click({ timeout: 5000 });
 await p.waitForSelector('[data-interlude="walk"]', { timeout: 10_000 });
 ok(true, '"seguir" left the rest of the tool check');
-await onLevel(p, '2do-1');
-ok(true, '5to enters the ladder at rung 9 (2do-1, the fog)');
+await onLevel(p, 'pp-l9');
+ok(true, '5to enters the ladder at rung 9 (pp-l9, the fog)');
 await p.waitForTimeout(900);
 await failRun(p, [{ t: 'loop', count: 'goal', body: ['right'] }]);
 await failRun(p, [{ t: 'loop', count: 'goal', body: ['right'] }]);
-await onLevel(p, '1ro-h13-2');
+await onLevel(p, 'pp-l8');
 ok(true, 'two failed runs end the item; the floor check opens rung 8');
 await solve(p);
 await p.waitForSelector('[data-interlude="cheer"]', { timeout: 15_000 });
@@ -389,7 +391,7 @@ const s3b = await newSession(p, '3ro', 'debug&nointro', 'off');
 await p.evaluate(() => window.__piloto.jump('ladder'));
 await p.waitForSelector('main.level');
 await p.evaluate(() => window.__ladder.go(11));
-await onLevel(p, '3ro-1');
+await onLevel(p, 'pp-l11');
 await p.waitForTimeout(900);
 // ▶ then ■ at once: no arrow pressed
 await p.locator('.btn-play').click(); await p.waitForTimeout(700);
@@ -407,7 +409,7 @@ ok(await p.locator('.pp-hand').isVisible(), 'the hand is up');
 // the reference rules and the way to the seed
 await p.evaluate(() => window.__camino.setRules(window.__camino.level.realtime.solution));
 await p.locator('.btn-play').click(); await p.waitForTimeout(500);
-for (const k of ['Up', 'Up', 'Right', 'Right', 'Right', 'Down', 'Right', 'Right', 'Up', 'Up']) { await p.keyboard.press(`Arrow${k}`); await p.waitForTimeout(650); }
+for (const k of ['Right', 'Up', 'Up', 'Up', 'Right', 'Right', 'Right']) { await p.keyboard.press(`Arrow${k}`); await p.waitForTimeout(650); }
 await p.locator('.next-page').click({ force: true, timeout: 15_000 });
 await p.waitForSelector('[data-interlude="walk"]');
 ok(true, 'the rule game was won by the arrows and the page turned');
@@ -504,17 +506,18 @@ ok(drags.some((d) => d.ph === 'drop' && d.ok === 'true'), 'the tool check\'s dra
 ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'tap_add' and payload->>'level_id' = 'tool-2';`)) === 1, 'the tool check\'s tap (on the second page) is a tap_add event');
 
 // the 1ro ladder
-const steps1 = JSON.parse(json(`select (payload->>'rung')::int rung, payload->>'item' item, payload->>'concept' concept, payload->>'check' chk, payload->>'result' result, payload->>'next' nxt, (payload->>'help_levels')::int help, (payload->>'adult_helped')::boolean adult, (payload->>'attempts')::int attempts from events where session_id = '${s1.sid}' and type = 'ladder_step' order by seq`));
+const steps1 = JSON.parse(json(`select (payload->>'rung')::int rung, payload->>'item' item, payload->>'concept' concept, payload->>'check' chk, payload->>'result' result, payload->>'next' nxt, (payload->>'help_levels')::int help, (payload->>'adult_helped')::boolean adult, (payload->>'attempts')::int attempts, payload->>'end_reason' why from events where session_id = '${s1.sid}' and type = 'ladder_step' order by seq`));
 ok(steps1.map((x) => `${x.rung}${x.result === 'pass' ? '✓' : '✗'}`).join(' ') === '1✓ 2✓ 3✗', `1ro ladder: ${steps1.map((x) => `${x.rung}${x.result === 'pass' ? '✓' : '✗'}`).join(' ')}`);
-ok(steps1[0]?.nxt === '1ro-h2-1' && steps1[1]?.nxt === '1ro-h3-3' && steps1[2]?.nxt === null, 'next items recorded, null at the stop');
+ok(steps1[0]?.nxt === 'pp-l2' && steps1[1]?.nxt === 'pp-l3' && steps1[2]?.nxt === null, 'next items recorded, null at the stop');
+ok(steps1.map((x) => x.why).join(',') === 'solved,solved,solution_hint', `end reasons: ${steps1.map((x) => x.why).join(',')}`);
 ok(steps1[2]?.help === 3 && steps1[2]?.adult === true && steps1[2]?.concept === 'fix', `the fix item records help 3 and the adult's help: ${JSON.stringify(steps1[2])}`);
 const end1 = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'ladder_end'`))[0]?.p;
 ok(end1?.reason === 'ceiling' && end1?.ceiling_rung === 2 && end1?.entry_rung === 1 && end1?.items === 3, `1ro ladder_end ${JSON.stringify(end1)}`);
 const view1 = sql(`select ladder_ceiling_rung from v_session_summary where session_id = '${s1.sid}';`);
 const conc1 = sql(`select string_agg(concept || ':' || rung, ',' order by rung) from v_ladder_ceiling where session_id = '${s1.sid}';`);
 ok(view1 === '2' && conc1 === 'sequence:1,long_sequence:2', `views agree: ladder_ceiling_rung ${view1}, v_ladder_ceiling ${conc1}`);
-const lvEnd3 = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'level_end' and payload->>'item' = '1ro-h3-3'`))[0]?.p;
-ok(lvEnd3?.outcome === 'fail' && lvEnd3?.adult_helped === true && lvEnd3?.rung === 3, `the fix page's level_end: ${lvEnd3?.outcome}, adult_helped ${lvEnd3?.adult_helped}`);
+const lvEnd3 = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'level_end' and payload->>'item' = 'pp-l3'`))[0]?.p;
+ok(lvEnd3?.outcome === 'fail' && lvEnd3?.adult_helped === true && lvEnd3?.rung === 3 && lvEnd3?.end_reason === 'solution_hint', `the fix page's level_end: ${lvEnd3?.outcome}, adult_helped ${lvEnd3?.adult_helped}, end_reason ${lvEnd3?.end_reason}`);
 ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'run' and (payload->>'after_ghost')::boolean;`)) >= 1, 'a run after the ghost demo is marked after_ghost');
 const sess = JSON.parse(sql(`select row_to_json(s) from (select code, grade, division, consent, ended_at is not null as ended, end_reason, survey, adult_form from sessions where id = '${s1.sid}') s;`));
 ok(sess.code === s1.code && sess.division === 'A' && sess.consent === null, `session ${sess.code}, grade ${sess.grade}, division ${sess.division}, consent ${sess.consent}`);
@@ -524,7 +527,7 @@ ok(sess.survey?.liked === 'yes' && sess.survey?.favorite_activity === 'ladder' &
 ok(sess.adult_form?.engagement === 'high' && sess.adult_form?.help_needed === 'some' && sess.adult_form?.step === 'goodbye', `adult form ${JSON.stringify(sess.adult_form)}`);
 ok(!Number(sql(`select count(*) from events where session_id = '${s1.sid}' and type = 'step' and payload->>'to' in ('code', 'adult_form');`)), 'no code or adult_form step');
 const hands1 = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'call_adult_end'`)).map((x) => x.p);
-ok(hands1.length === 1 && hands1[0].resolved_by === 'adult' && hands1[0].level_id === '1ro-h3-3', `the adult answered the hand: ${JSON.stringify(hands1)}`);
+ok(hands1.length === 1 && hands1[0].resolved_by === 'adult' && hands1[0].level_id === 'pp-l3', `the adult answered the hand: ${JSON.stringify(hands1)}`);
 const dev = JSON.parse(sql(`select device from sessions where id = '${s1.sid}';`));
 const cap1 = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'captions'`)).map((x) => x.p);
 ok(dev.captions === true && dev.captions_set === 'grade' && cap1.length === 1 && cap1[0].on === true && cap1[0].where === 'bar', `1ro: captions off by the grade, turned on in the bar: device ${JSON.stringify({ captions: dev.captions, set: dev.captions_set })}, ${JSON.stringify(cap1)}`);
@@ -532,15 +535,16 @@ const dev5 = JSON.parse(sql(`select device from sessions where id = '${s5.sid}';
 const dev3 = JSON.parse(sql(`select device from sessions where id = '${s3b.sid}';`));
 ok(dev5.captions === true && dev5.captions_set === 'grade' && dev3.captions === false && dev3.captions_set === 'setup', `5to captions on by the grade, 3ro off by the setup: ${JSON.stringify([dev5.captions, dev5.captions_set, dev3.captions, dev3.captions_set])}`);
 const hands3 = JSON.parse(json(`select payload p from events where session_id = '${s3b.sid}' and type = 'call_adult_end'`)).map((x) => x.p);
-ok(hands3.length === 1 && hands3[0].resolved_by === 'self' && hands3[0].level_id === '3ro-1', `3ro solved it with the hand up: ${JSON.stringify(hands3)}`);
+ok(hands3.length === 1 && hands3[0].resolved_by === 'self' && hands3[0].level_id === 'pp-l11', `3ro solved it with the hand up: ${JSON.stringify(hands3)}`);
 
 // the 5to ladder
-const steps5 = JSON.parse(json(`select (payload->>'rung')::int rung, payload->>'check' chk, payload->>'result' result, payload->>'next' nxt, (payload->>'attempts')::int attempts from events where session_id = '${s5.sid}' and type = 'ladder_step' order by seq`));
+const steps5 = JSON.parse(json(`select (payload->>'rung')::int rung, payload->>'check' chk, payload->>'result' result, payload->>'next' nxt, (payload->>'attempts')::int attempts, payload->>'end_reason' why from events where session_id = '${s5.sid}' and type = 'ladder_step' order by seq`));
 ok(steps5.map((x) => `${x.rung}${x.chk === 'floor' ? 'f' : ''}${x.result === 'pass' ? '✓' : '✗'}`).join(' ') === '9✗ 8f✓', `5to ladder: ${steps5.map((x) => `${x.rung}${x.chk === 'floor' ? 'f' : ''}${x.result === 'pass' ? '✓' : '✗'}`).join(' ')}`);
 const end5 = JSON.parse(json(`select payload p from events where session_id = '${s5.sid}' and type = 'ladder_end'`))[0]?.p;
+ok(steps5[0]?.why === 'runs' && steps5[1]?.why === 'solved', `5to end reasons: ${steps5.map((x) => x.why).join(',')}`);
 ok(end5?.reason === 'floor' && end5?.ceiling_rung === 8 && end5?.entry_rung === 9, `5to ladder_end ${JSON.stringify(end5)}`);
 ok(sql(`select ladder_ceiling_rung from v_session_summary where session_id = '${s5.sid}';`) === '8', 'v_session_summary agrees (8)');
-const fogRuns = JSON.parse(json(`select payload->>'result' r from events where session_id = '${s5.sid}' and type = 'run' and payload->>'level_id' = '2do-1' order by seq`));
+const fogRuns = JSON.parse(json(`select payload->>'result' r from events where session_id = '${s5.sid}' and type = 'run' and payload->>'level_id' = 'pp-l9' order by seq`));
 ok(fogRuns.length === 2 && fogRuns.every((x) => x.r !== 'win'), `the fog page's two runs: ${fogRuns.map((x) => x.r).join(',')}`);
 
 const tools5 = JSON.parse(json(`select payload->>'gesture' g, (payload->>'done')::boolean done, (payload->>'skipped')::boolean skipped, (payload->>'shown_by_ghost')::boolean ghost, (payload->>'time_ms')::int ms from events where session_id = '${s5.sid}' and type = 'tool_check' order by seq`));
@@ -550,10 +554,10 @@ ok(tools5.slice(2).map((x) => `${x.g}:${x.skipped}`).join(',') === 'drag:true,re
 ok(Number(sql(`select count(*) from events where session_id = '${s5.sid}' and type = 'ghost_demo' and payload->>'kind' = 'tool';`)) === 1, 'one ghost_demo of kind tool');
 
 // the rule game's runs
-const rt = JSON.parse(json(`select payload->>'result' r, (payload->>'keys')::int keys, (payload->>'score')::int score, payload->>'program' prog, (payload->>'blocks_used')::int blocks from events where session_id = '${s3b.sid}' and type = 'run' and payload->>'level_id' = '3ro-1' order by seq`));
+const rt = JSON.parse(json(`select payload->>'result' r, (payload->>'keys')::int keys, (payload->>'score')::int score, payload->>'program' prog, (payload->>'blocks_used')::int blocks from events where session_id = '${s3b.sid}' and type = 'run' and payload->>'level_id' = 'pp-l11' order by seq`));
 ok(rt.map((x) => x.r).join(',') === 'no_play,stopped,win', `rule game runs: ${rt.map((x) => `${x.r}(${x.keys} keys)`).join(' ')}`);
 ok(rt[1]?.keys === 2 && rt[1]?.prog === 'key:right(right)' && rt[1]?.blocks === 2, `a game's rules and keys: ${JSON.stringify(rt[1])}`);
-ok(rt[2]?.keys >= 10 && rt[2]?.prog.includes('key:down(down)'), `the winning game: ${JSON.stringify(rt[2])}`);
+ok(rt[2]?.keys >= 7 && rt[2]?.prog.includes('key:up(up)'), `the winning game: ${JSON.stringify(rt[2])}`);
 const step3 = JSON.parse(json(`select payload p from events where session_id = '${s3b.sid}' and type = 'ladder_step'`)).map((x) => x.p);
 const rule = step3.find((x) => x.rung === 11);
 ok(rule?.result === 'pass' && rule?.attempts === 3, `the rule game item: ${rule?.result}, ${rule?.attempts} runs`);

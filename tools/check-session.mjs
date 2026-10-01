@@ -310,9 +310,9 @@ const SESSIONS = {
     const { sid } = await newSession(p, '1ro', 'pliegue', 'debug&teclas=0.5');
     await serviceWorker(p);
     await toolCheck(p);
-    await onLevel(p, '1ro-h1-2'); await solve(p, 'ladder-1-sequence');
-    await onLevel(p, '1ro-h2-1'); await solve(p, 'ladder-2-long-sequence');
-    await onLevel(p, '1ro-h3-3');
+    await onLevel(p, 'pp-l1'); await solve(p, 'ladder-1-sequence');
+    await onLevel(p, 'pp-l2'); await solve(p, 'ladder-2-long-sequence');
+    await onLevel(p, 'pp-l3');
     await p.waitForTimeout(900);
     await shot(p, 'ladder-3-fix', 300);
     // offline: the helps, 🔊, the raised hand and the adult's answer
@@ -333,7 +333,7 @@ const SESSIONS = {
     const before = await kept(p);
     // the tab reloads while offline
     await offlineReload(p, sid, 'ladder');
-    await onLevel(p, '1ro-h3-3');
+    await onLevel(p, 'pp-l3');
     await shot(p, 'ladder-3-after-offline-reload', 1200);
     ok(true, 'the ladder carried on with the item on screen (rung 3)');
     ok((await p.locator('.level-bar .adult-title').innerText()).length > 0 && !(await p.locator('.dev-drawer.is-open').count()), 'the page is the child\'s (no dev drawer open)');
@@ -387,9 +387,9 @@ const SESSIONS = {
     const { sid } = await newSession(p, '5to', 'mina', 'debug&nointro&teclas=0.25');
     await serviceWorker(p);
     await toolCheck(p);
-    await onLevel(p, '2do-1'); await solve(p, 'ladder-9-fog');
-    await onLevel(p, '2do-2'); await solve(p, 'ladder-10-worlds');
-    await onLevel(p, '3ro-1');
+    await onLevel(p, 'pp-l9'); await solve(p, 'ladder-9-fog');
+    await onLevel(p, 'pp-l10'); await solve(p, 'ladder-10-worlds');
+    await onLevel(p, 'pp-l11');
     await p.waitForTimeout(900);
     await shot(p, 'ladder-11-rules', 300);
     await p.evaluate(() => window.__camino.setRules([{ hat: 'key:right', actions: ['right'] }]));
@@ -520,9 +520,9 @@ const SESSIONS = {
     await newSession(p, '3ro', 'ovillo', 'debug&nointro&teclas=0.25');
     await serviceWorker(p);
     await toolCheck(p);
-    await onLevel(p, '1ro-h4-1'); await solve(p, 'ladder-5-repeat');
-    await onLevel(p, '1ro-h5-1'); await solve(p, 'ladder-6-count');
-    await onLevel(p, '1ro-h6-2');
+    await onLevel(p, 'pp-l5'); await solve(p, 'ladder-5-repeat');
+    await onLevel(p, 'pp-l6'); await solve(p, 'ladder-6-count');
+    await onLevel(p, 'pp-l7');
     await shot(p, 'ladder-7-pattern', 1200);
     await failRun(p);
     await failRun(p);

@@ -59,9 +59,11 @@ async function toToolPage2(p) {
   await p.waitForTimeout(500);
 }
 /** A rung of the ladder's item bank (the debug hook), after the character. */
-async function toRung(p, rung, extra = '') {
+/** The grade that enters the ladder at or below each rung (1ro 1, 2do 2, 3ro 5, 4to 7, 5to 9). */
+const GRADE_AT = [null, '1ro', '2do', '2do', '2do', '3ro', '3ro', '4to', '4to', '5to', '5to', '5to', '5to'];
+async function toRung(p, rung, extra = '', grade = '1ro') {
   if (extra) await p.goto(`${base}?debug&${extra}#/piloto`);
-  await toCharacter(p);
+  await toCharacter(p, grade);
   await p.waitForTimeout(500);
   await p.locator('.choice-btn').nth(2).click();
   await p.waitForTimeout(400);
@@ -290,18 +292,15 @@ const SCENARIOS = [
     },
   },
   // ---------------------------------------------------------------- T4: the ladder, one item of each kind of board
-  { name: 'pp-ladder-sequence', run: async (p) => { await toRung(p, 1); } },
-  { name: 'pp-ladder-fix', run: async (p) => { await toRung(p, 3); } },
-  { name: 'pp-ladder-predict', run: async (p) => { await toRung(p, 4); } },
-  { name: 'pp-ladder-repeat', run: async (p) => { await toRung(p, 5); } },
-  { name: 'pp-ladder-count', run: async (p) => { await toRung(p, 6); } },
-  { name: 'pp-ladder-pattern', run: async (p) => { await toRung(p, 7); } },
-  { name: 'pp-ladder-fog', run: async (p) => { await toRung(p, 9); } },
-  { name: 'pp-ladder-fog-prints', run: async (p) => { await toRung(p, 9); await helps(p, 3); await p.waitForTimeout(1600); } },
-  { name: 'pp-ladder-worlds', run: async (p) => { await toRung(p, 10); } },
-  { name: 'pp-ladder-worlds-prints', run: async (p) => { await toRung(p, 10); await helps(p, 3); await p.waitForTimeout(2000); } },
-  { name: 'pp-ladder-rules', run: async (p) => { await toRung(p, 11, 'nointro'); } },
-  { name: 'pp-ladder-score', run: async (p) => { await toRung(p, 12); await p.click('.btn-play'); await p.waitForTimeout(3500); } },
+  // ---------------------------------------------------------------- T11: the round-2 item bank, every rung as it opens and with ✋ 3 (the solution's footprints)
+  ...Array.from({ length: 12 }, (_, i) => i + 1).flatMap((n) => [
+    // the grade that meets the rung first (from 3ro the line also shows in the bar)
+    { name: `pp-l${n}-start`, run: async (p) => { await toRung(p, n, n >= 11 ? 'nointro' : '', GRADE_AT[n]); await p.waitForTimeout(2500); } },
+    n >= 11
+      // the games: the ghost's intro (its rule, ▶, its key) and the line after it
+      ? { name: `pp-l${n}-intro`, run: async (p) => { await toRung(p, n, '', GRADE_AT[n]); await p.waitForTimeout(9000); } }
+      : { name: `pp-l${n}-prints`, run: async (p) => { await toRung(p, n, '', GRADE_AT[n]); await helps(p, 3); await p.waitForTimeout(1800); } },
+  ]),
   {
     name: 'pp-ladder-walk',
     run: async (p) => {
