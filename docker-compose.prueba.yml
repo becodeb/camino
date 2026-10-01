@@ -17,6 +17,7 @@ services:
     environment:
       DATABASE_URL: postgres://camino:${POSTGRES_PASSWORD}@db:5432/camino_prueba
       ADMIN_TOKEN: ${ADMIN_TOKEN}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       EXPORT_TOKEN: ${EXPORT_TOKEN}
       RETENTION_DAYS: ${RETENTION_DAYS:-180}
     depends_on:

@@ -11,7 +11,8 @@ import pg from 'pg';
 import { migrate } from './db.ts';
 import { createApp } from './app.ts';
 import { csvEscape, toCsv } from './lib/csv.ts';
-import { deleteOldSessions } from './retention.ts';
+import { deleteOldCommands, deleteOldDemoSessions, deleteOldSessions } from './retention.ts';
+import { createLoginLimiter, signCookie } from './lib/adminSession.ts';
 import { createRateLimiter } from './lib/rateLimit.ts';
 import { SYNC_RATE_LIMIT, SYNC_RATE_WINDOW_MS } from './routes/sync.ts';
 
@@ -115,7 +116,7 @@ dbDescribe('API against Postgres', () => {
     });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ ok: true, acked: [0, 1] });
+    expect(body).toEqual({ ok: true, acked: [0, 1], commands: [] });
 
     const { rows: sessionRows } = await pool.query('SELECT * FROM sessions WHERE id = $1', [session.id]);
     expect(sessionRows).toHaveLength(1);
@@ -395,7 +396,7 @@ dbDescribe('API against Postgres', () => {
       body,
     });
     expect(second.status).toBe(200);
-    expect(await second.json()).toEqual({ ok: true, acked: [0, 1] });
+    expect(await second.json()).toEqual({ ok: true, acked: [0, 1], commands: [] });
 
     const { rows } = await pool.query('SELECT count(*)::int AS n FROM events WHERE session_id = $1', [session.id]);
     expect(rows[0].n).toBe(2);
@@ -585,6 +586,225 @@ dbDescribe('API against Postgres', () => {
       expect(sessionRows).toHaveLength(0);
       const { rows: eventRows } = await pool.query('SELECT seq FROM events WHERE session_id = $1', [oldSession.id]);
       expect(eventRows).toHaveLength(0);
+    });
+  });
+  // ------------------------------------------------------------------ T14: the classroom round
+
+  describe('admin login (password, cookie, brute force)', () => {
+    const PW = 'throwaway-test-password';
+    const json = { 'content-type': 'application/json' };
+    const login = (app: ReturnType<typeof createApp>, password: unknown, headers: Record<string, string> = {}) =>
+      app.request('/api/admin/login', { method: 'POST', headers: { ...json, ...headers }, body: JSON.stringify({ password }) });
+    const cookieFrom = (res: Response) => (res.headers.get('set-cookie') ?? '').split(';')[0];
+
+    it('is 503 without ADMIN_PASSWORD; 401 with a wrong password (no cookie)', async () => {
+      expect((await login(createApp(pool, { adminToken: 't', distDir }), 'x')).status).toBe(503);
+      const app = createApp(pool, { adminToken: 't', adminPassword: PW, adminLimiter: createLoginLimiter(), distDir });
+      const res = await login(app, 'wrong');
+      expect(res.status).toBe(401);
+      expect(res.headers.get('set-cookie')).toBeNull();
+      expect((await login(app, '')).status).toBe(401);
+      expect((await login(app, 42)).status).toBe(401);
+    });
+
+    it('the right password sets a signed HttpOnly SameSite=Strict cookie for 12 h that opens the admin API', async () => {
+      const app = createApp(pool, { adminToken: 't', adminPassword: PW, adminLimiter: createLoginLimiter(), distDir });
+      const res = await login(app, PW);
+      expect(res.status).toBe(200);
+      const set = res.headers.get('set-cookie') ?? '';
+      expect(set).toMatch(/^camino_admin=v1\.\d+\.[A-Za-z0-9_-]{43}; Path=\/; Max-Age=43200; HttpOnly; SameSite=Strict$/);
+      expect(set).not.toContain(PW);
+      const cookie = cookieFrom(res);
+      expect((await app.request('/api/admin/me', { headers: { cookie } })).status).toBe(200);
+      expect((await app.request('/api/admin/summary', { headers: { cookie } })).status).toBe(200);
+      expect((await app.request('/api/admin/summary')).status).toBe(401);
+      // behind the https proxy the cookie is Secure
+      expect((await login(app, PW, { 'x-forwarded-proto': 'https' })).headers.get('set-cookie')).toMatch(/; Secure$/);
+      // the Bearer token still works for the tools
+      expect((await app.request('/api/admin/summary', { headers: { authorization: 'Bearer t' } })).status).toBe(200);
+    });
+
+    it('refuses a tampered, expired or foreign cookie; a change needs the x-camino-admin header', async () => {
+      const app = createApp(pool, { adminToken: 't', adminPassword: PW, adminLimiter: createLoginLimiter(), distDir });
+      const good = cookieFrom(await login(app, PW));
+      const tampered = good.replace(/v1\.(\d+)\./, (_m, n) => `v1.${Number(n) + 1000}.`);
+      expect((await app.request('/api/admin/summary', { headers: { cookie: tampered } })).status).toBe(401);
+      const expired = `camino_admin=${signCookie({ token: 't', password: PW }, Math.floor(Date.now() / 1000) - 50_000)}`;
+      expect((await app.request('/api/admin/summary', { headers: { cookie: expired } })).status).toBe(401);
+      const foreign = `camino_admin=${signCookie({ token: 't', password: 'another' })}`;
+      expect((await app.request('/api/admin/summary', { headers: { cookie: foreign } })).status).toBe(401);
+      const noHeader = await app.request('/api/admin/commands', { method: 'POST', headers: { ...json, cookie: good }, body: JSON.stringify({ kind: 'five_min' }) });
+      expect(noHeader.status).toBe(403);
+      const logout = await app.request('/api/admin/logout', { method: 'POST' });
+      expect(logout.headers.get('set-cookie')).toMatch(/^camino_admin=; Path=\/; Max-Age=0; HttpOnly; SameSite=Strict$/);
+      expect((await pool.query('SELECT count(*)::int AS n FROM class_commands')).rows[0].n).toBe(0);
+    });
+
+    it('locks a client out after 10 wrong tries in 10 minutes (even with the right password), not the others', async () => {
+      const app = createApp(pool, { adminToken: 't', adminPassword: PW, adminLimiter: createLoginLimiter(), distDir });
+      const a = { 'x-forwarded-for': '203.0.113.7' };
+      for (let i = 0; i < 10; i++) expect((await login(app, `guess-${i}`, a)).status).toBe(401);
+      const blocked = await login(app, PW, a);
+      expect(blocked.status).toBe(429);
+      expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(500);
+      expect((await login(app, PW, { 'x-forwarded-for': '203.0.113.8' })).status).toBe(200);
+      // Cloudflare's header names the client when present
+      expect((await login(app, PW, { 'cf-connecting-ip': '203.0.113.7' })).status).toBe(429);
+    });
+
+    it('the limiter: a success clears the client; the window ends; a global cap stops many addresses', () => {
+      const l = createLoginLimiter(3, 5, 1000);
+      l.fail('a', 0); l.fail('a', 0);
+      l.ok('a');
+      l.fail('a', 0); l.fail('a', 0);
+      expect(l.blockedFor('a', 10)).toBe(0);
+      l.fail('a', 10);
+      expect(l.blockedFor('a', 10)).toBe(990);
+      expect(l.blockedFor('a', 1000)).toBe(0);
+      const g = createLoginLimiter(100, 5, 1000);
+      for (let i = 0; i < 5; i++) g.fail(`ip${i}`, 0);
+      expect(g.blockedFor('fresh', 1)).toBe(999);
+    });
+  });
+
+  describe('class commands', () => {
+    const auth = { authorization: 'Bearer t', 'content-type': 'application/json' };
+    const app = () => createApp(pool, { adminToken: 't', distDir });
+    const sync = async (a: ReturnType<typeof createApp>, session: Record<string, unknown>, events: unknown[] = []) => {
+      const res = await a.request('/api/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session, events }) });
+      expect(res.status).toBe(200);
+      return (await res.json()) as { commands: Array<{ id: number; kind: string; cancelled: boolean; at: string; expires_at: string }> };
+    };
+    const send = async (a: ReturnType<typeof createApp>, kind: string) => {
+      const res = await a.request('/api/admin/commands', { method: 'POST', headers: auth, body: JSON.stringify({ kind }) });
+      return res;
+    };
+
+    it('hands a command to every session active now, also to one that comes back online; never to a session started after it', async () => {
+      await pool.query('DELETE FROM class_commands');
+      const a = app();
+      const early = new Date(Date.now() - 20 * 60_000).toISOString();
+      const online = newSession({ started_at: early });
+      const offline = newSession({ started_at: early });
+      expect((await sync(a, online)).commands).toEqual([]);
+      const res = await send(a, 'five_min');
+      expect(res.status).toBe(200);
+      const { command } = await res.json() as { command: { id: number; kind: string } };
+      expect(command.kind).toBe('five_min');
+      // the online device on its next poll; the same command again on the one after (the client applies each id once)
+      const got = (await sync(a, online)).commands;
+      expect(got.map((c) => [c.id, c.kind, c.cancelled])).toEqual([[command.id, 'five_min', false]]);
+      expect(Date.parse(got[0].expires_at) - Date.parse(got[0].at)).toBe(2 * 60 * 60_000);
+      expect((await sync(a, online)).commands).toHaveLength(1);
+      // the device that was offline while it was sent: its first sync, later
+      expect((await sync(a, offline, [event(0)])).commands.map((c) => c.id)).toEqual([command.id]);
+      // a child who starts after the command
+      expect((await sync(a, newSession())).commands).toEqual([]);
+      // "terminar la clase" too
+      const end = (await (await send(a, 'end_class')).json()) as { command: { id: number } };
+      expect((await sync(a, online)).commands.map((c) => c.kind)).toEqual(['five_min', 'end_class']);
+      expect(end.command.id).toBeGreaterThan(command.id);
+      await pool.query('DELETE FROM class_commands');
+    });
+
+    it('a device clock running ahead does not hide a session the server saw before the command', async () => {
+      await pool.query('DELETE FROM class_commands');
+      const a = app();
+      const ahead = newSession({ started_at: new Date(Date.now() + 10 * 60_000).toISOString() });
+      await sync(a, ahead);
+      await new Promise((r) => setTimeout(r, 20));
+      await send(a, 'five_min');
+      expect((await sync(a, ahead)).commands.map((c) => c.kind)).toEqual(['five_min']);
+      await pool.query('DELETE FROM class_commands');
+    });
+
+    it('"cancelar aviso" marks the warning cancelled; expired commands and sessions not seen for 2 h get nothing', async () => {
+      await pool.query('DELETE FROM class_commands');
+      const a = app();
+      const s = newSession({ started_at: new Date(Date.now() - 60_000).toISOString() });
+      await sync(a, s);
+      await send(a, 'five_min');
+      const cancel = await a.request('/api/admin/commands/cancel', { method: 'POST', headers: auth });
+      expect(await cancel.json()).toEqual({ ok: true, cancelled: 1 });
+      expect((await sync(a, s)).commands.map((c) => [c.kind, c.cancelled])).toEqual([['five_min', true]]);
+      await pool.query(`UPDATE class_commands SET expires_at = now() - interval '1 second'`);
+      expect((await sync(a, s)).commands).toEqual([]);
+      await pool.query('DELETE FROM class_commands');
+      // a session last seen three hours before the command (a tab left open since a morning class)
+      const stale = newSession({ started_at: new Date(Date.now() - 4 * 3600_000).toISOString() });
+      await sync(a, stale);
+      await pool.query(`UPDATE sessions SET last_seen_at = now() - interval '3 hours' WHERE id = $1`, [stale.id]);
+      await send(a, 'end_class');
+      expect((await sync(a, stale)).commands).toEqual([]);
+      // the summary lists the live commands
+      const sum = await (await a.request('/api/admin/summary', { headers: auth })).json() as { commands: Array<{ kind: string }> };
+      expect(sum.commands.map((c) => c.kind)).toEqual(['end_class']);
+      expect((await send(a, 'reboot')).status).toBe(400);
+      await pool.query('DELETE FROM class_commands');
+      expect(await deleteOldCommands(pool)).toBe(0);
+    });
+  });
+
+  describe('demo sessions', () => {
+    it('are stored with demo = true but left out of the export, /admin and every view; deleted after 24 h', async () => {
+      const a = createApp(pool, { adminToken: 't', exportToken: 'x', distDir });
+      const post = (session: Record<string, unknown>, events: unknown[]) => a.request('/api/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session, events }) });
+      const evs = [
+        event(0, { type: 'level_start', payload: { level_id: 'pp-l1', activity: 'ladder' } }),
+        event(1, { type: 'level_end', payload: { level_id: 'pp-l1', activity: 'ladder', outcome: 'win' } }),
+        event(2, { type: 'ladder_step', payload: { concept: 'sequence', rung: 1, item: 'pp-l1', result: 'pass', check: 'climb' } }),
+        event(3, { type: 'typing', payload: { key: 'a', expected: 'a', correct: true, latency_ms: 900, round: 1 } }),
+        event(4, { type: 'route_done', payload: { time_ms: 1000 } }),
+      ];
+      const demo = newSession({ code: 'Demo 1', grade: 4, demo: true });
+      const real = newSession({ code: 'Real 1', grade: 4 });
+      expect((await post(demo, evs)).status).toBe(200);
+      expect((await post(real, evs)).status).toBe(200);
+      // a later sync without the flag never turns a demo session real
+      expect((await post({ ...demo, demo: false }, [])).status).toBe(200);
+      expect((await pool.query('SELECT demo FROM sessions WHERE id = $1', [demo.id])).rows[0].demo).toBe(true);
+      expect((await post(newSession({ demo: 'yes' }), [])).status).toBe(400);
+
+      const exp = await (await a.request('/api/export?format=json', { headers: { authorization: 'Bearer x' } })).json() as { sessions: Array<{ id: string }>; events: Array<{ session_id: string }> };
+      expect(exp.sessions.map((s) => s.id)).toContain(real.id);
+      expect(exp.sessions.map((s) => s.id)).not.toContain(demo.id);
+      expect(exp.events.some((e) => e.session_id === demo.id)).toBe(false);
+      const csv = await (await a.request('/api/export?format=csv&table=events', { headers: { authorization: 'Bearer x' } })).text();
+      expect(csv).not.toContain(demo.id);
+      const adminCsv = await (await a.request('/api/admin/export?format=csv&table=sessions', { headers: { authorization: 'Bearer t' } })).text();
+      expect(adminCsv).not.toContain(demo.id);
+
+      const sum = await (await a.request('/api/admin/summary', { headers: { authorization: 'Bearer t' } })).json() as {
+        sessions: Array<{ session_id: string; route_done: boolean; survey_done: boolean; in_class: boolean }>; demo_hidden: number; class_counts: { route_done: number };
+      };
+      expect(sum.sessions.map((s) => s.session_id)).not.toContain(demo.id);
+      const mine = sum.sessions.find((s) => s.session_id === real.id)!;
+      expect(mine).toMatchObject({ route_done: true, survey_done: false, in_class: true });
+      expect(sum.demo_hidden).toBe(1);
+      expect(sum.class_counts.route_done).toBeGreaterThanOrEqual(1);
+
+      for (const v of ['v_session_summary', 'v_ladder_ceiling', 'v_activity_time']) {
+        const { rows } = await pool.query(`SELECT session_id FROM ${v} WHERE session_id IN ($1, $2)`, [demo.id, real.id]);
+        expect(rows.map((r) => r.session_id), v).toEqual([real.id]);
+      }
+      // the views by grade: grade 4 is this test's own, the demo's keys are not counted
+      const t = await pool.query('SELECT attempts::int FROM v_typing_by_grade WHERE grade = 4');
+      expect(t.rows[0].attempts).toBe(1);
+
+      // retention: the demo session from yesterday goes, the real one stays
+      expect(await deleteOldDemoSessions(pool)).toBe(0);
+      await pool.query(`UPDATE sessions SET created_at = now() - interval '25 hours' WHERE id IN ($1, $2)`, [demo.id, real.id]);
+      expect(await deleteOldDemoSessions(pool)).toBe(1);
+      expect((await pool.query('SELECT id FROM sessions WHERE id IN ($1, $2)', [demo.id, real.id])).rows.map((r) => r.id)).toEqual([real.id]);
+      expect((await pool.query('SELECT count(*)::int AS n FROM events WHERE session_id = $1', [demo.id])).rows[0].n).toBe(0);
+    });
+
+    it('every analysis view reads the real rows (migration 008 rewrote them all)', async () => {
+      const { rows } = await pool.query(`SELECT viewname, definition FROM pg_views WHERE schemaname = 'public' AND viewname LIKE 'v\\_%'`);
+      expect(rows.length).toBeGreaterThanOrEqual(9);
+      for (const r of rows as Array<{ viewname: string; definition: string }>) {
+        expect(r.definition, r.viewname).not.toMatch(/\b(FROM|JOIN)\s+(public\.)?(events|sessions)\b/);
+      }
     });
   });
 });

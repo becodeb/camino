@@ -15,6 +15,8 @@ export interface SessionInput {
   survey?: Record<string, unknown> | null;
   adult_form?: Record<string, unknown> | null;
   current_step?: string | null;
+  /** A demo session (T14): stored, but out of the export, /admin and the views; deleted after 24 h. */
+  demo?: boolean;
 }
 
 export interface EventInput {

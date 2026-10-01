@@ -1,5 +1,7 @@
 // Shared read-only queries for /api/export and /api/admin/export: both
 // endpoints expose the same two tables, gated by different bearer tokens.
+// Demo sessions (T14) are never exported: both read the `real_*` views
+// (migration 008), which leave them out.
 
 import type pg from 'pg';
 
@@ -24,11 +26,11 @@ export const SESSION_COLUMNS = [
 export const EVENT_COLUMNS = ['session_id', 'seq', 'client_t', 'server_t', 'type', 'payload'];
 
 export async function fetchAllSessions(pool: pg.Pool): Promise<Array<Record<string, unknown>>> {
-  const { rows } = await pool.query(`SELECT ${SESSION_COLUMNS.join(', ')} FROM sessions ORDER BY started_at`);
+  const { rows } = await pool.query(`SELECT ${SESSION_COLUMNS.join(', ')} FROM real_sessions ORDER BY started_at`);
   return rows;
 }
 
 export async function fetchAllEvents(pool: pg.Pool): Promise<Array<Record<string, unknown>>> {
-  const { rows } = await pool.query(`SELECT ${EVENT_COLUMNS.join(', ')} FROM events ORDER BY session_id, seq`);
+  const { rows } = await pool.query(`SELECT ${EVENT_COLUMNS.join(', ')} FROM real_events ORDER BY session_id, seq`);
   return rows;
 }

@@ -8,9 +8,10 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createPool, migrate } from './db.ts';
 import { createApp } from './app.ts';
-import { deleteOldSessions } from './retention.ts';
+import { deleteOldCommands, deleteOldDemoSessions, deleteOldSessions } from './retention.ts';
 
-const RETENTION_SWEEP_MS = 24 * 60 * 60 * 1000;
+// hourly: demo sessions must be gone 24 h after they started
+const RETENTION_SWEEP_MS = 60 * 60 * 1000;
 
 export async function main(): Promise<{ close: () => Promise<void> }> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -19,6 +20,7 @@ export async function main(): Promise<{ close: () => Promise<void> }> {
   const port = Number(process.env.PORT ?? 3000);
   const retentionDays = Number(process.env.RETENTION_DAYS ?? 180);
   const adminToken = process.env.ADMIN_TOKEN;
+  const adminPassword = process.env.ADMIN_PASSWORD || undefined;
   const exportToken = process.env.EXPORT_TOKEN;
 
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +36,9 @@ export async function main(): Promise<{ close: () => Promise<void> }> {
     try {
       const deleted = await deleteOldSessions(pool, retentionDays);
       if (deleted > 0) console.log(`retention: deleted ${deleted} session(s) older than ${retentionDays} days`);
+      const demo = await deleteOldDemoSessions(pool);
+      if (demo > 0) console.log(`retention: deleted ${demo} demo session(s) older than 24 hours`);
+      await deleteOldCommands(pool);
     } catch (err) {
       console.error('retention sweep failed', err);
     }
@@ -41,7 +46,7 @@ export async function main(): Promise<{ close: () => Promise<void> }> {
   await sweepRetention();
   const retentionTimer = setInterval(sweepRetention, RETENTION_SWEEP_MS);
 
-  const app = createApp(pool, { adminToken, exportToken, distDir });
+  const app = createApp(pool, { adminToken, adminPassword, exportToken, distDir });
 
   const server = serve({ fetch: app.fetch, port }, (info) => {
     console.log(`camino-prueba listening on :${info.port}`);

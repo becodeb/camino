@@ -9,6 +9,7 @@ import { getConnInfo } from '@hono/node-server/conninfo';
 import type pg from 'pg';
 import { validateSyncBody } from '../lib/validate.ts';
 import { createRateLimiter } from '../lib/rateLimit.ts';
+import { commandsFor, type ClassCommand } from '../lib/commands.ts';
 import type { EventInput, SessionInput } from '../types.ts';
 
 // Requests per IP per minute. A whole class (~25 devices) sits behind one
@@ -18,18 +19,25 @@ import type { EventInput, SessionInput } from '../types.ts';
 export const SYNC_RATE_LIMIT = 1500;
 export const SYNC_RATE_WINDOW_MS = 60_000;
 
+/** The session as the server saw it before this sync (null: its first). */
+interface Before { lastSeen: Date; createdAt: Date }
+
 async function upsertSessionAndEvents(
   client: pg.PoolClient,
   session: SessionInput,
   events: EventInput[],
-): Promise<void> {
+): Promise<Before | null> {
   await client.query('BEGIN');
   try {
+    const prev = await client.query<{ last_seen_at: Date; created_at: Date }>(
+      'SELECT last_seen_at, created_at FROM sessions WHERE id = $1',
+      [session.id],
+    );
     await client.query(
       `INSERT INTO sessions (
          id, code, grade, division, consent, started_at, ended_at, end_reason,
-         app_version, device, survey, adult_form, current_step, last_seen_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
+         app_version, device, survey, adult_form, current_step, last_seen_at, demo
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now(), $14)
        ON CONFLICT (id) DO UPDATE SET
          code = COALESCE(EXCLUDED.code, sessions.code),
          grade = COALESCE(EXCLUDED.grade, sessions.grade),
@@ -43,7 +51,8 @@ async function upsertSessionAndEvents(
          survey = COALESCE(EXCLUDED.survey, sessions.survey),
          adult_form = COALESCE(EXCLUDED.adult_form, sessions.adult_form),
          current_step = COALESCE(EXCLUDED.current_step, sessions.current_step),
-         last_seen_at = now()`,
+         last_seen_at = now(),
+         demo = sessions.demo OR EXCLUDED.demo`,
       [
         session.id,
         session.code,
@@ -58,6 +67,7 @@ async function upsertSessionAndEvents(
         session.survey === null ? null : JSON.stringify(session.survey),
         session.adult_form === null ? null : JSON.stringify(session.adult_form),
         session.current_step,
+        session.demo === true,
       ],
     );
 
@@ -71,6 +81,8 @@ async function upsertSessionAndEvents(
     }
 
     await client.query('COMMIT');
+    const row = prev.rows[0];
+    return row ? { lastSeen: row.last_seen_at, createdAt: row.created_at } : null;
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -109,14 +121,20 @@ export function syncRoute(pool: pg.Pool, rateLimit = SYNC_RATE_LIMIT): Hono {
       return c.json({ error: result.message }, result.status);
     }
 
+    const { session, events } = result.value;
     const client = await pool.connect();
+    let commands: ClassCommand[] = [];
     try {
-      await upsertSessionAndEvents(client, result.value.session, result.value.events);
+      const before = await upsertSessionAndEvents(client, session, events);
+      // the class's commands (T14) for this session: from when it started (the earlier of its clock and the server's first sight)
+      const own = Date.parse(session.started_at);
+      const seen = before?.createdAt.getTime() ?? Date.now();
+      commands = await commandsFor(client, new Date(Math.min(own, seen)), before?.lastSeen ?? null);
     } finally {
       client.release();
     }
 
-    return c.json({ ok: true, acked: result.value.events.map((e) => e.seq) }, 200);
+    return c.json({ ok: true, acked: events.map((e) => e.seq), commands }, 200);
   });
 
   return app;

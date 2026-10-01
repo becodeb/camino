@@ -76,6 +76,9 @@ function validateSession(input: unknown): SessionInput | string {
   const current_step = input.current_step ?? null;
   if (current_step !== null && typeof current_step !== 'string') return 'session.current_step must be a string';
 
+  const demo = input.demo ?? false;
+  if (typeof demo !== 'boolean') return 'session.demo must be a boolean';
+
   return {
     id,
     code,
@@ -90,6 +93,7 @@ function validateSession(input: unknown): SessionInput | string {
     survey: survey as Record<string, unknown> | null,
     adult_form: adult_form as Record<string, unknown> | null,
     current_step: current_step as string | null,
+    demo,
   };
 }
 

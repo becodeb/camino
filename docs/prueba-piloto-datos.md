@@ -37,7 +37,35 @@ One row per playtest session (one child, one sitting).
 | `adult_form` | jsonb, nullable | The adult's form: `{engagement: 'low'|'mid'|'high'|null, help_needed: 'none'|'some'|'a_lot'|null, comment?: string, step?: string}`. Round 1: a step after the goodbye, both answers required. Since round 2 it is optional, from the corner menu ("Comentario del adulto") at any time of the session; any answer may be left out (`null`), saving again replaces it, and `step` is the flow step it was saved on (see the `adult_form` event). Most round-2 sessions will have none. | 3, 5 |
 | `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`; round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. | 5 |
 | `created_at` | timestamptz | First time this session row was written. | — |
-| `last_seen_at` | timestamptz | Updated on every sync; drives the admin page's "active now" indicator. | 5 |
+| `last_seen_at` | timestamptz | Updated on every sync; drives the admin page's "active now" indicator. Since T14 a device with a session open syncs at least every ~10 s, so this is also the class's "seen" time. | 5 |
+| `demo` | boolean, default false | T14: a session played in demo mode (the adult showing or trying the pilot; see "Demo mode" below). Stored like any other, but left out of `/api/export`, `/api/admin/*` lists and counts and every SQL view, and deleted 24 hours after it started. A later sync never turns it back to `false` (migration `008_class_control.sql`). | — |
+
+## Table `class_commands`
+
+T14: el docente's class commands from `/admin` ("Quedan 5 minutos",
+"Terminar la clase"). No session or child is named: a command is for "the
+sessions active now".
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | bigserial, PK | The command's id; each device applies an id once. |
+| `kind` | text | `'five_min'` ("quedan 5 minutos") or `'end_class'` ("terminar la clase"). |
+| `created_at` | timestamptz | When el docente sent it. |
+| `expires_at` | timestamptz | `created_at` + 2 hours: after that no device gets it (a device offline longer than that never ends by an old command). |
+| `cancelled_at` | timestamptz, nullable | "Cancelar aviso" (only `five_min`): devices still waiting to apply it drop it. |
+
+Delivery: every `POST /api/sync` answers `{ok, acked, commands}`, where
+`commands` lists `{id, kind, at, expires_at, cancelled}` for each live
+command the posted session must see: the session started before the
+command (the earlier of the device's `started_at` and the server's first
+sight of it, `created_at`, so a device clock running ahead does not hide a
+session that was playing), it was seen within the 2 hours before the
+command (or is syncing for the first time), and the command has not
+expired. A device that was offline while it was sent gets it on its first
+sync after reconnecting. Demo sessions get commands too (the adult can try
+the class control in demo mode). The client logs `class_command` when it
+applies one. Rows expired more than 7 days ago are deleted by the
+retention job.
 
 ## Table `events`
 
@@ -975,6 +1003,13 @@ for a session therefore mean a 400-dropped batch, never a network failure.
 Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`, `004_game_maker.sql`, `005_text_probe.sql`, `007_typing_rounds.sql`), always available for ad hoc
 analysis (`psql`, or any tool that can read Postgres directly).
 
+Since T14 (`008_class_control.sql`) every view reads only real sessions:
+two base views, **`real_sessions`** (`sessions` without demo rows) and
+**`real_events`** (the events of real sessions), and each `v_*` view below
+was redefined on them (its own definition with the table names swapped, the
+logic unchanged). Read `real_sessions`/`real_events` for ad hoc analysis
+too; the tables themselves still hold the demo rows until they are deleted.
+
 - **`v_ladder_ceiling`** — one row per `(session_id, concept)`: the highest
   `rung` reached with `result = 'pass'`. Feeds RQ 2 (prior knowledge, next
   year's starting points).
@@ -1045,7 +1080,10 @@ analysis (`psql`, or any tool that can read Postgres directly).
 
 `RETENTION_DAYS` (env var, default 180) is read at startup; the server
 deletes `sessions` older than that many days (by `started_at`), cascading to
-their `events`, once at boot and every 24h after.
+their `events`, once at boot and every hour after. Since T14 the same job
+deletes demo sessions 24 hours after they started (the earlier of
+`started_at` and `created_at`) and class commands that expired more than 7
+days ago.
 
 **To delete one session** (a check or test session, or one a school asks to
 remove): `DELETE /api/admin/sessions/:id` (Bearer `ADMIN_TOKEN`) removes the
@@ -1070,8 +1108,41 @@ wipe the data early):
 - `GET /api/export?format=csv&table=sessions|events` (default `events`) →
   one CSV, jsonb columns serialized as JSON strings, RFC 4180 quoting
   (Bearer `EXPORT_TOKEN`).
-- `GET /api/admin/summary` and `GET /api/admin/export` (same shapes, Bearer
-  `ADMIN_TOKEN`) — used by the `/admin` page, also usable directly.
+- `GET /api/admin/summary` and `GET /api/admin/export` (same export shapes,
+  Bearer `ADMIN_TOKEN` or the `/admin` login cookie) — used by the `/admin`
+  page, also usable directly. Demo sessions are never exported (both exports
+  read `real_sessions`/`real_events`).
+
+### `/admin` (T14)
+
+- **Login**: `POST /api/admin/login {password}` checks `ADMIN_PASSWORD`
+  (env var, set in Coolify only, never in git) and sets the cookie
+  `camino_admin` = `v1.<expiry>.<HMAC-SHA256>` (key derived from
+  `ADMIN_TOKEN` and `ADMIN_PASSWORD`: changing either logs everyone out),
+  `HttpOnly; SameSite=Strict; Path=/; Max-Age=43200` (12 h), `Secure` behind
+  https. Wrong password: 401; no `ADMIN_PASSWORD`: 503. At most 10 failed
+  tries per client per 10 minutes (then 429 with `retry-after`, even with
+  the right password) and 200 failed tries in all per 10 minutes, counted in
+  memory (the address is never stored; the client is Cloudflare's
+  `cf-connecting-ip`, else the proxy's last `x-forwarded-for` hop).
+  `POST /api/admin/logout` clears the cookie; `GET /api/admin/me` says
+  whether the cookie (or token) is valid. `Authorization: Bearer
+  ADMIN_TOKEN` keeps working for the tools. A change made with the cookie
+  (POST/DELETE) must carry the header `x-camino-admin: 1` (403 otherwise).
+- **Class commands**: `POST /api/admin/commands {kind: 'five_min' |
+  'end_class'}` → `{ok, command}`; `POST /api/admin/commands/cancel` →
+  `{ok, cancelled}` (live five-minute warnings).
+- **Summary** (`GET /api/admin/summary`): `sessions` (non-demo) with
+  `route_done` (a `route_done` event exists: the green flag), `survey_done`
+  (`sessions.survey` set), `in_class` (seen in the last 2 hours),
+  `current_step`, `last_seen_at`, …; `class_counts {sessions, route_done,
+  survey_done}` for the sessions in class; `active_now` (seen in the last 2
+  minutes, not ended); `counts_by_grade`; `demo_hidden` (how many demo
+  sessions exist, not listed); `commands` (the live ones, newest first).
+- The page: a password form; then "Quedan 5 minutos", "Terminar la clase"
+  (a second tap confirms) and "Cancelar aviso"; "Esta clase": who is
+  playing, on which step, "Terminó" (the green flag) and "Encuesta"; all
+  sessions with "Borrar"; the exports. It polls every 5 s.
 - `tools/export-playtest.mjs` — no dependencies; reads `EXPORT_TOKEN` and
   `PLAYTEST_URL` from `~/.credentials/camino-prueba.env` (never printed),
   fetches all three exports and writes them to `exports/` (gitignored) as

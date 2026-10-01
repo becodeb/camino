@@ -10,9 +10,14 @@ import { adminRoute } from './routes/admin.ts';
 import { exportRoute } from './routes/export.ts';
 import { serveDist } from './static.ts';
 import { ADMIN_PAGE_HTML } from './admin/page.ts';
+import type { LoginLimiter } from './lib/adminSession.ts';
 
 export interface AppOptions {
   adminToken?: string;
+  /** El docente's /admin password (ADMIN_PASSWORD); unset: no password login. */
+  adminPassword?: string;
+  /** Tests: the login limiter. */
+  adminLimiter?: LoginLimiter;
   exportToken?: string;
   distDir: string;
   /** /api/sync requests per IP per minute (tests lower it). */
@@ -23,9 +28,9 @@ export function createApp(pool: pg.Pool, opts: AppOptions): Hono {
   const app = new Hono();
   app.route('/api/health', healthRoute(pool));
   app.route('/api/sync', syncRoute(pool, opts.syncRateLimit));
-  app.route('/api/admin', adminRoute(pool, opts.adminToken));
+  app.route('/api/admin', adminRoute(pool, { token: opts.adminToken, password: opts.adminPassword, limiter: opts.adminLimiter }));
   app.route('/api/export', exportRoute(pool, opts.exportToken));
-  app.get('/admin', (c) => c.html(ADMIN_PAGE_HTML));
+  app.get('/admin', (c) => c.html(ADMIN_PAGE_HTML, 200, { 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer' }));
   app.get('*', serveDist(opts.distDir));
   return app;
 }
