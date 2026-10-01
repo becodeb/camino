@@ -471,3 +471,9 @@ button.pp-key:focus-visible { outline: 3px dashed var(--blue-ink); outline-offse
   .piloto .mode-wardrobe .cast-btn .cast-face { width: 76px; height: 76px; }
   .piloto .mode-wardrobe .wardrobe-stage { grid-template-columns: 92px minmax(0, 1fr) minmax(0, 400px) auto; }
 }
+
+/* ------------------------------------------------ short windows (≤ 720 px high, e.g. 1366×650 not fullscreen) */
+@media (max-height: 720px) {
+  /* the rule game's palette (eight blocks or more) holds on the paper: drawn a little smaller */
+  .piloto .level.mode-realtime .zone-palette { zoom: 0.8; }
+}

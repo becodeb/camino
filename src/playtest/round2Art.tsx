@@ -192,13 +192,13 @@ export function GoOnArt() {
 /** "Jugar otra vez": a new seed in the ground, and a pen arrow coming round to it. */
 export function PlayAgainArt() {
   return (
-    <svg viewBox="0 0 96 80" aria-hidden="true" className="pp-again-art">
+    <svg viewBox="8 4 84 70" aria-hidden="true" className="pp-again-art">
       <g filter="url(#rough)" strokeLinecap="round" strokeLinejoin="round">
-        <path d={wobblyLine(18, 62, 78, 61, { bow: 1, seed: 4 })} fill="none" stroke={INK} strokeWidth={2.4} opacity={0.6} />
-        <ellipse cx={48} cy={54} rx={9} ry={8} fill="#f0d27a" stroke={INK} strokeWidth={2.4} />
-        <g transform="translate(48 47)"><Sprout size={1} seed={3} /></g>
-        <path d="M20,40 C14,14 64,4 78,30" fill="none" stroke={PEN} strokeWidth={4.4} />
-        <path d="M70,26 L79,32 L84,22" fill="none" stroke={PEN} strokeWidth={4.4} />
+        <path d={wobblyLine(20, 66, 80, 65, { bow: 1, seed: 4 })} fill="none" stroke={INK} strokeWidth={2.6} opacity={0.6} />
+        <ellipse cx={50} cy={58} rx={11} ry={9.5} fill="#f0d27a" stroke={INK} strokeWidth={2.6} />
+        <g transform="translate(50 50) scale(1.5)"><Sprout size={1} seed={3} /></g>
+        <path d="M18,44 C12,12 70,2 84,30" fill="none" stroke={PEN} strokeWidth={5} />
+        <path d="M75,25 L85,32 L90,20" fill="none" stroke={PEN} strokeWidth={5} />
       </g>
     </svg>
   );

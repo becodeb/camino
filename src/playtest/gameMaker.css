@@ -194,3 +194,10 @@
 @media (prefers-reduced-motion: reduce) {
   .gm-jar-n, .gm-lives > .is-gone, .gm-say, .gm-burst-star, .gm-hearts-again > span { animation: none; }
 }
+
+/* a short window (1366×650 not fullscreen): the board gives up some height so the arrow keys stay on screen */
+@media (max-height: 720px) {
+  .mode-gm .gm-board { width: auto; max-width: 100%; height: calc(100dvh - 360px); margin: 0 auto; display: block; }
+  .mode-gm .controls { min-height: 64px; }
+  .mode-gm .btn-play, .mode-gm .btn-restart { min-height: 58px; }
+}
