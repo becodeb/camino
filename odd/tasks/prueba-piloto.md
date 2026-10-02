@@ -75,7 +75,7 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 
 - [x] T14 Classroom round (user approval 2026-10-01): the ladder capped at 8 items / 8 min (parent's change from 6/6, see Progress); the typing game's "seguir" only after half of round 2; no division on setup; ✋ hold (~1.5 s) opens the adult "¿en qué lo ayudaste?" question (the child's hold-to-raise is removed; the hand still rises after the help steps); a green "terminó" flag visible from across the room once the core route is done, with endless free play afterwards and the survey done with the adult; class control from `/admin` ("quedan 5 minutos": every device finishes its item and goes to wardrobe + survey; "terminar la clase": "Actividad terminada", save, close in 10 s; commands travel in the `/api/sync` response), `/admin` behind a password (`ADMIN_PASSWORD` env var, never in git) with a list of who finished; a discreet demo mode (sessions flagged demo, excluded from export and admin, deleted after 24 h) with a clearly labelled demo bar (fast forward, skip level, solve level, go to step, end).
 - [x] T15 "Hacé tu juego" built step by step: empty stage; move with the arrows; the stone falls; the seed already falls on its own as an example; lose a life when the stone touches you, a point for the seed; choose when you win; then free. No Scratch column and no Scratch predictions.
-- [ ] T16 "Del bloque al texto" from zero for 5to (never saw code): a gentle introduction of each idea before using it (a move as text, then `for`, then `if`), no `while`, never surprising them; keep measuring how well they understand.
+- [x] T16 "Del bloque al texto" from zero for 5to (never saw code): a gentle introduction of each idea before using it (a move as text, then `for`, then `if`), no `while`, never surprising them; keep measuring how well they understand.
 - [ ] T17 Verification and redeploy.
 
 ## Progress
@@ -546,6 +546,40 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 
   Open: never tried with children, voices or a touch Chromebook; step lengths are estimates (the scripted run takes ~15 s per step); the board's right column is empty until step 4 (kept constant so nothing jumps); step 4's success needs the stone to hit the character, which a careful child may avoid (the skip covers it); the 5to session check covers only step 1 and the free step through the real flow (the rest by `check-juego`). Engram mirror still pending.
 
+- 2026-10-02: T16 done (route: delegated direct, one writer; 2+ non-trivial files). Work-unit commits on `feat/prueba-piloto` (not pushed, not deployed):
+  - `7468070` the text probe rebuilt from zero: `textCode.ts` without `while`/`else` (tests for the reduced subset), `textProbe.ts` (six steps, each a teaching screen and a task; times; `?caps=fast`; lines), `TextProbe.tsx` rewritten (teaching / pick / edit / predict screens, step path in the bar, ✋ three steps per screen, "seguir" after 90 s, blue pen glosses, marked words selected on tap, live "repetí N veces", word bank, code scaled up on big screens), `TxStepIcon` art (the item stamps removed), CSS; 13 step tests.
+  - `3e8f275` data: `010_text_probe_steps.sql` (drops and recreates `v_probe_text` and `v_probe_text_by_grade` on `real_events`/`real_sessions`), API test, dictionary section rewritten.
+  - `6efdded` fix: the auto-turn timer is cleared when the probe closes (no phantom `text_item` after the menu button).
+  - `a4d9aa8` checks: `check-texto.mjs` rewritten, `check-session.mjs`/`check-session-data.mjs` 5to path, `shots-piloto.mjs` `pp-tx-*` scenarios.
+
+  The steps as built (5to, about 8–10 minutes; every line spoken and captioned):
+
+  | # | Step | Teaching screen (blocks ↔ text, run once) | Task | Done when |
+  |---|---|---|---|---|
+  | 1 | `move` | → ↔ `derecha()` ("← la flecha") | ↑ block, pick `abajo()` / `arriba()`; a wrong tap dims it and shows its arrow | `arriba()` tapped |
+  | 2 | `seq` | → → ↑ ↔ three lines lit top to bottom | change the marked `derecha` (selected) to `arriba`; hint with drawn keys | reaches the seed |
+  | 3 | `repeat` | repetir 3 {→} ↔ `for i in range(3):` + indented line ("← repetí 3 veces", "← lo corrido se repite") | change the marked 2; the note follows ("repetí 4 veces") | reaches the seed |
+  | 4 | `typo` | none | `drecha()` on line 2; ▶ → "¿Será «derecha»?" | reaches the seed |
+  | 5 | `if` | →, si hay piedra [saltar], → ↔ the same in text | the same program without the rock: three drawn ends (no blocks) | a pick (then the run explains) |
+  | 6 | `write` (si querés) | none | write one line on the empty line; word bank of the four moves | reaches the seed |
+
+  Evidence:
+  - `npm run typecheck` clean; `npm test` 39 files, 1089 tests (textCode 65 with the reduced subset — `while`/`else` now unknown names; `textProbe.test.ts` 13: order and kinds, no while/else and each idea taught before a task uses it, teaching programs win and equal their blocks, each edit task's text fails and its fix wins changing only the focus line, marks, the slip's note, the pick, the predict's right drawing is the real end and is 2nd, live note, times, no "difícil"/"incorrecto" in any line); `npm run build` ok (also `VITE_PLAYTEST=1`); `npm run test:api` 36/36 on `camino-prueba-t16db` (54340, database `apitest`), incl. the new views (per step alone/help/skipped and seconds, first tries, answers, teaching runs apart, a session that left, a round-1 row with empty step columns, by-grade counts and medians).
+  - `tools/check-texto.mjs` (vite 8811 → API 8810 → Postgres 54340 `dev`, `?caps=fast`): 60 ok, all passed — real keyboard and taps: the line ↔ block ring, the lit lines per run, a wrong pick then the right one, the marked word selected and replaced by typing, "repetí 4 veces" and the repeat block showing 4, ✋ once, the typo note on line 2 then the missing letter typed, the predict skipped with "seguir" in the bar, the stretch written; 3ro via the adult menu: ✋ ×3 on the teaching screen (ghost run) and on the pick (ghost pick). DB: 30 events seq 0..29; `text_item` and `probe_phase` per step as expected; the one parse error; `probe_end` 5 completed; `activity_end` not a win (a core step skipped); views agree (alone 3, help 1, skipped 1; first tries false/true/true/false); 3ro move = help (ghost), `probe_end` left.
+  - `tools/check-session.mjs http://127.0.0.1:8810/ 5to` (a `VITE_PLAYTEST=1` build served by the local API; the probe offline: move teach + pick, seq teach + word): all passed; export (throwaway `HOME`) + `check-session-data.mjs`: 36 ok, all passed (`v_probe_text` move/seq alone, seq at the first try, liked yes). Export files deleted.
+  - Regressions against 8811: `check-piloto` 187 ok, `check-primer` 37 ok, `check-3ro` 8 ok, no console errors.
+  - Screenshots at 1366×768 and 1920×911 (own tour: every step's teaching screen at start and after the run, every task at start and solved, the liking question; plus `SIZES=1920x911,1366x768 tools/shots-piloto.mjs … pp-tx-`, 17 scenarios × 2, all ok), reviewed with the Read tool. Fixed from them: the glosses were cut at 1366 ("← repetí 3", "← si hay piedr") — the code column now takes 1.6 of the space and the notes are shorter; "← = la flecha →" read as two arrows; the predict's drawn answers overflowed their cards and the page (now three stacked mini boards under the text, sized by the space left, the board to watch on the right); at 1920 the code was small in a wide empty column (code and pick cards now scale up to 1.3×); the step's stone in the bar stayed empty until the page turned.
+
+  Decisions and deviations:
+  - `while` and `else` were removed from the language itself, not only from the probe (the brief: "Remove while entirely (and else)"); old round-1 data keeps its `else_without_if`/`while` rows.
+  - Step 4 (the slip) and the stretch have no teaching screen: nothing new to show; the slip's task says why ("La compu solo entiende las palabras justas"). The slip shows the right program's blocks dimmed (gentle; it gives the fix away like the note does).
+  - The predict hides the blocks (it measures reading the text) and is never marked; the line after the run explains either way.
+  - A pick allows a second tap (a wrong tap explains itself); `first_try` and `answer` (the first tap) carry the measurement. `correct` = ended right by the child, not by ✋ 3.
+  - ✋ counts per screen (teaching and task apart); the step's `help_levels` is the higher one. "Seguir" only on tasks; teaching screens show the next arrow after their run or after 30 s; done screens turn by themselves after 12 s.
+  - The liking question keeps its wording and id (`text_probe_liked`).
+
+  Open: never tried with children, voices, a touch Chromebook or its on-screen keyboard (the marked word is selected with `setSelectionRange` on focus; on a touch keyboard a tap may move the caret first — the tap-inside-the-word reselect covers it in reasoning only); step lengths are estimates (the scripted run takes ~70 s for all six); `adult_helped` on a task carries the adult's help from earlier screens of the probe; the pick page is calm but mostly empty at 1920. Engram mirror still pending.
+
 ## Next step
 
-T16 ("Del bloque al texto" from zero for 5to). Before deploying T14/T15: make sure `ADMIN_PASSWORD` is set on the Coolify app (done by the parent) and redeploy; the live DB gets migration 008 at start.
+T17 (verification and redeploy). Before deploying T14–T16: make sure `ADMIN_PASSWORD` is set on the Coolify app (done by the parent) and redeploy; the live DB gets migrations 008–010 at start.
