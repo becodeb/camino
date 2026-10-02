@@ -222,9 +222,11 @@ function useScreen(o: { step: TxStep; screen: Screen; say: string; first: boolea
   const doneRef = useRef(false);
   const turnRef = useRef<() => void>(() => {});
   const turned = useRef(false);
+  const autoTurn = useRef<number | undefined>(undefined);
   const log: Log = (type, payload) => apiRef.current.log(type, payload);
 
   useEffect(() => {
+    turned.current = false;
     apiRef.current.level.current = track.current;
     let off = () => {};
     const line = o.first ? `${TX_SAY.intro} ${o.say}` : o.say;
@@ -232,6 +234,9 @@ function useScreen(o: { step: TxStep; screen: Screen; say: string; first: boolea
     if (o.skippable) timers.push(window.setTimeout(() => { if (!doneRef.current) setCanSkip(true); }, o.times.skipMs));
     return () => {
       timers.forEach(clearTimeout); off(); ghostRun.current?.cancel();
+      // the probe closed (the menu button): nothing turns or logs after it
+      clearTimeout(autoTurn.current);
+      turned.current = true;
       // the next screen: a hand nobody answered goes down (the child moved on)
       apiRef.current.lowerHand('moved_on');
       if (apiRef.current.level.current === track.current) apiRef.current.level.current = null;
@@ -255,7 +260,7 @@ function useScreen(o: { step: TxStep; screen: Screen; say: string; first: boolea
     setCanSkip(false);
     o.onSolved?.();
     apiRef.current.lowerHand('self');
-    window.setTimeout(turn, o.times.autoTurnMs);
+    autoTurn.current = window.setTimeout(turn, o.times.autoTurnMs);
   };
 
   const demo = (steps: DemoStep[], kind: string, pace?: number) => {
