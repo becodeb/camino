@@ -648,7 +648,7 @@ menu opens and when the card is held (a tap picks it). **RQ 5.**
 | 2do | `sheet` (sheet 8 "Zigzag"), `recess`, `guardas`, `editor` (sheet 7) |
 | 3ro | `rule_game`, `sheet` (sheet 13 "Antes y después"), `recess`, `editor` (sheet 7) |
 | 4to | `rule_game`, `editor` (sheet 15, the workshop with few lines), `recess`, `game_maker` (T7's probe "Hacé tu juego"; see below) |
-| 5to | `rule_game`, `editor` (sheet 15), `recess`, `text_probe` (T8's probe "Del bloque al texto"; see below) |
+| 5to | `rule_game`, `editor` (sheet 15), `recess`, `text_probe` (the probe "Del bloque al texto", T8, rebuilt in T16; see below) |
 
 `rule_game` plays `3ro-1`, `3ro-2` (a page already solved is skipped) and
 then `pp-reglas`: the child's own game (every key, move and the point, no
@@ -820,106 +820,121 @@ The probe ended: `{ probe: 'game_maker', reason: 'done' | 'left', time_ms: numbe
 ### The text probe, "Del bloque al texto" (5to)
 
 A probe of free play (`src/playtest/TextProbe.tsx`; the text language
-`src/game/textCode.ts`; the items `src/playtest/textProbe.ts`), about 8–10
-minutes. **RQ 8** (and 3, 5): can 5to read and edit the text version of a
-block program? Its card is on 5to's menu; the adult's corner menu opens it
-for any grade during free play (`choice.by: 'adult'`). Its events carry
-`probe: 'text'` (`probe_phase`, `probe_end`) or `item`; its `help`, `speak`
-and `ghost_demo` carry `level_id: 'text_probe'` and `item` (`'tour'` in the
-tour). It logs no `level_start`/`level_end`: free play counts the whole
-visit in `activity_end` (one `levelEnded` at the end: win when the seven
-core items were all tried). For free play's time the probe is one page.
+`src/game/textCode.ts`; the steps `src/playtest/textProbe.ts`), about 8–10
+minutes. **RQ 8** (and 3, 5): how well does a child of 5to, who knows blocks
+(MakeCode Arcade, micro:bit) but has never written code, understand the
+text version of a block program? Rebuilt from zero in T16 (2026-10-02)
+after el docente's feedback ("muy difícil"; they never wrote code): one
+idea at a time, always from the blocks they know to the text, never a
+surprise. Its card is on 5to's menu; the adult's corner menu opens it for
+any grade during free play (`choice.by: 'adult'`). Its events carry
+`probe: 'text'` (`probe_phase`, `probe_end`) or `item`/`step`; its `help`,
+`speak` and `ghost_demo` carry `level_id: 'text_probe'` and `phase` (the
+step, or `<step>_teach` on a teaching screen). It logs no
+`level_start`/`level_end`: free play counts the whole visit in
+`activity_end` (one `levelEnded` at the end: win when the five core steps
+were all done, alone or with help). For free play's time the probe is one
+page.
 
 The text (Python-like; Spanish names inside Python's English keywords, as
 the children will meet them in Python): `derecha()`, `izquierda()`,
 `arriba()`, `abajo()` (one step, Camino's absolute arrows: there is no
 `avanzar()`, Camino has no heading), `saltar()` (a jump to the right, the
 "saltar" block), `for i in range(n):` ("repetir n", any loop name, n
-0–20), `while not llegue():` ("repetir hasta llegar"), `if hay_piedra():`
-(looks right) and `else:` (text only: the blocks have no "si no"). One
-statement per line, 4 spaces per level (a tab is 4); a loop holds calls and
-ifs, an if holds calls. `if hay_piedra():` holding only `saltar()` is the
-"si hay piedra [saltar]" block. Error kinds (`text_run.error_kind`), each
-said to the child in one short sentence with its line ("Me parece que falta
-un paréntesis en la línea 2"): `empty`, `too_long` (over 500 characters or
+0–20) and `if hay_piedra():` (looks right). Since T16 there is no `while`
+and no `else`: those words are unknown names now. One statement per line,
+4 spaces per level (a tab is 4); a loop holds calls and ifs, an if holds
+calls. `if hay_piedra():` holding only `saltar()` is the "si hay piedra
+[saltar]" block. Error kinds (`text_run.error_kind`), each said to the
+child in one short sentence with its line ("Me parece que falta un
+paréntesis en la línea 2"): `empty`, `too_long` (over 500 characters or
 30 lines), `bad_char`, `unknown_name` (with the likely word: "¿Será
 «derecha»?"), `uppercase`, `missing_paren`, `extra_args`, `missing_colon`,
 `bad_number`, `big_number`, `same_line` (a body on the header's line),
 `extra`, `bad_line`, `missing_indent`, `unexpected_indent`, `bad_indent`,
-`empty_block`, `else_without_if`, `nesting` (a loop in a loop, an if in an
-if).
+`empty_block`, `nesting` (a loop in a loop, an if in an if). Round-1 data
+may also hold `else_without_if`.
 
-The screens: a tour first (the same program as blocks | as text | the
-board: a line and its block light together under the finger, and while it
-runs, step by step), then the items, free order (the stamps in the bar),
-then "¿Te gustó escribir el programa?" (three faces). The editor is a real
-textarea (big monospace, syntax colours, no spellcheck/autocorrect/
-autocapitalize; Tab and Enter indent like a Python editor); its keys never
-reach another listener (the dev-mode keys ignore text fields anyway).
+The screens: six steps; the step path (six stones) is in the bar, every
+line is said and captioned. A step first shows a block program beside its
+text and the board (the **teaching screen**: the child presses Probar, the
+line running and its block light together; a line and its block also
+light under the finger; short notes in blue pen say what a line means,
+e.g. "← repetí 3 veces"); then one very small **task** with that idea.
+The editor is a real textarea (big monospace, syntax colours, no
+spellcheck/autocorrect/autocapitalize; Tab and Enter indent like a Python
+editor); its keys never reach another listener. A marked word (the word
+and number tasks) starts selected, and a tap inside it selects it again,
+so typing replaces it. Then "¿Te gustó escribir el programa?" (three
+faces).
 
-| # | Item | Kind | What the child does | Right answer / goal |
+| # | Step (`phase`) | Teaching screen (blocks ↔ text) | Task (`text_item.item`, `kind`) | Done when |
 |---|---|---|---|---|
-| 1 | `predict_loop` | `predict` | reads `derecha()` / `for i in range(3):` `arriba()` / `derecha()` (no blocks), picks one of three drawn boards, watches it run | `end_2_0` (2nd of `end_1_0`, `end_2_0`, `end_2_2`) |
-| 2 | `predict_if` | `predict` | reads `for i in range(4):` `if hay_piedra():` `saltar()` / `derecha()` on a row with two rocks | `end_8` (1st of `end_8`, `bump_1`, `end_4`) |
-| 3 | `number` | `number` | edits `range(2)` (the caret starts after the 2) so the character climbs to the seed; blocks shown and following the text | `range(4)` (any text that reaches the seed counts) |
-| 4 | `typo_name` | `typo` | runs, reads the error on line 3 (`drecha()`), fixes it; no blocks | `derecha()` |
-| 5 | `typo_colon` | `typo` | the same with `for i in range(2)` missing its `:` | the `:` |
-| 6 | `blocks_loop` | `blocks_to_text` | blocks → , repetir 3 {↑ →}: which of three texts is it | `same` (3rd of `outside`, `count2`, `same`) |
-| 7 | `blocks_until` | `blocks_to_text` | blocks repetir hasta llegar {si hay piedra [saltar], →} | `same` (2nd of `inside_if`, `same`, `for3`) |
-| 8 | `write_if` | `write` | the stretch ("si querés"): writes `saltar()` on the empty line inside `if hay_piedra():` | reaches the seed |
+| 1 | `move` | → ↔ `derecha()` (3×1 board) | `move_pick`, `pick`: a ↑ block and two lines, `abajo()` and `arriba()`: which is it? A wrong tap dims that line and shows its own arrow ("Esa es abajo… Probá con la otra") | `arriba()` tapped |
+| 2 | `seq` | → → ↑ ↔ three lines; they light top to bottom | `seq_word`, `word`: `derecha()` ×3, the last word marked and selected, the hint "Cambiá derecha por [a][r][r][i][b][a]" (drawn keys); blocks follow the text | the run reaches the seed |
+| 3 | `repeat` | repetir 3 {→} ↔ `for i in range(3):` + an indented `derecha()` ("repetí 3 veces", "lo corrido se repite") | `repeat_number`, `number`: `range(2)`, the 2 marked and selected; the note follows the number ("repetí 4 veces"); blocks follow | the run reaches the seed (`range(4)`) |
+| 4 | `typo` | none (the task says why: "La compu solo entiende las palabras justas") | `typo_fix`, `typo`: `arriba()` / `drecha()` / `derecha()`; ▶ shows "En la línea 2 dice «drecha» y esa palabra no la conozco. ¿Será «derecha»?"; the blocks of the right program shown dimmed | the run reaches the seed |
+| 5 | `if` | →, si hay piedra [saltar], → ↔ `derecha()` / `if hay_piedra():` / `    saltar()` / `derecha()` (a rock on the way: it jumps it) | `if_predict`, `predict`: the same program without the rock (no blocks: reading the text); three drawn answers under the text, picked once, then the run; never marked right or wrong, the line after the run explains ("Solo salta si hay piedra") | a pick (`end_2`, the 2nd drawing, is right) |
+| 6 | `write` (optional, "si querés") | none | `write_line`, `write`: `derecha()` ×2 and an empty line: write a line so it goes up; a word bank shows the four moves as block and text | the run reaches the seed |
 
-The next-page button shows once an item is finished (picked, or run to the
-seed), or anyway after 2 minutes on a number/typo item and 30 s on the
-stretch item (never before a pick on a choice); it goes to the next item not
-finished, and to the liking question when none is left (or after 12 minutes
-in the items). ✋: 1 the instruction again (the editor or the answers
-wiggle); 2 the ghost hand points at the line that matters (the number, the
-slip, the empty line, the loop or the if; on a blocks item the line where
-the three texts differ); 3 the fix written by the ghost hand as an edit (a
-`text_edit` {item, ghost: true, line} event; the item then counts as not
-the child's), on a predict item the ghost follows the first steps from the
-line to the board, on a blocks item it points at the answer. A fourth press
-or a held ✋ raises the hand.
+✋ in three steps per screen (teaching and task screens count apart): 1 the
+line again (Probar, the answers or the marked word wiggle); 2 the ghost
+hand points at the line that matters (and its block, the hint or the
+board); 3 the ghost does it: runs the teaching screen, picks the answer,
+writes the fix as a ghost edit (`text_edit` {item, step, ghost: true,
+line}), follows the program onto the board on the predict. A fourth press
+or a held ✋ raises the hand. A task not done after 90 s gets "seguir" in
+the bar (`?caps=fast`: 6 s); a teaching screen's next arrow shows after
+its run or after 30 s; the stretch's after 30 s. A screen done turns by
+itself after 12 s (or the arrow).
 
 #### `text_item`
-An item answered (a choice item: once, the pick is final), solved, or (an
-edit item) left having done something (a run, an edit, a help) without
-solving it. An edit item left and solved later has both rows.
+One per task, when it ends (answered, solved or skipped).
 ```
 {
-  item: string, kind: 'predict' | 'number' | 'typo' | 'blocks_to_text' | 'write',
-  reason: 'answered' | 'solved' | 'left',
-  correct: boolean,          // the right pick; a text that reaches the seed, written by the child (not by ✋ 3)
-  answer?: string, position?: number,   // choice items: the option picked and its place (0–2)
-  text?: string,             // edit items: the program as the child left it (only the subset's characters, ≤ 500)
-  attempts: number,          // runs (edit items) or 1 (a pick)
-  errors: string[],          // the parse error kinds of this visit's runs, in order
-  time_ms: number, help_levels: number,  // ✋ presses on the item (0–3)
-  ghost_fixed?: boolean,     // ✋ 3 wrote the fix
+  item: 'move_pick' | 'seq_word' | 'repeat_number' | 'typo_fix' | 'if_predict' | 'write_line',
+  kind: 'pick' | 'word' | 'number' | 'typo' | 'predict' | 'write',
+  step: 'move' | 'seq' | 'repeat' | 'typo' | 'if' | 'write',
+  reason: 'answered' | 'solved' | 'skipped',
+  correct: boolean,          // ended right by the child (not by ✋ 3)
+  first_try: boolean,        // right at the first attempt: the first tap, the first run
+  attempts: number,          // taps (pick), runs (edit tasks), 0/1 (predict)
+  errors: string[],          // the parse error kinds of the task's runs, in order
+  time_ms: number, help_levels: number,  // ✋ presses on the task screen (0–3)
+  ghost: boolean,            // ✋ 3 did it
+  answer?: string, position?: number,   // pick: the FIRST line tapped; predict: the drawing picked
+  text?: string,             // edit tasks: the program as the child left it (only the subset's characters, ≤ 500)
   adult_helped: boolean
 }
 ```
 `text` is code, not free text: capitals are lowered and anything outside
 a–z, digits, `_`, `(`, `)`, `:`, spaces and newlines is dropped before it is
-logged.
+logged. Round-1 (T8) rows have no `step` and `reason` may be `left`.
 
 #### `text_run`
-One press of ▶ on a text (the tour's too, `item: 'tour'`).
+One press of ▶ on a text: a task's (`item` = the task id) or a teaching
+screen's (`item: '<step>_teach'`).
 ```
-{ item: string, ok: boolean, result: 'win' | 'bump' | 'short' | null, error_kind: string | null, line: number | null, attempt?: number }
+{ item: string, step: string, ok: boolean, result: 'win' | 'bump' | 'short' | null, error_kind: string | null, line: number | null, attempt: number }
 ```
 `ok: false`: the text did not parse (nothing ran; `error_kind` and its
-`line`). A predict item's run after the pick is not a `text_run`.
+`line`). The predict's run after the pick is not a `text_run`. Round-1
+rows have `item: 'tour'` and T8's item ids.
 
 #### `probe_phase` (text)
-`{ probe: 'text', phase: 'intro', completed: boolean, time_ms, runs, links, help_levels }`
-(the tour: `completed` = ran at least once; `links` = taps that lit a line
-with its block) and `{ probe: 'text', phase: 'items', completed: boolean,
-time_ms, runs, picks, items_tried, items_correct, help_levels }`
-(`completed`: the seven core items all tried).
+One per step, when it ends:
+`{ probe: 'text', phase: <step>, completed: boolean, skipped: boolean, time_ms, help_levels, ghost, teach_runs, links, task }`
+(`completed`: the task done, alone or with help; `skipped`: "seguir";
+`help_levels`: the highest ✋ step on either screen; `ghost`: ✋ 3 did
+something; `teach_runs`: runs on the teaching screen; `links`: taps that
+lit a line with its block). **Done alone** = completed with
+`help_levels` 0 and no ghost; **with help** = completed otherwise;
+**skipped** = skipped. Round 1 logged `phase: 'intro' | 'items'`.
 
 #### `probe_end` (text)
-`{ probe: 'text', reason: 'done' | 'left', time_ms, items_tried, items_correct, runs? }`.
+`{ probe: 'text', reason: 'done' | 'left', time_ms, steps_completed, steps_alone, runs }`
+(`steps_*` count the stretch too; `runs` = every ▶). Round 1 logged
+`items_tried`, `items_correct`.
 
 ### `survey_answer`
 One spoken survey question answered with drawn faces/pictures. **RQ 9.**
@@ -1122,7 +1137,7 @@ for a session therefore mean a 400-dropped batch, never a network failure.
 
 ## SQL views
 
-Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`, `004_game_maker.sql`, `005_text_probe.sql`, `007_typing_rounds.sql`, `009_game_maker_steps.sql`), always available for ad hoc
+Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`, `004_game_maker.sql`, `005_text_probe.sql`, `007_typing_rounds.sql`, `009_game_maker_steps.sql`, `010_text_probe_steps.sql`), always available for ad hoc
 analysis (`psql`, or any tool that can read Postgres directly).
 
 Since T14 (`008_class_control.sql`) every view reads only real sessions:
@@ -1186,19 +1201,23 @@ too; the tables themselves still hold the demo rows until they are deleted.
   `added_the_bird`, `won_a_game`, `liked_yes`, `liked_mid`, `liked_no`.
 
 - **`v_probe_text`** — one row per session that opened "Del bloque al
-  texto": the tour (`tour_done`, `tour_runs`, `tour_links`); the items, one
-  per item however many visits (`items_tried`, `items_correct` = the
-  child's own, `items_solo` = correct with no ✋ and no adult,
-  `items_ghost_fixed`), and tried/correct by kind (`predict_*`,
-  `number_*`, `typo_*`, `blocks_*`, `write_*`); the runs (`runs`,
-  `runs_parsed`, `runs_won`, the tour's left out), `parse_errors` and
-  `error_kinds` (the tour's included); `answers` ("item:answer,…" of the
-  choice items); `liked`; `end_reason`, `probe_seconds`.
-  `server/migrations/005_text_probe.sql`. Feeds RQ 8.
-- **`v_probe_text_by_grade`** — RQ 8 per grade: `sessions`, `tour_done`,
-  `median_items_correct`, `items_tried`, `items_correct`, `items_solo`,
-  correct / tried per kind summed, `parse_errors`, `liked_yes`,
-  `liked_mid`, `liked_no`.
+  texto" (T16's steps; redefined in `server/migrations/010_text_probe_steps.sql`,
+  on `real_events`/`real_sessions`): `steps_reached` (core steps 1–5),
+  `steps_alone`, `steps_with_help`, `steps_skipped`; per step
+  `<step>_result` (`alone` | `help` | `skipped` | null = not reached) and
+  `<step>_seconds` for `move`, `seq`, `repeat`, `typo`, `if`, `write`;
+  `<step>_first_try` for the five core tasks; `move_answer` (the first line
+  tapped), `if_answer` (the drawing picked), `write_text` (the stretch's
+  program); `tasks_correct`, `tasks_first_try`; `teach_runs`, `links`; the
+  tasks' runs (`runs`, `runs_parsed`, `runs_won`, `parse_errors`,
+  `error_kinds`; teaching runs left out); `liked`; `end_reason`,
+  `probe_seconds`. Round-1 sessions get a row with empty step columns.
+  Feeds RQ 8.
+- **`v_probe_text_by_grade`** — RQ 8 per grade: `sessions`; for each core
+  idea `<step>_alone`, `<step>_help`, `<step>_skipped`, `<step>_first_try`,
+  `<step>_median_s`; `write_reached`, `write_alone`, `write_help`;
+  `median_steps_alone`, `parse_errors`, `liked_yes`, `liked_mid`,
+  `liked_no`.
 
 ## Retention and deletion
 

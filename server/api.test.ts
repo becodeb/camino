@@ -324,7 +324,7 @@ dbDescribe('API against Postgres', () => {
     expect(Number(g.median_free_rules_added)).toBe(1);
   });
 
-  it('v_probe_text sums up the text probe per session (an item left and solved later counts once); the by-grade view counts it for RQ 8', async () => {
+  it('v_probe_text reports each idea of the text probe (T16) done alone, with help or skipped, and right at the first try; the by-grade view counts them', async () => {
     const app = createApp(pool, { distDir });
     const post = (session: Record<string, unknown>, events: unknown[]) => app.request('/api/sync', {
       method: 'POST',
@@ -332,61 +332,79 @@ dbDescribe('API against Postgres', () => {
       body: JSON.stringify({ session, events }),
     });
     const ev = (seq: number, type: string, payload: Record<string, unknown>) => event(seq, { type, payload });
-    const item = (seq: number, id: string, kind: string, reason: string, correct: boolean, extra: Record<string, unknown> = {}) =>
-      ev(seq, 'text_item', { item: id, kind, reason, correct, attempts: 1, errors: [], time_ms: 30_000, help_levels: 0, adult_helped: false, ...extra });
-    const run = (seq: number, id: string, ok: boolean, result: string | null, error_kind: string | null = null, line: number | null = null) =>
-      ev(seq, 'text_run', { item: id, ok, result, error_kind, line, attempt: 1 });
-    // 5to: one child through every item, one who leaves in the tour; a 3ro opened by the adult
+    const phase = (seq: number, step: string, completed: boolean, seconds: number, extra: Record<string, unknown> = {}) =>
+      ev(seq, 'probe_phase', { probe: 'text', phase: step, completed, skipped: !completed, time_ms: seconds * 1000, help_levels: 0, ghost: false, teach_runs: 1, links: 0, ...extra });
+    const task = (seq: number, item: string, kind: string, step: string, reason: string, correct: boolean, firstTry: boolean, extra: Record<string, unknown> = {}) =>
+      ev(seq, 'text_item', { item, kind, step, reason, correct, first_try: firstTry, attempts: 1, errors: [], time_ms: 20_000, help_levels: 0, ghost: false, adult_helped: false, ...extra });
+    const run = (seq: number, item: string, ok: boolean, result: string | null, error_kind: string | null = null) =>
+      ev(seq, 'text_run', { item, step: item.split('_')[0], ok, result, error_kind, line: error_kind ? 2 : null, attempt: 1 });
+    // 5to: every step (seq with help, repeat with the ghost, if skipped), the stretch written
     const a = newSession({ grade: 5 });
     expect((await post(a, [
       ev(0, 'choice', { activity: 'text_probe', visit: 1 }),
-      run(1, 'tour', true, 'win'),
-      ev(2, 'probe_phase', { probe: 'text', phase: 'intro', completed: true, time_ms: 40_000, runs: 1, links: 3, help_levels: 0 }),
-      item(3, 'predict_loop', 'predict', 'answered', true, { answer: 'end_2_0', position: 1 }),
-      item(4, 'predict_if', 'predict', 'answered', false, { answer: 'bump_1', position: 1 }),
-      run(5, 'number', true, 'short'),
-      // left without solving, then back: solved (counts once, as solved, not solo: it had help)
-      item(6, 'number', 'number', 'left', false, { text: 'derecha()', attempts: 1 }),
-      run(7, 'number', true, 'win'),
-      item(8, 'number', 'number', 'solved', true, { text: 'derecha()\nfor i in range(4):\n    arriba()\nderecha()', help_levels: 1 }),
-      run(9, 'typo_name', false, null, 'unknown_name', 3),
-      run(10, 'typo_name', true, 'win'),
-      item(11, 'typo_name', 'typo', 'solved', true, { errors: ['unknown_name'], attempts: 2 }),
-      run(12, 'typo_colon', false, null, 'missing_colon', 1),
-      run(13, 'typo_colon', false, null, 'missing_colon', 1),
-      // the ghost wrote the fix: solved, not correct
-      run(14, 'typo_colon', true, 'win'),
-      item(15, 'typo_colon', 'typo', 'solved', false, { ghost_fixed: true, help_levels: 3 }),
-      item(16, 'blocks_loop', 'blocks_to_text', 'answered', true, { answer: 'same', position: 2 }),
-      item(17, 'blocks_until', 'blocks_to_text', 'answered', false, { answer: 'inside_if', position: 0 }),
-      run(18, 'write_if', false, null, 'empty_block', 2),
-      ev(19, 'probe_phase', { probe: 'text', phase: 'items', completed: true, time_ms: 400_000, runs: 7, picks: 4, items_tried: 7, items_correct: 5, help_levels: 3 }),
-      ev(20, 'survey_answer', { question: 'text_probe_liked', answer: 'mid' }),
-      ev(21, 'probe_end', { probe: 'text', reason: 'done', time_ms: 480_000 }),
+      run(1, 'move_teach', true, 'win'),
+      task(2, 'move_pick', 'pick', 'move', 'answered', true, false, { answer: 'abajo', attempts: 2 }),
+      phase(3, 'move', true, 40, { links: 2 }),
+      run(4, 'seq_teach', true, 'win'),
+      run(5, 'seq_word', true, 'short'),
+      run(6, 'seq_word', true, 'win'),
+      task(7, 'seq_word', 'word', 'seq', 'solved', true, false, { attempts: 2, help_levels: 1, text: 'derecha()\nderecha()\narriba()' }),
+      phase(8, 'seq', true, 70, { help_levels: 1 }),
+      run(9, 'repeat_teach', true, 'win'),
+      run(10, 'repeat_number', true, 'win'),
+      task(11, 'repeat_number', 'number', 'repeat', 'solved', false, false, { help_levels: 3, ghost: true }),
+      phase(12, 'repeat', true, 90, { help_levels: 3, ghost: true }),
+      run(13, 'typo_fix', false, null, 'unknown_name'),
+      run(14, 'typo_fix', true, 'win'),
+      task(15, 'typo_fix', 'typo', 'typo', 'solved', true, false, { attempts: 2, errors: ['unknown_name'] }),
+      phase(16, 'typo', true, 50, { teach_runs: 0 }),
+      run(17, 'if_teach', true, 'win'),
+      task(18, 'if_predict', 'predict', 'if', 'skipped', false, false, { attempts: 0 }),
+      phase(19, 'if', false, 95),
+      run(20, 'write_line', true, 'win'),
+      task(21, 'write_line', 'write', 'write', 'solved', true, true, { text: 'derecha()\nderecha()\narriba()' }),
+      phase(22, 'write', true, 30, { teach_runs: 0 }),
+      ev(23, 'survey_answer', { question: 'text_probe_liked', answer: 'yes' }),
+      ev(24, 'probe_end', { probe: 'text', reason: 'done', time_ms: 480_000 }),
     ])).status).toBe(200);
+    // 5to: two steps alone at the first try, then left
     const b = newSession({ grade: 5 });
     expect((await post(b, [
       ev(0, 'choice', { activity: 'text_probe', visit: 1 }),
-      ev(1, 'probe_end', { probe: 'text', reason: 'left', time_ms: 20_000 }),
+      task(1, 'move_pick', 'pick', 'move', 'answered', true, true, { answer: 'arriba' }),
+      phase(2, 'move', true, 20),
+      run(3, 'seq_word', true, 'win'),
+      task(4, 'seq_word', 'word', 'seq', 'solved', true, true),
+      phase(5, 'seq', true, 30),
+      ev(6, 'probe_end', { probe: 'text', reason: 'left', time_ms: 60_000 }),
+    ])).status).toBe(200);
+    // a round-1 (T8) session: a row with empty step columns
+    const c = newSession({ grade: 5 });
+    expect((await post(c, [
+      ev(0, 'probe_phase', { probe: 'text', phase: 'intro', completed: true, time_ms: 40_000, runs: 1, links: 3, help_levels: 0 }),
+      ev(1, 'text_item', { item: 'predict_loop', kind: 'predict', reason: 'answered', correct: true, attempts: 1, errors: [], time_ms: 9000, help_levels: 0, adult_helped: false }),
+      ev(2, 'text_run', { item: 'tour', ok: true, result: 'win', error_kind: null, line: null }),
     ])).status).toBe(200);
 
     const r = (await pool.query('SELECT * FROM v_probe_text WHERE session_id = $1', [a.id])).rows[0];
-    expect([r.tour_done, Number(r.tour_runs), Number(r.tour_links)]).toEqual([true, 1, 3]);
-    expect([Number(r.items_tried), Number(r.items_correct), Number(r.items_solo), Number(r.items_ghost_fixed)]).toEqual([7, 4, 3, 1]);
-    expect([Number(r.predict_tried), Number(r.predict_correct), Number(r.number_tried), Number(r.number_correct)]).toEqual([2, 1, 1, 1]);
-    expect([Number(r.typo_tried), Number(r.typo_correct), Number(r.blocks_tried), Number(r.blocks_correct), Number(r.write_tried), Number(r.write_correct)]).toEqual([2, 1, 2, 1, 0, 0]);
-    expect([Number(r.runs), Number(r.runs_parsed), Number(r.runs_won), Number(r.parse_errors)]).toEqual([8, 4, 3, 4]);
-    expect(r.error_kinds).toBe('empty_block,missing_colon,unknown_name');
-    expect(r.answers).toBe('blocks_loop:same,blocks_until:inside_if,predict_if:bump_1,predict_loop:end_2_0');
-    expect([r.liked, r.end_reason, Number(r.probe_seconds)]).toEqual(['mid', 'done', 480]);
+    expect([Number(r.steps_reached), Number(r.steps_alone), Number(r.steps_with_help), Number(r.steps_skipped)]).toEqual([5, 2, 2, 1]);
+    expect([r.move_result, r.seq_result, r.repeat_result, r.typo_result, r.if_result, r.write_result]).toEqual(['alone', 'help', 'help', 'alone', 'skipped', 'alone']);
+    expect([r.move_seconds, r.seq_seconds, r.repeat_seconds, r.typo_seconds, r.if_seconds, r.write_seconds].map(Number)).toEqual([40, 70, 90, 50, 95, 30]);
+    expect([r.move_first_try, r.seq_first_try, r.repeat_first_try, r.typo_first_try, r.if_first_try]).toEqual([false, false, false, false, false]);
+    expect([r.move_answer, r.if_answer, r.write_text]).toEqual(['abajo', null, 'derecha()\nderecha()\narriba()']);
+    expect([Number(r.tasks_correct), Number(r.tasks_first_try), Number(r.teach_runs), Number(r.links)]).toEqual([4, 1, 4, 2]);
+    expect([Number(r.runs), Number(r.runs_parsed), Number(r.runs_won), Number(r.parse_errors), r.error_kinds]).toEqual([6, 5, 4, 1, 'unknown_name']);
+    expect([r.liked, r.end_reason, Number(r.probe_seconds)]).toEqual(['yes', 'done', 480]);
 
     const left = (await pool.query('SELECT * FROM v_probe_text WHERE session_id = $1', [b.id])).rows[0];
-    expect([left.tour_done, Number(left.items_tried), Number(left.runs), left.liked, left.end_reason]).toEqual([false, 0, 0, null, 'left']);
+    expect([Number(left.steps_reached), Number(left.steps_alone), left.move_first_try, left.seq_first_try, left.repeat_result, left.end_reason]).toEqual([2, 2, true, true, null, 'left']);
+    const old = (await pool.query('SELECT * FROM v_probe_text WHERE session_id = $1', [c.id])).rows[0];
+    expect([Number(old.steps_reached), old.move_result, Number(old.tasks_correct), Number(old.runs)]).toEqual([0, null, 0, 0]);
 
     const g = (await pool.query('SELECT * FROM v_probe_text_by_grade WHERE grade = 5')).rows[0];
-    expect([Number(g.sessions), Number(g.tour_done), Number(g.items_correct), Number(g.items_tried), Number(g.parse_errors), Number(g.liked_mid)]).toEqual([2, 1, 4, 7, 4, 1]);
-    expect([Number(g.typo_correct), Number(g.typo_tried), Number(g.blocks_correct), Number(g.blocks_tried)]).toEqual([1, 2, 1, 2]);
-    expect(Number(g.median_items_correct)).toBe(2);
+    expect(Number(g.sessions)).toBe(3);
+    expect([g.move_alone, g.move_first_try, g.seq_alone, g.seq_help, g.seq_first_try, g.repeat_help, g.typo_alone, g.if_skipped, g.write_reached, g.write_alone].map(Number)).toEqual([2, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+    expect([Number(g.move_median_s), Number(g.seq_median_s), Number(g.median_steps_alone), Number(g.parse_errors), Number(g.liked_yes)]).toEqual([30, 50, 2, 1, 1]);
   });
 
   it('retrying the exact same batch is idempotent: one row per seq, all acked again', async () => {
