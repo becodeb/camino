@@ -101,7 +101,7 @@ for (const id of ids) {
   if (s.grade === 5) {
     ok(of('resume')[0]?.step === 'free_play', `5° ${s.code}: resume after the offline reload on free play`);
     ok(of('level_end').some((x) => x.sheet === 15 && x.page === 'test' && x.outcome === 'win'), `5° ${s.code}: the workshop's test page (sheet 15) won`);
-    ok(of('text_item').length >= 3, `5° ${s.code}: text items ${of('text_item').length}`);
+    ok(of('text_item').map((x) => `${x.item}:${x.first_try}`).join() === 'move_pick:true,seq_word:true' && of('probe_phase').filter((x) => x.probe === 'text').length === 2, `5° ${s.code}: text tasks ${of('text_item').map((x) => x.item).join()} and their steps`);
     const gmSteps = of('probe_phase').filter((x) => x.probe === 'game_maker').map((x) => `${x.phase}:${x.completed}`).join(',');
     ok(gmSteps === 'move:true,free:false' && of('scratch_predict').length === 0, `5° ${s.code}: game maker steps ${gmSteps}, no Scratch predictions`);
     ok(of('choice').some((x) => x.activity === 'game_maker' && x.by === 'adult'), `5° ${s.code}: the game maker opened by the adult`);
@@ -146,10 +146,10 @@ if (process.env.PSQL && ids.length) {
     ok(gm.length === 1 && gm[0].move_result === 'alone' && gm[0].free_reached && gm[0].free_edits === 1 && gm[0].rule_edits === 5 && gm[0].liked === 'mid', 'v_probe_game_maker: the 5to session\'s step 1 alone, a free edit and liking');
     const gmg = rows('select grade, sessions, move_alone, free_reached from v_probe_game_maker_by_grade where grade = 5');
     ok(gmg.length === 1 && gmg[0].sessions >= 1, `v_probe_game_maker_by_grade (5): ${JSON.stringify(gmg)}`);
-    const tx = rows(`select grade, items_tried, items_correct, predict_tried, number_correct, runs, runs_won, liked from v_probe_text where session_id = '${five[0]}'`);
+    const tx = rows(`select grade, steps_reached, move_result, seq_result, seq_first_try, runs, runs_won, liked from v_probe_text where session_id = '${five[0]}'`);
     console.log(`     v_probe_text: ${JSON.stringify(tx)}`);
-    ok(tx.length === 1 && tx[0].items_tried >= 3 && tx[0].number_correct >= 1 && tx[0].liked === 'yes', 'v_probe_text: the 5to session\'s items, the number item and the liking');
-    const txg = rows('select grade, sessions, items_tried, items_correct from v_probe_text_by_grade where grade = 5');
+    ok(tx.length === 1 && tx[0].steps_reached === 2 && tx[0].move_result === 'alone' && tx[0].seq_result === 'alone' && tx[0].seq_first_try && tx[0].liked === 'yes', 'v_probe_text: the 5to session\'s first two ideas alone, the word at the first try, and the liking');
+    const txg = rows('select grade, sessions, move_alone, seq_alone from v_probe_text_by_grade where grade = 5');
     ok(txg.length === 1 && txg[0].sessions >= 1, `v_probe_text_by_grade (5): ${JSON.stringify(txg)}`);
   }
 }

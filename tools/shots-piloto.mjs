@@ -109,10 +109,11 @@ async function toGameMaker(p, stage = 'move', who = 'mina') {
   if (stage !== 'move') { await pil(p, (s) => window.__gm.go(s), stage); await p.waitForTimeout(1200); }
 }
 /** Free play of 5to, the text probe's card; `item`: an item of the probe (the debug hook), after the tour. */
-async function toText(p, item = null, who = 'mina') {
+/** The text probe, on a step's task (or its teaching screen). */
+async function toText(p, step = null, screen = 'task', who = 'mina') {
   await toFreePlay(p, '5to', who);
   await pickCard(p, 'text_probe', 'main');
-  if (item != null) { await pil(p, (i) => window.__tx.item(i), item); await p.waitForTimeout(1400); }
+  if (step != null) { await pil(p, ([s, sc]) => window.__tx.go(s, sc), [step, screen]); await p.waitForTimeout(1400); }
 }
 /** Solves the level page on screen with its reference solution and turns it. */
 async function solveTurn(p) {
@@ -542,23 +543,21 @@ const SCENARIOS = [
   { name: 'pp-gm-liked', run: async (p) => { await toGameMaker(p, 'liked'); } },
   // T8: "Del bloque al texto" (5to)
   { name: 'pp-tx-menu-5to', run: async (p) => { await toFreePlay(p, '5to'); } },
-  { name: 'pp-tx-tour', run: async (p) => { await toText(p); } },
-  { name: 'pp-tx-tour-link', run: async (p) => { await toText(p); const b = await p.locator('.tx-code .tx-line[data-line="3"]').boundingBox(); await p.mouse.move(b.x + 40, b.y + b.height / 2); await p.waitForTimeout(400); } },
-  { name: 'pp-tx-tour-run', run: async (p) => { await toText(p); await p.click('.tx-root .btn-play'); await p.waitForTimeout(2600); } },
-  { name: 'pp-tx-predict', run: async (p) => { await toText(p, 0); } },
-  { name: 'pp-tx-predict-run', run: async (p) => { await toText(p, 0); await p.click('[data-answer="end_2_0"]'); await p.waitForTimeout(2400); } },
-  { name: 'pp-tx-predict-if', run: async (p) => { await toText(p, 1); } },
-  { name: 'pp-tx-predict-if-run', run: async (p) => { await toText(p, 1); await p.click('[data-answer="bump_1"]'); await p.waitForTimeout(3400); } },
-  { name: 'pp-tx-number', run: async (p) => { await toText(p, 2); } },
-  { name: 'pp-tx-number-edit', run: async (p) => { await toText(p, 2); await p.keyboard.press('Backspace'); await p.keyboard.type('4'); await p.waitForTimeout(500); } },
-  { name: 'pp-tx-number-run', run: async (p) => { await toText(p, 2); await p.keyboard.press('Backspace'); await p.keyboard.type('4'); await p.click('.tx-root .btn-play'); await p.waitForTimeout(2800); } },
-  { name: 'pp-tx-typo-error', run: async (p) => { await toText(p, 3); await p.click('.tx-root .btn-play'); await p.waitForTimeout(1200); } },
-  { name: 'pp-tx-typo-colon', run: async (p) => { await toText(p, 4); await p.click('.tx-root .btn-play'); await p.waitForTimeout(1200); } },
-  { name: 'pp-tx-typo-help', run: async (p) => { await toText(p, 3); for (let i = 0; i < 3; i++) { await p.click('.tx-root .level-bar .help'); await p.waitForFunction(() => !document.querySelector('.tx-root.is-demo'), null, { timeout: 30_000 }); await p.waitForTimeout(i < 2 ? 1500 : 200); } } },
-  { name: 'pp-tx-blocks', run: async (p) => { await toText(p, 5); } },
-  { name: 'pp-tx-blocks-until', run: async (p) => { await toText(p, 6); await p.click('[data-answer="same"]'); await p.waitForTimeout(700); } },
-  { name: 'pp-tx-write', run: async (p) => { await toText(p, 7); } },
-  { name: 'pp-tx-write-error', run: async (p) => { await toText(p, 7); await p.click('.tx-root .btn-play'); await p.waitForTimeout(1200); } },
+  { name: 'pp-tx-move-teach', run: async (p) => { await toText(p); } },
+  { name: 'pp-tx-move-link', run: async (p) => { await toText(p); const b = await p.locator('.tx-code .tx-line[data-line="1"]').boundingBox(); await p.mouse.move(b.x + 40, b.y + b.height / 2); await p.waitForTimeout(400); } },
+  { name: 'pp-tx-move-pick', run: async (p) => { await toText(p, 'move'); } },
+  { name: 'pp-tx-move-pick-other', run: async (p) => { await toText(p, 'move'); await p.click('[data-answer="abajo"]'); await p.waitForTimeout(600); } },
+  { name: 'pp-tx-seq-teach-run', run: async (p) => { await toText(p, 'seq', 'teach'); await p.click('.tx-root .btn-play', { force: true }); await p.waitForTimeout(1600); } },
+  { name: 'pp-tx-seq-word', run: async (p) => { await toText(p, 'seq'); } },
+  { name: 'pp-tx-seq-word-typed', run: async (p) => { await toText(p, 'seq'); await p.keyboard.type('arriba'); await p.waitForTimeout(500); } },
+  { name: 'pp-tx-repeat-teach', run: async (p) => { await toText(p, 'repeat', 'teach'); await p.waitForTimeout(1200); } },
+  { name: 'pp-tx-repeat-number', run: async (p) => { await toText(p, 'repeat'); await p.keyboard.type('4'); await p.waitForTimeout(500); } },
+  { name: 'pp-tx-typo-error', run: async (p) => { await toText(p, 'typo'); await p.click('.tx-root .btn-play', { force: true }); await p.waitForTimeout(1200); } },
+  { name: 'pp-tx-typo-help', run: async (p) => { await toText(p, 'typo'); for (let i = 0; i < 3; i++) { await p.click('.tx-root .level-bar .help'); await p.waitForFunction(() => !document.querySelector('.tx-root.is-demo'), null, { timeout: 30_000 }); await p.waitForTimeout(i < 2 ? 1500 : 200); } } },
+  { name: 'pp-tx-if-teach', run: async (p) => { await toText(p, 'if', 'teach'); await p.waitForTimeout(1200); } },
+  { name: 'pp-tx-if-predict', run: async (p) => { await toText(p, 'if'); } },
+  { name: 'pp-tx-if-predict-run', run: async (p) => { await toText(p, 'if'); await p.click('[data-answer="end_4"]'); await p.waitForTimeout(3400); } },
+  { name: 'pp-tx-write', run: async (p) => { await toText(p, 'write'); } },
   { name: 'pp-tx-liked', run: async (p) => { await toText(p); await pil(p, () => window.__tx.go('liked')); await p.waitForTimeout(900); } },
 ];
 
