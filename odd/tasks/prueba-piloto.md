@@ -76,7 +76,7 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 - [x] T14 Classroom round (user approval 2026-10-01): the ladder capped at 8 items / 8 min (parent's change from 6/6, see Progress); the typing game's "seguir" only after half of round 2; no division on setup; ✋ hold (~1.5 s) opens the adult "¿en qué lo ayudaste?" question (the child's hold-to-raise is removed; the hand still rises after the help steps); a green "terminó" flag visible from across the room once the core route is done, with endless free play afterwards and the survey done with the adult; class control from `/admin` ("quedan 5 minutos": every device finishes its item and goes to wardrobe + survey; "terminar la clase": "Actividad terminada", save, close in 10 s; commands travel in the `/api/sync` response), `/admin` behind a password (`ADMIN_PASSWORD` env var, never in git) with a list of who finished; a discreet demo mode (sessions flagged demo, excluded from export and admin, deleted after 24 h) with a clearly labelled demo bar (fast forward, skip level, solve level, go to step, end).
 - [x] T15 "Hacé tu juego" built step by step: empty stage; move with the arrows; the stone falls; the seed already falls on its own as an example; lose a life when the stone touches you, a point for the seed; choose when you win; then free. No Scratch column and no Scratch predictions.
 - [x] T16 "Del bloque al texto" from zero for 5to (never saw code): a gentle introduction of each idea before using it (a move as text, then `for`, then `if`), no `while`, never surprising them; keep measuring how well they understand.
-- [ ] T17 Verification and redeploy.
+- [x] T17 Verification and redeploy.
 
 ## Progress
 
@@ -580,6 +580,8 @@ Route per task: delegated direct (one writer at a time; each touches 2+ non-triv
 
   Open: never tried with children, voices, a touch Chromebook or its on-screen keyboard (the marked word is selected with `setSelectionRange` on focus; on a touch keyboard a tap may move the caret first — the tap-inside-the-word reselect covers it in reasoning only); step lengths are estimates (the scripted run takes ~70 s for all six); `adult_helped` on a task carries the adult's help from earlier screens of the probe; the pick page is calm but mostly empty at 1920. Engram mirror still pending.
 
+- 2026-10-02: T17 done by the parent (route: inline). Pushed `c56f77c`, redeployed `camino-prueba` (finished, `running:healthy`); live `/api/admin/login` refuses a wrong password (401) and accepts the right one (200). `check-session.mjs` 1ro/5to/3ro against production: all passed (offline stretches included); `DEMO=1` 1ro: all passed; `check-session-data.mjs`: all passed; the demo session was absent from the export. The four check sessions were deleted. The class check (`check-class.mjs`) was NOT run against production, on purpose: its commands reach every session active in the last 2 h, including the user's (verified locally in T14). Production keeps one session: the user's 4to try of 2026-10-01 23:07 UTC (`b8268a90…`), left for the user to decide.
+
 ## Next step
 
-T17 (verification and redeploy). Before deploying T14–T16: make sure `ADMIN_PASSWORD` is set on the Coolify app (done by the parent) and redeploy; the live DB gets migrations 008–010 at start.
+The user tries the classroom round; then the real pilot with children.
