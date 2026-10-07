@@ -221,7 +221,8 @@ function AdultMenu({ onClose }: { onClose: () => void }) {
   const step = api.flow.step;
   return (
     <AdultSheet title={form ? 'Comentario del adulto' : prevForm ? 'Comentario del chico anterior' : 'Menú del adulto'} onClose={onClose}>
-      <p className="pp-adult-note">{STEP_NAME[step]}</p>
+      {/* the current session's own step: meaningless above the PREVIOUS child's panel, which has its own header */}
+      {!prevForm && <p className="pp-adult-note">{STEP_NAME[step]}</p>}
       {form ? (
         <AdultFormPanel done={() => { setForm(false); setSaved(true); }} />
       ) : prevForm && prev ? (

@@ -61,13 +61,13 @@ export const Face = memo(function Face({ mood, seed = 1 }: { mood: FaceMood; see
   );
 });
 
-/** A small waving hand (the brief's "the character waving 'see you'"), drawn once and reused at any scale. */
-const WAVE_HAND = 'M7.4,13.2 L7.2,6.6 C7.2,5.3 9.1,5.2 9.2,6.5 L9.4,11.2 L9.3,4.4 C9.3,3 11.3,3 11.4,4.4 L11.6,10.8 L11.7,4.1 C11.8,2.7 13.8,2.8 13.8,4.2 L13.8,11 L14.3,5.5 C14.4,4.2 16.3,4.3 16.3,5.6 L16.1,13.4 L17.6,11.2 C18.4,10 20.2,10.9 19.5,12.3 C18.4,14.6 17.2,17.4 15.4,19.1 C14.3,20.2 12.8,20.8 11.3,20.8 C8.8,20.8 7.4,19 7.4,16.4 Z';
+const GREEN_INK = '#5c7a35';
 
 /**
- * "¿Querés volver a jugar?" without words (T23): sí is a waving hand on the
- * green disc ("see you"); no is a big red cross alone, the style guide's own
- * error mark, on the pink disc — distinct glyphs, not "sí"/"no" written out.
+ * "¿Querés volver a jugar?" without words (T23): sí is a big green tick, no
+ * a big red cross — the same two-stroke drawn mark on either disc, never a
+ * hand (✋ already means "help" elsewhere in the app, and an open palm also
+ * reads as "stop"), never "sí"/"no" written out.
  */
 export const YesNo = memo(function YesNo({ yes }: { yes: boolean }) {
   return (
@@ -76,8 +76,9 @@ export const YesNo = memo(function YesNo({ yes }: { yes: boolean }) {
         <path d={blob(0, 0, 44, 43, { wob: 0.03, n: 12, seed: yes ? 5 : 6 })} fill={yes ? '#cfdcaa' : '#f1c9c6'} stroke={INK} strokeWidth={3.4} />
       </g>
       {yes ? (
-        <g transform="translate(-41 -32) scale(3.1)" filter="url(#rough)">
-          <path d={WAVE_HAND} fill="#eeac7f" stroke={INK} strokeWidth={1.1} strokeLinejoin="round" />
+        <g stroke={GREEN_INK} strokeWidth={6.2} strokeLinecap="round">
+          <path d={wobblyLine(-22, 2, -6, 20, { bow: 1.6, seed: 13 })} fill="none" />
+          <path d={wobblyLine(-6, 20, 26, -20, { bow: 1.6, seed: 14 })} fill="none" />
         </g>
       ) : (
         <g stroke="#c24a3c" strokeWidth={6.2} strokeLinecap="round">
@@ -137,9 +138,19 @@ export function DifficultyHeaderArt() {
   );
 }
 
-const DIFFICULTY_DOOR: Record<'easy' | 'mid' | 'hard', Door> = { easy: 'easy', mid: 'medium', hard: 'hard' };
+/**
+ * Which "¿Cómo seguís?" hill draws each difficulty value: flat (`medium`,
+ * the least climb) for `easy`, the gentle hill (`easy`) for `mid`, the
+ * steep one (`hard`) for `hard` — flat → gentle → steep reads as
+ * fácil → más o menos → difícil, left to right. `PathArt`'s own door names
+ * are about the *path chosen* in "¿Cómo seguís?" (its flattest one is
+ * `medium`, "igual"), not about *this* question's effort scale, so the two
+ * naming schemes do not line up one to one; this map is the single place
+ * that translates between them (pinned by difficulty.test.ts).
+ */
+export const DIFFICULTY_DOOR: Record<'easy' | 'mid' | 'hard', Door> = { easy: 'medium', mid: 'easy', hard: 'hard' };
 
-/** A difficulty answer: the same hill art as "¿Cómo seguís?" (gentle, flat or steep), not a face. */
+/** A difficulty answer: the same hill art as "¿Cómo seguís?" (flat, gentle or steep), not a face. */
 export function DifficultyArt({ level }: { level: 'easy' | 'mid' | 'hard' }) {
   return <span className="pp-diff-art"><PathArt door={DIFFICULTY_DOOR[level]} mini /></span>;
 }
