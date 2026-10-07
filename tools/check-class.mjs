@@ -139,7 +139,18 @@ try {
   ok(sa.end_reason === 'class_end' && !!sa.ended_at, `A: the session ended (${sa.end_reason}) after the countdown; the resting page`);
   await A.p.evaluate(() => window.__piloto.flush());
   await shot(A.p, 'class-rest');
-  ok(await A.p.locator('.pp-rest-start').isVisible() && !(await A.p.locator('.pp-setup').count()), 'A: rests; a new session only with the adult\'s long press');
+  ok(await A.p.locator('.pp-rest-start').isVisible() && !(await A.p.locator('.pp-setup').count()), 'A: rests, briefly');
+
+  // T22: the adult's long press is kept as an immediate shortcut (done right away, before the
+  // device would return to the setup by itself within REST_AUTO_MS, so this does not race it)
+  const box = await A.p.locator('.pp-rest-start').boundingBox();
+  await A.p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await A.p.mouse.down(); await A.p.waitForTimeout(600); await A.p.mouse.up();
+  ok(!(await A.p.locator('.pp-setup').count()), 'A: a short press on the resting page does nothing');
+  await A.p.mouse.down(); await A.p.waitForTimeout(2300); await A.p.mouse.up();
+  await A.p.waitForSelector('.pp-setup', { timeout: 10_000 });
+  ok(true, 'A: the adult\'s 2-second press: the setup for the next class, right away (the shortcut)');
+
   await a.waitForSelector('#class-state b', { timeout: 10_000 });
   ok(/terminada/i.test(await a.locator('#class-state').innerText()), '/admin: says the class was ended');
 
@@ -152,16 +163,10 @@ try {
   const sb = await B.p.evaluate(() => window.__piloto.session());
   ok(sb.end_reason === 'class_end', `B: the session ended (${sb.end_reason})`);
   await B.p.evaluate(() => window.__piloto.flush());
-  await B.p.waitForTimeout(1500);
-
-  // the adult's long press starts a new session on A
-  const box = await A.p.locator('.pp-rest-start').boundingBox();
-  await A.p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await A.p.mouse.down(); await A.p.waitForTimeout(600); await A.p.mouse.up();
-  ok(!(await A.p.locator('.pp-setup').count()), 'A: a short press on the resting page does nothing');
-  await A.p.mouse.down(); await A.p.waitForTimeout(2300); await A.p.mouse.up();
-  await A.p.waitForSelector('.pp-setup', { timeout: 10_000 });
-  ok(true, 'A: the adult\'s 2-second press: the setup for the next class');
+  // T22: B rests too, and (left alone) returns to the start by itself — no adult hold needed on this one
+  // (B's link carries no ?grado: the grade cards, same as the setup always showed before this class)
+  await B.p.waitForSelector('.pp-setup', { timeout: 20_000 });
+  ok(true, 'B: back to the setup by itself, no adult hold');
 
   // ---------------------------------------------------------------- the rows
   if (PSQL) {
