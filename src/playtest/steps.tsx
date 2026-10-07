@@ -8,8 +8,15 @@
 // Round 2: the setup is one tap on the grade (the child can do it); there is
 // no session-code screen and no adult-form step (the adult's comment is in
 // the corner menu; the goodbye starts the next session).
+//
+// T18/T19 (the silent classroom round): before the first spoken line (the
+// setup's own question, or none at all when `?grado=` skips it) the setup
+// awaits the admin's class sound setting (ensureSoundSettingStarted, capped
+// at ~1.5 s by fetchClassSettings so a dead network never blocks), then
+// `?grado=`/`?grade=` (gradeFromUrl) starts the session right away as if
+// that grade's card were tapped, with no cards shown and no question said.
 
-import { useEffect, useState, type ComponentType, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ComponentType, type CSSProperties } from 'react';
 import { ChoicePage } from '../screens/WardrobeScreen';
 import { PlayerFace } from '../screens/player';
 import { SpeakerIcon } from '../ui/icons';
@@ -17,9 +24,12 @@ import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { captionsFor, type CaptionsSetting } from './captions';
 import { usePlaytest } from './context';
 import type { StepId } from './flow';
+import { gradeFromUrl } from './gradeParam';
 import { GRADES, GRADE_LABEL } from './labels';
 import { Goodbye, Survey } from './closing';
 import { CaptionsIcon, GradeArt } from './round2Art';
+import { fetchClassSettings } from './runtime';
+import { currentSound, ensureSoundSettingStarted } from './soundSetting';
 import { FreePlay } from './FreePlay';
 import { Ladder } from './Ladder';
 import { ToolCheck } from './ToolCheck';
@@ -55,15 +65,29 @@ const CAPTION_CHOICES: { v: CaptionsSetting; label: string }[] = [
 function Setup({ start }: StepViewProps) {
   const [cap, setCap] = useState<CaptionsSetting>('auto');
   const demo = useDemo();
-  useEffect(() => {
-    let off = () => {};
-    const t = setTimeout(() => { off = speakWhenAllowed(SETUP_SAY); }, 450);
-    return () => { clearTimeout(t); off(); };
-  }, []);
-  const go = (g: number) => {
+  // T19: `?grado=`/`?grade=` in the bookmark link: null falls back to the cards
+  const urlGrade = useMemo(() => gradeFromUrl(typeof location !== 'undefined' ? location.search : ''), []);
+  const go = useCallback((g: number) => {
     stopSpeaking();
-    start({ grade: g, division: null, captions: captionsFor(g, cap), captionsSet: cap === 'auto' ? 'grade' : 'setup', ...(demo.on ? { demo: true } : {}) });
-  };
+    const sound = currentSound();
+    start({
+      grade: g, division: null, captions: captionsFor(g, cap), captionsSet: cap === 'auto' ? 'grade' : 'setup',
+      sound: sound.on, soundSource: sound.source, ...(demo.on ? { demo: true } : {}),
+    });
+  }, [start, cap, demo.on]);
+  useEffect(() => {
+    let cancelled = false;
+    let off = () => {};
+    let t: ReturnType<typeof setTimeout> | undefined;
+    // T18: the admin's class setting (capped at ~1.5 s) is in effect before anything is said, the question included
+    ensureSoundSettingStarted(fetchClassSettings).finally(() => {
+      if (cancelled) return;
+      if (urlGrade != null) { go(urlGrade); return; }
+      t = setTimeout(() => { off = speakWhenAllowed(SETUP_SAY); }, 450);
+    });
+    return () => { cancelled = true; clearTimeout(t); off(); };
+  }, [urlGrade, go]);
+  if (urlGrade != null) return null;
   return (
     <main className={`pp-page pp-setup${demo.on ? ' is-demo' : ''}`}>
       <header className="pp-setup-q">
