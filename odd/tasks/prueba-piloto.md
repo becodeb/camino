@@ -83,7 +83,7 @@ Silent classroom round (user request 2026-10-07: next class with 1ro uses the wh
 - [x] T18 Sound switch: a master mute for speech and sfx (`speak` still feeds the on-screen text, `ringNote` silent); the device default from the bookmark (`?sonido=no|si`), a class-wide setting from `/admin` (con sonido / sin sonido / lo que diga el link) that reaches every device, including ones that open the link AFTER the teacher pressed it (a setting, not a command for older sessions) and is applied before the first spoken line; the admin setting wins while live and expires after a few hours; a per-device toggle in the adult corner menu.
 - [x] T19 Grade from the bookmark: `?grado=1..5` skips the grade cards (also after the goodbye restarts by itself), so the child opens the link and plays.
 - [x] T20 Understood without sound (1ro first): when muted, the on-screen text is always on, in capital letters for 1ro/2do; every 1ro ladder item, free-play activity and the typing game shows what to do without words (a short wordless ghost demo of the gesture at the start of each new format, never giving the answer away; e.g. predict, fix, count, three worlds); an idle nudge that makes ✋ pulse; the survey stays with the adult.
-- [ ] T21 Verification and redeploy: silent screenshot tour of the whole 1ro route reviewed for "understood with no sound and no reading"; regressions; push, redeploy, live checks; production left empty of check sessions.
+- [x] T21 Verification and redeploy: silent screenshot tour of the whole 1ro route reviewed for "understood with no sound and no reading"; regressions; push, redeploy, live checks; production left empty of check sessions.
 
 ## Progress
 
@@ -660,6 +660,8 @@ Silent classroom round (user request 2026-10-07: next class with 1ro uses the wh
   Redeploy NOT done: the parent's Coolify deploy call was refused by the session's permission classifier (production deploy); left for the user. Live checks pending until then.
   Open: 2do's music recess is still shown while muted; nothing tried with children, a touch Chromebook or the classroom network.
 
+- 2026-10-07: redeploy done after the user's explicit request ("hacé el redeploy en coolify"): Coolify deployment `xyojivbbydtnlube1vbgryzr` finished, `running:healthy`; live `/api/health` 200, live `/api/class-settings` → `{"sound":"link","expires_at":null}`, the served `assets/index-ClHeiZy_.js` has the same name as the local `VITE_PLAYTEST=1` build. No scripted session checks against production (they would create sessions and `check-sound` would change the class sound setting); the user tries it by hand.
+
 ## Next step
 
-The user redeploys `camino-prueba` (or authorizes it), then live checks (sound setting from `/admin`, `?grado=1&sonido=no`) and production emptied of check sessions; then the 1ro class.
+The user tries `/?grado=1&sonido=no` and the Sonido card in `/admin` live; then the 1ro class.
