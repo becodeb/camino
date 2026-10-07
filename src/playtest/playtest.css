@@ -23,6 +23,9 @@
 .pp-adult-title { margin: 0; font: 700 22px/1.2 var(--body); color: var(--ink); text-align: center; }
 .pp-adult-title small { display: block; font-weight: 400; font-size: 16px; color: var(--ink-2); }
 .pp-adult-note { margin: 0; font: 400 18px/1.35 var(--body); color: var(--ink-2); text-align: center; }
+/* T22: "Comentario del chico anterior" — which child, never a name */
+.pp-prev-who { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.pp-prev-who .bar-face { width: 44px; height: 50px; margin: 0; }
 
 /* ------------------------------------------------ setup: "¿En qué grado estás?", five big cards, the adult's small options */
 .pp-setup { place-items: center; align-content: center; gap: clamp(14px, 4dvh, 40px); }
@@ -218,13 +221,22 @@
 .pp-survey-dots li { width: 18px; height: 18px; border: 2.4px solid var(--ink); border-radius: 50% 45% 52% 48%; background: var(--sheet); }
 .pp-survey-dots li.is-done { background: #a4b86d; }
 .pp-survey-dots li.is-here { background: var(--yellow); }
-.pp-options { width: auto; max-width: 100%; grid-auto-flow: column; gap: 34px; padding: 34px 44px 38px; }
-/* "¿Qué te gustó más?" offers every activity done (up to ten): two rows, never a row wider than the screen */
+/* T23: the card's own layout (padding, tape) — the question's header picture above, the answers' own grid below;
+   separate elements so a header never disturbs the grid that sizes the option buttons */
+.pp-question { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 34px 44px 38px; }
+.pp-options { display: grid; justify-items: center; width: auto; max-width: 100%; grid-auto-flow: column; gap: 34px; }
+/* a single row of 4 full-size cards already overflows a 760px card: 2x2 instead */
+.pp-options.n4 { grid-auto-flow: row; grid-template-columns: repeat(2, auto); }
+/* "¿Qué te gustó más?" offers every activity done (up to ten): two rows, never a row wider than the screen.
+   Four 200px cards in a row (plus three 34px gaps) need ~902px: the card itself (normally capped at 760px,
+   min(760px, 100%)) grows to fit when it holds one of these wider grids, so nothing escapes its own paper */
 .pp-options.n5, .pp-options.n6, .pp-options.n7, .pp-options.n8 { grid-auto-flow: row; grid-template-columns: repeat(4, auto); }
 .pp-options.n9, .pp-options.n10 { grid-auto-flow: row; grid-template-columns: repeat(5, auto); gap: 26px; }
 .pp-options.n9 .pp-option, .pp-options.n10 .pp-option { width: 180px; height: 180px; }
 .pp-options.n9 .pp-activity-art, .pp-options.n10 .pp-activity-art { width: 130px; height: 130px; }
 .pp-options.n9 .pp-activity-art > svg, .pp-options.n10 .pp-activity-art > svg { width: 122px; height: 122px; }
+.pp-question:has(.pp-options.n5), .pp-question:has(.pp-options.n6), .pp-question:has(.pp-options.n7), .pp-question:has(.pp-options.n8) { width: min(1040px, 100%); }
+.pp-question:has(.pp-options.n9), .pp-question:has(.pp-options.n10) { width: min(1160px, 100%); }
 .pp-option {
   --r-cut: 18px 14px 20px 13px / 14px 19px 13px 18px;
   width: 200px; height: 200px;
@@ -240,6 +252,15 @@
 .pp-option .pen-ring { position: absolute; inset: -12px; width: calc(100% + 24px); height: calc(100% + 24px); overflow: visible; pointer-events: none; }
 .pp-option.is-picked { --fill: #e9efd8; }
 .pp-option.is-other { opacity: 0.35; }
+
+/* "¿Te gustó?" and "¿Fue fácil o difícil?": a small header picture above the options (T23: readable with no sound) */
+.pp-q-header { display: flex; align-items: center; justify-content: center; }
+.pp-q-header-art { display: flex; align-items: center; gap: 10px; }
+.pp-q-header-art .bar-face { width: 72px; height: 82px; margin: 0; }
+.pp-heart-icon, .pp-effort-icon { width: 58px; height: 46px; overflow: visible; }
+/* the difficulty options: the "¿Cómo seguís?" hills, not a face */
+.pp-diff-art { display: grid; place-items: center; width: 150px; height: 150px; overflow: visible; }
+.pp-diff-art > svg { width: 100%; height: auto; }
 
 /* ------------------------------------------------ goodbye: "jugar otra vez" */
 .pp-again {

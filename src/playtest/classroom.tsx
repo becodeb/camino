@@ -9,8 +9,10 @@
 //   a few seconds below the bar.
 // - ClassEnd (a flow step): "Actividad terminada", the character waving and
 //   a 10-second countdown drawn as a clock face emptying; then the session
-//   ends, the queue is sent, and a resting page waits for an adult (a long
-//   press) to start a new session.
+//   ends, the queue is sent, and a resting page is shown briefly before the
+//   device starts the next session by itself (T22: back-to-back classes on
+//   the same computers); an adult's long press is kept as an immediate
+//   shortcut.
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -34,6 +36,8 @@ const GREEN_DARK = '#6f8f3a';
 export const FLAG_HOLD_MS = 1500;
 export const CLASS_END_SECONDS = 10;
 export const REST_HOLD_MS = 2000;
+/** T22: the resting page shows itself briefly, then the device starts the next session by itself (no adult needed). */
+export const REST_AUTO_MS = 5000;
 
 const LINES = {
   flag: '¡Terminaste el camino! Seguí jugando a lo que quieras.',
@@ -205,13 +209,18 @@ function RestArt() {
 /**
  * The class is over (el docente's "terminar la clase"): "Actividad terminada"
  * with the character waving and a 10-second countdown; at zero the session
- * ends (`end_reason: 'class_end'`) and the queue is sent; then a resting page
- * until an adult holds the button to start a new session.
+ * ends (`end_reason: 'class_end'`) and the queue is sent; then a brief
+ * resting page, and the device starts the next session by itself (T22: back
+ * to back classes on the same computers never need an adult to unblock the
+ * next child) — the adult's long press still works, as an immediate
+ * shortcut.
  */
 export function ClassEnd({ newSession }: StepViewProps) {
   const api = usePlaytest();
   const apiRef = useRef(api);
   apiRef.current = api;
+  const newSessionRef = useRef(newSession);
+  newSessionRef.current = newSession;
   const [left, setLeft] = useState(CLASS_END_SECONDS);
   const [rest, setRest] = useState(false);
   const [hold, setHold] = useState<number | null>(null);
@@ -229,6 +238,12 @@ export function ClassEnd({ newSession }: StepViewProps) {
     }, 250);
     return () => { off(); window.clearInterval(id); };
   }, []);
+  // the device is ready for the next child by itself, shortly after resting; the adult's hold (below) is a shortcut
+  useEffect(() => {
+    if (!rest) return;
+    const t = realTimeout(() => { stopSpeaking(); newSessionRef.current(); }, REST_AUTO_MS);
+    return () => window.clearTimeout(t);
+  }, [rest]);
   useHold(REST_HOLD_MS, (e) => rest && !!(e.target as Element | null)?.closest?.('.pp-rest-start'), () => { stopSpeaking(); newSession(); }, setHold);
   return (
     <main className={`pp-page pp-end${rest ? ' is-rest' : ''}`} data-class-end={rest ? 'rest' : 'countdown'}>

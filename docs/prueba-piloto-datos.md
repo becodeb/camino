@@ -30,7 +30,7 @@ One row per playtest session (one child, one sitting).
 | `consent` | boolean, nullable | Round 1: `true`, the adult ticked "La escuela autorizó esta prueba" at setup. Since round 2 the setup asks no tick (the school's authorization is kept outside the app, and nothing here names a child): new sessions write `NULL` (migration `006_consent_nullable.sql`). | — |
 | `started_at` | timestamptz | When the session began. | 5 (duration, idle) |
 | `ended_at` | timestamptz, nullable | When the session ended (set on goodbye or an adult end-session gesture). | 5 |
-| `end_reason` | text, nullable | `'completed'` (the child reached the goodbye; since T14 also the adult's "end the session" once the core route was done, the green flag), `'adult_ended'` (the adult's hidden "end the session" before the route was done; the survey still follows), `'class_end'` (T14: el docente's "terminar la clase" from `/admin`, at the end of the 10-second countdown), `'demo_ended'` (a demo session ended from the demo bar; demo sessions are never exported), `'abandoned'` (set by the client when a new session starts on the device while this one never ended, e.g. the adult set up a new child without ending the last one, or a tab reloaded more than 2 hours after its last save; `ended_at` is then its last event's time). A reload within a session no longer abandons it: the session carries on (see `resume`). | 5 |
+| `end_reason` | text, nullable | `'completed'` (the child reached the goodbye; since T14 also the adult's "end the session" once the core route was done, the green flag), `'adult_ended'` (the adult's hidden "end the session" before the route was done; the survey still follows), `'class_end'` (T14: el docente's "terminar la clase" from `/admin`, at the end of the 10-second countdown), `'demo_ended'` (a demo session ended from the demo bar; demo sessions are never exported), `'abandoned'` (set by the client when a new session starts on the device while this one never ended, e.g. the adult set up a new child without ending the last one, or a tab reloaded more than 2 hours after its last save; `ended_at` is then its last event's time; T22: also what any ending — including `class_end` — becomes when nobody ever did anything in the session, still on the character screen: no `choice` with `activity: 'character'` and no `level_start`, read from the client's own flow state, not from events after the fact). A reload within a session no longer abandons it: the session carries on (see `resume`). | 5 |
 | `app_version` | text, nullable | Front-end build version at the time of the session. | — |
 | `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang, captions?, captions_set?, sound?, sound_source?}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language; since round 2 `captions` (on-screen text on now: set at the start and updated by every 💬 toggle, see `captions`) and `captions_set` (`'grade'`: the default, on from 3ro; `'setup'`: forced on or off at setup); since T18 `sound` (the effective sound setting now) and `sound_source` (`'admin'`\|`'url'`\|`'adult'`\|`'default'`: which layer decided it, see the `sound` event and the table `class_settings`). | 1 (device capability vs. tool failures), 3 (captions, sound) |
 | `survey` | jsonb, nullable | See "survey_answer" below; the final answers, keyed by question. | 9 |
@@ -1112,10 +1112,19 @@ failure).
 Round 2: the adult saved "Comentario del adulto" from the corner menu (the
 answers themselves go on `sessions.adult_form`). **RQ 3, 5.**
 ```
-{ step: string, engagement: 'low' | 'mid' | 'high' | null, help_needed: 'none' | 'some' | 'a_lot' | null, comment: boolean }
+{ step: string, engagement: 'low' | 'mid' | 'high' | null, help_needed: 'none' | 'some' | 'a_lot' | null, comment: boolean, previous?: true }
 ```
 `comment` only says whether a comment was written (its text is on the
-session, never in an event).
+session, never in an event). `previous` (T22): the comment was "Comentario
+del chico anterior" — the adult's corner menu, on this session's own device,
+about the *previous* session on it (it already ended; by the time this is
+saved, a different child's session may be the one being played). `step` is
+then that previous session's last known `current_step` when it ended (e.g.
+`class_end`), not a step of the session this event is attached to. Written
+by its own endpoint, `POST /api/adult-form/:id` (below), not `/api/sync`:
+the server picks the event's `seq` itself (one past whatever that session's
+events already hold), since the device sending it may no longer know the
+session's real seq count (see "The previous child's comment").
 
 ### `resume`
 The tab reloaded (a stray F5, a Chromebook discarding the tab, the adult
@@ -1162,6 +1171,47 @@ program and ▶, a predict page the right cell, a rule game its rules and ▶),
 (the route done: the green flag, free play) and "Terminar la sesión" (the
 goodbye, after a second tap). Demo sessions get the class commands too, so
 el docente can try the class control in demo mode.
+
+## The previous child's comment (T22, back-to-back classes)
+
+A class ending (`class_end`) now sends the device back to the start by
+itself (`?grado`'s character choice, or the grade cards), ready for the
+next child — before, only an adult's long press on the resting page did
+that. By the time el docente wants to leave "Comentario del chico
+anterior", the device may already be playing a different child's session
+(or sitting idle, waiting for one), so the previous session's record is no
+longer the one the kid app has open.
+
+The device keeps a small, independent record of its own last ended,
+really-played (non-demo, non-empty — see `sessions.end_reason`'s
+`'abandoned'`), on this one device: the session id, when it ended, its
+grade and character, and its last known step (`localStorage`
+`camino.piloto.previous.v1`, outside telemetry.ts's own event queue and its
+pruning). The adult corner menu's "Comentario del chico anterior" item
+appears while that record is no more than 3 hours old; it opens the same
+questions as "Comentario del adulto" (engagement, help needed, a comment
+without names), prefilled if this exact feature already saved one for that
+session, with the previous character's picture and "hace N min" above them
+— never a name.
+
+Saving posts to `POST /api/adult-form/:id` (`:id` the previous session's
+id; no auth — the kid app has no admin token — rate limited per IP like
+`/api/class-settings`), not `/api/sync`: the client no longer has (or
+trusts) that session's full record or its next free event `seq`, and
+reconstructing both just to patch one field would be more code than one
+small, focused endpoint. The body is the same shape as `sessions.adult_form`
+(`{engagement, help_needed, comment?}`); the server refuses an unknown id,
+a demo session, or a session that has not ended yet (400: the live
+"Comentario del adulto" path, not this one, covers an open session), sets
+`sessions.adult_form` (replacing it if called again) with `step` set to
+that session's own last known `current_step`, and logs one `adult_form`
+event on it with `previous: true` and its own next `seq` (picked by the
+server: `max(seq) + 1` over that session's existing events, never a seq the
+device itself tracks). A post that fails (offline, a dropped class wifi) is
+kept as one pending submission on the device and retried once the network
+is back or the app next loads (`src/playtest/previousChild.ts`) — not the
+full batched-and-acked offline queue telemetry.ts has for events, since
+this is one comment, not a stream.
 
 ## How the client sends (offline queue)
 

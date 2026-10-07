@@ -12,25 +12,32 @@
 // - The adult's comment (AdultFormPanel): optional, from the corner menu at
 //   any time of the session: engagement, help needed, a comment without
 //   names (`sessions.adult_form`).
+// - T22: PreviousAdultFormPanel is the same questions, for the previous
+//   session ended on this device ("Comentario del chico anterior", the
+//   corner menu), sent to its own small endpoint (previousChild.ts): the
+//   session being played may already be a different child's.
 
 import { useEffect, useRef, useState } from 'react';
 import { CHARACTER_NAME, isCharacterId } from '../curriculum/motivation';
 import { progress, useProgress } from '../curriculum/progress';
 import { arrivedCritters, arrivedPlants, outfitOf } from '../curriculum/rewards';
-import { PlayerFace } from '../screens/player';
-import { PenRing, SeedIcon } from '../ui/art';
+import { charDef, PlayerFace } from '../screens/player';
+import { PenRing, Portrait, SeedIcon } from '../ui/art';
 import { SpeakerIcon } from '../ui/icons';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { adultSheetOpen } from './adultState';
 import { usePlaytest } from './context';
-import { ActivityPicture, Face, YesNo } from './surveyArt';
+import { postPreviousAdultForm } from './runtime';
+import type { AdultFormValue, PreviousChild } from './previousChild';
+import { submitPreviousAdultForm } from './previousChild';
+import { ActivityPicture, DifficultyArt, DifficultyHeaderArt, Face, LikedHeaderArt, YesNo } from './surveyArt';
 import type { StepViewProps } from './steps';
 import { PlayAgainArt } from './round2Art';
 import { SessionGarden } from './SessionGarden';
 
 type QuestionId = 'liked' | 'difficulty' | 'favorite_activity' | 'play_again';
 interface Option { value: string; word: string; art: React.ReactNode }
-interface Question { id: QuestionId; say: string; adult: string; options: Option[] }
+interface Question { id: QuestionId; say: string; adult: string; options: Option[]; header?: React.ReactNode }
 
 /** How each activity is named aloud when its picture is tapped. */
 const ACTIVITY_WORD: Record<string, string> = {
@@ -45,6 +52,7 @@ export function surveyQuestions(activities: readonly string[], grade = 1): Quest
       id: 'liked',
       say: '¿Te gustó jugar? Tocá una carita: mucho, más o menos, o no.',
       adult: '¿Te gustó?',
+      header: <LikedHeaderArt />,
       options: [
         { value: 'yes', word: '¡Mucho!', art: <Face mood="happy" seed={1} /> },
         { value: 'mid', word: 'Más o menos.', art: <Face mood="mid" seed={2} /> },
@@ -53,12 +61,14 @@ export function surveyQuestions(activities: readonly string[], grade = 1): Quest
     },
     {
       id: 'difficulty',
-      say: '¿Fue fácil o difícil? Tocá una carita: fácil, más o menos, o difícil.',
+      say: '¿Fue fácil o difícil? Tocá un camino: fácil, más o menos, o difícil.',
       adult: '¿Fue fácil o difícil?',
+      // T23: drawn differently from the liking faces (the "¿Cómo seguís?" hills), so a muted 1ro never confuses the two questions
+      header: <DifficultyHeaderArt />,
       options: [
-        { value: 'easy', word: 'Fácil.', art: <Face mood="easy" seed={4} /> },
-        { value: 'mid', word: 'Más o menos.', art: <Face mood="mid" seed={5} /> },
-        { value: 'hard', word: 'Difícil.', art: <Face mood="hard" seed={6} /> },
+        { value: 'easy', word: 'Fácil.', art: <DifficultyArt level="easy" /> },
+        { value: 'mid', word: 'Más o menos.', art: <DifficultyArt level="mid" /> },
+        { value: 'hard', word: 'Difícil.', art: <DifficultyArt level="hard" /> },
       ],
     },
   ];
@@ -124,16 +134,19 @@ export function Survey() {
           {questions.map((x, k) => <li key={x.id} className={k < i ? 'is-done' : k === i ? 'is-here' : ''} />)}
         </ol>
       </header>
-      <section className={`sheet pp-card pp-options n${q.options.length}`} key={q.id} aria-label={q.adult}>
+      <section className="sheet pp-card pp-question" key={q.id} aria-label={q.adult}>
         <span className="tape tape-l" aria-hidden="true" />
         <span className="tape tape-r" aria-hidden="true" />
-        {q.options.map((o) => (
-          <button key={o.value} type="button" className={`pp-option cut${picked === o.value ? ' is-picked' : ''}${picked && picked !== o.value ? ' is-other' : ''}`}
-            data-answer={o.value} aria-label={o.word || o.value} onClick={() => answer(o)}>
-            {o.art}
-            {picked === o.value && <PenRing seed={o.value.length + 4} />}
-          </button>
-        ))}
+        {q.header && <div className="pp-q-header">{q.header}</div>}
+        <div className={`pp-options n${q.options.length}`}>
+          {q.options.map((o) => (
+            <button key={o.value} type="button" className={`pp-option cut${picked === o.value ? ' is-picked' : ''}${picked && picked !== o.value ? ' is-other' : ''}`}
+              data-answer={o.value} aria-label={o.word || o.value} onClick={() => answer(o)}>
+              {o.art}
+              {picked === o.value && <PenRing seed={o.value.length + 4} />}
+            </button>
+          ))}
+        </div>
       </section>
     </main>
   );
@@ -243,6 +256,51 @@ export function AdultFormPanel({ done }: { done: () => void }) {
         <textarea rows={3} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Lo que viste, sin nombres." />
       </label>
       <button type="button" className="btn btn-play cut pp-start" data-act="save-form" disabled={!engagement && !help && !comment.trim()} onClick={save}>Guardar</button>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ T22: the previous child's comment
+
+/** "Comentario del chico anterior": which child it is about, never a name — the previous character and how long ago. */
+export function PreviousChildHeader({ info }: { info: PreviousChild }) {
+  const mins = Math.max(0, Math.round((Date.now() - Date.parse(info.ended_at)) / 60_000));
+  return (
+    <p className="pp-adult-note pp-prev-who">
+      <Portrait def={charDef(info.character ?? 'brote')} className="bar-face" />
+      {mins <= 0 ? 'Recién terminó.' : `Hace ${mins} min.`}
+    </p>
+  );
+}
+
+/**
+ * The same questions as AdultFormPanel, for the previous session ended on
+ * this device (prefilled from previousChild.ts's own cache if this exact
+ * panel already saved one); sent to its own small endpoint, not
+ * `patchSession` (the session being played, if any, is a different one).
+ */
+export function PreviousAdultFormPanel({ info, done }: { info: PreviousChild; done: () => void }) {
+  const prev = info.adult_form;
+  const [engagement, setEngagement] = useState<'low' | 'mid' | 'high' | null>(prev?.engagement ?? null);
+  const [help, setHelp] = useState<'none' | 'some' | 'a_lot' | null>(prev?.help_needed ?? null);
+  const [comment, setComment] = useState(prev?.comment ?? '');
+  const [saving, setSaving] = useState(false);
+  const save = () => {
+    const form: AdultFormValue = { engagement, help_needed: help };
+    const text = comment.trim().slice(0, 2000);
+    if (text) form.comment = text;
+    setSaving(true);
+    void submitPreviousAdultForm(info.id, form, postPreviousAdultForm).finally(() => { setSaving(false); done(); });
+  };
+  return (
+    <div className="pp-adult-form">
+      <Choice legend="¿Cuánto se enganchó?" options={ENGAGEMENT} value={engagement} set={setEngagement} />
+      <Choice legend="¿Cuánta ayuda necesitó?" options={HELP} value={help} set={setHelp} />
+      <label className="pp-comment">
+        <span>Comentario <small>(sin nombres)</small></span>
+        <textarea rows={3} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Lo que viste, sin nombres." />
+      </label>
+      <button type="button" className="btn btn-play cut pp-start" data-act="save-previous-form" disabled={saving || (!engagement && !help && !comment.trim())} onClick={save}>Guardar</button>
     </div>
   );
 }

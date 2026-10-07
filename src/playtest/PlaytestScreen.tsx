@@ -42,7 +42,8 @@ import { withName } from './characterName';
 import { holdHash } from './hashHold';
 import { AdultControls } from './AdultControls';
 import { PlaytestContext, type AdultHelpKind, type AdultHelpVia, type HandState, type LevelTrack, type PlaytestApi } from './context';
-import { initialFlow, reduce, wrapPending, type FlowAction, type FlowState, type StepId, type Transition } from './flow';
+import { initialFlow, reduce, ROUTE, visited, wrapPending, type FlowAction, type FlowState, type StepId, type Transition } from './flow';
+import { savePreviousChild } from './previousChild';
 import { FiveMinBanner, RouteFlag } from './classroom';
 import { DemoBar } from './DemoBar';
 import { setFast } from './demo';
@@ -104,6 +105,27 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     tel.log(type, payload);
   }, [tel]);
 
+  /**
+   * T22: a session ending with no real child input yet (still on the
+   * character screen, nothing picked, never reached a step of the core
+   * route: the device auto-returned to `?grado` between two classes and
+   * nobody sat down before the next class command, or the adult, ended it)
+   * is marked `abandoned` instead of whatever reason would otherwise land
+   * on it, so it does not look like a played class in the data (it already
+   * carries no `level_start`, per the dictionary's existing `abandoned`
+   * meaning). A session that really was played is cached locally
+   * (previousChild.ts) so "Comentario del chico anterior" can still reach
+   * it once the device has moved on.
+   */
+  const finishSession = useCallback((patch: Parameters<typeof tel.updateSession>[0], flowAtEnd: FlowState) => {
+    const empty = flowAtEnd.activities.length === 0 && !ROUTE.some((s) => visited(flowAtEnd, s));
+    tel.updateSession(empty && patch.end_reason ? { ...patch, end_reason: 'abandoned' } : patch);
+    const s = tel.session;
+    if (s && s.ended_at && !s.demo && !empty) {
+      savePreviousChild({ id: s.id, ended_at: s.ended_at, grade: s.grade, character: progress.get().character, current_step: s.current_step });
+    }
+  }, [tel]);
+
   const apply = useCallback((action: FlowAction): Transition | null => {
     const now = Date.now();
     const t = reduce(flowRef.current, action, now);
@@ -119,7 +141,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     // the adult ended it: after the route that is a completed session (the child did it all)
     if (c.reason === 'end_now') Object.assign(patch, { ended_at: at, end_reason: t.state.routeDone ? 'completed' : 'adult_ended' });
     else if (c.to === 'goodbye' && !t.state.endedEarly) Object.assign(patch, { ended_at: at, end_reason: c.reason === 'demo' ? 'demo_ended' : 'completed' });
-    tel.updateSession(patch);
+    finishSession(patch, t.state);
     // the core route is done: the green flag (the admin's "terminó")
     if (t.routeDoneNow) {
       const started = tel.session?.started_at ? Date.parse(tel.session.started_at) : now;
@@ -129,7 +151,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     clearCaption();
     endHandRef.current('moved_on');
     return t;
-  }, [tel]);
+  }, [tel, finishSession]);
 
   const start = useCallback((input: StartInput) => {
     setCaptions(!!input.captions);
@@ -208,9 +230,9 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
   const endSession = useCallback((reason: 'class_end') => {
     const cur = tel.session;
     if (!cur || cur.ended_at) return;
-    tel.updateSession({ ended_at: new Date().toISOString(), end_reason: reason });
+    finishSession({ ended_at: new Date().toISOString(), end_reason: reason }, flowRef.current);
     void tel.flush();
-  }, [tel]);
+  }, [tel, finishSession]);
 
   const api = useMemo<PlaytestApi>(() => ({
     session,

@@ -1,15 +1,22 @@
-// The survey's drawings: faces for "¿Te gustó?" and "¿Fue fácil o
-// difícil?", the sí / no of "¿Querés volver a jugar?", and a picture per
-// activity for "¿Qué te gustó más?". Paper-yellow discs, ink boiled by
-// #rough, a flat darker facet, blue pen for the marks: the notebook's style.
+// The survey's drawings: faces for "¿Te gustó?", the "¿Cómo seguís?" hills
+// for "¿Fue fácil o difícil?" (T23: drawn differently from the liking faces,
+// so a muted 1ro never confuses the two), the sí / no of "¿Querés volver a
+// jugar?" (a wave and a cross, not words), and a picture per activity for
+// "¿Qué te gustó más?". A small header picture (the character + an icon)
+// sits above the "¿Te gustó?" and "¿Fue fácil o difícil?" options, so each
+// question is recognisable before reading any of its answers. Paper-yellow
+// discs, ink boiled by #rough, a flat darker facet, blue pen for the marks:
+// the notebook's style.
 
 import { memo } from 'react';
-import { blob } from '../ink/ink.js';
+import type { Door } from '../curriculum/model';
+import { blob, wobblyLine } from '../ink/ink.js';
 import { GuardaIcon, JarIcon, PageIcon, SeedIcon, SongIcon } from '../ui/art';
 import { WardrobeIcon } from '../ui/wardrobeArt';
 import { PlayerFace } from '../screens/player';
 import { activityFor, type ActivityId } from './freePlay';
 import { ActivityArt } from './menuArt';
+import { PathArt } from './round2Art';
 import { LetterSeed } from './typingArt';
 
 const INK = '#2b2622';
@@ -54,21 +61,88 @@ export const Face = memo(function Face({ mood, seed = 1 }: { mood: FaceMood; see
   );
 });
 
-/** "sí" or "no", written big in pen on a paper disc, with a nod or a shake drawn beside it. */
+/** A small waving hand (the brief's "the character waving 'see you'"), drawn once and reused at any scale. */
+const WAVE_HAND = 'M7.4,13.2 L7.2,6.6 C7.2,5.3 9.1,5.2 9.2,6.5 L9.4,11.2 L9.3,4.4 C9.3,3 11.3,3 11.4,4.4 L11.6,10.8 L11.7,4.1 C11.8,2.7 13.8,2.8 13.8,4.2 L13.8,11 L14.3,5.5 C14.4,4.2 16.3,4.3 16.3,5.6 L16.1,13.4 L17.6,11.2 C18.4,10 20.2,10.9 19.5,12.3 C18.4,14.6 17.2,17.4 15.4,19.1 C14.3,20.2 12.8,20.8 11.3,20.8 C8.8,20.8 7.4,19 7.4,16.4 Z';
+
+/**
+ * "¿Querés volver a jugar?" without words (T23): sí is a waving hand on the
+ * green disc ("see you"); no is a big red cross alone, the style guide's own
+ * error mark, on the pink disc — distinct glyphs, not "sí"/"no" written out.
+ */
 export const YesNo = memo(function YesNo({ yes }: { yes: boolean }) {
   return (
     <svg className="pp-face" viewBox="-50 -50 100 100" aria-hidden="true">
       <g filter="url(#rough)">
         <path d={blob(0, 0, 44, 43, { wob: 0.03, n: 12, seed: yes ? 5 : 6 })} fill={yes ? '#cfdcaa' : '#f1c9c6'} stroke={INK} strokeWidth={3.4} />
-        <text x={0} y={14} textAnchor="middle" fontFamily="'Gochi Hand', 'Andika', cursive" fontSize={42} fill={INK}>{yes ? 'sí' : 'no'}</text>
-        {/* the head's movement: up and down for sí, side to side for no */}
-        {yes
-          ? <path d="M-38,-8 L-38,8 M-44,-2 L-38,-10 L-32,-2 M-44,2 L-38,10 L-32,2" fill="none" stroke={PEN} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
-          : <path d="M-10,-34 L10,-34 M-4,-40 L-12,-34 L-4,-28 M4,-40 L12,-34 L4,-28" fill="none" stroke={PEN} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />}
       </g>
+      {yes ? (
+        <g transform="translate(-41 -32) scale(3.1)" filter="url(#rough)">
+          <path d={WAVE_HAND} fill="#eeac7f" stroke={INK} strokeWidth={1.1} strokeLinejoin="round" />
+        </g>
+      ) : (
+        <g stroke="#c24a3c" strokeWidth={6.2} strokeLinecap="round">
+          <path d={wobblyLine(-23, -23, 23, 23, { bow: 2.4, seed: 11 })} fill="none" />
+          <path d={wobblyLine(23, -23, -23, 23, { bow: 2.4, seed: 12 })} fill="none" />
+        </g>
+      )}
     </svg>
   );
 });
+
+// ------------------------------------------------------------------ T23: header pictures and the difficulty hills
+
+/** A hand-drawn heart, the "¿Te gustó?" header's icon beside the character's face. */
+function HeartIcon() {
+  const d = 'M30,50 C6,34 2,16 16,8 C24,3 30,10 30,16 C30,10 36,3 44,8 C58,16 54,34 30,50 Z';
+  return (
+    <svg className="pp-heart-icon" viewBox="0 0 60 54" aria-hidden="true">
+      <g filter="url(#rough)">
+        <path d={d} transform="translate(2 3)" fill="rgba(84, 62, 38, 0.2)" />
+        <path d={d} fill="#e7a3a0" stroke={INK} strokeWidth={3} strokeLinejoin="round" />
+      </g>
+    </svg>
+  );
+}
+
+/** "¿Te gustó?": the character's face with a heart — recognisable before any of the three faces below. */
+export function LikedHeaderArt() {
+  return (
+    <span className="pp-q-header-art" aria-hidden="true">
+      <PlayerFace className="bar-face" mood="grin" />
+      <HeartIcon />
+    </span>
+  );
+}
+
+/** Two little peaks: "effort/how hard", distinct from the single hills of the options below. */
+function EffortIcon() {
+  const d = 'M2,48 L22,14 L34,30 L48,6 L78,48 Z';
+  return (
+    <svg className="pp-effort-icon" viewBox="0 0 80 50" aria-hidden="true">
+      <g filter="url(#rough)">
+        <path d={d} transform="translate(2 3)" fill="rgba(84, 62, 38, 0.2)" />
+        <path d={d} fill="#e6dcbc" stroke={INK} strokeWidth={3} strokeLinejoin="round" />
+      </g>
+    </svg>
+  );
+}
+
+/** "¿Fue fácil o difícil?": the character's face with a little double-hill — "how hard", said before the three single hills below. */
+export function DifficultyHeaderArt() {
+  return (
+    <span className="pp-q-header-art" aria-hidden="true">
+      <PlayerFace className="bar-face" />
+      <EffortIcon />
+    </span>
+  );
+}
+
+const DIFFICULTY_DOOR: Record<'easy' | 'mid' | 'hard', Door> = { easy: 'easy', mid: 'medium', hard: 'hard' };
+
+/** A difficulty answer: the same hill art as "¿Cómo seguís?" (gentle, flat or steep), not a face. */
+export function DifficultyArt({ level }: { level: 'easy' | 'mid' | 'hard' }) {
+  return <span className="pp-diff-art"><PathArt door={DIFFICULTY_DOOR[level]} mini /></span>;
+}
 
 /** A little board with a path of arrows to a seed: "the levels". */
 function BoardPicture() {

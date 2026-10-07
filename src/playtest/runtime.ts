@@ -7,11 +7,13 @@
 import { useSyncExternalStore } from 'react';
 import { POLL_MS, Telemetry, type AdminSound, type Backing, type Device, type PostResult, type SyncStatus } from './telemetry';
 import { createErrorLimiter, createIdleTracker, sourceFile } from './watch';
+import { retryPendingSubmit, type AdultFormValue } from './previousChild';
 
 declare const __CAMINO_VERSION__: string | undefined;
 
 const SYNC_URL = './api/sync';
 const CLASS_SETTINGS_URL = './api/class-settings';
+const ADULT_FORM_URL = './api/adult-form/';
 /** T18: a dead network must never hold up the setup's first spoken line. */
 export const CLASS_SETTINGS_TIMEOUT_MS = 1500;
 
@@ -34,6 +36,19 @@ export async function fetchClassSettings(timeoutMs = CLASS_SETTINGS_TIMEOUT_MS):
     return null;
   } finally {
     if (timer != null) clearTimeout(timer);
+  }
+}
+
+/** T22: POST /api/adult-form/:id (the previous child's comment, see previousChild.ts); true only on a 2xx. */
+export async function postPreviousAdultForm(id: string, form: AdultFormValue): Promise<boolean> {
+  if (typeof fetch !== 'function') return false;
+  try {
+    const res = await fetch(`${ADULT_FORM_URL}${id}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form), cache: 'no-store',
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -121,11 +136,13 @@ function statusSnapshot(): SyncStatus {
  * key input, logged when input resumes), `visibility`, `error`; flushes the
  * queue when the page is hidden or closed, and sends at once when the network
  * comes back. `step()` names the flow step for the idle event; while it is
- * null (the adult's setup, no session yet) nothing is logged. Returns the
- * uninstaller.
+ * null (the adult's setup, no session yet) nothing is logged. Also retries
+ * (once) a previous child's comment (T22) that failed to post earlier,
+ * here and on every `online` event. Returns the uninstaller.
  */
 export function installWatchers(step: () => string | null): () => void {
   const t = telemetry();
+  void retryPendingSubmit(postPreviousAdultForm);
   const idle = createIdleTracker(Date.now());
   const limit = createErrorLimiter();
   const on = () => step() != null;
@@ -139,7 +156,7 @@ export function installWatchers(step: () => string | null): () => void {
     if (hidden) t.flushKeepalive();
   };
   const onPageHide = () => t.flushKeepalive();
-  const onOnline = () => t.online();
+  const onOnline = () => { t.online(); void retryPendingSubmit(postPreviousAdultForm); };
   const onError = (e: ErrorEvent) => {
     const info = limit({ message: e.message, source: sourceFile(e.filename), line: e.lineno || undefined, col: e.colno || undefined }, Date.now());
     if (info && on()) t.log('error', { ...info });

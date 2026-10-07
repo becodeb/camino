@@ -126,6 +126,41 @@ function validateEvent(input: unknown, index: number): EventInput | string {
   return { seq, client_t: clientTIso, type, payload };
 }
 
+// ---------------------------------------------------------------- POST /api/adult-form/:id (T22)
+
+const ENGAGEMENT_VALUES = new Set(['low', 'mid', 'high']);
+const HELP_VALUES = new Set(['none', 'some', 'a_lot']);
+export const MAX_ADULT_FORM_COMMENT_CHARS = 2000;
+
+export interface AdultFormInput {
+  engagement: 'low' | 'mid' | 'high' | null;
+  help_needed: 'none' | 'some' | 'a_lot' | null;
+  comment?: string;
+}
+
+/** The previous child's comment (a device's dedicated endpoint, not /api/sync): the same shape sessions.adult_form takes. */
+export function validateAdultForm(raw: unknown): AdultFormInput | string {
+  if (!isPlainObject(raw)) return 'body must be an object';
+
+  const engagement = raw.engagement ?? null;
+  if (engagement !== null && (typeof engagement !== 'string' || !ENGAGEMENT_VALUES.has(engagement))) {
+    return 'engagement must be low, mid, high or null';
+  }
+
+  const help_needed = raw.help_needed ?? null;
+  if (help_needed !== null && (typeof help_needed !== 'string' || !HELP_VALUES.has(help_needed))) {
+    return 'help_needed must be none, some, a_lot or null';
+  }
+
+  const out: AdultFormInput = { engagement: engagement as AdultFormInput['engagement'], help_needed: help_needed as AdultFormInput['help_needed'] };
+  if (raw.comment != null) {
+    if (typeof raw.comment !== 'string') return 'comment must be a string';
+    const text = raw.comment.trim().slice(0, MAX_ADULT_FORM_COMMENT_CHARS);
+    if (text) out.comment = text;
+  }
+  return out;
+}
+
 export function validateSyncBody(raw: unknown, rawByteLength: number): ValidationResult {
   if (rawByteLength > MAX_BODY_BYTES) {
     return { ok: false, status: 413, message: `body exceeds ${MAX_BODY_BYTES} bytes` };

@@ -734,6 +734,9 @@ dbDescribe('API against Postgres', () => {
       const end = (await (await send(a, 'end_class')).json()) as { command: { id: number } };
       expect((await sync(a, online)).commands.map((c) => c.kind)).toEqual(['five_min', 'end_class']);
       expect(end.command.id).toBeGreaterThan(command.id);
+      // T22 (back-to-back classes): a new child's session on this same device, after "terminar la clase",
+      // never sees the five_min or the end_class that just closed the class before it
+      expect((await sync(a, newSession())).commands).toEqual([]);
       await pool.query('DELETE FROM class_commands');
     });
 
@@ -910,6 +913,61 @@ dbDescribe('API against Postgres', () => {
       for (const r of rows as Array<{ viewname: string; definition: string }>) {
         expect(r.definition, r.viewname).not.toMatch(/\b(FROM|JOIN)\s+(public\.)?(events|sessions)\b/);
       }
+    });
+  });
+
+  describe("the previous child's comment (T22, back-to-back classes)", () => {
+    const app = () => createApp(pool, { adminToken: 't', distDir });
+    const post = (a: ReturnType<typeof createApp>, id: string, body: unknown) =>
+      a.request(`/api/adult-form/${id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+    it('writes sessions.adult_form and logs an adult_form event with previous: true, once the session has ended', async () => {
+      const a = app();
+      const session = newSession();
+      await a.request('/api/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session: { ...session, current_step: 'goodbye' }, events: [event(0)] }) });
+
+      // not ended yet: refused
+      expect((await post(a, session.id, { engagement: 'high', help_needed: 'none' })).status).toBe(400);
+
+      await a.request('/api/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session: { ...session, current_step: 'goodbye', ended_at: new Date().toISOString(), end_reason: 'completed' }, events: [] }) });
+      const res = await post(a, session.id, { engagement: 'high', help_needed: 'none', comment: 'Jugó solo, muy enganchado' });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true });
+
+      const { rows } = await pool.query('SELECT adult_form FROM sessions WHERE id = $1', [session.id]);
+      expect(rows[0].adult_form).toEqual({ engagement: 'high', help_needed: 'none', comment: 'Jugó solo, muy enganchado', step: 'goodbye' });
+
+      const { rows: evs } = await pool.query("SELECT seq, payload FROM events WHERE session_id = $1 AND type = 'adult_form' ORDER BY seq", [session.id]);
+      expect(evs).toHaveLength(1);
+      expect(evs[0].seq).toBe(1); // after the one real event (seq 0): the server picks its own free seq, never colliding
+      expect(evs[0].payload).toEqual({ step: 'goodbye', engagement: 'high', help_needed: 'none', comment: true, previous: true });
+
+      // saving again replaces the form (does not accumulate events beyond the one more per save)
+      await post(a, session.id, { engagement: 'low', help_needed: 'a_lot' });
+      const again = await pool.query('SELECT adult_form FROM sessions WHERE id = $1', [session.id]);
+      expect(again.rows[0].adult_form).toEqual({ engagement: 'low', help_needed: 'a_lot', step: 'goodbye' });
+      const { rows: evs2 } = await pool.query("SELECT seq FROM events WHERE session_id = $1 AND type = 'adult_form'", [session.id]);
+      expect(evs2).toHaveLength(2);
+    });
+
+    it('refuses an unknown id, a demo session, a bad body, and rate-limits per IP', async () => {
+      const a = app();
+      expect((await post(a, 'not-a-uuid', {})).status).toBe(400);
+      expect((await post(a, randomUUID(), {})).status).toBe(404);
+
+      const demo = newSession({ demo: true, ended_at: new Date().toISOString(), end_reason: 'demo_ended' });
+      await a.request('/api/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session: demo, events: [] }) });
+      expect((await post(a, demo.id, { engagement: 'high', help_needed: 'none' })).status).toBe(404);
+
+      const ended = newSession({ ended_at: new Date().toISOString(), end_reason: 'completed' });
+      await a.request('/api/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session: ended, events: [] }) });
+      expect((await post(a, ended.id, { engagement: 'mucho' })).status).toBe(400);
+      expect((await post(a, ended.id, { help_needed: 'bastante' })).status).toBe(400);
+
+      const limited = createApp(pool, { distDir, adultFormRateLimit: 2 });
+      expect((await post(limited, ended.id, { engagement: null, help_needed: null })).status).toBe(200);
+      expect((await post(limited, ended.id, { engagement: null, help_needed: null })).status).toBe(200);
+      expect((await post(limited, ended.id, { engagement: null, help_needed: null })).status).toBe(429);
     });
   });
 });

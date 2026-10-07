@@ -22,7 +22,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMuted } from '../ui/mute';
 import { holdAdultSheet } from './adultState';
-import { AdultFormPanel } from './closing';
+import { AdultFormPanel, PreviousAdultFormPanel, PreviousChildHeader } from './closing';
 import { usePlaytest, type AdultHelpKind, type AdultHelpVia } from './context';
 import { canEndNow, canOpenSurvey, canSkip } from './flow';
 import { realTimeout } from './demo';
@@ -31,6 +31,7 @@ import { useSyncStatus } from './runtime';
 import { STEP_NAME } from './labels';
 import { RaisedHand } from './RaisedHand';
 import { openProbe } from './probes';
+import { getPreviousChild, type PreviousChild } from './previousChild';
 import { setAdultOverride } from './soundSetting';
 
 export const CORNER_PX = 64;
@@ -213,12 +214,21 @@ function AdultMenu({ onClose }: { onClose: () => void }) {
   const [noted, setNoted] = useState(false);
   const [form, setForm] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [prevForm, setPrevForm] = useState(false);
+  const [prevSaved, setPrevSaved] = useState(false);
+  // T22: computed once per opening of the menu (a fresh mount), not reactive: the adult just opened this
+  const [prev] = useState<PreviousChild | null>(() => getPreviousChild());
   const step = api.flow.step;
   return (
-    <AdultSheet title={form ? 'Comentario del adulto' : 'Menú del adulto'} onClose={onClose}>
+    <AdultSheet title={form ? 'Comentario del adulto' : prevForm ? 'Comentario del chico anterior' : 'Menú del adulto'} onClose={onClose}>
       <p className="pp-adult-note">{STEP_NAME[step]}</p>
       {form ? (
         <AdultFormPanel done={() => { setForm(false); setSaved(true); }} />
+      ) : prevForm && prev ? (
+        <>
+          <PreviousChildHeader info={prev} />
+          <PreviousAdultFormPanel info={prev} done={() => { setPrevForm(false); setPrevSaved(true); }} />
+        </>
       ) : help ? (
         <>
           <p className="pp-adult-note">¿En qué lo ayudaste?</p>
@@ -229,6 +239,7 @@ function AdultMenu({ onClose }: { onClose: () => void }) {
           {canOpenSurvey(api.flow) && <button type="button" className={`pp-adult-btn cut${api.flow.routeDone ? ' is-go' : ''}`} data-act="survey" onClick={() => { api.openSurvey('menu'); onClose(); }}>Hacer la encuesta{api.flow.routeDone ? ' (ya terminó)' : ''}</button>}
           <button type="button" className="pp-adult-btn cut" data-act="log-help" onClick={() => { setHelp(true); setNoted(false); }}>Registrar ayuda{noted ? ' ✓' : ''}</button>
           <button type="button" className="pp-adult-btn cut" data-act="adult-form" onClick={() => setForm(true)}>Comentario del adulto <small>(opcional)</small>{saved ? ' ✓' : ''}</button>
+          {prev && <button type="button" className="pp-adult-btn cut" data-act="previous-form" onClick={() => setPrevForm(true)}>Comentario del chico anterior{prevSaved ? ' ✓' : ''}</button>}
           <SoundToggle />
           {step === 'free_play' && <button type="button" className="pp-adult-btn cut" data-act="open-game-maker" onClick={() => { openProbe('game_maker'); onClose(); }}>Abrir «Hacé tu juego»</button>}
           {step === 'free_play' && <button type="button" className="pp-adult-btn cut" data-act="open-text-probe" onClick={() => { openProbe('text_probe'); onClose(); }}>Abrir «Del bloque al texto»</button>}

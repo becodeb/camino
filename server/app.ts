@@ -9,6 +9,7 @@ import { syncRoute } from './routes/sync.ts';
 import { adminRoute } from './routes/admin.ts';
 import { exportRoute } from './routes/export.ts';
 import { classSettingsRoute } from './routes/classSettings.ts';
+import { previousAdultFormRoute } from './routes/previousAdultForm.ts';
 import { serveDist } from './static.ts';
 import { ADMIN_PAGE_HTML } from './admin/page.ts';
 import type { LoginLimiter } from './lib/adminSession.ts';
@@ -25,6 +26,8 @@ export interface AppOptions {
   syncRateLimit?: number;
   /** T18: /api/class-settings requests per IP per minute (tests lower it). */
   classSettingsRateLimit?: number;
+  /** T22: /api/adult-form/:id requests per IP per minute (tests lower it). */
+  adultFormRateLimit?: number;
 }
 
 export function createApp(pool: pg.Pool, opts: AppOptions): Hono {
@@ -32,6 +35,7 @@ export function createApp(pool: pg.Pool, opts: AppOptions): Hono {
   app.route('/api/health', healthRoute(pool));
   app.route('/api/sync', syncRoute(pool, opts.syncRateLimit));
   app.route('/api/class-settings', classSettingsRoute(pool, opts.classSettingsRateLimit));
+  app.route('/api/adult-form', previousAdultFormRoute(pool, opts.adultFormRateLimit));
   app.route('/api/admin', adminRoute(pool, { token: opts.adminToken, password: opts.adminPassword, limiter: opts.adminLimiter }));
   app.route('/api/export', exportRoute(pool, opts.exportToken));
   app.get('/admin', (c) => c.html(ADMIN_PAGE_HTML, 200, { 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer' }));
