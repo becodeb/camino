@@ -699,6 +699,8 @@ Back-to-back classes round (user request 2026-10-07: ~50-minute classes one afte
 
   Evidence: `npm run typecheck` clean; `npm test` 47 files, 1132 passed (new: `surveyArt.test.ts`, 2 tests). `node tools/check-backtoback.mjs` against a fresh disposable Postgres (`camino-prueba-testdb-t22b`, 54340) and a rebuilt `VITE_PLAYTEST=1` dist on :8810: **all checks passed** at both 1366×768 and 1280×800 (re-run in full, not just the three screens, since the survey's and the corner menu's own code paths are exercised throughout that script). Screenshots re-taken at both sizes and reviewed with the Read tool: `survey-difficulty` (flat → gentle → steep, left to right, matching the spoken order), `survey-play_again` (a green tick beside the red cross, no hand), `previous-child-panel` (title, the character's picture, "Recién terminó.", straight into the questions — no stray label). Local stack and the disposable Postgres stopped afterwards; the user's dev server on 8797 was never touched.
 
+- 2026-10-08: parent reviewed the fixed survey shots (difficulty flat → gentle → steep, "sí" as a green tick) and re-ran `check-3ro.mjs` on a fresh vite 8811: all ok, no console errors. Pushed. Redeploy waits for the user's explicit request.
+
 ## Next step
 
-T24 (verification and redeploy — redeploy only on the user's explicit request).
+T24: redeploy on the user's request; then the back-to-back classes.
