@@ -340,6 +340,9 @@ a.page-card:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset:
 @keyframes ghost-ripple { from { transform: scale(0.3); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
 .guide-ring { position: absolute; overflow: visible; animation: guide-pulse 0.85s ease-in-out 3 alternate; }
 @keyframes guide-pulse { from { transform: scale(0.94); opacity: 0.55; } to { transform: scale(1.04); opacity: 1; } }
+/* T20: predict's silent demo, a pulsing "?" over the board (never the cell). */
+.ghost-guess { position: fixed; width: 40px; height: 40px; margin: -20px 0 0 -20px; z-index: 81; animation: guess-pulse 0.9s ease-in-out infinite; }
+@keyframes guess-pulse { 0%, 100% { transform: scale(0.92); opacity: 0.8; } 50% { transform: scale(1.1); opacity: 1; } }
 .help.is-inviting { animation: help-invite 0.5s ease-in-out 4; }
 @keyframes help-invite { 0%, 100% { rotate: 0deg; } 30% { rotate: -12deg; } 70% { rotate: 10deg; } }
 
@@ -353,5 +356,5 @@ a.page-card:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset:
   .controls { min-height: 72px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .next-page, .page-brote, .tramo-page .stamp.is-new, .play-lamp.is-on .lamp-rays { animation: none; }
+  .next-page, .page-brote, .tramo-page .stamp.is-new, .play-lamp.is-on .lamp-rays, .ghost-guess { animation: none; }
 }

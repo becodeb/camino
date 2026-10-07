@@ -96,6 +96,18 @@ export interface LevelDef {
    * (`fail`), and again from ✋ while the program has no loop.
    */
   intro?: { program: Program; after: 'full' | 'fail' };
+  /**
+   * T20 (silent classroom round): a wordless demo for a format `intro`
+   * cannot cover (no loop concept to build), shown once per session the
+   * first time a muted child meets it, cancelled by any real input.
+   * 'path': the ghost drags one arrow into the notebook, then points at
+   * ▶ (never the solution). 'fix': the ghost taps ▶ to show the bump,
+   * then points across the program ("change something here"). 'predict':
+   * a pulsing "?" over the board, the ghost hovering a few cells without
+   * landing, then ▶. 'worlds': the ghost points at each board in turn
+   * ("one program, every board").
+   */
+  silentDemo?: 'path' | 'fix' | 'predict' | 'worlds';
   /** 3ro: the rules, how the page is won and what falls from the sky. `solution` stays empty. */
   realtime?: RealtimeDef;
   /** 1ro's practice format (see Format); a plain page when absent. */

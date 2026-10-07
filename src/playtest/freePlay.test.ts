@@ -16,6 +16,14 @@ describe('the free-play menu', () => {
     expect(menuFor(5, none).map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess']);
   });
 
+  it('T20: muted, 1ro loses its recess (music) card; not muted, or another grade: unchanged', () => {
+    expect(menuFor(1, none, true).map((a) => a.id)).toEqual(['sheet', 'guardas', 'editor']);
+    expect(menuFor(1, none, false).map((a) => a.id)).toEqual(['sheet', 'recess', 'guardas', 'editor']);
+    expect(menuFor(1, none).map((a) => a.id)).toContain('recess'); // the default, unchanged
+    expect(menuFor(2, none, true).map((a) => a.id)).toContain('recess');
+    expect(menuFor(3, none, true).map((a) => a.id)).toContain('recess');
+  });
+
   it('shows a probe\'s card once its component is registered, on its grade only', () => {
     expect(menuFor(4, all).map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess', 'game_maker']);
     expect(menuFor(5, (id: ProbeId) => id === 'text_probe').map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess', 'text_probe']);

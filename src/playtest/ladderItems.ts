@@ -70,6 +70,7 @@ const R1 = item(1, {
   title: 'Rodear los charcos',
   say: 'Llevá a Brote hasta la semilla. Los charcos no se pisan.',
   ...flat(openBoard({ cols: 4, rows: 3, start: [0, 2], goal: [3, 0], seed: 3101, puddles: [[1, 1], [2, 1]], grass: [[0, 0], [3, 2], [1, 0]] })),
+  silentDemo: 'path',
 });
 
 // ------------------------------------------------------------------ 2 · long sequence, a turn, seeds in order
@@ -82,6 +83,7 @@ const R2 = item(2, {
     cols: 6, rows: 4, start: [0, 0], goal: [5, 3], seed: 3102,
     pickups: [[3, 0], [3, 3]], rocks: [[2, 1], [2, 2], [4, 1], [4, 2], [5, 0]], grass: [[0, 3], [1, 2], [5, 1]],
   })),
+  silentDemo: 'path',
 });
 
 // ------------------------------------------------------------------ 3 · fix (one arrow into the water)
@@ -99,6 +101,7 @@ const R3 = item(3, {
   solution: cmdProgram(R3_PLAN),
   slots: R3_PLAN.length,
   blocks: ['up', 'right'],
+  silentDemo: 'fix',
 });
 
 // ------------------------------------------------------------------ 4 · predict (a tall board, two turns)
@@ -114,6 +117,7 @@ const R4 = item(4, {
   solution: R4_PROGRAM,
   slots: R4_PROGRAM.length,
   blocks: ['up', 'down', 'right'],
+  silentDemo: 'predict',
 });
 
 // ------------------------------------------------------------------ 5 · repeat (walk left across the river)
@@ -155,6 +159,8 @@ const R7 = item(7, {
   blocks: ['up', 'right', 'repeat'],
   slots: 2,
   solution: [loop(4, ['up', 'right'])],
+  // T20: pattern/before-after reuse the repeat intro style (R5's)
+  intro: { program: [loop(2, ['up', 'right'])], after: 'full' },
 });
 
 // ------------------------------------------------------------------ 8 · steps before and after a repeat (a second, different staircase)
@@ -167,6 +173,7 @@ const R8 = item(8, {
   blocks: ['down', 'right', 'repeat'],
   slots: 4,
   solution: [cmd('right'), cmd('right'), loop(3, ['down', 'right']), cmd('down')],
+  intro: { program: [loop(2, ['down', 'right'])], after: 'full' },
 });
 
 // ------------------------------------------------------------------ 9 · fog and "si hay piedra"
@@ -194,6 +201,7 @@ const R10 = item(10, {
   blocks: ['right', 'ifrock:right', 'repeat-goal'],
   slots: 3,
   solution: WALK_OR_JUMP,
+  silentDemo: 'worlds',
 });
 
 // ------------------------------------------------------------------ 11 · a game: rules for the arrow keys

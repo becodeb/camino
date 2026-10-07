@@ -18,7 +18,9 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSS
 import { BoardView } from '../ui/board/BoardView';
 import { GuardaView } from '../ui/board/GuardaView';
 import { MusicView } from '../ui/board/MusicView';
-import { type DemoStep } from '../ui/ghost';
+import { glowTargets, pulseGuess, type DemoStep } from '../ui/ghost';
+import { isMuted } from '../ui/mute';
+import { markSilentDemoShown, silentDemoShown } from '../ui/silentDemo';
 import { speak } from '../ui/speech';
 import { PlayIcon } from '../ui/icons';
 import { PadArrow } from '../ui/art';
@@ -356,21 +358,22 @@ function ProgramLevel({ level }: { level: LevelDef }) {
   /** The counted repeat whose number is the child's (not taped on), last one first. */
   const kidCount = (p: Program) => p.findLastIndex((it, i) => it.t === 'loop' && it.count !== 'goal' && !pins.counts.has(i));
 
-  const run = async () => {
+  /** `silent`: T20's fix demo presses ▶ on the given (buggy) program to show the bump; it is never attributed to the child. */
+  const run = async (opts: { silent?: boolean } = {}) => {
     const vs = views.current;
     if (!vs.length || busy() || locked) return;
     if (format === 'complete') {
       // something still missing: nothing runs, the empty line or the number calls
       const counts = program.findIndex((it) => it.t === 'loop' && it.count === 0);
       if (holesOf(program).length || counts >= 0) {
-        nav.onRunReport?.({ result: 'incomplete', program });
+        if (!opts.silent) nav.onRunReport?.({ result: 'incomplete', program });
         speak(LINES.missing);
         setMarks(holesOf(program).length ? { hintHole: true } : { hintCount: counts });
         return;
       }
     }
     if (!cardCount(program)) {
-      nav.onRunReport?.({ result: 'empty', program });
+      if (!opts.silent) nav.onRunReport?.({ result: 'empty', program });
       speak(level.music ? LINES.emptyNotes : LINES.empty);
       setMarks((m) => ({ ...m, hintSlot: true }));
       document.querySelectorAll<HTMLElement>('.block-palette .pblk').forEach((b, i) => b.animate?.([{ translate: '0 0' }, { translate: '0 -12px' }, { translate: '0 0' }], { duration: 320, delay: i * 70, easing: 'ease-out' }));
@@ -414,7 +417,7 @@ function ProgramLevel({ level }: { level: LevelDef }) {
       return;
     }
     nav.onResult?.(results.every((r) => r === 'win') ? 'win' : results.includes('crash') ? 'crash' : 'short');
-    if (nav.onRunReport) {
+    if (nav.onRunReport && !opts.silent) {
       const crash = traces.find((t) => t.outcome === 'crash');
       nav.onRunReport({
         result: results.every((r) => r === 'win') ? 'win' : results.includes('crash') ? (level.music ? 'wrong_note' : level.guarda ? 'smudge' : 'bump') : 'short',
@@ -451,10 +454,63 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     }
     runningRef.current = false;
     setRunning(false);
-    if (!results.every((r) => r === 'win') && level.intro?.after === 'fail' && !introShown.current && !hasLoop(program)) {
+    if (!opts.silent && !results.every((r) => r === 'win') && level.intro?.after === 'fail' && !introShown.current && !hasLoop(program)) {
       setTimeout(playIntro, 900);
     }
   };
+
+  /**
+   * T20 (silent classroom round): a wordless demo for a format `intro`
+   * cannot cover ('path': build-a-path pages; 'fix': the given program has
+   * a bug; 'worlds': one program, several boards). Muted only, once per
+   * tag this session, cancelled by any real input (useGhost).
+   */
+  const playSilentDemo = () => {
+    const kind = level.silentDemo;
+    if (!kind || busy() || won) return;
+    markSilentDemoShown(kind);
+    nav.onIntro?.(level);
+    const steps: DemoStep[] = [];
+    if (kind === 'worlds') {
+      steps.push({ do: 'point', at: level.worlds.map((_, i) => `.sheet[data-world="${i}"] .board`) });
+    } else if (kind === 'fix') {
+      steps.push({ do: 'tap', at: '.btn-play', apply: () => { void run({ silent: true }); } });
+      steps.push({ do: 'wait', ms: 1300 });
+      steps.push({ do: 'point', at: ['.zone-program .blk'] });
+    } else if (kind === 'path') {
+      glowTargets(rootRef.current!);
+      const dir = (level.blocks.find((b) => b !== 'repeat' && b !== 'repeat-goal') ?? 'right') as Dir;
+      const block = paletteBlock(dir);
+      if (programRef.current.length) steps.push({ do: 'tap', at: '.btn-restart', apply: restart });
+      steps.push({
+        do: 'drag', from: `.zone-palette [data-cmd="${dir}"]`, to: '.zone-program [data-key="end0"]',
+        apply: () => editWith((p) => insertAt(p, appendSlot(p, null, block), block)),
+      });
+      steps.push({ do: 'point', at: ['.btn-play'] });
+    } else {
+      return;
+    }
+    demoRef.current = true;
+    setDemoing(true);
+    const r = ghost(steps);
+    const end = () => { demoRef.current = false; setDemoing(false); };
+    if (r) void r.then(end); else end();
+  };
+
+  // muted, a new format: the wordless demo plays shortly after the page opens,
+  // unless the child already acted (the program changed, or a run is afoot)
+  useEffect(() => {
+    const kind = level.silentDemo;
+    if (!kind || !isMuted() || silentDemoShown(kind)) return;
+    const startedWith = JSON.stringify(programRef.current);
+    const t = setTimeout(() => {
+      if (busy() || won || JSON.stringify(programRef.current) !== startedWith) return;
+      playSilentDemo();
+    }, 1200);
+    return () => clearTimeout(t);
+    // once per page, like the concept demo above
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level]);
 
   /** Where the hand drops a block for a gap of the program. */
   const slotTarget = (slot: Slot): string => {
@@ -694,6 +750,31 @@ function PredictLevel({ level }: { level: LevelDef }) {
     }
     ghost(steps);
   };
+
+  /**
+   * T20: predict's own wordless demo (never ✋'s help, which already points
+   * at the real path): a pulsing "?" over the board, the ghost hovering a
+   * few cells without landing on any of them, then a point at ▶ — "tocá un
+   * lugar, después probá", never which one.
+   */
+  const playSilentDemo = () => {
+    if (level.silentDemo !== 'predict' || runningRef.current || wonRef.current) return;
+    markSilentDemoShown('predict');
+    nav.onIntro?.(level);
+    pulseGuess(rootRef.current!);
+    const r = ghost([{ do: 'point', at: ['.board [data-cell]'] }, { do: 'point', at: ['.btn-play'] }]);
+    void r;
+  };
+
+  useEffect(() => {
+    if (level.silentDemo !== 'predict' || !isMuted() || silentDemoShown('predict')) return;
+    const t = setTimeout(() => {
+      if (runningRef.current || wonRef.current || guessRef.current) return;
+      playSilentDemo();
+    }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level]);
 
   useDebugHooks({ level, program, guess: (c: number, r: number) => pick({ c, r }), run, help, restart, picked: () => guessRef.current });
 

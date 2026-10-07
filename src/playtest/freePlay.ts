@@ -60,11 +60,18 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
   }
 }
 
-/** The menu of a grade: its activities, a probe only when `hasProbe` says its component is there. */
-export function menuFor(grade: number, hasProbe: (id: ProbeId) => boolean): Activity[] {
+/**
+ * The menu of a grade: its activities, a probe only when `hasProbe` says its
+ * component is there. T20 (silent classroom round): 1ro's recess (the
+ * xylophone song) is music through and through — it depends on hearing, so
+ * it is left off 1ro's menu while muted rather than built out as a visual
+ * activity (the smaller change, and 1ro has three other cards already).
+ */
+export function menuFor(grade: number, hasProbe: (id: ProbeId) => boolean, muted = false): Activity[] {
   return (MENU[grade] ?? MENU[1])
     .map((id) => activityFor(id, grade))
-    .filter((a): a is Activity => !!a && (!('probe' in a.kind) || hasProbe(a.kind.probe)));
+    .filter((a): a is Activity => !!a && (!('probe' in a.kind) || hasProbe(a.kind.probe)))
+    .filter((a) => !(muted && grade === 1 && a.id === 'recess'));
 }
 
 /** Said when the menu opens (then each card's name), and when the child comes back to it. */

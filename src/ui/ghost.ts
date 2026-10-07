@@ -207,6 +207,30 @@ export function glowTargets(root: HTMLElement, ms = 2600): void {
   });
 }
 
+/**
+ * A pulsing "?" over the board (T20's predict silent demo: "tocá un lugar,
+ * después probá" — never which place). Fades by itself; skipped under
+ * reduced motion.
+ */
+export function pulseGuess(root: HTMLElement, ms = 2200): void {
+  if (REDUCED) return;
+  const board = root.querySelector('.sheet .board') ?? root.querySelector('.board');
+  if (!board) return;
+  const r = board.getBoundingClientRect();
+  const host = layer();
+  const mark = document.createElement('div');
+  mark.className = 'ghost-guess';
+  mark.style.left = `${r.left + r.width / 2}px`;
+  mark.style.top = `${r.top + r.height / 2}px`;
+  mark.innerHTML = `
+    <svg viewBox="0 0 40 40" width="40" height="40" aria-hidden="true" style="overflow:visible">
+      <circle cx="20" cy="20" r="17" fill="#fdf3df" stroke="${INK}" stroke-width="2.6"/>
+      <text x="20" y="28" text-anchor="middle" font-size="22" font-weight="700" fill="${PEN}">?</text>
+    </svg>`;
+  host.append(mark);
+  setTimeout(() => mark.remove(), ms);
+}
+
 /** The raised hand wiggles and glows once: "si querés ayuda, tocá la mano". */
 export function wiggleHelp(root: HTMLElement): void {
   const help = root.querySelector<HTMLElement>('.help');

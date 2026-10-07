@@ -13,6 +13,7 @@ import { BoardView, aspectOf, frameOf, type Frame } from '../ui/board/BoardView'
 import { GUARDA_FRAME } from '../ui/board/GuardaView';
 import { MUSIC_FRAME } from '../ui/board/MusicView';
 import { playGhost, type DemoStep, type GhostRun } from '../ui/ghost';
+import { useIdleNudge } from '../ui/idleNudge';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { RestartIcon } from '../ui/icons';
 import { NextPageArt } from '../ui/art';
@@ -191,10 +192,27 @@ export function useInstruction(level: LevelDef) {
   return useCallback(() => speak(level.say), [level]);
 }
 
-/** The ghost hand, one at a time, cancelled when the page goes away. */
+/**
+ * The ghost hand, one at a time, cancelled when the page goes away — or
+ * (T20) by any real tap or key from the child while it plays: a demo only
+ * ever shows the gesture, so a child who already knows what to do (or just
+ * wants to act) is never held up by it. The ghost's own moves never count:
+ * it animates a detached hand and calls `apply()` directly, it never
+ * dispatches a real pointer or keyboard event.
+ */
 export function useGhost(root: React.RefObject<HTMLElement | null>) {
   const run = useRef<GhostRun | null>(null);
-  useEffect(() => () => run.current?.cancel(), []);
+  useEffect(() => {
+    const el = root.current;
+    const stop = () => run.current?.cancel();
+    el?.addEventListener('pointerdown', stop, true);
+    el?.addEventListener('keydown', stop, true);
+    return () => {
+      el?.removeEventListener('pointerdown', stop, true);
+      el?.removeEventListener('keydown', stop, true);
+      run.current?.cancel();
+    };
+  }, [root]);
   return useCallback((steps: DemoStep[], opts?: { pace?: number }): Promise<void> | null => {
     const el = root.current;
     if (!el || run.current) return null;
@@ -269,6 +287,7 @@ export interface ShellProps {
 
 export function Shell({ level, mode, rootRef, onSpeak, onHelp, busy, children, notebookW, noPalette }: ShellProps) {
   const nav = useLevelNav();
+  useIdleNudge(rootRef);
   return (
     <main
       ref={rootRef}

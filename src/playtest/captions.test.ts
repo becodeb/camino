@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { setSpeechFilter, speak, stopSpeaking } from '../ui/speech';
-import { captionsByGrade, captionsFor, captionsOn, clearCaption, installCaptions, setCaptions } from './captions';
+import { captionsByGrade, captionsFor, captionsOn, captionsShown, captionsUpper, clearCaption, installCaptions, setCaptions } from './captions';
 import * as captions from './captions';
 
 describe('on-screen text', () => {
@@ -13,6 +13,15 @@ describe('on-screen text', () => {
     expect(captionsFor(5, 'off')).toBe(false);
     expect(captionsFor(2, 'auto')).toBe(false);
     expect(captionsFor(3, 'auto')).toBe(true);
+  });
+
+  it('T20: muted, the text is always shown, in capital letters for 1ro/2do only', () => {
+    expect(captionsShown(false, false)).toBe(false);
+    expect(captionsShown(false, true)).toBe(true);
+    expect(captionsShown(true, false)).toBe(true);
+    expect(captionsShown(true, true)).toBe(true);
+    expect([1, 2, 3, 4, 5].map((g) => captionsUpper(true, g))).toEqual([true, true, false, false, false]);
+    expect([1, 2, 3, 4, 5].map((g) => captionsUpper(false, g))).toEqual([false, false, false, false, false]);
   });
 
   it('hears every spoken line (after the speech filter) and drops it when speech stops', () => {

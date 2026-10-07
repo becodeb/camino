@@ -35,6 +35,7 @@ import { PlayerFace } from '../screens/player';
 import { SheetScreen } from '../screens/SheetScreen';
 import { SeedPouch } from '../screens/yearKit';
 import { ThenArrow } from '../ui/art';
+import { useMuted } from '../ui/mute';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { usePlaytest } from './context';
 import { activityFor, budgetFrom, budgetVerdict, menuFor, MENU_LINES, type Activity, type ProbeId } from './freePlay';
@@ -83,7 +84,9 @@ export function FreePlay() {
   const apiRef = useRef(api);
   apiRef.current = api;
   const grade = api.session?.grade ?? 1;
-  const [menu] = useState(() => menuFor(grade, hasProbe));
+  const muted = useMuted();
+  // T20: 1ro's recess (music) drops off the menu while muted; it comes back if sound does
+  const menu = useMemo(() => menuFor(grade, hasProbe, muted), [grade, muted]);
   const [budget, setBudget] = useState(() => budgetFrom(location.search));
   // a reloaded tab carries on with free play's clock and visit count (resume.ts); the child is back on the menu
   const [kept] = useState(() => resumedPart<{ startedAt: number; visits: number }>('free_play'));

@@ -33,6 +33,7 @@ import { DEBUG } from '../screens/levelKit';
 import { forgetRealtimeIntros } from '../screens/RealtimeLevel';
 import { forgetWorkshopGuides } from '../screens/WorkshopScreen';
 import { setUnlocks } from '../curriculum/rewards';
+import { forgetSilentDemos } from '../ui/silentDemo';
 import { setSpeechFilter } from '../ui/speech';
 import { clearCaption, installCaptions, setCaptions } from './captions';
 import { Captions } from './Captions';
@@ -139,6 +140,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     // a new child: the pages' first-entry demos play again
     forgetRealtimeIntros();
     forgetWorkshopGuides();
+    forgetSilentDemos();
     setHand(null);
     level.current = null;
     setSession(tel.startSession(input));

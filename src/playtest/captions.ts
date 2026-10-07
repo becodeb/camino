@@ -21,6 +21,16 @@ export function captionsFor(grade: number, setting: CaptionsSetting): boolean {
   return setting === 'auto' ? captionsByGrade(grade) : setting === 'on';
 }
 
+/**
+ * T20 (silent classroom round): muted, the on-screen text is always shown,
+ * regardless of `on` (the child's 💬 choice) — there is nothing to hear, so
+ * nothing to fall back on. Not muted: unchanged (just `on`).
+ */
+export const captionsShown = (on: boolean, muted: boolean): boolean => on || muted;
+
+/** Muted, 1ro/2do (grade <= 2) read the text in capital letters; 3ro+ and not muted: unchanged. */
+export const captionsUpper = (muted: boolean, grade: number): boolean => muted && grade <= 2;
+
 export interface CaptionLine {
   text: string;
   /** Increases with every line, so the same words said again still re-show. */

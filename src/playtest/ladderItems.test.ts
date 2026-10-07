@@ -81,7 +81,23 @@ describe('the round-2 item bank', () => {
       expect(plan.length, l.id).toBeGreaterThan(l.slots!);
       expect(l.solution.some((it) => it.t === 'loop'), l.id).toBe(true);
     }
+    // T20: 5, 7, 8 all get the repeat concept demo (7/8 reuse 5's style)
+    for (const n of [5, 7, 8]) expect(at(n).intro, at(n).id).toBeTruthy();
+  });
+
+  it('T20 (silent classroom round): every 1ro/2do format has a way to show it wordless', () => {
+    expect(at(1).silentDemo).toBe('path');
+    expect(at(2).silentDemo).toBe('path');
+    expect(at(3).silentDemo).toBe('fix');
+    expect(at(4).silentDemo).toBe('predict');
     expect(at(5).intro).toBeTruthy();
+    expect(at(6).silentDemo).toBeUndefined(); // already pulses via CSS (.blk-count.is-calling)
+    expect(at(7).intro).toBeTruthy();
+    expect(at(8).intro).toBeTruthy();
+    expect(at(9).intro).toBeTruthy(); // fog: already has one
+    expect(at(10).silentDemo).toBe('worlds');
+    expect(at(11).realtime?.intro).toBeTruthy(); // rule games: already auto-play once
+    expect(at(12).realtime?.intro).toBeTruthy();
   });
 
   it('6 · the count is what is missing, nothing to bring', () => {

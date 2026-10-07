@@ -7,11 +7,19 @@
 // goodbye) they float at the top. A tap on the bubble says the line again.
 // The line stays until the next one, or until speech stops (the page or the
 // step changes).
+//
+// T20 (silent classroom round): muted, the text is always on, regardless of
+// the 💬 choice (there is no sound to fall back on); for 1ro/2do it is shown
+// in capital letters (easier for a reader of imprenta mayúscula). Not muted:
+// unchanged. The 💬 toggle still writes the child's preference (for when
+// sound comes back), but stays disabled while muted since there is nothing
+// to switch off to.
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useMuted } from '../ui/mute';
 import { speak } from '../ui/speech';
-import { useCaptionLine, useCaptionsOn } from './captions';
+import { captionsShown, captionsUpper, useCaptionLine, useCaptionsOn } from './captions';
 import { usePlaytest } from './context';
 import type { StepId } from './flow';
 import { CaptionsIcon } from './round2Art';
@@ -39,21 +47,24 @@ const sizeOf = (t: string) => (t.length > 150 ? ' is-longer' : t.length > 95 ? '
 
 export function Captions({ step }: { step: StepId }) {
   const on = useCaptionsOn();
-  const line = useCaptionLine();
+  const muted = useMuted();
   const api = usePlaytest();
+  const line = useCaptionLine();
   const bar = useBar();
   if (step === 'setup') return null;
+  const shown = captionsShown(on, muted);
+  const upper = captionsUpper(muted, api.session?.grade ?? 99);
   const toggle = (
     <button
-      type="button" className={`pp-cap-toggle cut${on ? ' is-on' : ''}`} aria-pressed={on}
+      type="button" className={`pp-cap-toggle cut${shown ? ' is-on' : ''}`} aria-pressed={shown} disabled={muted}
       aria-label={on ? 'Sacar el texto de la pantalla' : 'Mostrar el texto en la pantalla'}
       onClick={() => api.setCaptions(!on, bar ? 'bar' : 'corner')}
     >
-      <CaptionsIcon on={on} />
+      <CaptionsIcon on={shown} />
     </button>
   );
-  const bubble = on && line ? (
-    <button type="button" key={line.n} className={`pp-cap${sizeOf(line.text)}`} aria-live="polite" aria-label={`${line.text} (escuchar otra vez)`} onClick={() => speak(line.text)}>
+  const bubble = shown && line ? (
+    <button type="button" key={line.n} className={`pp-cap${sizeOf(line.text)}${upper ? ' is-upper' : ''}`} aria-live="polite" aria-label={`${line.text} (escuchar otra vez)`} onClick={() => speak(line.text)}>
       <span className="pp-cap-text">{line.text}</span>
     </button>
   ) : null;
