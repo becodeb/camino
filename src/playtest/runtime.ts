@@ -5,14 +5,39 @@
 // comes back.
 
 import { useSyncExternalStore } from 'react';
-import { POLL_MS, Telemetry, type Backing, type Device, type PostResult, type SyncStatus } from './telemetry';
+import { POLL_MS, Telemetry, type AdminSound, type Backing, type Device, type PostResult, type SyncStatus } from './telemetry';
 import { createErrorLimiter, createIdleTracker, sourceFile } from './watch';
 
 declare const __CAMINO_VERSION__: string | undefined;
 
 const SYNC_URL = './api/sync';
+const CLASS_SETTINGS_URL = './api/class-settings';
+/** T18: a dead network must never hold up the setup's first spoken line. */
+export const CLASS_SETTINGS_TIMEOUT_MS = 1500;
 
-function browserStorage(): Backing | null {
+/**
+ * GET /api/class-settings at page load, before any speech: the admin's
+ * live class-wide sound setting, or null on any failure or timeout (the
+ * device/url baseline decides then; soundSetting.ts never blocks on it
+ * longer than the timeout below).
+ */
+export async function fetchClassSettings(timeoutMs = CLASS_SETTINGS_TIMEOUT_MS): Promise<AdminSound | null> {
+  if (typeof fetch !== 'function') return null;
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch(CLASS_SETTINGS_URL, { cache: 'no-store', signal: ctrl?.signal });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { sound?: unknown };
+    return body.sound === 'on' || body.sound === 'off' || body.sound === 'link' ? body.sound : null;
+  } catch {
+    return null;
+  } finally {
+    if (timer != null) clearTimeout(timer);
+  }
+}
+
+export function browserStorage(): Backing | null {
   try {
     if (typeof localStorage === 'undefined') return null;
     const probe = 'camino.piloto.probe';

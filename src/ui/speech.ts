@@ -1,6 +1,12 @@
 // Spoken instructions (Web Speech API): the child never has to read.
 // Ported from habilidades (app/src/ui/speech.ts @ 9b90d1d), plus speakWhenAllowed.
 // Prefers an Argentine Spanish voice, then any Spanish one.
+//
+// T18 (the master mute, ui/mute.ts): muted, `speak` still runs the filter
+// and feeds the listener (the on-screen text keeps working) but never
+// calls speechSynthesis.speak.
+
+import { isMuted } from './mute';
 
 let chosen: SpeechSynthesisVoice | null | undefined;
 
@@ -48,6 +54,7 @@ export function setSpeechListener(f: SpeechListener | null): void {
 export function speak(text: string): void {
   if (filter) text = filter(text);
   listener?.(text);
+  if (isMuted()) return;
   if (!speechAvailable()) return;
   if (chosen === undefined) chosen = pickVoice();
   speechSynthesis.cancel();

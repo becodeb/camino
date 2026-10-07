@@ -9,8 +9,9 @@
 //
 // Routes: a live summary for /admin (demo sessions left out, with "terminó"
 // and the survey per session), the class commands ("quedan 5 minutos",
-// "terminar la clase", "cancelar aviso"), the same JSON/CSV export as
-// /api/export, and the deletion of one session (check and test sessions).
+// "terminar la clase", "cancelar aviso"), the sound setting (T18: "Con
+// sonido" / "Sin sonido" / "Como diga el link"), the same JSON/CSV export
+// as /api/export, and the deletion of one session (check and test sessions).
 
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { timingSafeEqual } from 'node:crypto';
@@ -22,6 +23,7 @@ import {
   type AdminSecrets, type LoginLimiter,
 } from '../lib/adminSession.ts';
 import { COMMAND_KINDS, cancelWarnings, createCommand, liveCommands, type CommandKind } from '../lib/commands.ts';
+import { liveSoundSetting, setSoundSetting, type SoundSetting } from '../lib/classSettings.ts';
 import { APP_VERSION } from '../version.ts';
 
 const ACTIVE_WINDOW_MINUTES = 2;
@@ -116,7 +118,9 @@ export function adminRoute(pool: pg.Pool, opts: AdminOptions | string | undefine
     );
     const demoQuery = pool.query('SELECT count(*)::int AS n FROM sessions WHERE demo');
 
-    const [sessions, counts, active, demo, commands] = await Promise.all([sessionsQuery, countsQuery, activeQuery, demoQuery, liveCommands(pool)]);
+    const [sessions, counts, active, demo, commands, soundSetting] = await Promise.all([
+      sessionsQuery, countsQuery, activeQuery, demoQuery, liveCommands(pool), liveSoundSetting(pool),
+    ]);
 
     const countsByGrade: Record<number, number> = {};
     for (const row of counts.rows as Array<{ grade: number; n: number }>) countsByGrade[row.grade] = row.n;
@@ -135,6 +139,7 @@ export function adminRoute(pool: pg.Pool, opts: AdminOptions | string | undefine
       },
       demo_hidden: (demo.rows[0] as { n: number }).n,
       commands,
+      sound_setting: soundSetting,
       generated_at: new Date().toISOString(),
     });
   });
@@ -153,6 +158,18 @@ export function adminRoute(pool: pg.Pool, opts: AdminOptions | string | undefine
 
   // "cancelar aviso": the five-minute warning is dropped where it is still pending
   app.post('/commands/cancel', async (c) => c.json({ ok: true, cancelled: await cancelWarnings(pool) }));
+
+  // T18: "Con sonido" / "Sin sonido" / "Como diga el link", a class-wide setting (not a one-time command)
+  app.post('/settings', async (c) => {
+    let body: unknown;
+    try { body = await c.req.json(); } catch { body = null; }
+    const sound = (body as { sound?: unknown } | null)?.sound;
+    if (sound !== 'on' && sound !== 'off' && sound !== 'link') {
+      return c.json({ error: 'sound must be on, off or link' }, 400);
+    }
+    const setting = await setSoundSetting(pool, sound as SoundSetting);
+    return c.json({ ok: true, setting });
+  });
 
   // Removes one session and (ON DELETE CASCADE) all its events: check and
   // test sessions must not stay in the pilot's data.

@@ -15,6 +15,13 @@
 // "terminar la clase" shows "Actividad terminada" (classroom.tsx) and ends
 // it. A demo session (demo.ts) gets the demo bar (DemoBar.tsx).
 //
+// T18 (the silent classroom round): the device's `?sonido=`/localStorage
+// baseline is set as early as possible (before Setup even renders), and
+// every change of the effective setting (the admin's sync answers, the
+// adult's corner-menu toggle) is logged and kept on `device.sound` while a
+// session is open (soundSetting.ts does the resolving; ui/mute.ts is the
+// actual switch).
+//
 // The playtest keeps its own progress in memory (never the demo's
 // `camino.progress.v1`), fresh for every session. A reload of the tab
 // carries on with the session on the step it was on (resume.ts).
@@ -41,12 +48,15 @@ import { setFast } from './demo';
 import { setPageHooks } from '../screens/levelKit';
 import { enterPlaytestProgress, leavePlaytestProgress } from './progressScope';
 import { rememberFlow, takeResume, type SavedSession } from './resume';
-import { installWatchers, telemetry } from './runtime';
+import { browserStorage, installWatchers, telemetry } from './runtime';
+import { initDeviceSound, setAdminSound, subscribeSound } from './soundSetting';
 import { STEP_VIEWS } from './steps';
 import type { SessionRecord, StartInput } from './telemetry';
 import './playtest.css';
 
 export function PlaytestScreen() {
+  // T18: before Setup even renders (so its first spoken line, if any, is already muted or not)
+  useState(() => { initDeviceSound(typeof location !== 'undefined' ? location.search : '', browserStorage()); return true; });
   // before any child reads the progress: the playtest's own, in memory (a reloaded tab's, when it carries on)
   const [resumed] = useState(() => {
     const r = takeResume(telemetry().session?.id);
@@ -241,6 +251,16 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
       apply({ type: 'class_end' });
     }
   }), [tel, log, apply]);
+
+  // T18: the admin's sound setting, as every sync answer carries it
+  useEffect(() => tel.onAdminSound(setAdminSound), [tel]);
+  // T18: logged only once a session exists (the setup's own session-start input already carries the value it started with)
+  useEffect(() => subscribeSound((s) => {
+    if (!tel.session || flowRef.current.step === 'setup') return;
+    log('sound', { on: s.on, source: s.source });
+    const d = tel.session.device;
+    tel.updateSession({ device: { ...d, sound: s.on, sound_source: s.source } });
+  }), [log, tel]);
 
   // "quedan 5 minutos" on a step with no item to finish (the character, the tool check): on to the wardrobe now
   useEffect(() => {

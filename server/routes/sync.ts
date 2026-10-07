@@ -2,7 +2,9 @@
 // the offline client can retry a batch blindly — upserting the session
 // never overwrites a non-null field with null, and events are inserted with
 // ON CONFLICT (session_id, seq) DO NOTHING, so acked always lists every seq
-// in the batch once this call succeeds.
+// in the batch once this call succeeds. T18: every answer also carries the
+// live `settings.sound` (class_settings), so the admin's class-wide sound
+// setting reaches an already-open device within one sync cycle.
 
 import { Hono } from 'hono';
 import { getConnInfo } from '@hono/node-server/conninfo';
@@ -10,6 +12,7 @@ import type pg from 'pg';
 import { validateSyncBody } from '../lib/validate.ts';
 import { createRateLimiter } from '../lib/rateLimit.ts';
 import { commandsFor, type ClassCommand } from '../lib/commands.ts';
+import { liveSoundSetting } from '../lib/classSettings.ts';
 import type { EventInput, SessionInput } from '../types.ts';
 
 // Requests per IP per minute. A whole class (~25 devices) sits behind one
@@ -124,17 +127,23 @@ export function syncRoute(pool: pg.Pool, rateLimit = SYNC_RATE_LIMIT): Hono {
     const { session, events } = result.value;
     const client = await pool.connect();
     let commands: ClassCommand[] = [];
+    let sound: 'on' | 'off' | 'link' = 'link';
     try {
       const before = await upsertSessionAndEvents(client, session, events);
       // the class's commands (T14) for this session: from when it started (the earlier of its clock and the server's first sight)
       const own = Date.parse(session.started_at);
       const seen = before?.createdAt.getTime() ?? Date.now();
-      commands = await commandsFor(client, new Date(Math.min(own, seen)), before?.lastSeen ?? null);
+      const [cmds, setting] = await Promise.all([
+        commandsFor(client, new Date(Math.min(own, seen)), before?.lastSeen ?? null),
+        liveSoundSetting(client),
+      ]);
+      commands = cmds;
+      sound = setting.value;
     } finally {
       client.release();
     }
 
-    return c.json({ ok: true, acked: events.map((e) => e.seq), commands }, 200);
+    return c.json({ ok: true, acked: events.map((e) => e.seq), commands, settings: { sound } }, 200);
   });
 
   return app;

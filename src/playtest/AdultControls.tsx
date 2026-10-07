@@ -13,10 +13,14 @@
 //   still the child's help. The child no longer raises the hand by holding
 //   ✋ (it still rises after the automatic help steps);
 // - a long press (1.2 s) on the character's raised hand asks the same.
+// - T18: "Sonido: sí / no" mutes or unmutes this one device for the rest of
+//   this page load (soundSetting.ts); the admin's class-wide setting still
+//   wins while it is live.
 // The corner is watched on the window (capture phase), so the page under it
 // (the 🔊 of a level's bar) keeps working for a normal tap.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useMuted } from '../ui/mute';
 import { holdAdultSheet } from './adultState';
 import { AdultFormPanel } from './closing';
 import { usePlaytest, type AdultHelpKind, type AdultHelpVia } from './context';
@@ -27,6 +31,7 @@ import { useSyncStatus } from './runtime';
 import { STEP_NAME } from './labels';
 import { RaisedHand } from './RaisedHand';
 import { openProbe } from './probes';
+import { setAdultOverride } from './soundSetting';
 
 export const CORNER_PX = 64;
 export const CORNER_HOLD_MS = 1500;
@@ -168,6 +173,16 @@ function HelpKinds({ onPick, big = false }: { onPick: (k: AdultHelpKind) => void
   );
 }
 
+/** T18: "Sonido: sí / no" for this device, this page load only (soundSetting.ts's adult layer). */
+function SoundToggle() {
+  const muted = useMuted();
+  return (
+    <button type="button" className="pp-adult-btn cut" data-act="sound" onClick={() => setAdultOverride(muted)}>
+      Sonido: {muted ? 'no' : 'sí'}
+    </button>
+  );
+}
+
 /** A sheet for the adult over the page (short text allowed). */
 export function AdultSheet({ title, onClose, children, className }: { title: string; onClose: () => void; children: ReactNode; className?: string }) {
   // the goodbye waits while the adult has a sheet open
@@ -214,6 +229,7 @@ function AdultMenu({ onClose }: { onClose: () => void }) {
           {canOpenSurvey(api.flow) && <button type="button" className={`pp-adult-btn cut${api.flow.routeDone ? ' is-go' : ''}`} data-act="survey" onClick={() => { api.openSurvey('menu'); onClose(); }}>Hacer la encuesta{api.flow.routeDone ? ' (ya terminó)' : ''}</button>}
           <button type="button" className="pp-adult-btn cut" data-act="log-help" onClick={() => { setHelp(true); setNoted(false); }}>Registrar ayuda{noted ? ' ✓' : ''}</button>
           <button type="button" className="pp-adult-btn cut" data-act="adult-form" onClick={() => setForm(true)}>Comentario del adulto <small>(opcional)</small>{saved ? ' ✓' : ''}</button>
+          <SoundToggle />
           {step === 'free_play' && <button type="button" className="pp-adult-btn cut" data-act="open-game-maker" onClick={() => { openProbe('game_maker'); onClose(); }}>Abrir «Hacé tu juego»</button>}
           {step === 'free_play' && <button type="button" className="pp-adult-btn cut" data-act="open-text-probe" onClick={() => { openProbe('text_probe'); onClose(); }}>Abrir «Del bloque al texto»</button>}
           {canSkip(step) && <button type="button" className="pp-adult-btn cut" data-act="skip" onClick={() => { api.skip(); onClose(); }}>Saltar este paso</button>}

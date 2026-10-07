@@ -6,6 +6,8 @@
 //   clase" (with a confirm), plus "Cancelar aviso"; who is playing now, on
 //   which step, who finished the route ("terminó") and who did the survey.
 //   Demo sessions are not listed (only counted).
+// - T18: "Sonido" — "Con sonido" / "Sin sonido" / "Como diga el link",
+//   highlighting the one in effect and when it expires (4 hours).
 // - Every session (older ones too), the delete button and the exports.
 // It polls /api/admin/summary every 5 s. Andika is embedded as a data: URI
 // copy of src/fonts/andika-400-latin.woff2 (server/admin/fonts/, same OFL
@@ -105,6 +107,8 @@ button.secondary { background: var(--sheet); }
 .big.warn { background: var(--yellow); }
 .big.stop { background: #e69a8c; }
 .big.stop.is-confirm { background: var(--red); color: #fff; }
+.big.sound { background: var(--sheet); font-size: 1.15rem; min-height: 72px; }
+.big.sound.is-current { background: var(--blue); outline: 3px solid var(--blue-ink); outline-offset: 2px; }
 .class-state { margin: 12px 0 0; font-size: 1rem; min-height: 1.5em; }
 .class-state b { color: var(--blue-ink); }
 .stats { display: flex; gap: 28px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -167,6 +171,17 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
   <p class="class-state" id="class-state" role="status"></p>
   <button type="button" class="secondary" id="cancel-warn" hidden>Cancelar aviso de 5 minutos</button>
   <p class="note">Las compus reciben el aviso en unos segundos. Una compu sin internet lo recibe cuando vuelve la conexión (hasta 2 horas).</p>
+</section>
+
+<section class="card" aria-labelledby="sound-h">
+  <h2 id="sound-h">Sonido</h2>
+  <div class="big-buttons">
+    <button type="button" class="big sound" id="sound-on" data-sound="on">🔊 Con sonido</button>
+    <button type="button" class="big sound" id="sound-off" data-sound="off">🔇 Sin sonido</button>
+    <button type="button" class="big sound" id="sound-link" data-sound="link">🔗 Como diga el link</button>
+  </div>
+  <p class="class-state" id="sound-state" role="status"></p>
+  <p class="note">"Como diga el link" deja que cada compu decida sola (el enlace, o el ✋ del menú del adulto). "Con sonido" y "Sin sonido" valen para toda la clase durante 4 horas; después vuelve solo a "como diga el link".</p>
 </section>
 
 <section class="card" aria-labelledby="now-h">
@@ -311,6 +326,17 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
     $('demo-note').textContent = data.demo_hidden ? ('Hay ' + data.demo_hidden + ' sesión(es) de demo: no se muestran ni se exportan, y se borran solas a las 24 horas.') : '';
   }
 
+  function renderSound(data) {
+    var s = data.sound_setting || { value: 'link', expires_at: null };
+    ['on', 'off', 'link'].forEach(function (v) {
+      $('sound-' + v).classList.toggle('is-current', s.value === v);
+    });
+    var text;
+    if (s.value === 'link') text = 'Ahora: <b>como diga el link</b> (cada compu decide sola).';
+    else text = 'Ahora: <b>' + (s.value === 'on' ? 'con sonido' : 'sin sonido') + '</b> para toda la clase, hasta las <b>' + fmtTime(s.expires_at) + '</b> (después, como diga el link).';
+    $('sound-state').innerHTML = text;
+  }
+
   function renderAll(data) {
     var stats = $('grade-stats');
     stats.innerHTML = '';
@@ -351,6 +377,7 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
         if (!data) return;
         say(statusEl, 'Actualizado ' + new Date().toLocaleTimeString('es-AR'), false);
         renderClass(data);
+        renderSound(data);
         renderAll(data);
       })
       .catch(function (err) { say(statusEl, err.message, true); });
@@ -391,6 +418,12 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
   });
   $('cancel-warn').addEventListener('click', function () {
     command('/api/admin/commands/cancel', {}, 'Aviso cancelado.');
+  });
+  ['on', 'off', 'link'].forEach(function (v) {
+    $('sound-' + v).addEventListener('click', function () {
+      var label = v === 'on' ? 'Con sonido.' : v === 'off' ? 'Sin sonido.' : 'Como diga el link.';
+      command('/api/admin/settings', { sound: v }, 'Sonido: ' + label);
+    });
   });
 
   $('login-form').addEventListener('submit', function (e) {

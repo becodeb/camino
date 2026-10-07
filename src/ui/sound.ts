@@ -7,8 +7,12 @@
 // Nothing here may break a page. Without Web Audio, when it throws, or before
 // the page was ever tapped (browsers refuse to start audio then, and the
 // next tap tries again), nothing sounds: the board still shows every note.
+//
+// T18 (the master mute, ui/mute.ts): muted, `ringNote` does nothing (no
+// AudioContext is even touched).
 
 import type { Pitch } from '../game/music';
+import { isMuted } from './mute';
 
 /** The fifth octave: a toy xylophone's range, clear on laptop speakers. */
 const FREQ: Record<Pitch, number> = { do: 523.25, re: 587.33, mi: 659.25, fa: 698.46, sol: 783.99 };
@@ -50,6 +54,7 @@ function partial(c: AudioContext, out: AudioNode, freq: number, amp: number, att
 
 /** Rings a bar of the xylophone now (silently when there is no sound). */
 export function ringNote(p: Pitch): void {
+  if (isMuted()) return;
   try {
     const c = audio();
     if (!c) return;

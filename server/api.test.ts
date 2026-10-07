@@ -116,7 +116,7 @@ dbDescribe('API against Postgres', () => {
     });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ ok: true, acked: [0, 1], commands: [] });
+    expect(body).toEqual({ ok: true, acked: [0, 1], commands: [], settings: { sound: 'link' } });
 
     const { rows: sessionRows } = await pool.query('SELECT * FROM sessions WHERE id = $1', [session.id]);
     expect(sessionRows).toHaveLength(1);
@@ -426,7 +426,7 @@ dbDescribe('API against Postgres', () => {
       body,
     });
     expect(second.status).toBe(200);
-    expect(await second.json()).toEqual({ ok: true, acked: [0, 1], commands: [] });
+    expect(await second.json()).toEqual({ ok: true, acked: [0, 1], commands: [], settings: { sound: 'link' } });
 
     const { rows } = await pool.query('SELECT count(*)::int AS n FROM events WHERE session_id = $1', [session.id]);
     expect(rows[0].n).toBe(2);
@@ -772,6 +772,81 @@ dbDescribe('API against Postgres', () => {
       expect((await send(a, 'reboot')).status).toBe(400);
       await pool.query('DELETE FROM class_commands');
       expect(await deleteOldCommands(pool)).toBe(0);
+    });
+  });
+
+  describe('the sound setting (T18)', () => {
+    const auth = { authorization: 'Bearer t', 'content-type': 'application/json' };
+    const app = () => createApp(pool, { adminToken: 't', distDir });
+    const settings = (a: ReturnType<typeof createApp>) => a.request('/api/class-settings');
+    const sync = async (a: ReturnType<typeof createApp>, session: Record<string, unknown>) => {
+      const res = await a.request('/api/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session, events: [] }) });
+      expect(res.status).toBe(200);
+      return (await res.json()) as { settings: { sound: string } };
+    };
+
+    it('GET /api/class-settings is public, cheap, never cached, and link by default', async () => {
+      await pool.query(`DELETE FROM class_settings`);
+      const a = app();
+      const res = await settings(a);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      expect(await res.json()).toEqual({ sound: 'link', expires_at: null });
+    });
+
+    it('POST /api/admin/settings needs auth, validates the value, and the new value shows at once on the public endpoint and in /api/sync', async () => {
+      await pool.query(`DELETE FROM class_settings`);
+      const a = app();
+      expect((await a.request('/api/admin/settings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sound: 'off' }) })).status).toBe(401);
+      const bad = await a.request('/api/admin/settings', { method: 'POST', headers: auth, body: JSON.stringify({ sound: 'mute' }) });
+      expect(bad.status).toBe(400);
+      const res = await a.request('/api/admin/settings', { method: 'POST', headers: auth, body: JSON.stringify({ sound: 'off' }) });
+      expect(res.status).toBe(200);
+      const body = await res.json() as { ok: true; setting: { value: string; expires_at: string | null } };
+      expect(body.setting.value).toBe('off');
+      expect(body.setting.expires_at).not.toBeNull();
+      expect(await (await settings(a)).json()).toMatchObject({ sound: 'off' });
+      const got = await sync(a, newSession());
+      expect(got.settings).toEqual({ sound: 'off' });
+      // a device already open gets the change within one sync cycle (no new session needed)
+      await a.request('/api/admin/settings', { method: 'POST', headers: auth, body: JSON.stringify({ sound: 'on' }) });
+      expect((await sync(a, newSession())).settings).toEqual({ sound: 'on' });
+    });
+
+    it('expires 4 hours after being set: falls back to "link" by itself', async () => {
+      await pool.query(`DELETE FROM class_settings`);
+      const a = app();
+      await a.request('/api/admin/settings', { method: 'POST', headers: auth, body: JSON.stringify({ sound: 'off' }) });
+      expect(await (await settings(a)).json()).toMatchObject({ sound: 'off' });
+      await pool.query(`UPDATE class_settings SET expires_at = now() - interval '1 second' WHERE key = 'sound'`);
+      expect(await (await settings(a)).json()).toMatchObject({ sound: 'link', expires_at: null });
+    });
+
+    it('setting it again (on, then link) replaces the row rather than accumulating rows', async () => {
+      await pool.query(`DELETE FROM class_settings`);
+      const a = app();
+      await a.request('/api/admin/settings', { method: 'POST', headers: auth, body: JSON.stringify({ sound: 'on' }) });
+      await a.request('/api/admin/settings', { method: 'POST', headers: auth, body: JSON.stringify({ sound: 'link' }) });
+      const { rows } = await pool.query(`SELECT value FROM class_settings WHERE key = 'sound'`);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].value).toBe('link');
+      await pool.query(`DELETE FROM class_settings`);
+    });
+
+    it('a class-settings request is rate-limited per IP (the same shape as /api/sync, a smaller cap)', async () => {
+      const a = createApp(pool, { adminToken: 't', distDir, classSettingsRateLimit: 2 });
+      expect((await settings(a)).status).toBe(200);
+      expect((await settings(a)).status).toBe(200);
+      expect((await settings(a)).status).toBe(429);
+    });
+
+    it('/api/admin/summary carries the live setting too', async () => {
+      await pool.query(`DELETE FROM class_settings`);
+      const a = app();
+      await a.request('/api/admin/settings', { method: 'POST', headers: auth, body: JSON.stringify({ sound: 'on' }) });
+      const sum = await (await a.request('/api/admin/summary', { headers: auth })).json() as { sound_setting: { value: string } };
+      expect(sum.sound_setting.value).toBe('on');
+      await pool.query(`DELETE FROM class_settings`);
     });
   });
 

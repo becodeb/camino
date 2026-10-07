@@ -28,6 +28,8 @@ function world(opts: { storage?: Backing & { data: Map<string, string> }; random
   const warn = vi.fn();
   /** The class commands the fake server hands out with every 'ok' (T14). */
   const commands: unknown[] = [];
+  /** T18: the admin's sound setting the fake server hands out with every 'ok'; unset: the field is left out. */
+  let soundSetting: 'on' | 'off' | 'link' | undefined;
   const deps: TelemetryDeps = {
     storage,
     async post(body, o) {
@@ -35,7 +37,17 @@ function world(opts: { storage?: Backing & { data: Map<string, string> }; random
       posts.push({ body: parsed, keepalive: o.keepalive });
       const next = script.shift() ?? 'ok';
       if (next === 'down') throw new TypeError('Failed to fetch');
-      if (next === 'ok') return { status: 200, body: { ok: true, acked: parsed.events.map((e) => e.seq), commands: commands.map((c) => ({ ...(c as object) })) } } satisfies PostResult;
+      if (next === 'ok') {
+        return {
+          status: 200,
+          body: {
+            ok: true,
+            acked: parsed.events.map((e) => e.seq),
+            commands: commands.map((c) => ({ ...(c as object) })),
+            ...(soundSetting ? { settings: { sound: soundSetting } } : {}),
+          },
+        } satisfies PostResult;
+      }
       return { status: next, body: { error: 'x' } };
     },
     now: () => t,
@@ -62,7 +74,10 @@ function world(opts: { storage?: Backing & { data: Map<string, string> }; random
     t = end;
   };
   const nextTimerIn = () => (timers.length ? Math.min(...timers.map((x) => x.at)) - t : null);
-  return { storage, posts, script, deps, advance, warn, nextTimerIn, commands, now: () => t };
+  return {
+    storage, posts, script, deps, advance, warn, nextTimerIn, commands, now: () => t,
+    setSoundSetting: (v: 'on' | 'off' | 'link' | undefined) => { soundSetting = v; },
+  };
 }
 
 let ids = 0;
@@ -99,6 +114,16 @@ describe('the telemetry queue', () => {
     expect(s).toMatchObject({ grade: 2, division: 'B', consent: null, app_version: '0.1.0', ended_at: null });
     expect(s.device).toMatchObject({ captions: true, captions_set: 'setup' });
     expect(Object.keys(s).sort()).toEqual(['adult_form', 'app_version', 'code', 'consent', 'current_step', 'device', 'division', 'ended_at', 'end_reason', 'grade', 'id', 'started_at', 'survey'].sort());
+  });
+
+  it('T18: records the effective sound setting and its source on the device, when given', () => {
+    const w = world();
+    const tel = new Telemetry(w.deps);
+    const withSound = tel.startSession({ grade: 1, division: null, sound: false, soundSource: 'url' });
+    expect(withSound.device).toMatchObject({ sound: false, sound_source: 'url' });
+    const withoutSound = tel.startSession({ grade: 1, division: null });
+    expect(withoutSound.device).not.toHaveProperty('sound');
+    expect(withoutSound.device).not.toHaveProperty('sound_source');
   });
 
   it('numbers events 0, 1, 2… per session, stores them first and removes what the server acked', async () => {
@@ -376,5 +401,32 @@ describe('class commands and the poll (T14)', () => {
     const tel = new Telemetry(w.deps);
     expect(tel.startSession({ grade: 1, division: null, demo: true }).demo).toBe(true);
     expect(tel.startSession({ grade: 1, division: null }).demo).toBeUndefined();
+  });
+});
+
+describe("the admin's sound setting (T18)", () => {
+  it('hands the current value to onAdminSound on every successful post (not once per id)', async () => {
+    const w = world();
+    const tel = new Telemetry(w.deps, { pollMs: 10_000 });
+    const got: string[] = [];
+    tel.onAdminSound((v) => got.push(v));
+    tel.startSession({ grade: 3, division: null });
+    w.setSoundSetting('off');
+    // the session's own creation needs a sync (the batch timer), plus two polls: the same value every time (it is a setting, not a command)
+    await w.advance(25_000);
+    expect(got).toEqual(['off', 'off', 'off']);
+    w.setSoundSetting('link');
+    await w.advance(10_000);
+    expect(got).toEqual(['off', 'off', 'off', 'link']);
+  });
+
+  it('ignores a missing or malformed settings field', async () => {
+    const w = world();
+    const tel = new Telemetry(w.deps, { pollMs: 10_000 });
+    const got: string[] = [];
+    tel.onAdminSound((v) => got.push(v));
+    tel.startSession({ grade: 3, division: null });
+    await w.advance(10_000); // no settings field at all: no call
+    expect(got).toEqual([]);
   });
 });

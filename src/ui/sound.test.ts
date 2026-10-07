@@ -56,6 +56,19 @@ describe('the xylophone\'s voice', () => {
     expect(FakeAudio.made).toHaveLength(0);
   });
 
+  it('T18: muted, it never touches the AudioContext at all', async () => {
+    vi.stubGlobal('window', { AudioContext: FakeAudio });
+    vi.stubGlobal('navigator', { userActivation: { hasBeenActive: true } });
+    const { setMuted } = await import('./mute');
+    const ring = await load();
+    setMuted(true);
+    ring('do');
+    expect(FakeAudio.made).toHaveLength(0);
+    setMuted(false);
+    ring('do');
+    expect(FakeAudio.made).toHaveLength(1);
+  });
+
   it('rings a soft tone at the note, two octaves above it, and a click; quietly; resuming a suspended context', async () => {
     vi.stubGlobal('window', { AudioContext: FakeAudio });
     vi.stubGlobal('navigator', { userActivation: { hasBeenActive: true } });

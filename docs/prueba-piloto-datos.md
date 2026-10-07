@@ -25,14 +25,14 @@ One row per playtest session (one child, one sitting).
 |---|---|---|---|
 | `id` | uuid, PK | Client-generated session id. | — |
 | `code` | text | An anonymous session code (e.g. "Zorro 27"). Round 1 showed it to the adult for paper notes; since round 2 (2026-10-01) the kid app never shows it: it is only for the admin page (telling sessions apart, "Borrar"). | 3 |
-| `grade` | smallint 1–5 | Grade (1ro–5to). | all, as the grouping dimension |
+| `grade` | smallint 1–5 | Grade (1ro–5to). T19: `?grado=1..5` (also `?grade=`) in the bookmark link preselects it — the setup's cards are skipped, the session starts right away as if that card were tapped (an invalid or missing value falls back to the cards). | all, as the grouping dimension |
 | `division` | text, 1 letter or null | Optional division letter. Since T14 the setup has no division buttons: new sessions write `NULL` (the column stays for older rows). | grouping only |
 | `consent` | boolean, nullable | Round 1: `true`, the adult ticked "La escuela autorizó esta prueba" at setup. Since round 2 the setup asks no tick (the school's authorization is kept outside the app, and nothing here names a child): new sessions write `NULL` (migration `006_consent_nullable.sql`). | — |
 | `started_at` | timestamptz | When the session began. | 5 (duration, idle) |
 | `ended_at` | timestamptz, nullable | When the session ended (set on goodbye or an adult end-session gesture). | 5 |
 | `end_reason` | text, nullable | `'completed'` (the child reached the goodbye; since T14 also the adult's "end the session" once the core route was done, the green flag), `'adult_ended'` (the adult's hidden "end the session" before the route was done; the survey still follows), `'class_end'` (T14: el docente's "terminar la clase" from `/admin`, at the end of the 10-second countdown), `'demo_ended'` (a demo session ended from the demo bar; demo sessions are never exported), `'abandoned'` (set by the client when a new session starts on the device while this one never ended, e.g. the adult set up a new child without ending the last one, or a tab reloaded more than 2 hours after its last save; `ended_at` is then its last event's time). A reload within a session no longer abandons it: the session carries on (see `resume`). | 5 |
 | `app_version` | text, nullable | Front-end build version at the time of the session. | — |
-| `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang, captions?, captions_set?}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language; since round 2 `captions` (on-screen text on now: set at the start and updated by every 💬 toggle, see `captions`) and `captions_set` (`'grade'`: the default, on from 3ro; `'setup'`: forced on or off at setup). | 1 (device capability vs. tool failures), 3 (captions) |
+| `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang, captions?, captions_set?, sound?, sound_source?}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language; since round 2 `captions` (on-screen text on now: set at the start and updated by every 💬 toggle, see `captions`) and `captions_set` (`'grade'`: the default, on from 3ro; `'setup'`: forced on or off at setup); since T18 `sound` (the effective sound setting now) and `sound_source` (`'admin'`\|`'url'`\|`'adult'`\|`'default'`: which layer decided it, see the `sound` event and the table `class_settings`). | 1 (device capability vs. tool failures), 3 (captions, sound) |
 | `survey` | jsonb, nullable | See "survey_answer" below; the final answers, keyed by question. | 9 |
 | `adult_form` | jsonb, nullable | The adult's form: `{engagement: 'low'|'mid'|'high'|null, help_needed: 'none'|'some'|'a_lot'|null, comment?: string, step?: string}`. Round 1: a step after the goodbye, both answers required. Since round 2 it is optional, from the corner menu ("Comentario del adulto") at any time of the session; any answer may be left out (`null`), saving again replaces it, and `step` is the flow step it was saved on (see the `adult_form` event). Most round-2 sessions will have none. | 3, 5 |
 | `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, and since T14 `'class_end'`; round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. | 5 |
@@ -66,6 +66,34 @@ sync after reconnecting. Demo sessions get commands too (the adult can try
 the class control in demo mode). The client logs `class_command` when it
 applies one. Rows expired more than 7 days ago are deleted by the
 retention job.
+
+## Table `class_settings`
+
+T18 (the silent classroom round): el docente's class-wide sound setting
+from `/admin` ("Con sonido" / "Sin sonido" / "Como diga el link"). Unlike
+`class_commands` (a one-time instruction each device applies once by its
+id), this is a **current value**: one row per key (`key` text PK, `value`
+text, `set_at`, `expires_at` nullable), upserted in place (`ON CONFLICT
+(key) DO UPDATE`), never accumulating rows. Only one key exists so far:
+`sound`, value `'on'`, `'off'` or `'link'` (no class override: each device
+decides for itself). Set from `/admin` with a 4-hour expiry, so a class
+left muted overnight is not still muted the next morning; past
+`expires_at` (or with no row at all) the live value is `'link'`.
+
+Delivery: the public, cheap `GET /api/class-settings` (no auth, rate
+limited per IP like `/api/sync`, `cache-control: no-store`) returns
+`{sound, expires_at}`; the client calls it once at page load, before the
+setup's spoken question, with a ~1.5 s timeout (a dead network falls back
+to the device's own `?sonido=`/localStorage value, never blocking). Every
+`POST /api/sync` answer also carries `{settings: {sound}}`, the exact same
+live value, so a change from `/admin` reaches a device already playing
+within one sync cycle (about 10 s), regardless of when its session
+started — the opposite of `class_commands`' once-per-id semantics, since a
+setting has one current value, not a sequence of one-time instructions.
+`/api/admin/summary` carries it too, as `sound_setting`, for the page
+itself. See the `sound` event below and `sessions.device.sound`/
+`sound_source` above for how the client resolves and records the
+effective value.
 
 ## Table `events`
 
@@ -1055,6 +1083,31 @@ The state is also kept on `sessions.device.captions`. **RQ 3.**
 { on: boolean, where: 'bar' | 'corner' }
 ```
 
+### `sound`
+T18 (the silent classroom round): the effective sound setting changed,
+once a session is open (the value a session started with is only on
+`sessions.device.sound`/`sound_source`, not a first `sound` event — the
+same choice `captions` makes for the on-screen text). Fires for an admin
+push arriving mid-session (`/admin`'s "Con sonido"/"Sin sonido"/"Como diga
+el link", or that setting expiring back to `'link'`) and for the adult's
+corner-menu "Sonido: sí / no" on this one device.
+```
+{ on: boolean, source: 'admin' | 'url' | 'adult' | 'default' }
+```
+`source` names which layer decided the new value (`src/playtest/
+soundSetting.ts`): `admin` (the class setting, while live), `adult` (the
+corner-menu toggle, this page load only), `url` (the bookmark's
+`?sonido=`/localStorage baseline) or `default` (on, nothing else said
+anything). Precedence: `admin` while live, else `adult` (a fresh page
+load clears it), else `url`, else `default`. Muted, `speak` still feeds
+the on-screen text listener (`captions`/the 🔊 buttons keep working — a
+🔊 tap re-shows the line rather than being hidden) and only
+`speechSynthesis.speak`/`ringNote` (the xylophone) are skipped; muting
+also cancels a line already speaking. The state is also kept on
+`sessions.device.sound`/`sound_source`. **RQ 3** (and data cleaning: a
+muted session's lack of spoken-line timing is expected, not a tool
+failure).
+
 ### `adult_form`
 Round 2: the adult saved "Comentario del adulto" from the corner menu (the
 answers themselves go on `sessions.adult_form`). **RQ 3, 5.**
@@ -1131,7 +1184,10 @@ while a session is open (not ended) the client also posts at least every
 10 s even with nothing queued (the session record alone, so `last_seen_at`
 moves too): the answer carries the class's commands (`class_commands`), so
 "quedan 5 minutos" and "terminar la clase" reach every device within about
-10 s, and a device that was offline gets them when it reconnects. Session changes (`current_step`, `ended_at`,
+10 s, and a device that was offline gets them when it reconnects. The
+answer also carries T18's `settings.sound` (`class_settings`'s live
+value), every time, not once per id: the admin's class-wide sound setting
+reaches an already-open device the same way, within about 10 s. Session changes (`current_step`, `ended_at`,
 `end_reason`, `survey`, `adult_form`) travel in the same posts. Gaps in `seq`
 for a session therefore mean a 400-dropped batch, never a network failure.
 
@@ -1275,17 +1331,24 @@ wipe the data early):
 - **Class commands**: `POST /api/admin/commands {kind: 'five_min' |
   'end_class'}` → `{ok, command}`; `POST /api/admin/commands/cancel` →
   `{ok, cancelled}` (live five-minute warnings).
+- **Sound setting** (T18): `POST /api/admin/settings {sound: 'on' | 'off' |
+  'link'}` → `{ok, setting}` (same auth as the class commands); the public
+  `GET /api/class-settings` (no auth, rate limited, `cache-control:
+  no-store`) → `{sound, expires_at}`, what a device reads at page load.
 - **Summary** (`GET /api/admin/summary`): `sessions` (non-demo) with
   `route_done` (a `route_done` event exists: the green flag), `survey_done`
   (`sessions.survey` set), `in_class` (seen in the last 2 hours),
   `current_step`, `last_seen_at`, …; `class_counts {sessions, route_done,
   survey_done}` for the sessions in class; `active_now` (seen in the last 2
   minutes, not ended); `counts_by_grade`; `demo_hidden` (how many demo
-  sessions exist, not listed); `commands` (the live ones, newest first).
+  sessions exist, not listed); `commands` (the live ones, newest first);
+  `sound_setting` (the live `class_settings` row, T18).
 - The page: a password form; then "Quedan 5 minutos", "Terminar la clase"
-  (a second tap confirms) and "Cancelar aviso"; "Esta clase": who is
-  playing, on which step, "Terminó" (the green flag) and "Encuesta"; all
-  sessions with "Borrar"; the exports. It polls every 5 s.
+  (a second tap confirms) and "Cancelar aviso"; "Sonido": "Con sonido" /
+  "Sin sonido" / "Como diga el link", highlighting the one in effect and
+  when it expires (T18); "Esta clase": who is playing, on which step,
+  "Terminó" (the green flag) and "Encuesta"; all sessions with "Borrar";
+  the exports. It polls every 5 s.
 - `tools/export-playtest.mjs` — no dependencies; reads `EXPORT_TOKEN` and
   `PLAYTEST_URL` from `~/.credentials/camino-prueba.env` (never printed),
   fetches all three exports and writes them to `exports/` (gitignored) as

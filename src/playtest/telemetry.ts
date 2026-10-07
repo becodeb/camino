@@ -28,6 +28,10 @@
 //   is cancelled later), and only for the session being played. The ids
 //   already seen live with the queued session, so a reload does not apply a
 //   command twice. Still idempotent and anonymous.
+// - T18: every answer also carries `settings.sound` (the admin's class-wide
+//   sound setting, 'on'|'off'|'link'), handed to `onAdminSound` listeners on
+//   every successful post (not once-per-id like a command: it is the
+//   current value, not an event). soundSetting.ts applies it.
 //
 // Pure of the browser: storage, the network, time, randomness and timers are
 // injected (see `browserTelemetry` in ./runtime.ts), so the tests drive it.
@@ -53,6 +57,9 @@ export interface Device {
   /** On-screen text (captions.ts): its state now, and how it was set at the start (by the grade, or the setup). */
   captions?: boolean;
   captions_set?: 'grade' | 'setup';
+  /** T18: the effective sound setting now, and which layer decided it (soundSetting.ts). */
+  sound?: boolean;
+  sound_source?: 'admin' | 'url' | 'adult' | 'default';
 }
 
 /** The `sessions` row, as POST /api/sync takes it (docs/prueba-piloto-datos.md). */
@@ -74,6 +81,9 @@ export interface SessionRecord {
   /** T14: a demo session (the adult's demo mode): stored, but out of the data. */
   demo?: boolean;
 }
+
+/** T18: the admin's class-wide sound setting, as /api/sync and /api/class-settings hand it out. 'link': no class override. */
+export type AdminSound = 'on' | 'off' | 'link';
 
 /** A class command from /admin, as /api/sync hands it out. */
 export interface ClassCommand {
@@ -173,6 +183,9 @@ export interface StartInput {
   captionsSet?: 'grade' | 'setup';
   /** T14: the adult's demo mode. */
   demo?: boolean;
+  /** T18: the effective sound setting at the start, and which layer decided it. */
+  sound?: boolean;
+  soundSource?: 'admin' | 'url' | 'adult' | 'default';
 }
 
 const EMPTY_STATE = (): QueueState => ({ v: 1, current: null, entries: {} });
@@ -212,6 +225,7 @@ export class Telemetry {
   private perPost: number;
   private subs = new Set<() => void>();
   private cmdSubs = new Set<(c: ClassCommand) => void>();
+  private soundSubs = new Set<(v: AdminSound) => void>();
   private pollTimer: unknown = null;
   private lastPostAt = 0;
   private readonly o: TelemetryOptions;
@@ -254,7 +268,11 @@ export class Telemetry {
       ended_at: null,
       end_reason: null,
       app_version: this.deps.appVersion,
-      device: { ...this.deps.device(), ...(input.captions != null ? { captions: input.captions, captions_set: input.captionsSet ?? 'grade' } : {}) },
+      device: {
+        ...this.deps.device(),
+        ...(input.captions != null ? { captions: input.captions, captions_set: input.captionsSet ?? 'grade' } : {}),
+        ...(input.sound != null ? { sound: input.sound, sound_source: input.soundSource ?? 'default' } : {}),
+      },
       survey: null,
       adult_form: null,
       current_step: null,
@@ -392,6 +410,7 @@ export class Telemetry {
         this.lastOkAt = this.deps.now();
         this.lastError = null;
         this.takeCommands(e, (res.body as { commands?: unknown })?.commands);
+        this.takeAdminSound((res.body as { settings?: { sound?: unknown } })?.settings?.sound);
         return true;
       }
       if (res.status === 413 && seqs.length > 1) {
@@ -473,6 +492,19 @@ export class Telemetry {
     }
     this.save();
     for (const c of fresh) this.cmdSubs.forEach((f) => f(c));
+  }
+
+  // ---------------------------------------------------------------- the admin's sound setting (T18)
+
+  /** Called on every successful post that carries a recognized `settings.sound` (every sync, not once per id: it is a current value, not an event). */
+  onAdminSound(fn: (v: AdminSound) => void): () => void {
+    this.soundSubs.add(fn);
+    return () => { this.soundSubs.delete(fn); };
+  }
+
+  private takeAdminSound(raw: unknown) {
+    if (raw !== 'on' && raw !== 'off' && raw !== 'link') return;
+    this.soundSubs.forEach((f) => f(raw));
   }
 
   /** While the current session is open: a post every pollMs even with nothing queued, so commands arrive. */
