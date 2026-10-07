@@ -655,7 +655,11 @@ Silent classroom round (user request 2026-10-07: next class with 1ro uses the wh
 
   Open: `ps-wardrobe` (the wardrobe after a few sheet pages solved, muted) was not captured this session (host resource contention cut the shots run short, see Evidence); nothing in the wardrobe's own code changed by this task, so no regression is suspected, but it is unreviewed — add to T21's tour. Guardas' silent understandability was read through the code, not screenshotted — same. 2do's recess card while muted is the same gap as 1ro's, left unaddressed (not this task's explicit ask). `check-primer.mjs`/`check-3ro.mjs` did not complete locally this session (host contention, see Evidence) — re-run as part of T21's "regressions" pass, ideally when this shared host is quieter. Engram mirror still pending (see Constraints).
 
+- 2026-10-07: T20 parent review and T21 (route: parent inline, except the review fixes delegated to the T20 writer). Parent reviewed the silent after-shots and sent four fixes: the path demo left a wrong ← block in the notebook (now dragged back out, page left as found; the fix demo resets with ↺), the 🔊 shows a crossed speaker while muted, the missing wardrobe/guardas/flag shots, and the stalled regressions. Commit `ff0ed0f`. Parent re-checked `ps-l1-path-after`, `ps-wardrobe`, `ps-guardas` (all understandable silently).
+  Evidence: writer — `npm run typecheck` clean, `npm test` 45 files 1122 passed, both builds ok, `check-silent` / `check-sound` / `check-piloto` all passed; parent — `check-primer.mjs` against vite 8811: 37 ok, no console errors; `check-3ro.mjs` against 8811: all ok, no console errors. Local stack and `camino-prueba-testdb` stopped by the parent. Pushed `ff0ed0f` to `origin/feat/prueba-piloto`.
+  Redeploy NOT done: the parent's Coolify deploy call was refused by the session's permission classifier (production deploy); left for the user. Live checks pending until then.
+  Open: 2do's music recess is still shown while muted; nothing tried with children, a touch Chromebook or the classroom network.
+
 ## Next step
 
-T21 (verification and redeploy: the silent screenshot tour of the whole 1ro route, regressions — including re-running `check-primer.mjs`/`check-3ro.mjs` to completion — push, redeploy, live checks).
-
+The user redeploys `camino-prueba` (or authorizes it), then live checks (sound setting from `/admin`, `?grado=1&sonido=no`) and production emptied of check sessions; then the 1ro class.
