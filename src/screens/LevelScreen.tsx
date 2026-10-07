@@ -472,11 +472,19 @@ function ProgramLevel({ level }: { level: LevelDef }) {
     nav.onIntro?.(level);
     const steps: DemoStep[] = [];
     if (kind === 'worlds') {
+      // only points at the three boards: nothing on the page changes
       steps.push({ do: 'point', at: level.worlds.map((_, i) => `.sheet[data-world="${i}"] .board`) });
     } else if (kind === 'fix') {
+      // taps ▶ for real (the bump is the point), then ↺ puts Brote back home and
+      // clears the crash marks — the given (still buggy) program is untouched,
+      // restart() never erases a fix page's given lines (startProgram keeps them)
       steps.push({ do: 'tap', at: '.btn-play', apply: () => { void run({ silent: true }); } });
       steps.push({ do: 'wait', ms: 1300 });
-      steps.push({ do: 'point', at: ['.zone-program .blk'] });
+      // bookends the program (first line, last line) rather than circling every
+      // block: "look across here", without a long point-at-each-one crawl
+      const last = Math.max(0, programRef.current.length - 1);
+      steps.push({ do: 'point', at: [`.zone-program [data-ref="0"]`, `.zone-program [data-ref="${last}"]`] });
+      steps.push({ do: 'tap', at: '.btn-restart', apply: restart });
     } else if (kind === 'path') {
       glowTargets(rootRef.current!);
       const dir = (level.blocks.find((b) => b !== 'repeat' && b !== 'repeat-goal') ?? 'right') as Dir;
@@ -487,6 +495,12 @@ function ProgramLevel({ level }: { level: LevelDef }) {
         apply: () => editWith((p) => insertAt(p, appendSlot(p, null, block), block)),
       });
       steps.push({ do: 'point', at: ['.btn-play'] });
+      // the demo must never leave a wrong block behind for the child to copy:
+      // the same gesture in reverse, back to the palette (removeAt), empty again
+      steps.push({
+        do: 'drag', from: '.zone-program [data-ref="0"]', to: '.zone-palette',
+        apply: () => editWith((p) => removeAt(p, { item: 0 }).program),
+      });
     } else {
       return;
     }

@@ -1,6 +1,8 @@
 // Small hand-drawn icons for buttons (26px, ink outline), in the demo's language.
 // Ported from habilidades (app/src/ui/icons.tsx @ 9b90d1d).
 
+import { useMuted } from './mute';
+
 export const PlayIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7,4.5 L19.5,12.3 L6.5,19.6 Z" fill="#fbf6ea" stroke="#2b2622" strokeWidth="2.2" strokeLinejoin="round" /></svg>
 );
@@ -15,13 +17,28 @@ export const NextIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6,3.5 L15,3.5 L19,8 L19,20.5 L6,20.5 Z" fill="#fbf6ea" stroke="#2b2622" strokeWidth="2" strokeLinejoin="round" /><path d="M15,3.5 L15,8 L19,8" fill="none" stroke="#2b2622" strokeWidth="2" strokeLinejoin="round" /><path d="M9,13.5 L15.5,13.5 M12.8,10.8 L15.6,13.5 L12.8,16.2" fill="none" stroke="#3d6ea5" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>
 );
 
-export const SpeakerIcon = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M4,9.5 L8,9.5 L13,5 L13,19 L8,14.5 L4,14.5 Z" fill="#f0d27a" stroke="#2b2622" strokeWidth="2" strokeLinejoin="round" />
-    <path d="M16,9 Q18.5,12 16,15" fill="none" stroke="#2b2622" strokeWidth="2" strokeLinecap="round" />
-    <path d="M18.5,6.5 Q23,12 18.5,17.5" fill="none" stroke="#2b2622" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-);
+/**
+ * T20 (silent classroom round): muted, drawn with a cross over the sound
+ * waves (🔇 style) instead of them — the button still re-shows the line as
+ * on-screen text when pressed (mute.ts's own decision), only the drawing
+ * changes, so a muted child does not tap it expecting to hear something.
+ */
+export const SpeakerIcon = () => {
+  const muted = useMuted();
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4,9.5 L8,9.5 L13,5 L13,19 L8,14.5 L4,14.5 Z" fill="#f0d27a" stroke="#2b2622" strokeWidth="2" strokeLinejoin="round" />
+      {muted ? (
+        <path d="M15.5,8 L21,16 M21,8 L15.5,16" fill="none" stroke="#2b2622" strokeWidth="2.2" strokeLinecap="round" />
+      ) : (
+        <>
+          <path d="M16,9 Q18.5,12 16,15" fill="none" stroke="#2b2622" strokeWidth="2" strokeLinecap="round" />
+          <path d="M18.5,6.5 Q23,12 18.5,17.5" fill="none" stroke="#2b2622" strokeWidth="2" strokeLinecap="round" />
+        </>
+      )}
+    </svg>
+  );
+};
 
 /** "Volver a empezar": a hand-drawn circular arrow (docs/17). */
 export const RestartIcon = () => (

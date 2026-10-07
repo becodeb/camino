@@ -6,9 +6,10 @@
 // Checked: speechSynthesis.speak is never called through the character,
 // the tool check and a ladder item; the on-screen text is forced on and in
 // capital letters (grade 1); a wordless ghost demo plays on the first
-// ladder item (`ghost_demo` logged, kind 'intro'); an idle child (no real
-// input) gets the ✋ pulse after ~15s; the route reaches the green "terminó"
-// flag. Local stack only.
+// ladder item (`ghost_demo` logged, kind 'intro') and leaves the notebook
+// empty again when it ends (never a wrong block left for the child to
+// copy); an idle child (no real input) gets the ✋ pulse after ~15s; the
+// route reaches the green "terminó" flag. Local stack only.
 //
 // PW=<dir with playwright> node tools/check-silent.mjs [base]
 //   base: the app with /api and /admin (e.g. http://127.0.0.1:8810/, the default)
@@ -71,8 +72,13 @@ try {
   ok(level1 === 'pp-l1', `on rung 1 (${level1})`);
   const sawGhost = await p.waitForSelector('.ghost-hand', { timeout: 3500 }).then(() => true).catch(() => false);
   ok(sawGhost, 'rung 1: the wordless "path" demo\'s ghost hand showed up, unprompted');
-  await p.waitForTimeout(2500); // the demo finishes
+  // the demo also drags the block back out (the parent's T20 review fix): wait for the hand
+  // to leave the DOM rather than guess a fixed delay — the whole sequence is now longer
+  await p.waitForSelector('.ghost-hand', { state: 'detached', timeout: 12_000 }).catch(() => {});
+  await p.waitForTimeout(300);
   ok((await speakCalls()) === 0, 'rung 1: still never called (the demo is wordless)');
+  const emptyAfter = await pil(() => window.__camino.program.length === 0);
+  ok(emptyAfter, 'rung 1: the demo leaves the notebook empty again (never a wrong block left to copy)');
 
   // left untouched: the idle nudge (✋ pulses, no auto-solve) — the ghost's own moves never count as input
   const t0 = Date.now();

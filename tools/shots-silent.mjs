@@ -70,6 +70,19 @@ async function toWardrobe(p) {
   await p.waitForSelector('.mode-wardrobe .hooks');
   await p.waitForTimeout(800);
 }
+/** A free-play card (guardas, editor, …) opened for real, from the drawn menu. */
+async function toActivity(p, id, wait = 'main.level[data-level]') {
+  await toFreePlay(p);
+  await p.locator(`.pp-fp-card[data-activity="${id}"]`).click();
+  await p.waitForSelector(`.pp-fp-activity[data-activity="${id}"] ${wait}`);
+  await p.waitForTimeout(900);
+}
+/** The debug shortcut shots-piloto.mjs's own scenarios use: the core route done, the green "terminó" flag on. */
+async function routeDone(p) {
+  await pil(p, () => window.__piloto.routeDone());
+  await p.waitForSelector('.piloto.route-done', { timeout: 10_000 });
+  await p.waitForTimeout(600);
+}
 
 const SCENARIOS = [
   // the bookmark's very first screen: on-screen text forced on, capital letters (grade 1)
@@ -79,8 +92,11 @@ const SCENARIOS = [
   { name: 'ps-tool-idle', run: async (p) => { await toTool(p); await p.waitForTimeout(16_500); } },
   // the wordless demos, caught mid-play (never the solution)
   { name: 'ps-l1-path-demo', run: async (p) => { await toRung(p, 1); await p.waitForTimeout(2600); } },
-  { name: 'ps-l1-path-after', run: async (p) => { await toRung(p, 1); await p.waitForTimeout(4600); } },
+  // the demo now also drags the block back out (the parent's T20 review fix): wait past the whole sequence
+  { name: 'ps-l1-path-after', run: async (p) => { await toRung(p, 1); await p.waitForTimeout(8300); } },
   { name: 'ps-l3-fix-demo', run: async (p) => { await toRung(p, 3); await p.waitForTimeout(3300); } },
+  // the fix demo's own ↺ step (the parent's T20 review fix): Brote back home, the given program untouched
+  { name: 'ps-l3-fix-after', run: async (p) => { await toRung(p, 3); await p.waitForTimeout(8300); } },
   { name: 'ps-l4-predict-demo', run: async (p) => { await toRung(p, 4); await p.waitForTimeout(2200); } },
   { name: 'ps-l5-repeat-demo', run: async (p) => { await toRung(p, 5); await p.waitForTimeout(500); } },
   { name: 'ps-l6-count', run: async (p) => { await toRung(p, 6); await p.waitForTimeout(500); } },
@@ -88,8 +104,12 @@ const SCENARIOS = [
   { name: 'ps-l10-worlds-demo', run: async (p) => { await toRung(p, 10); await p.waitForTimeout(2200); } },
   // free play: 1ro's menu while muted, no recess (music) card
   { name: 'ps-freeplay-menu', run: async (p) => { await toFreePlay(p); } },
+  { name: 'ps-guardas', run: async (p) => { await toActivity(p, 'guardas'); } },
   { name: 'ps-typing', run: async (p) => { await toTyping(p); await p.waitForTimeout(1500); } },
   { name: 'ps-wardrobe', run: async (p) => { await toWardrobe(p); } },
+  // T21 parent review: the green "terminó" flag, and free play carrying on (endless, recess still hidden) after it
+  { name: 'ps-route-flag', run: async (p) => { await toTool(p); await routeDone(p); } },
+  { name: 'ps-freeplay-after-route', run: async (p) => { await toFreePlay(p); await routeDone(p); } },
 ];
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox', '--disable-gpu'] });
