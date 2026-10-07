@@ -11,9 +11,11 @@
 // T20 (silent classroom round): muted, the text is always on, regardless of
 // the 💬 choice (there is no sound to fall back on); for 1ro/2do it is shown
 // in capital letters (easier for a reader of imprenta mayúscula). Not muted:
-// unchanged. The 💬 toggle still writes the child's preference (for when
-// sound comes back), but stays disabled while muted since there is nothing
-// to switch off to.
+// unchanged. The 💬 toggle stays clickable and keeps writing the child's
+// preference (it has no visible effect while muted, display is forced
+// either way, but it is what the setup/corner menu's own captions choice
+// reads once sound comes back) — deliberately not disabled: check-sound.mjs
+// already clicks it while muted to turn preference on for its own assertion.
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -56,7 +58,7 @@ export function Captions({ step }: { step: StepId }) {
   const upper = captionsUpper(muted, api.session?.grade ?? 99);
   const toggle = (
     <button
-      type="button" className={`pp-cap-toggle cut${shown ? ' is-on' : ''}`} aria-pressed={shown} disabled={muted}
+      type="button" className={`pp-cap-toggle cut${shown ? ' is-on' : ''}`} aria-pressed={shown}
       aria-label={on ? 'Sacar el texto de la pantalla' : 'Mostrar el texto en la pantalla'}
       onClick={() => api.setCaptions(!on, bar ? 'bar' : 'corner')}
     >
