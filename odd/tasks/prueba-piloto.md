@@ -85,6 +85,12 @@ Silent classroom round (user request 2026-10-07: next class with 1ro uses the wh
 - [x] T20 Understood without sound (1ro first): when muted, the on-screen text is always on, in capital letters for 1ro/2do; every 1ro ladder item, free-play activity and the typing game shows what to do without words (a short wordless ghost demo of the gesture at the start of each new format, never giving the answer away; e.g. predict, fix, count, three worlds); an idle nudge that makes ✋ pulse; the survey stays with the adult.
 - [x] T21 Verification and redeploy: silent screenshot tour of the whole 1ro route reviewed for "understood with no sound and no reading"; regressions; push, redeploy, live checks; production left empty of check sessions.
 
+Back-to-back classes round (user request 2026-10-07: ~50-minute classes one after another on the same computers; "quedan 5" / "terminar" must leave each computer ready for the next group; a hidden way to write a comment about the previous child; the survey done alone by 1ro). Route: T22–T23 delegated direct (one writer); T24 parent inline.
+
+- [ ] T22 Class end leaves the computer ready: after "Terminar la clase" (10 s countdown, session ended and flushed) the device goes back by itself to the start for the next child (with `?grado` the character choice), no adult hold; the next session never receives the old commands; avoid piling up empty sessions while nobody plays if cheap. A "Comentario del chico anterior" item in the adult corner menu writes the adult form of the previous session ended on this device (recent, e.g. last 3 h), synced to that session.
+- [ ] T23 The survey alone, without sound or reading: each question recognisable from its pictures (the difficulty answers drawn differently from the liking faces, e.g. the "¿Cómo seguís?" hills; play again with a clear yes/no drawing), checked silently at 1ro.
+- [ ] T24 Verification and redeploy (redeploy only on the user's explicit request).
+
 ## Progress
 
 - 2026-09-30: worktree and branch created from `feat/primer-grado` (fe6a277); code mapped; this document created before the first source write.
@@ -664,4 +670,4 @@ Silent classroom round (user request 2026-10-07: next class with 1ro uses the wh
 
 ## Next step
 
-The user tries `/?grado=1&sonido=no` and the Sonido card in `/admin` live; then the 1ro class.
+T22 (back-to-back classes round).
