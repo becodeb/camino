@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GOLD_SAY, NO_GOAL, differences, endOf, formatOf, goldLevel, hasFixedLines, pinsOf, sameShape, startProgram } from './formats';
+import { GOLD_SAY, NO_GOAL, differences, endOf, formatOf, goldLevel, hasFixedLines, nextPredictVariant, pinsOf, sameShape, startProgram } from './formats';
 import { solves } from './engine';
 import type { LevelDef } from './levels';
 import { HOLE, cmdProgram, type Board, type Program } from './model';
@@ -57,6 +57,15 @@ describe('formats', () => {
     const b = board({ goalKind: 'none', goal: NO_GOAL });
     expect(endOf(b, [loop(3, ['right']), { t: 'cmd', cmd: 'up' }])).toEqual({ c: 3, r: 0 });
     expect(solves(b, cmdProgram(['right', 'right', 'right', 'right', 'right']))).toBe(false);
+  });
+
+  it('T30: the next predict variant after a wrong guess is never the one just played', () => {
+    // no alternates (the base demo's own predict pages): always itself
+    expect(nextPredictVariant(0, 1)).toBe(0);
+    // cycles through every alternate, wrapping back to the page's own (0)
+    expect(nextPredictVariant(0, 3)).toBe(1);
+    expect(nextPredictVariant(1, 3)).toBe(2);
+    expect(nextPredictVariant(2, 3)).toBe(0);
   });
 
   it('the gold challenge: the same board, the fewest lines, "repetir" in the palette', () => {

@@ -107,6 +107,16 @@ const R3 = item(3, {
 // ------------------------------------------------------------------ 4 · predict (a tall board, two turns)
 
 const R4_PROGRAM = cmdProgram(['up', 'up', 'up', 'right', 'right', 'down']);
+/**
+ * T30: two more puzzles on the same board shape (4×5, six lines, two turns),
+ * shown after a wrong guess instead of the one just run — the data showed
+ * kids tapping where the failed run had just ended (a trivial "win" with no
+ * real predicting). Each ends somewhere the other two never do, so cycling
+ * through them (game/formats.ts `nextPredictVariant`) never repeats an
+ * answer the child just saw; proved by `ladderItems.test.ts`.
+ */
+const R4_VARIANT_1 = cmdProgram(['down', 'down', 'down', 'left', 'left', 'up']);
+const R4_VARIANT_2 = cmdProgram(['down', 'down', 'right', 'right', 'down', 'down']);
 const R4 = item(4, {
   id: 'pp-l4',
   title: '¿Dónde se queda Brote?',
@@ -118,6 +128,16 @@ const R4 = item(4, {
   slots: R4_PROGRAM.length,
   blocks: ['up', 'down', 'right'],
   silentDemo: 'predict',
+  predictVariants: [
+    {
+      worlds: [openBoard({ cols: 4, rows: 5, start: [3, 0], goal: null, seed: 3114, rocks: [[0, 4], [2, 4], [0, 0]], grass: [[0, 1], [3, 4], [1, 0]] })],
+      program: R4_VARIANT_1,
+    },
+    {
+      worlds: [openBoard({ cols: 4, rows: 5, start: [0, 0], goal: null, seed: 3124, rocks: [[3, 0], [3, 4], [1, 4]], grass: [[3, 1], [0, 4], [3, 3]] })],
+      program: R4_VARIANT_2,
+    },
+  ],
 });
 
 // ------------------------------------------------------------------ 5 · repeat (walk left across the river)

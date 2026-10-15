@@ -189,7 +189,8 @@ predict pages through the level's LevelNav), logged when the run ends (its
   help_step: number,             // automatic help step reached so far on this level (0–3)
   worlds?: string[],             // several worlds: each one's 'win' | 'crash' | 'short'
   culprit?: string,              // the block that tripped (its ref key in the notebook, e.g. '2' or '1:0')
-  guess?: {c, r}, final?: {c, r} // predict pages: the cell tapped and where the character ended
+  guess?: {c, r}, final?: {c, r}, // predict pages: the cell tapped and where the character ended
+  variant?: number,              // predict pages with alternates (T30): which puzzle was played (0 = the page's own; a wrong guess swaps to a different one for the next try)
 }
 ```
 `result`: `bump` a walk that crashed (rock, edge, closed pot), `short` it

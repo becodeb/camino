@@ -58,6 +58,18 @@ export function pinsOf(l: LevelDef): Pins {
 /** A predict board has no goal: Brote never "arrives", the child's ring is the only target. */
 export const NO_GOAL: Cell = { c: -1, r: -1 };
 
+/**
+ * T30: after a wrong guess on a predict page with alternates, which variant
+ * to show next — never the one just played. A plain cycle is enough: every
+ * variant is authored to end somewhere different from its neighbours (even
+ * wrapping around), so the next index alone already satisfies "not the one
+ * just seen". One variant (or none): always itself (nothing to switch to).
+ */
+export function nextPredictVariant(current: number, total: number): number {
+  if (total <= 1) return 0;
+  return (current + 1) % total;
+}
+
 /** Where a program leaves Brote (on a predict page, the cell to tap). */
 export function endOf(b: Board, p: Program): Cell {
   const t = simulate(b, p);

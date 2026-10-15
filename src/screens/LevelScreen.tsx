@@ -28,7 +28,7 @@ import { paletteBlock, useBlockEditor, type Marks } from '../blocks/BlockEditor'
 import { refKey } from '../blocks/blocks';
 import { appendSlot, emptyLine, holesOf, insertAt, refusal, removeAt, writeLine, type Block, type BlockRef, type DragSource, type DropResult, type Slot } from '../game/editor';
 import { completeProgram, move, nextMove, simulate, unroll } from '../game/engine';
-import { formatOf, hasFixedLines, pinsOf, startProgram } from '../game/formats';
+import { formatOf, hasFixedLines, nextPredictVariant, pinsOf, startProgram } from '../game/formats';
 import { COUNT_MIN, countTaps, linesHint, nextCount, nextHint } from '../game/hint';
 import { judgeOf, tracesOf } from '../game/judge';
 import { tonesOf } from '../game/music';
@@ -669,12 +669,31 @@ function ProgramLevel({ level }: { level: LevelDef }) {
  */
 function PredictLevel({ level }: { level: LevelDef }) {
   const rootRef = useRef<HTMLElement>(null);
-  const { svgs, views } = useBoards(level);
   const say = useInstruction(level);
   const nav = useLevelNav();
   const ghost = useGhost(rootRef);
-  const board = level.worlds[0];
-  const program = level.given ?? level.solution;
+  /**
+   * T30: a wrong guess is never followed by the same puzzle (data: kids
+   * tapped where the run just ended, a trivial win). Variant 0 is the
+   * page's own worlds/given/solution; 1+ come from `level.predictVariants`
+   * (absent or one entry: nothing to switch to, unchanged behaviour — the
+   * base demo's own predict pages, deliberately left this way).
+   */
+  const variants = useMemo(
+    () => [{ worlds: level.worlds, program: level.given ?? level.solution }, ...(level.predictVariants ?? [])],
+    [level],
+  );
+  const [variantIdx, setVariantIdx] = useState(0);
+  const variantIdxRef = useRef(0);
+  variantIdxRef.current = variantIdx;
+  const activeLevel = useMemo(() => {
+    if (variantIdx === 0) return level;
+    const v = variants[variantIdx];
+    return { ...level, worlds: v.worlds, given: v.program, solution: v.program };
+  }, [level, variants, variantIdx]);
+  const { svgs, views } = useBoards(activeLevel);
+  const board = activeLevel.worlds[0];
+  const program = activeLevel.given ?? activeLevel.solution;
   /** Where the child thinks Brote will end (the ring on the board). */
   const guessRef = useRef<Cell | null>(null);
   const [marks, setMarks] = useState<Marks>({});
@@ -699,7 +718,7 @@ function PredictLevel({ level }: { level: LevelDef }) {
     const v = views.current[0];
     v?.setPicking((cell) => pickRef.current(cell));
     return () => v?.setPicking(null);
-  }, [level, views]);
+  }, [activeLevel, views]);
 
   const restart = () => {
     if (runningRef.current) return;
@@ -713,11 +732,31 @@ function PredictLevel({ level }: { level: LevelDef }) {
     void v?.reset();
   };
 
+  /**
+   * T30: the board asks for a guess — the same wordless affordance as the
+   * first-time demo below (a pulsing "?", the ghost hovering the board),
+   * reused here for every ▶ pressed before a cell is picked (data: 56 such
+   * presses in 6 sessions; the spoken line and the cells' own ripple,
+   * `askPick`, were not enough on their own). Quicker than the one-time
+   * intro (`pace`): a child who presses ▶ again and again needs a snappy
+   * "pick one first", not a slow tour of the whole board every time.
+   */
+  const nudgeGuess = () => {
+    pulseGuess(rootRef.current!);
+    void ghost([{ do: 'point', at: ['.board [data-cell]'] }], { pace: 0.4 });
+  };
+
   const run = async () => {
     const v = views.current[0];
     if (!v || runningRef.current || wonRef.current) return;
     const g = guessRef.current;
-    if (!g) { nav.onRunReport?.({ result: 'no_guess', program }); speak(LINES.guessFirst); v.askPick(); return; }
+    if (!g) {
+      nav.onRunReport?.({ result: 'no_guess', program, variant: variantIdxRef.current });
+      speak(LINES.guessFirst);
+      v.askPick();
+      nudgeGuess();
+      return;
+    }
     runningRef.current = true;
     setRunning(true);
     setMarks({});
@@ -738,9 +777,13 @@ function PredictLevel({ level }: { level: LevelDef }) {
     away.current = true;
     if (res === 'aborted') { runningRef.current = false; setRunning(false); return; }
     setMarks({ iteration });
-    nav.onResult?.(sameCell(t.final, g) ? 'win' : 'short');
-    nav.onRunReport?.({ result: sameCell(t.final, g) ? 'win' : 'wrong_guess', program, guess: { c: g.c, r: g.r }, final: { c: t.final.c, r: t.final.r } });
-    if (sameCell(t.final, g)) {
+    const win = sameCell(t.final, g);
+    nav.onResult?.(win ? 'win' : 'short');
+    nav.onRunReport?.({
+      result: win ? 'win' : 'wrong_guess', program, guess: { c: g.c, r: g.r }, final: { c: t.final.c, r: t.final.r },
+      variant: variantIdxRef.current,
+    });
+    if (win) {
       await v.celebrate();
       const line = nav.won(level, program);
       wonRef.current = true;
@@ -749,6 +792,14 @@ function PredictLevel({ level }: { level: LevelDef }) {
     } else {
       await v.missed(g);
       speak(LINES.missed);
+      // T30: the next try is a different puzzle — tapping where this run just
+      // ended must never be the answer again.
+      if (variants.length > 1) {
+        away.current = false;
+        guessRef.current = null;
+        setMarks({});
+        setVariantIdx(nextPredictVariant(variantIdxRef.current, variants.length));
+      }
     }
     runningRef.current = false;
     setRunning(false);
@@ -790,7 +841,10 @@ function PredictLevel({ level }: { level: LevelDef }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level]);
 
-  useDebugHooks({ level, program, guess: (c: number, r: number) => pick({ c, r }), run, help, restart, picked: () => guessRef.current });
+  useDebugHooks({
+    level: activeLevel, program, guess: (c: number, r: number) => pick({ c, r }), run, help, restart,
+    picked: () => guessRef.current, variant: () => variantIdxRef.current,
+  });
 
   const editor = useBlockEditor({
     blocks: [], label: level.blockLabel, program, marks, disabled: running || won, lines: 'read',
@@ -798,12 +852,15 @@ function PredictLevel({ level }: { level: LevelDef }) {
   });
 
   return (
-    <Shell level={level} mode="program" rootRef={rootRef} onSpeak={say} onHelp={help} busy={running} noPalette>
+    <Shell level={activeLevel} mode="program" rootRef={rootRef} onSpeak={say} onHelp={help} busy={running} noPalette>
       <section className="zone zone-program" data-zone="program" aria-label="El programa de Brote">{editor.program}</section>
       <section className="level-stage" aria-label="Tablero">
         <div className="controls">
           {won ? <NextPage level={level} /> : (
-            <button type="button" className="btn btn-play cut" onClick={() => void run()} disabled={running} aria-label="Probar">
+            <button
+              type="button" className={`btn btn-play cut${guessRef.current ? '' : ' is-dim'}`} onClick={() => void run()}
+              disabled={running} aria-label="Probar"
+            >
               <PlayIcon /><span>Probar</span>
             </button>
           )}
@@ -811,7 +868,7 @@ function PredictLevel({ level }: { level: LevelDef }) {
           {nav.gold?.(level, won)}
           {nav.reward?.(level, won)}
         </div>
-        <Sheets level={level} svgs={svgs} />
+        <Sheets level={activeLevel} svgs={svgs} />
       </section>
     </Shell>
   );

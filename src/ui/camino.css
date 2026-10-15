@@ -189,6 +189,8 @@
 .mode-realtime .controls { min-height: 122px; }
 .mode-realtime .zone-program .block-program { padding: 24px 12px 22px 44px; }
 .btn-play.is-running { --fill: var(--blue); }
+/* T30: a predict page's ▶ before any guess — dimmed, not disabled (still tappable, so pressing it still nudges). */
+.btn-play.is-dim { opacity: 0.55; }
 
 /* the arrow keys, drawn as keycaps in the keyboard's inverted T */
 .keypad {

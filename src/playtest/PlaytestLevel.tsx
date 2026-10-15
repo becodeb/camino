@@ -255,6 +255,7 @@ function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs
         ...(r.worlds ? { worlds: r.worlds } : {}),
         ...(r.culprit ? { culprit: r.culprit } : {}),
         ...(r.guess ? { guess: r.guess, final: r.final } : {}),
+        ...(r.variant != null ? { variant: r.variant } : {}),
       });
       ghostSinceRun.current = false;
       check();

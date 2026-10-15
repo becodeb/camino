@@ -128,6 +128,15 @@ export interface LevelDef {
    * board: its cells are the points where the lines cross.
    */
   guarda?: GuardaDef;
+  /**
+   * T30: a predict page's alternate puzzles (same difficulty: another start
+   * position and/or program), so a wrong guess never leaves the same puzzle
+   * to tap again from what was just seen. The page's own worlds/given/
+   * solution count as variant 0; these are 1, 2, … Absent or a single
+   * variant: unchanged (the page always replays its own puzzle), used by
+   * the base demo's own predict pages on purpose (see T30's Decisions).
+   */
+  predictVariants?: { worlds: Board[]; program: Program }[];
 }
 
 const grass = (seed: number, cells: [number, number][]): Deco[] =>

@@ -152,6 +152,8 @@ export interface RunReport {
   /** Predict: the cell guessed and where the character ended. */
   guess?: { c: number; r: number };
   final?: { c: number; r: number };
+  /** Predict with alternates (T30): which puzzle was played (0 = the page's own). */
+  variant?: number;
 }
 
 function LiveTramoPages({ current }: { current: string }) {

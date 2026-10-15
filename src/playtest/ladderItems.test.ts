@@ -74,6 +74,28 @@ describe('the round-2 item bank', () => {
     expect(t.final).toMatchObject({ c: 2, r: 2 });
   });
 
+  it('T30: pp-l4\'s alternate puzzles are real boards whose program never bumps, each ending somewhere different', () => {
+    const l = at(4);
+    expect(l.predictVariants).toHaveLength(2);
+    const finals = [
+      simulate(l.worlds[0], l.given!).final,
+      ...l.predictVariants!.map((v) => simulate(v.worlds[0], v.program).final),
+    ];
+    for (const [i, v] of [{ worlds: l.worlds, program: l.given! }, ...l.predictVariants!].entries()) {
+      const b = v.worlds[0];
+      const t = simulate(b, v.program);
+      expect(t.outcome, `variant ${i}`).not.toBe('crash');
+      expect(b.start.c >= 0 && b.start.c < b.cols && b.start.r >= 0 && b.start.r < b.rows, `variant ${i} start in bounds`).toBe(true);
+      expect(b.obstacles.some((o) => o.c === b.start.c && o.r === b.start.r), `variant ${i} start free`).toBe(false);
+      expect(v.program.length, `variant ${i} same difficulty`).toBe(l.given!.length);
+    }
+    // every pair, including the wrap from the last variant back to the page's own, ends somewhere different
+    for (let i = 0; i < finals.length; i++) {
+      const a = finals[i], b = finals[(i + 1) % finals.length];
+      expect(a.c === b.c && a.r === b.r, `final ${i} vs ${(i + 1) % finals.length}`).toBe(false);
+    }
+  });
+
   it('5–8 · the repeat pages need the repeat: no flat plan fits their lines', () => {
     for (const n of [5, 6, 7, 8]) {
       const l = at(n);
