@@ -8,18 +8,20 @@
 // - "Quedan 5 minutos": A shows the banner, finishes its item and goes to
 //   the wardrobe. "Cancelar aviso" before that, then the warning again:
 //   the cancel is applied and the second warning wraps A up.
-// - "Terminar la clase" (with its confirm): A shows "Actividad terminada"
-//   with the countdown, ends the session (class_end) and rests.
+// - "Terminar la clase" (with its confirm, T28): A keeps playing (still on
+//   the wardrobe) through a non-blocking 10 s countdown banner, THEN the
+//   session ends (class_end) and A rests on its own garden.
 // - B reconnects: the commands reach it (the cancelled warning is ignored,
-//   the second warning and the class end applied): "Actividad terminada",
-//   class_end.
+//   the second warning and the class end applied): the same non-blocking
+//   countdown, then class_end and its own garden.
 // - The panel lists both sessions (step, terminó, encuesta); with PSQL, the
 //   rows: class_command events, end_reason and current_step class_end.
 //
 // PW=<dir with playwright> ADMIN_PASSWORD=<the local throwaway> node tools/check-class.mjs [base]
 //   base:      the app with /api and /admin (the API serving a build, e.g. http://127.0.0.1:8810/, the default)
 //   PSQL:      optional, psql against the API's database (e.g. "docker exec -i camino-prueba-t14db psql -U postgres -d dev -tA")
-//   SHOTS:     optional directory: the admin login and panel, the banner, "Actividad terminada" (<name>-<width>.png)
+//   SHOTS:     optional directory: the admin login and panel, the five-minute banner, the
+//              class-end countdown banner and the resting garden (<name>-<width>.png)
 //   VIEWPORT:  e.g. 1920x911 (default 1366x768)
 // The admin password is read from the environment only and never printed.
 import { createRequire } from 'node:module';
@@ -126,23 +128,26 @@ try {
   ok(true, '/admin: A shows "vestidor"');
   await shot(a, 'admin-panel');
 
-  // ---------------------------------------------------------------- "terminar la clase"
+  // ---------------------------------------------------------------- "terminar la clase" (T28: non-blocking)
   await a.click('#end-class');
   ok(/Seguro/.test(await a.locator('#end-label').innerText()), '/admin: "Terminar la clase" asks to confirm (a second tap)');
   await a.click('#end-class');
-  await A.p.waitForSelector('.pp-end', { timeout: 20_000 });
-  await A.p.waitForTimeout(1200);
-  await shot(A.p, 'class-end');
-  ok(await A.p.locator('.pp-countdown').isVisible() && await A.p.locator('.pp-end-wave').isVisible(), 'A: "Actividad terminada", the character waving and the countdown');
+  await A.p.waitForSelector('.pp-end-banner', { timeout: 20_000 });
+  ok(await A.p.locator('.piloto[data-step="wardrobe"]').count() === 1, 'A: the countdown banner shows OVER the wardrobe — still there, not replaced');
+  await shot(A.p, 'class-end-banner');
+  ok(await A.p.locator('.pp-end-banner .pp-countdown').isVisible(), 'A: the banner has the clock-face countdown');
+  const sMidCountdown = await A.p.evaluate(() => window.__piloto.session());
+  ok(!sMidCountdown.ended_at, 'A: the session is NOT ended yet while the countdown runs (the child could still keep playing)');
   await A.p.waitForSelector('[data-class-end="rest"]', { timeout: 20_000 });
+  ok(await A.p.locator('.pp-end-banner').count() === 0, 'A: the banner is gone once the countdown reaches zero');
   const sa = await A.p.evaluate(() => window.__piloto.session());
-  ok(sa.end_reason === 'class_end' && !!sa.ended_at, `A: the session ended (${sa.end_reason}) after the countdown; the resting page`);
+  ok(sa.end_reason === 'class_end' && !!sa.ended_at, `A: the session ended (${sa.end_reason}) once the countdown reached zero`);
   await A.p.evaluate(() => window.__piloto.flush());
   await shot(A.p, 'class-rest');
-  ok(await A.p.locator('.pp-rest-start').isVisible() && !(await A.p.locator('.pp-setup').count()), 'A: rests, briefly');
+  ok(await A.p.locator('.pp-end-garden .pp-garden-svg').isVisible() && await A.p.locator('.pp-rest-start').isVisible() && !(await A.p.locator('.pp-setup').count()), 'A: rests on its own garden');
 
-  // T22: the adult's long press is kept as an immediate shortcut (done right away, before the
-  // device would return to the setup by itself within REST_AUTO_MS, so this does not race it)
+  // T28: the adult's long press is kept as an immediate shortcut (no fixed auto-advance any more;
+  // the device otherwise waits for the lid to close/reopen or a longer fallback)
   const box = await A.p.locator('.pp-rest-start').boundingBox();
   await A.p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await A.p.mouse.down(); await A.p.waitForTimeout(600); await A.p.mouse.up();
@@ -157,16 +162,19 @@ try {
   // ---------------------------------------------------------------- B comes back
   await B.ctx.setOffline(false);
   await B.p.evaluate(() => window.dispatchEvent(new Event('online')));
-  await B.p.waitForSelector('.pp-end', { timeout: 40_000 });
-  ok(true, 'B: back online, the commands arrived: "Actividad terminada"');
+  await B.p.waitForSelector('.pp-end-banner', { timeout: 40_000 });
+  ok(await B.p.locator('.piloto[data-step="free_play"]').count() === 1, 'B: back online, the same non-blocking countdown — still in free play underneath');
   await B.p.waitForSelector('[data-class-end="rest"]', { timeout: 20_000 });
   const sb = await B.p.evaluate(() => window.__piloto.session());
   ok(sb.end_reason === 'class_end', `B: the session ended (${sb.end_reason})`);
   await B.p.evaluate(() => window.__piloto.flush());
-  // T22: B rests too, and (left alone) returns to the start by itself — no adult hold needed on this one
-  // (B's link carries no ?grado: the grade cards, same as the setup always showed before this class)
+  ok(await B.p.locator('.pp-end-garden .pp-garden-svg').isVisible(), 'B: rests on its own garden too');
+  // T22/T28: B rests until the lid closes and reopens (or the fallback) — simulate a quick lid close/open
+  await B.p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await B.p.waitForTimeout(2200); // past REST_HIDDEN_MIN_MS, so this counts as a real lid close, not a flicker
+  await B.p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
   await B.p.waitForSelector('.pp-setup', { timeout: 20_000 });
-  ok(true, 'B: back to the setup by itself, no adult hold');
+  ok(true, 'B: back to the setup by itself once the lid closed and reopened, no adult hold');
 
   // ---------------------------------------------------------------- the rows
   if (PSQL) {
