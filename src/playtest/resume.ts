@@ -14,8 +14,9 @@
 // lost: it lives in localStorage (telemetry.ts).
 //
 // A resume needs the queue's current session to be the one saved, a step
-// past the adult's setup, and a save younger than RESUME_MAX_AGE_MS (a tab
-// left open overnight starts fresh).
+// past the adult's setup (and never the class-end/rest screen: pickResume
+// below), and a save younger than RESUME_MAX_AGE_MS (a tab left open
+// overnight starts fresh).
 
 import { STEPS, type FlowState } from './flow';
 
@@ -45,7 +46,10 @@ export function pickResume(raw: string | null, sessionId: string | null | undefi
   if (!o || o.v !== 1 || o.sid !== sessionId || typeof o.at !== 'number') return null;
   if (now - o.at < 0 || now - o.at > RESUME_MAX_AGE_MS) return null;
   const f = o.flow;
-  if (!f || !STEPS.includes(f.step) || f.step === 'setup' || !Array.isArray(f.visits) || !f.visits.length || !Array.isArray(f.activities)) return null;
+  // T28: the class-end/rest screen is never resumed into — a reload or a reopened
+  // bookmark there always starts fresh, the same as the setup (and a session that
+  // reached it is always ended, so this also keeps an ended session from resuming)
+  if (!f || !STEPS.includes(f.step) || f.step === 'setup' || f.step === 'class_end' || !Array.isArray(f.visits) || !f.visits.length || !Array.isArray(f.activities)) return null;
   return {
     v: 1,
     sid: o.sid,

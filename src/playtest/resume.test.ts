@@ -88,6 +88,13 @@ describe('resume after a reload', () => {
     expect(st.m.has(RESUME_KEY)).toBe(false);
   });
 
+  it('T28: never resumes into class_end (opening the bookmark or reloading there always starts fresh)', () => {
+    rememberFlow('s1', walked(2), 1000);
+    const raw = st.m.get(RESUME_KEY)!;
+    const atClassEnd = JSON.stringify({ ...JSON.parse(raw), flow: { ...JSON.parse(raw).flow, step: 'class_end' } });
+    expect(pickResume(atClassEnd, 's1', 2000)).toBeNull();
+  });
+
   it('works with no storage at all', () => {
     resetResumeForTests(null);
     rememberFlow('s1', walked(3), 1);

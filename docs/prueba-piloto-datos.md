@@ -30,7 +30,7 @@ One row per playtest session (one child, one sitting).
 | `consent` | boolean, nullable | Round 1: `true`, the adult ticked "La escuela autorizó esta prueba" at setup. Since round 2 the setup asks no tick (the school's authorization is kept outside the app, and nothing here names a child): new sessions write `NULL` (migration `006_consent_nullable.sql`). | — |
 | `started_at` | timestamptz | When the session began. | 5 (duration, idle) |
 | `ended_at` | timestamptz, nullable | When the session ended (set on goodbye or an adult end-session gesture). | 5 |
-| `end_reason` | text, nullable | `'completed'` (the child reached the goodbye; since T14 also the adult's "end the session" once the core route was done, the green flag), `'adult_ended'` (the adult's hidden "end the session" before the route was done; the survey still follows), `'class_end'` (T14: el docente's "terminar la clase" from `/admin`, at the end of the 10-second countdown), `'demo_ended'` (a demo session ended from the demo bar; demo sessions are never exported), `'abandoned'` (set by the client when a new session starts on the device while this one never ended, e.g. the adult set up a new child without ending the last one, or a tab reloaded more than 2 hours after its last save; `ended_at` is then its last event's time; T22: also what any ending — including `class_end` — becomes when nobody ever did anything in the session, still on the character screen: no `choice` with `activity: 'character'` and no `level_start`, read from the client's own flow state, not from events after the fact). A reload within a session no longer abandons it: the session carries on (see `resume`). | 5 |
+| `end_reason` | text, nullable | `'completed'` (the child reached the goodbye; since T14 also the adult's "end the session" once the core route was done, the green flag), `'adult_ended'` (the adult's hidden "end the session" before the route was done; the survey still follows), `'class_end'` (T14: el docente's "terminar la clase" from `/admin`; since T28, at the end of a non-blocking 10-second countdown banner the child keeps playing through, or at once with no countdown for a command the device sees too late — see `class_command`'s `late`), `'demo_ended'` (a demo session ended from the demo bar; demo sessions are never exported), `'abandoned'` (set by the client when a new session starts on the device while this one never ended, e.g. the adult set up a new child without ending the last one, or a tab reloaded more than 2 hours after its last save; `ended_at` is then its last event's time; T22: also what any ending — including `class_end` — becomes when nobody ever did anything in the session, still on the character screen: no `choice` with `activity: 'character'` and no `level_start`, read from the client's own flow state, not from events after the fact). A reload within a session no longer abandons it: the session carries on (see `resume`). | 5 |
 | `app_version` | text, nullable | Front-end build version at the time of the session. | — |
 | `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang, captions?, captions_set?, sound?, sound_source?, voice?}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language; since round 2 `captions` (on-screen text on now: set at the start and updated by every 💬 toggle, see `captions`) and `captions_set` (`'grade'`: the default, on from 3ro; `'setup'`: forced on or off at setup); since T18 `sound` (the effective sound setting now) and `sound_source` (`'admin'`\|`'url'`\|`'adult'`\|`'default'`: which layer decided it, see the `sound` event and the table `class_settings`); since T27 `voice` (this device's "Voz" switch now: `true` unless the adult turned it off here; independent of `sound` — off, speech is silenced but sfx/music keep playing — and, unlike the adult's `sound` override, persisted so it survives a new session on this computer). | 1 (device capability vs. tool failures), 3 (captions, sound, voice) |
 | `survey` | jsonb, nullable | See "survey_answer" below; the final answers, keyed by question. | 9 |
@@ -1034,7 +1034,11 @@ T14 (the classroom round): the core route is `character` → `tool_check` →
 survey (the corner menu, or a long press on the green flag); after it, back
 to `free_play`. `end_now` goes to `survey`, or straight to `goodbye` when
 the survey was done. `class_end`: el docente's "terminar la clase"
-(`to: 'class_end'`). `demo`: the demo bar's "Ir a…", "Mostrar que terminó"
+(`to: 'class_end'`; T28: logged once the session has already ended, after
+the non-blocking countdown banner — `from` is whatever step the child was
+actually still playing through those 10 seconds, not `class_end` itself;
+the late-command case skips this step entirely, see `class_command`).
+`demo`: the demo bar's "Ir a…", "Mostrar que terminó"
 or "Terminar la sesión" (demo sessions only). Under "quedan 5 minutos"
 the step on screen ends after its item and the next steps are the wardrobe
 (if not visited), the survey (if not done), then free play (`wrap_up:
@@ -1057,18 +1061,38 @@ T14: a class command from `/admin` reached this device and was applied
 (see the table `class_commands`). **RQ 5** (and data cleaning: what the
 class end cut).
 ```
-{ kind: 'five_min' | 'cancel_five_min' | 'end_class', id: number, sent_at: string, received_at: string, step: string }
+{ kind: 'five_min' | 'cancel_five_min' | 'end_class', id: number, sent_at: string, received_at: string, step: string, late?: true }
 ```
 `five_min`: "¡Quedan 5 minutos!" was shown and said; the step on screen
 ends after its item (`ladder_end`/`typing_end` `wrap_up`, free play like its
 time), then the wardrobe and the survey, then free play. `cancel_five_min`:
 "Cancelar aviso" reached the device while the warning was still pending
 (a warning cancelled before the device saw it is never applied).
-`end_class`: "Actividad terminada" with a 10-second countdown, then the
-session ends (`end_reason: 'class_end'`), the queue is sent, and the device
-rests until an adult holds "Adulto: mantené apretado para empezar otra vez"
-(2 s). `sent_at` is the server's time of the command, `received_at` the
-device's.
+
+`end_class` (T28: non-blocking): the child keeps playing through a
+10-second on-screen countdown banner (over whatever is on screen, never
+replacing it); only at zero does the session actually end
+(`end_reason: 'class_end'`), the queue is sent, and the device shows that
+child's own garden (`SessionGarden`) as a calm resting page. The device
+returns to the start by itself once it is put away (the page hidden, then
+visible again — a lid closed and reopened) or after a few minutes with the
+page left open the whole time (`REST_FALLBACK_MS`,
+`src/playtest/classroom.tsx`); an adult's 2 s hold on the resting page is
+kept as an immediate shortcut. `sent_at` is the server's time of the
+command, `received_at` the device's.
+
+`late: true` (T28): this device's clock read more than `LATE_END_CLASS_MS`
+(2 minutes) past `sent_at` when the command was finally seen — a device
+asleep (lid closed) when el docente pressed "Terminar la clase", waking up
+only for the next class, with a new child already sitting down (class 1's
+data: 5 devices 24–26 min late). The 10-second countdown and the garden are
+skipped entirely: the stale session is ended silently
+(`end_reason: 'class_end'`, or `'abandoned'` by the usual T22 rule if
+nobody ever really played it) and the device goes straight to a fresh
+start, so the new child never sees the previous child's ending. Comparing
+`sent_at` to the device's own clock is the only timing available (the sync
+answer carries no server-relative "now" to correct for drift); documented
+as a known limitation, not treated as exact.
 
 ### `captions`
 Round 2: the on-screen text was turned on or off with the 💬 toggle (in the
@@ -1154,10 +1178,12 @@ free play keeps its clock and visit count (the child is back on the menu);
 the tool check, typing game, wardrobe and survey start that step again.
 Offline, the service worker (`src/playtest/serviceWorker.ts`) still opens
 the app. No `step` event is logged for it. A resume needs the device's
-current queued session, a step past the setup and a save younger than
-2 hours; otherwise the setup opens as before. **RQ 5** (and data cleaning:
-the page that was open logged a `level_start` with no `level_end`, and an
-open free-play activity no `activity_end`).
+current queued session, a step past the setup — and, T28, never the
+class-end/rest screen: reopening the bookmark or reloading there always
+starts fresh, the same as a session that really is over — and a save
+younger than 2 hours; otherwise the setup opens as before. **RQ 5** (and
+data cleaning: the page that was open logged a `level_start` with no
+`level_end`, and an open free-play activity no `activity_end`).
 ```
 {
   step: string,          // the flow step it carries on at
@@ -1194,10 +1220,14 @@ el docente can try the class control in demo mode.
 A class ending (`class_end`) now sends the device back to the start by
 itself (`?grado`'s character choice, or the grade cards), ready for the
 next child — before, only an adult's long press on the resting page did
-that. By the time el docente wants to leave "Comentario del chico
-anterior", the device may already be playing a different child's session
-(or sitting idle, waiting for one), so the previous session's record is no
-longer the one the kid app has open.
+that. T28 changed *when* "by itself" fires: no longer a fixed few seconds
+after the countdown, but when the lid is closed and reopened (the page
+hidden, then visible again) or after a longer fallback with the page left
+open the whole time (`REST_FALLBACK_MS`); the adult's long press is still
+kept as an immediate shortcut. By the time el docente wants to leave
+"Comentario del chico anterior", the device may already be playing a
+different child's session (or sitting idle, waiting for one), so the
+previous session's record is no longer the one the kid app has open.
 
 The device keeps a small, independent record of its own last ended,
 really-played (non-demo, non-empty — see `sessions.end_reason`'s

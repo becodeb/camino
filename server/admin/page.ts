@@ -5,7 +5,8 @@
 // - The class panel: two big buttons, "Quedan 5 minutos" and "Terminar la
 //   clase" (with a confirm), plus "Cancelar aviso"; who is playing now, on
 //   which step, who finished the route ("terminó") and who did the survey.
-//   Demo sessions are not listed (only counted).
+//   Demo sessions are not listed (only counted). T28: one short line under
+//   each button says what it actually does on the computers.
 // - T18: "Sonido" — "Con sonido" / "Sin sonido" / "Como diga el link",
 //   highlighting the one in effect and when it expires (4 hours).
 // - Every session (older ones too), the delete button and the exports.
@@ -94,15 +95,19 @@ button:active { transform: translate(1px, 2px); box-shadow: 1px 1px 0 var(--shad
 button:disabled { opacity: 0.5; cursor: default; }
 button.secondary { background: var(--sheet); }
 .big-buttons { display: flex; gap: 16px; flex-wrap: wrap; align-items: stretch; }
+.big-wrap { display: flex; flex-direction: column; gap: 6px; flex: 1 1 260px; min-width: 260px; }
+.big-note { margin: 0; font-size: 0.85rem; color: var(--ink-2); }
 .big {
   min-height: 92px;
   min-width: 260px;
-  flex: 1 1 260px;
   font-size: 1.45rem;
   font-weight: 700;
   padding: 14px 22px;
   display: flex; align-items: center; justify-content: center; gap: 14px;
 }
+/* a button straight in .big-buttons (the sound row) sizes itself; one wrapped with its own note (.big-wrap, the class row) fills that wrapper instead */
+.big-buttons > .big { flex: 1 1 260px; }
+.big-wrap > .big { width: 100%; }
 .big svg { width: 54px; height: 54px; flex: none; }
 .big.warn { background: var(--yellow); }
 .big.stop { background: #e69a8c; }
@@ -159,14 +164,20 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
 <section class="card" aria-labelledby="class-h">
   <h2 id="class-h">La clase</h2>
   <div class="big-buttons">
-    <button type="button" class="big warn" id="five-min">
-      <svg viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="32" r="22" fill="#fbf7ee" stroke="#2b2622" stroke-width="3.5"/><path d="M30 32 L30 17 M30 32 L41 38" stroke="#2b2622" stroke-width="4" stroke-linecap="round" fill="none"/><path d="M22 6 L38 6" stroke="#2b2622" stroke-width="4" stroke-linecap="round"/></svg>
-      Quedan 5 minutos
-    </button>
-    <button type="button" class="big stop" id="end-class">
-      <svg viewBox="0 0 60 60" aria-hidden="true"><path d="M14 54 L14 8" stroke="#2b2622" stroke-width="4" stroke-linecap="round"/><path d="M15 9 C26 4 34 15 47 9 L47 33 C34 39 26 28 15 33 Z" fill="#fbf7ee" stroke="#2b2622" stroke-width="3.5" stroke-linejoin="round"/></svg>
-      <span id="end-label">Terminar la clase</span>
-    </button>
+    <div class="big-wrap">
+      <button type="button" class="big warn" id="five-min">
+        <svg viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="32" r="22" fill="#fbf7ee" stroke="#2b2622" stroke-width="3.5"/><path d="M30 32 L30 17 M30 32 L41 38" stroke="#2b2622" stroke-width="4" stroke-linecap="round" fill="none"/><path d="M22 6 L38 6" stroke="#2b2622" stroke-width="4" stroke-linecap="round"/></svg>
+        Quedan 5 minutos
+      </button>
+      <p class="big-note">Cada compu termina lo que está haciendo y pasa al vestidor y la encuesta.</p>
+    </div>
+    <div class="big-wrap">
+      <button type="button" class="big stop" id="end-class">
+        <svg viewBox="0 0 60 60" aria-hidden="true"><path d="M14 54 L14 8" stroke="#2b2622" stroke-width="4" stroke-linecap="round"/><path d="M15 9 C26 4 34 15 47 9 L47 33 C34 39 26 28 15 33 Z" fill="#fbf7ee" stroke="#2b2622" stroke-width="3.5" stroke-linejoin="round"/></svg>
+        <span id="end-label">Terminar la clase</span>
+      </button>
+      <p class="big-note">10 segundos para terminar, después cada chico ve su jardín; la compu arranca sola de nuevo al cerrar y abrir la tapa.</p>
+    </div>
   </div>
   <p class="class-state" id="class-state" role="status"></p>
   <button type="button" class="secondary" id="cancel-warn" hidden>Cancelar aviso de 5 minutos</button>

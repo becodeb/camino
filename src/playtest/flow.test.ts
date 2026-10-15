@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUDGET_MS, STEPS, canOpenSurvey, initialFlow, reduce, routeComplete, stepAfter, timeOnStep, wrapPending, wrapTarget, type FlowAction, type FlowState } from './flow';
+import { BUDGET_MS, STEPS, canOpenSurvey, initialFlow, isLiveStep, reduce, routeComplete, stepAfter, timeOnStep, wrapPending, wrapTarget, type FlowAction, type FlowState } from './flow';
 
 const walk = (state: FlowState, n: number, t0 = 0) => {
   let s = state;
@@ -163,5 +163,9 @@ describe('the playtest flow', () => {
     let s = initialFlow(0);
     for (const a of ['character', 'ladder', 'character', 'recess']) s = reduce(s, { type: 'did', activity: a }, 1).state;
     expect(s.activities).toEqual(['character', 'ladder', 'recess']);
+  });
+
+  it('T29: isLiveStep is false only for setup, class_end and goodbye', () => {
+    for (const s of STEPS) expect(isLiveStep(s)).toBe(s !== 'setup' && s !== 'class_end' && s !== 'goodbye');
   });
 });

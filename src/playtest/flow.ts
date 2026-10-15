@@ -111,6 +111,8 @@ export function initialFlow(now: number): FlowState {
 export const stepAfter = (s: StepId): StepId | null => (s === 'goodbye' || s === 'class_end' ? null : STEPS[STEPS.indexOf(s) + 1] ?? null);
 export const canSkip = (s: StepId) => CHILD_STEPS.includes(s) || s === 'survey';
 export const canEndNow = (s: StepId) => CHILD_STEPS.includes(s);
+/** T29: the session is actively being played — not the adult's setup, not resting after "terminar la clase", not the goodbye. Closing the tab asks first only then (PlaytestScreen.tsx's `beforeunload`); the classroom bar (the green flag, "quedan 5 minutos") also only shows then. */
+export const isLiveStep = (s: StepId) => s !== 'setup' && s !== 'class_end' && s !== 'goodbye';
 /** The adult may open the survey from any step of the child's part (it was always the adult's call). */
 export const canOpenSurvey = (state: FlowState) => CHILD_STEPS.includes(state.step) && !state.surveyDone;
 

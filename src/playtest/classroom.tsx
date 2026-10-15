@@ -7,23 +7,28 @@
 //   adult's long press opens the survey.
 // - FiveMinBanner: "¡Quedan 5 minutos!", calm, spoken (and captioned), for
 //   a few seconds below the bar.
-// - ClassEnd (a flow step): "Actividad terminada", the character waving and
-//   a 10-second countdown drawn as a clock face emptying; then the session
-//   ends, the queue is sent, and a resting page is shown briefly before the
-//   device starts the next session by itself (T22: back-to-back classes on
-//   the same computers); an adult's long press is kept as an immediate
-//   shortcut.
+// - ClassEndBanner (T28): "terminar la clase" no longer cuts the child off
+//   at once — a non-blocking banner (the clock-face countdown, captioned)
+//   floats over whatever is on screen for CLASS_END_SECONDS while the child
+//   keeps playing; only then does the session actually end.
+// - ClassEnd (the flow step, after the banner and the real end): the
+//   child's own garden (SessionGarden, what this sitting grew) as a calm
+//   resting page, until the device is put away: back to the start by itself
+//   once the lid is closed and reopened (`visibilitychange`, with a minimal
+//   hidden time so a quick tab flicker does not reset it) or after
+//   REST_FALLBACK_MS with the page left open the whole time; the adult's
+//   long press is kept as an immediate shortcut (T22: back-to-back classes
+//   on the same computers never need the adult to unblock the next child).
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { blob, wobblyLine } from '../ink/ink.js';
-import { drawPortrait } from '../ui/board/BoardView';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
-import { playerKey, usePlayer } from '../screens/player';
 import { useBar } from './Captions';
 import { useHold } from './AdultControls';
 import { usePlaytest } from './context';
 import { realInterval, realTimeout } from './demo';
+import { SessionGarden } from './SessionGarden';
 import type { StepViewProps } from './steps';
 
 const INK = '#2b2622';
@@ -34,15 +39,19 @@ const GREEN = '#8fae4f';
 const GREEN_DARK = '#6f8f3a';
 
 export const FLAG_HOLD_MS = 1500;
+/** T28: how long the non-blocking countdown banner shows before the session actually ends. */
 export const CLASS_END_SECONDS = 10;
 export const REST_HOLD_MS = 2000;
-/** T22: the resting page shows itself briefly, then the device starts the next session by itself (no adult needed). */
-export const REST_AUTO_MS = 5000;
+/** T28: the resting garden returns to the start by itself after this long with the page left open the whole time (no lid close/open seen). */
+export const REST_FALLBACK_MS = 5 * 60_000;
+/** T28: the page must have been hidden at least this long to count as "the lid was closed" (a quick tab flicker does not reset the resting garden). */
+export const REST_HIDDEN_MIN_MS = 2000;
 
 const LINES = {
   flag: '¡Terminaste el camino! Seguí jugando a lo que quieras.',
   five: '¡Quedan cinco minutos! Terminá lo que estás haciendo.',
-  end: '¡Actividad terminada! Gracias por jugar.',
+  endingSoon: '¡Ya terminamos! Guardá lo que estás haciendo.',
+  rest: '¡Gracias por jugar! Hasta la próxima.',
 };
 
 // ------------------------------------------------------------------ the green flag
@@ -134,32 +143,31 @@ export function FiveMinBanner({ done }: { done(): void }) {
   );
 }
 
-// ------------------------------------------------------------------ "Actividad terminada"
+/**
+ * T28: a device asleep (lid closed) when "terminar la clase" was sent can
+ * wake up long after — the data showed commands reaching devices 24–26 min
+ * late, at the start of the NEXT class, with a new child already sitting
+ * down. That child should never see the old child's countdown or garden:
+ * past this age the device instead ends the stale session silently and
+ * goes straight to a fresh start (PlaytestScreen.tsx's onCommand).
+ */
+export const LATE_END_CLASS_MS = 2 * 60_000;
 
-/** The character's portrait, dressed, with a big hand waving goodbye beside it. */
-function WavingCharacter() {
-  const player = usePlayer();
-  const ref = useRef<SVGSVGElement>(null);
-  const key = playerKey(player);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (ref.current) drawPortrait(player.def, ref.current, { x: 0.3, y: -0.2 }, 'grin', player.outfit); }, [key]);
-  const hand = 'M7.4,13.2 L7.2,6.6 C7.2,5.3 9.1,5.2 9.2,6.5 L9.4,11.2 L9.3,4.4 C9.3,3 11.3,3 11.4,4.4 L11.6,10.8 L11.7,4.1 C11.8,2.7 13.8,2.8 13.8,4.2 L13.8,11 L14.3,5.5 C14.4,4.2 16.3,4.3 16.3,5.6 L16.1,13.4 L17.6,11.2 C18.4,10 20.2,10.9 19.5,12.3 C18.4,14.6 17.2,17.4 15.4,19.1 C14.3,20.2 12.8,20.8 11.3,20.8 C8.8,20.8 7.4,19 7.4,16.4 Z';
-  return (
-    <svg className="pp-end-wave" viewBox="0 0 260 230" aria-hidden="true">
-      <path d={blob(118, 128, 104, 96, { wob: 0.05, n: 11, seed: 61 })} transform="translate(6 8)" fill={SHADOW} filter="url(#rough)" />
-      <path d={blob(118, 128, 104, 96, { wob: 0.05, n: 11, seed: 61 })} fill="#cfe0a8" stroke={INK} strokeWidth={3.2} filter="url(#rough)" />
-      <svg ref={ref} x={0} y={70} width={170} height={170} viewBox="-52 -100 104 104" overflow="visible" />
-      <g className="pp-end-hand" style={{ transformOrigin: '196px 150px' }}>
-        <g transform={`translate(${196 - 11.5 * 6.4} ${150 - 20.8 * 6.4}) scale(6.4)`} filter="url(#rough)">
-          <path d={hand} fill="#eeac7f" stroke={INK} strokeWidth={1.1} strokeLinejoin="round" />
-        </g>
-      </g>
-      <g stroke={PEN} strokeWidth={4} strokeLinecap="round" fill="none" className="pp-end-ticks">
-        <path d="M170,40 L160,26" /><path d="M236,44 L246,30" /><path d="M250,92 L262,86" />
-      </g>
-    </svg>
-  );
+/**
+ * Pure: has the command's `at` (the server's clock, when el docente pressed
+ * the button) become too old by `now` (the device's clock — the only one
+ * available here; there is no server-relative timestamp in the sync answer
+ * to correct for device clock drift) to still show the countdown and the
+ * garden? An unparsable `at` is never late: a banner shown a little oddly
+ * is a smaller problem than silently dropping a child's own ending.
+ */
+export function isLateEndClass(sentAt: string, now: number, thresholdMs = LATE_END_CLASS_MS): boolean {
+  const at = Date.parse(sentAt);
+  if (!Number.isFinite(at)) return false;
+  return now - at > thresholdMs;
 }
+
+// ------------------------------------------------------------------ "terminar la clase": the non-blocking countdown, then the resting garden
 
 /** The countdown: a clock face whose yellow slice empties with the seconds, the number big in the middle. */
 export function CountdownArt({ left, total }: { left: number; total: number }) {
@@ -180,95 +188,92 @@ export function CountdownArt({ left, total }: { left: number; total: number }) {
   );
 }
 
-/** A sleeping notebook: the resting page's drawing (a closed notebook with a pencil, three small z's in pen). */
-function RestArt() {
-  return (
-    <svg className="pp-rest-art" viewBox="0 0 220 140" aria-hidden="true">
-      <g filter="url(#rough)" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M30,52 L170,40 L184,112 L42,124 Z" transform="translate(5 6)" fill={SHADOW} />
-        <path d="M30,52 L170,40 L184,112 L42,124 Z" fill="#7298c1" stroke={INK} strokeWidth={3} />
-        {/* the spiral rings along the spine */}
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <path key={i} d={`M${33 + i * 1.6},${60 + i * 11} c-9,-2 -9,7 0,7`} fill="none" stroke={INK} strokeWidth={2.4} />
-        ))}
-        <path d="M78,72 L150,66 L152,84 L80,90 Z" fill={PAPER} stroke={INK} strokeWidth={2.2} />
-        <path d="M86,79 L140,75" stroke={PEN} strokeWidth={2} opacity={0.6} />
-        <path d="M58,132 L196,104" stroke="#e9c46a" strokeWidth={9} />
-        <path d="M58,132 L196,104" fill="none" stroke={INK} strokeWidth={2} opacity={0.5} />
-        <path d="M196,104 L208,100 L198,110 Z" fill={INK} />
-        <g fill="none" stroke={PEN} strokeWidth={3.2}>
-          <path d="M170,24 L184,24 L170,36 L184,36" />
-          <path d="M190,8 L200,8 L190,17 L200,17" />
-          <path d="M150,30 L158,30 L150,37 L158,37" />
-        </g>
-      </g>
-    </svg>
-  );
-}
-
 /**
- * The class is over (el docente's "terminar la clase"): "Actividad terminada"
- * with the character waving and a 10-second countdown; at zero the session
- * ends (`end_reason: 'class_end'`) and the queue is sent; then a brief
- * resting page, and the device starts the next session by itself (T22: back
- * to back classes on the same computers never need an adult to unblock the
- * next child) — the adult's long press still works, as an immediate
- * shortcut.
+ * T28: "terminar la clase" no longer cuts the child off at once. This banner
+ * floats over whatever is on screen for CLASS_END_SECONDS (non-blocking: the
+ * child keeps playing through it) with the clock-face countdown — readable
+ * with no sound and no reading — and the line also captioned; `done()` runs
+ * once, at zero (the caller actually ends the session and moves to the
+ * resting garden then, not before).
  */
-export function ClassEnd({ newSession }: StepViewProps) {
-  const api = usePlaytest();
-  const apiRef = useRef(api);
-  apiRef.current = api;
-  const newSessionRef = useRef(newSession);
-  newSessionRef.current = newSession;
+export function ClassEndBanner({ done }: { done(): void }) {
+  const doneRef = useRef(done);
+  doneRef.current = done;
   const [left, setLeft] = useState(CLASS_END_SECONDS);
-  const [rest, setRest] = useState(false);
-  const [hold, setHold] = useState<number | null>(null);
   useEffect(() => {
-    const off = speakWhenAllowed(LINES.end);
+    speak(LINES.endingSoon);
     const t0 = Date.now();
     const id = realInterval(() => {
       const l = Math.max(0, CLASS_END_SECONDS - Math.floor((Date.now() - t0) / 1000));
       setLeft(l);
-      if (l === 0) {
-        window.clearInterval(id);
-        apiRef.current.endSession('class_end');
-        setRest(true);
-      }
+      if (l === 0) { window.clearInterval(id); doneRef.current(); }
     }, 250);
-    return () => { off(); window.clearInterval(id); };
+    return () => window.clearInterval(id);
   }, []);
-  // the device is ready for the next child by itself, shortly after resting; the adult's hold (below) is a shortcut
-  useEffect(() => {
-    if (!rest) return;
-    const t = realTimeout(() => { stopSpeaking(); newSessionRef.current(); }, REST_AUTO_MS);
-    return () => window.clearTimeout(t);
-  }, [rest]);
-  useHold(REST_HOLD_MS, (e) => rest && !!(e.target as Element | null)?.closest?.('.pp-rest-start'), () => { stopSpeaking(); newSession(); }, setHold);
   return (
-    <main className={`pp-page pp-end${rest ? ' is-rest' : ''}`} data-class-end={rest ? 'rest' : 'countdown'}>
-      <section className="sheet pp-end-card" aria-label="Actividad terminada">
+    <div className="pp-end-banner" role="status" aria-label={`Termina la actividad en ${left} segundos`}>
+      <div className="pp-end-banner-card sheet">
         <span className="tape tape-l" aria-hidden="true" />
         <span className="tape tape-r" aria-hidden="true" />
-        <h1 className="pp-end-title">Actividad terminada</h1>
-        {rest ? (
-          <>
-            <RestArt />
-            <p className="pp-end-say">¡Gracias por jugar! Hasta la próxima.</p>
-          </>
-        ) : (
-          <div className="pp-end-row">
-            <WavingCharacter />
-            <CountdownArt left={left} total={CLASS_END_SECONDS} />
-          </div>
-        )}
+        <CountdownArt left={left} total={CLASS_END_SECONDS} />
+        <p className="pp-end-banner-text">¡Ya terminamos!</p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The class is over and the session has already ended (`end_reason:
+ * 'class_end'`, after ClassEndBanner's countdown): the child's own garden
+ * (SessionGarden, what this sitting grew, the character standing in it) as
+ * a calm resting page. The device is ready for the next child by itself
+ * once it is put away: back to the start when the lid is closed and
+ * reopened (the page hidden, then visible again — REST_HIDDEN_MIN_MS keeps
+ * a quick tab flicker from resetting it) or after REST_FALLBACK_MS with the
+ * page left open the whole time; the adult's long press is kept as an
+ * immediate shortcut (useful right after ending the class, before any lid
+ * closes).
+ */
+export function ClassEnd({ newSession }: StepViewProps) {
+  const newSessionRef = useRef(newSession);
+  newSessionRef.current = newSession;
+  const [hold, setHold] = useState<number | null>(null);
+  const goRef = useRef(() => { stopSpeaking(); newSessionRef.current(); });
+
+  useEffect(() => speakWhenAllowed(LINES.rest), []);
+
+  // a fallback for a device that is never closed between classes
+  useEffect(() => {
+    const t = realTimeout(() => goRef.current(), REST_FALLBACK_MS);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  // the lid closed and reopened: the page hidden, then visible again (not a quick flicker)
+  useEffect(() => {
+    let hiddenAt: number | null = null;
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+      if (hiddenAt != null && Date.now() - hiddenAt >= REST_HIDDEN_MIN_MS) goRef.current();
+      hiddenAt = null;
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
+  useHold(REST_HOLD_MS, (e) => !!(e.target as Element | null)?.closest?.('.pp-rest-start'), () => goRef.current(), setHold);
+
+  return (
+    <main className="pp-page pp-end is-rest" data-class-end="rest">
+      <section className="sheet pp-end-card" aria-label="Jardín de hoy">
+        <span className="tape tape-l" aria-hidden="true" />
+        <span className="tape tape-r" aria-hidden="true" />
+        <h1 className="pp-end-title">¡Terminamos por hoy!</h1>
+        <div className="pp-end-garden"><SessionGarden cheer={0} /></div>
       </section>
-      {rest && (
-        <button type="button" className="pp-rest-start" aria-label="Para el adulto: mantené apretado para empezar otra sesión" style={hold != null ? { ['--hold' as string]: hold } : undefined}>
-          <span>Adulto: mantené apretado para empezar otra vez</span>
-          {hold != null && <span className="pp-rest-ring" aria-hidden="true" />}
-        </button>
-      )}
+      <button type="button" className="pp-rest-start" aria-label="Para el adulto: mantené apretado para empezar otra sesión" style={hold != null ? { ['--hold' as string]: hold } : undefined}>
+        <span>Adulto: mantené apretado para empezar otra vez</span>
+        {hold != null && <span className="pp-rest-ring" aria-hidden="true" />}
+      </button>
     </main>
   );
 }

@@ -605,18 +605,25 @@ button.pp-key:focus-visible { outline: 3px dashed var(--blue-ink); outline-offse
 @keyframes pp-five-in { from { translate: 0 -40px; opacity: 0; rotate: -2deg; } to { translate: 0 0; opacity: 1; rotate: -0.6deg; } }
 @keyframes pp-five-out { to { translate: 0 -30px; opacity: 0; } }
 
-/* ------------------------------------------------ "Actividad terminada" and the resting page */
+/* ------------------------------------------------ T28: "terminar la clase"'s non-blocking countdown banner (over whatever is on screen, like .pp-five) */
+.pp-end-banner { position: fixed; top: 2px; left: 0; right: 0; z-index: 77; display: flex; justify-content: center; pointer-events: none; }
+.pp-end-banner-card {
+  display: flex; align-items: center; gap: 18px;
+  padding: 10px 30px 10px 18px;
+  background: #f6d4c6;
+  box-shadow: 5px 6px 0 var(--shadow);
+  animation: pp-five-in 700ms cubic-bezier(.3, 1.4, .5, 1) both;
+}
+.pp-end-banner .pp-countdown { width: 72px; height: 72px; flex: none; }
+.pp-end-banner-text { margin: 0; font: 700 clamp(26px, 3.2vw, 38px)/1.1 var(--body); color: var(--ink); }
+
+/* ------------------------------------------------ the resting page: the child's own garden, until the device is put away */
 .pp-end { position: fixed; inset: 0; z-index: 85; background: var(--paper); place-items: center; }
 .pp-end-card { width: min(980px, 100%); display: grid; justify-items: center; gap: 10px; padding: 26px 34px 30px; }
 .pp-end-title { margin: 0; font: 700 clamp(40px, 6vw, 72px)/1.05 var(--body); color: var(--ink); text-align: center; }
-.pp-end-row { display: flex; align-items: center; justify-content: center; gap: clamp(20px, 5vw, 70px); flex-wrap: wrap; }
-.pp-end-wave { width: clamp(220px, 30vw, 340px); height: auto; aspect-ratio: 260 / 230; overflow: visible; }
-.pp-end-hand { animation: pp-wave 1.3s ease-in-out infinite; }
-.pp-end-ticks { animation: pp-ticks 1.3s ease-in-out infinite; }
 .pp-countdown { width: clamp(150px, 20vw, 230px); height: auto; aspect-ratio: 1; overflow: visible; }
 .pp-countdown-n { font: 700 36px var(--body); fill: var(--ink); }
-.pp-rest-art { width: clamp(220px, 30vw, 320px); height: auto; aspect-ratio: 220 / 140; overflow: visible; margin: 8px 0; }
-.pp-end-say { margin: 0; font: 400 clamp(22px, 2.6vw, 30px)/1.25 var(--body); color: var(--ink-2); text-align: center; }
+.pp-end-garden { width: min(860px, 100%); }
 .pp-rest-start {
   position: fixed; right: 18px; bottom: 16px; z-index: 86;
   min-height: 48px; padding: 8px 16px;
@@ -629,7 +636,7 @@ button.pp-key:focus-visible { outline: 3px dashed var(--blue-ink); outline-offse
   width: calc(var(--hold, 0) * 100%); background: var(--blue-ink);
 }
 @media (prefers-reduced-motion: reduce) {
-  .pp-flag, .pp-flag .pp-flag-cloth, .pp-five-card, .pp-end-hand, .pp-end-ticks { animation: none; }
+  .pp-flag, .pp-flag .pp-flag-cloth, .pp-five-card, .pp-end-banner-card { animation: none; }
 }
 
 /* ------------------------------------------------ demo mode: the setup's discreet switch */

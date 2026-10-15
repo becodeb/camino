@@ -42,9 +42,9 @@ import { withName } from './characterName';
 import { holdHash } from './hashHold';
 import { AdultControls } from './AdultControls';
 import { PlaytestContext, type AdultHelpKind, type AdultHelpVia, type HandState, type LevelTrack, type PlaytestApi } from './context';
-import { initialFlow, reduce, ROUTE, visited, wrapPending, type FlowAction, type FlowState, type StepId, type Transition } from './flow';
+import { initialFlow, isLiveStep, reduce, ROUTE, visited, wrapPending, type FlowAction, type FlowState, type StepId, type Transition } from './flow';
 import { savePreviousChild } from './previousChild';
-import { FiveMinBanner, RouteFlag } from './classroom';
+import { ClassEndBanner, FiveMinBanner, RouteFlag, isLateEndClass } from './classroom';
 import { DemoBar } from './DemoBar';
 import { setFast } from './demo';
 import { setPageHooks } from '../screens/levelKit';
@@ -98,6 +98,8 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
   const [hand, setHand] = useState<HandState | null>(null);
   /** "Quedan 5 minutos" on screen (the command's id), or null. */
   const [banner, setBanner] = useState<number | null>(null);
+  /** T28: "terminar la clase"'s own non-blocking countdown on screen (the command's id), or null; while set, the five-minute banner stays hidden. */
+  const [ending, setEnding] = useState<number | null>(null);
   // a reloaded demo session keeps the page hooks the demo bar plays through
   useState(() => { if (resumed && tel.session?.demo) setPageHooks(true); return true; });
   const handRef = useRef(hand);
@@ -274,11 +276,26 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
       setBanner(cmd.id);
       apply({ type: 'wrap_up', on: true });
     } else {
-      log('class_command', { kind: 'end_class', ...received });
+      // T28: a device asleep (lid closed) when this was sent can wake up long
+      // after, with a new child already sitting down — never show them the
+      // old child's countdown or garden; end the stale session silently and
+      // go straight to a fresh start instead (T22's own guard still marks a
+      // never-really-played session `abandoned`, not `class_end`).
+      const late = isLateEndClass(cmd.at, Date.now());
+      log('class_command', { kind: 'end_class', ...received, ...(late ? { late: true } : {}) });
       setBanner(null);
-      apply({ type: 'class_end' });
+      if (late) {
+        setEnding(null);
+        endSession('class_end');
+        newSession();
+      } else {
+        // the non-blocking countdown (ClassEndBanner, below); only once it
+        // reaches zero does the session actually end and the flow move to
+        // `class_end` (the resting garden) — the child keeps playing until then
+        setEnding(cmd.id);
+      }
     }
-  }), [tel, log, apply]);
+  }), [tel, log, apply, endSession, newSession]);
 
   // T18: the admin's sound setting, as every sync answer carries it
   useEffect(() => tel.onAdminSound(setAdminSound), [tel]);
@@ -335,7 +352,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
   });
 
   const View = STEP_VIEWS[flow.step];
-  const live = flow.step !== 'goodbye' && flow.step !== 'class_end';
+  const live = isLiveStep(flow.step);
   const flagOn = !!session && !!flow.routeDone && live;
   return (
     <PlaytestContext.Provider value={api}>
@@ -344,7 +361,11 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
           <View key={flow.visits.length} start={start} newSession={newSession} />
           {session && flow.step !== 'class_end' && <Captions step={flow.step} />}
           {flagOn && <RouteFlag />}
-          {session && banner != null && live && <FiveMinBanner key={banner} done={() => setBanner(null)} />}
+          {/* T28: the "terminar la clase" countdown takes priority over "quedan 5 minutos" (both can be queued together for a device that was offline) */}
+          {session && ending != null && live && (
+            <ClassEndBanner key={ending} done={() => { setEnding(null); endSession('class_end'); apply({ type: 'class_end' }); }} />
+          )}
+          {session && banner != null && ending == null && live && <FiveMinBanner key={banner} done={() => setBanner(null)} />}
           {session && flow.step !== 'class_end' && <AdultControls />}
           {session?.demo && <DemoBar />}
         </div>
