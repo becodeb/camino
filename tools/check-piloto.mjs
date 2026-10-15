@@ -12,8 +12,8 @@
 // T14: no division at setup; after the wardrobe the route is done (the
 // green flag, free play again), the adult opens the survey from the corner
 // menu, the child is back in free play, the adult ends from the corner; on
-// 3ro's rule game a ✋ press under 1.5 s is the child's help and a 1.5 s
-// hold the adult's "¿En qué lo ayudaste?".
+// 3ro's rule game a ✋ press under ~0.8 s (T25: was 1.5 s) is the child's
+// help and a longer hold the adult's "¿En qué lo ayudaste?".
 //
 // 1ro — setup, character; the real tool check (the arrow put in
 //   by a DRAG when a tap is asked, ▶, the arrow put in by a TAP when a drag is
@@ -470,14 +470,14 @@ await p.locator('.btn-play').click(); await p.waitForTimeout(500);
 for (const k of ['ArrowRight', 'ArrowRight']) { await p.keyboard.press(k); await p.waitForTimeout(700); }
 await p.locator('.btn-play').click(); await p.waitForTimeout(500);
 ok(!(await p.locator('.pp-cap').count()), '3ro with on-screen text forced off at setup: no bubble');
-// T14: a press on ✋ shorter than 1.5 s is the child's help as before; held 1.5 s it is the adult's "¿En qué lo ayudaste?"
+// T25: a press on ✋ shorter than ~0.8 s (HELP_HOLD_MS) is the child's help as before; held past it, the adult's "¿En qué lo ayudaste?"
 const [h3x, h3y] = await center(p, '.level-bar .help');
-await hold(p, h3x, h3y, 1100);
+await hold(p, h3x, h3y, 500);
 await p.waitForTimeout(400);
-ok(!(await p.locator('.pp-help-q').count()) && !(await p.locator('.pp-hand').count()), 'a ✋ press under 1.5 s opens no adult question and raises no hand (the child\'s help)');
-await hold(p, h3x, h3y, 1800);
+ok(!(await p.locator('.pp-help-q').count()) && !(await p.locator('.pp-hand').count()), 'a ✋ press under ~0.8 s opens no adult question and raises no hand (the child\'s help)');
+await hold(p, h3x, h3y, 1100);
 await p.waitForSelector('.pp-help-q');
-ok(await p.locator('.pp-help-q [data-kind]').count() === 4, 'held 1.5 s: "¿En qué lo ayudaste?" with its four answers');
+ok(await p.locator('.pp-help-q [data-kind]').count() === 4, 'held ~0.8 s: "¿En qué lo ayudaste?" with its four answers');
 await p.locator('.pp-help-q [data-kind="tool"]').click();
 ok(!(await p.locator('.pp-help-q').count()), 'one tap answers and closes it');
 // the hand raised after the help steps (as a fourth ✋ would; the hold no longer raises it), nobody comes; the child wins: it goes down by itself
