@@ -161,6 +161,33 @@ describe('block editor layout and hit testing', () => {
     // nested: a tape dragged near the same spot still stays at the top level, never inside another tape
     expect(slotAt(L, draggedTop + DIMS.h / 2, tape())).toEqual({ at: 2 });
   });
+
+  it('T26 follow-up: the drag preview itself (the rendered gap, not just slotAt) sits inside the tape when slotAt says inside, and after it when slotAt says after', () => {
+    // a mapping bug once left the preview a frame behind the hit-test; layoutProgram's own
+    // 'gap' item is what BlockEditor.tsx actually draws, so pin its position directly against
+    // slotAt's decision rather than trust them to agree (see the follow-up to T26, d95b1d6).
+    const L = layoutProgram(p);
+    const [, , , , c] = L.items;
+    const draggedTop = c.y + c.h; // T26's own exact boundary: the dragged block's top at the last card's bottom edge
+    const insideSlot = slotAt(L, draggedTop + DIMS.h / 2, cmd('x'));
+    expect(insideSlot).toEqual({ tape: 1, at: 2 });
+    const withInsideGap = layoutProgram(p, { gap: insideSlot, gapBlock: cmd('x') });
+    const insideGap = withInsideGap.items.find((i) => i.kind === 'gap')!;
+    const grownLoop = withInsideGap.items.find((i) => i.kind === 'loop')!;
+    // inside the tape's own (now taller, to make room) box, indented like its cards, strictly above its foot
+    expect(insideGap.x).toBe(DIMS.spine);
+    expect(insideGap.y).toBeGreaterThanOrEqual(grownLoop.y + DIMS.arm);
+    expect(insideGap.y + insideGap.h).toBeLessThanOrEqual(grownLoop.y + grownLoop.h - DIMS.foot);
+
+    const afterSlot = slotAt(L, c.y + c.h + DIMS.h / 2 + 1, cmd('x'));
+    expect(afterSlot).toEqual({ at: 2 });
+    const withAfterGap = layoutProgram(p, { gap: afterSlot, gapBlock: cmd('x') });
+    const afterGap = withAfterGap.items.find((i) => i.kind === 'gap')!;
+    const unchangedLoop = withAfterGap.items.find((i) => i.kind === 'loop')!;
+    // at the top level, after the tape's own (unchanged) closing foot — never inside it
+    expect(afterGap.x).toBe(0);
+    expect(afterGap.y).toBeGreaterThanOrEqual(unchangedLoop.y + unchangedLoop.h);
+  });
 });
 
 describe('the notebook lines', () => {
