@@ -4,9 +4,11 @@
 //
 // T18 (the master mute, ui/mute.ts): muted, `speak` still runs the filter
 // and feeds the listener (the on-screen text keeps working) but never
-// calls speechSynthesis.speak.
+// calls speechSynthesis.speak. T27 (the per-device "Voz" switch, ui/voice.ts):
+// the same, but only for speech — sfx and music are untouched by it.
 
 import { isMuted } from './mute';
+import { isVoiceOff } from './voice';
 
 let chosen: SpeechSynthesisVoice | null | undefined;
 
@@ -54,7 +56,7 @@ export function setSpeechListener(f: SpeechListener | null): void {
 export function speak(text: string): void {
   if (filter) text = filter(text);
   listener?.(text);
-  if (isMuted()) return;
+  if (isMuted() || isVoiceOff()) return;
   if (!speechAvailable()) return;
   if (chosen === undefined) chosen = pickVoice();
   speechSynthesis.cancel();

@@ -19,6 +19,9 @@
 // - T18: "Sonido: sí / no" mutes or unmutes this one device for the rest of
 //   this page load (soundSetting.ts); the admin's class-wide setting still
 //   wins while it is live.
+// - T27: "Voz: sí / no" silences speech only on this device (sfx and music
+//   keep playing) and, unlike "Sonido", is saved so it survives a new
+//   session and a reload on the same computer (voiceSetting.ts).
 // The corner is watched on the window (capture phase), so the page under it
 // keeps working for a normal tap. T25: the 🔊 button used to sit inside that
 // same 64×64 px corner (a teacher's slow press there landed on the icon
@@ -30,6 +33,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMuted } from '../ui/mute';
+import { useVoiceOff } from '../ui/voice';
 import { holdAdultSheet } from './adultState';
 import { AdultFormPanel, PreviousAdultFormPanel, PreviousChildHeader } from './closing';
 import { usePlaytest, type AdultHelpKind, type AdultHelpVia } from './context';
@@ -42,6 +46,7 @@ import { RaisedHand } from './RaisedHand';
 import { openProbe } from './probes';
 import { getPreviousChild, type PreviousChild } from './previousChild';
 import { setAdultOverride } from './soundSetting';
+import { setDeviceVoice } from './voiceSetting';
 
 export const CORNER_PX = 64;
 /** T25: ~0.8 s for every adult hold (was 1.5 s corner / 1.2 s hand / 1.5 s ✋); kept equal on purpose. */
@@ -215,6 +220,16 @@ function SoundToggle() {
   );
 }
 
+/** T27: "Voz: sí / no" for this device, saved (voiceSetting.ts): silences speech only, sfx and music keep playing. */
+function VoiceToggle() {
+  const voiceOff = useVoiceOff();
+  return (
+    <button type="button" className="pp-adult-btn cut" data-act="voice" onClick={() => setDeviceVoice(voiceOff)}>
+      Voz: {voiceOff ? 'no' : 'sí'} <small>(solo lo hablado; el sonido sigue)</small>
+    </button>
+  );
+}
+
 /** A sheet for the adult over the page (short text allowed). */
 export function AdultSheet({ title, onClose, children, className }: { title: string; onClose: () => void; children: ReactNode; className?: string }) {
   // the goodbye waits while the adult has a sheet open
@@ -273,6 +288,7 @@ function AdultMenu({ onClose }: { onClose: () => void }) {
           <button type="button" className="pp-adult-btn cut" data-act="adult-form" onClick={() => setForm(true)}>Comentario del adulto <small>(opcional)</small>{saved ? ' ✓' : ''}</button>
           {prev && <button type="button" className="pp-adult-btn cut" data-act="previous-form" onClick={() => setPrevForm(true)}>Comentario del chico anterior{prevSaved ? ' ✓' : ''}</button>}
           <SoundToggle />
+          <VoiceToggle />
           {step === 'free_play' && <button type="button" className="pp-adult-btn cut" data-act="open-game-maker" onClick={() => { openProbe('game_maker'); onClose(); }}>Abrir «Hacé tu juego»</button>}
           {step === 'free_play' && <button type="button" className="pp-adult-btn cut" data-act="open-text-probe" onClick={() => { openProbe('text_probe'); onClose(); }}>Abrir «Del bloque al texto»</button>}
           {canSkip(step) && <button type="button" className="pp-adult-btn cut" data-act="skip" onClick={() => { api.skip(); onClose(); }}>Saltar este paso</button>}

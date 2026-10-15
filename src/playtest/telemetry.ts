@@ -60,6 +60,8 @@ export interface Device {
   /** T18: the effective sound setting now, and which layer decided it (soundSetting.ts). */
   sound?: boolean;
   sound_source?: 'admin' | 'url' | 'adult' | 'default';
+  /** T27: the per-device "Voz" switch now (speech only; independent of `sound` — sfx/music keep playing). */
+  voice?: boolean;
 }
 
 /** The `sessions` row, as POST /api/sync takes it (docs/prueba-piloto-datos.md). */
@@ -186,6 +188,8 @@ export interface StartInput {
   /** T18: the effective sound setting at the start, and which layer decided it. */
   sound?: boolean;
   soundSource?: 'admin' | 'url' | 'adult' | 'default';
+  /** T27: this device's "Voz" switch at the start (speech only; independent of `sound`). */
+  voice?: boolean;
 }
 
 const EMPTY_STATE = (): QueueState => ({ v: 1, current: null, entries: {} });
@@ -272,6 +276,7 @@ export class Telemetry {
         ...this.deps.device(),
         ...(input.captions != null ? { captions: input.captions, captions_set: input.captionsSet ?? 'grade' } : {}),
         ...(input.sound != null ? { sound: input.sound, sound_source: input.soundSource ?? 'default' } : {}),
+        ...(input.voice != null ? { voice: input.voice } : {}),
       },
       survey: null,
       adult_form: null,

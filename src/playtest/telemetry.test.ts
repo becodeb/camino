@@ -126,6 +126,15 @@ describe('the telemetry queue', () => {
     expect(withoutSound.device).not.toHaveProperty('sound_source');
   });
 
+  it('T27: records the per-device "Voz" switch on the device, when given, independent of sound', () => {
+    const w = world();
+    const tel = new Telemetry(w.deps);
+    const withVoiceOff = tel.startSession({ grade: 1, division: null, sound: true, soundSource: 'default', voice: false });
+    expect(withVoiceOff.device).toMatchObject({ sound: true, sound_source: 'default', voice: false });
+    const withoutVoice = tel.startSession({ grade: 1, division: null });
+    expect(withoutVoice.device).not.toHaveProperty('voice');
+  });
+
   it('numbers events 0, 1, 2… per session, stores them first and removes what the server acked', async () => {
     const w = world();
     const tel = new Telemetry(w.deps);

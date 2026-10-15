@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const load = async () => {
   const speech = await import('./speech');
   const mute = await import('./mute');
-  return { ...speech, ...mute };
+  const voice = await import('./voice');
+  return { ...speech, ...mute, ...voice };
 };
 
 describe('speak, muted (T18)', () => {
@@ -48,6 +49,49 @@ describe('speak, muted (T18)', () => {
     vi.stubGlobal('speechSynthesis', { speak: vi.fn(), cancel, getVoices: () => [] });
     const { setMuted } = await load();
     setMuted(true);
+    expect(cancel).toHaveBeenCalled();
+  });
+});
+
+describe('speak, voice off (T27: speech only, independent of the master mute)', () => {
+  beforeEach(() => { vi.resetModules(); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('never calls speechSynthesis.speak with the voice off, but still filters and feeds the listener', async () => {
+    const speakFn = vi.fn();
+    const cancel = vi.fn();
+    vi.stubGlobal('speechSynthesis', { speak: speakFn, cancel, getVoices: () => [] });
+    const { speak, setVoiceOff, setSpeechListener, setSpeechFilter } = await load();
+    const seen: (string | null)[] = [];
+    setSpeechListener((t) => seen.push(t));
+    setSpeechFilter((t) => t.replace('Brote', 'Mina'));
+    setVoiceOff(true);
+    speak('Ayudá a Brote.');
+    expect(speakFn).not.toHaveBeenCalled();
+    expect(seen).toEqual(['Ayudá a Mina.']);
+    setSpeechListener(null);
+    setSpeechFilter(null);
+  });
+
+  it('is independent of the master mute: muted but voice on still speaks nothing (mute wins); voice off alone also speaks nothing', async () => {
+    const speakFn = vi.fn();
+    vi.stubGlobal('speechSynthesis', { speak: speakFn, cancel: vi.fn(), getVoices: () => [] });
+    vi.stubGlobal('SpeechSynthesisUtterance', class { constructor(public text: string) {} });
+    const { speak, setMuted, setVoiceOff } = await load();
+    setVoiceOff(true);
+    setMuted(false);
+    speak('Una línea.');
+    expect(speakFn).not.toHaveBeenCalled();
+    setVoiceOff(false);
+    speak('Otra línea.');
+    expect(speakFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('turning the voice off cancels a line already speaking', async () => {
+    const cancel = vi.fn();
+    vi.stubGlobal('speechSynthesis', { speak: vi.fn(), cancel, getVoices: () => [] });
+    const { setVoiceOff } = await load();
+    setVoiceOff(true);
     expect(cancel).toHaveBeenCalled();
   });
 });

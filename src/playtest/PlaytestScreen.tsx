@@ -51,7 +51,9 @@ import { setPageHooks } from '../screens/levelKit';
 import { enterPlaytestProgress, leavePlaytestProgress } from './progressScope';
 import { rememberFlow, takeResume, type SavedSession } from './resume';
 import { browserStorage, installWatchers, telemetry } from './runtime';
-import { initDeviceSound, setAdminSound, subscribeSound } from './soundSetting';
+import { initDeviceSound, setAdminSound, subscribeSound, currentSound } from './soundSetting';
+import { initDeviceVoice } from './voiceSetting';
+import { isVoiceOff, subscribeVoiceOff } from '../ui/voice';
 import { STEP_VIEWS } from './steps';
 import type { SessionRecord, StartInput } from './telemetry';
 import './playtest.css';
@@ -59,6 +61,8 @@ import './playtest.css';
 export function PlaytestScreen() {
   // T18: before Setup even renders (so its first spoken line, if any, is already muted or not)
   useState(() => { initDeviceSound(typeof location !== 'undefined' ? location.search : '', browserStorage()); return true; });
+  // T27: this device's saved "Voz" choice, restored the same way
+  useState(() => { initDeviceVoice(browserStorage()); return true; });
   // before any child reads the progress: the playtest's own, in memory (a reloaded tab's, when it carries on)
   const [resumed] = useState(() => {
     const r = takeResume(telemetry().session?.id);
@@ -279,11 +283,20 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
   // T18: the admin's sound setting, as every sync answer carries it
   useEffect(() => tel.onAdminSound(setAdminSound), [tel]);
   // T18: logged only once a session exists (the setup's own session-start input already carries the value it started with)
+  // T27: the `voice` field rides along on the same `sound` event/`device` fields (see the `voice` effect just below)
   useEffect(() => subscribeSound((s) => {
     if (!tel.session || flowRef.current.step === 'setup') return;
-    log('sound', { on: s.on, source: s.source });
+    log('sound', { on: s.on, source: s.source, voice: !isVoiceOff() });
     const d = tel.session.device;
-    tel.updateSession({ device: { ...d, sound: s.on, sound_source: s.source } });
+    tel.updateSession({ device: { ...d, sound: s.on, sound_source: s.source, voice: !isVoiceOff() } });
+  }), [log, tel]);
+  // T27: the adult corner menu's "Voz: sí / no" for this device — kept consistent with the `sound` event/`device` fields above
+  useEffect(() => subscribeVoiceOff(() => {
+    if (!tel.session || flowRef.current.step === 'setup') return;
+    const s = currentSound();
+    log('sound', { on: s.on, source: s.source, voice: !isVoiceOff() });
+    const d = tel.session.device;
+    tel.updateSession({ device: { ...d, sound: s.on, sound_source: s.source, voice: !isVoiceOff() } });
   }), [log, tel]);
 
   // "quedan 5 minutos" on a step with no item to finish (the character, the tool check): on to the wardrobe now

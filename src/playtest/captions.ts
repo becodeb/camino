@@ -24,11 +24,13 @@ export function captionsFor(grade: number, setting: CaptionsSetting): boolean {
 /**
  * T20 (silent classroom round): muted, the on-screen text is always shown,
  * regardless of `on` (the child's 💬 choice) — there is nothing to hear, so
- * nothing to fall back on. Not muted: unchanged (just `on`).
+ * nothing to fall back on. Not muted: unchanged (just `on`). T27: the caller
+ * passes `muted || voiceOff` here (Captions.tsx) so the same fallback kicks
+ * in when just the voice is off — speech is just as unheard then.
  */
 export const captionsShown = (on: boolean, muted: boolean): boolean => on || muted;
 
-/** Muted, 1ro/2do (grade <= 2) read the text in capital letters; 3ro+ and not muted: unchanged. */
+/** Muted (or, T27, voice off), 1ro/2do (grade <= 2) read the text in capital letters; 3ro+ and not muted: unchanged. */
 export const captionsUpper = (muted: boolean, grade: number): boolean => muted && grade <= 2;
 
 export interface CaptionLine {

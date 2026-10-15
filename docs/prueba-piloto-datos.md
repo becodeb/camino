@@ -32,7 +32,7 @@ One row per playtest session (one child, one sitting).
 | `ended_at` | timestamptz, nullable | When the session ended (set on goodbye or an adult end-session gesture). | 5 |
 | `end_reason` | text, nullable | `'completed'` (the child reached the goodbye; since T14 also the adult's "end the session" once the core route was done, the green flag), `'adult_ended'` (the adult's hidden "end the session" before the route was done; the survey still follows), `'class_end'` (T14: el docente's "terminar la clase" from `/admin`, at the end of the 10-second countdown), `'demo_ended'` (a demo session ended from the demo bar; demo sessions are never exported), `'abandoned'` (set by the client when a new session starts on the device while this one never ended, e.g. the adult set up a new child without ending the last one, or a tab reloaded more than 2 hours after its last save; `ended_at` is then its last event's time; T22: also what any ending — including `class_end` — becomes when nobody ever did anything in the session, still on the character screen: no `choice` with `activity: 'character'` and no `level_start`, read from the client's own flow state, not from events after the fact). A reload within a session no longer abandons it: the session carries on (see `resume`). | 5 |
 | `app_version` | text, nullable | Front-end build version at the time of the session. | — |
-| `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang, captions?, captions_set?, sound?, sound_source?}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language; since round 2 `captions` (on-screen text on now: set at the start and updated by every 💬 toggle, see `captions`) and `captions_set` (`'grade'`: the default, on from 3ro; `'setup'`: forced on or off at setup); since T18 `sound` (the effective sound setting now) and `sound_source` (`'admin'`\|`'url'`\|`'adult'`\|`'default'`: which layer decided it, see the `sound` event and the table `class_settings`). | 1 (device capability vs. tool failures), 3 (captions, sound) |
+| `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang, captions?, captions_set?, sound?, sound_source?, voice?}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language; since round 2 `captions` (on-screen text on now: set at the start and updated by every 💬 toggle, see `captions`) and `captions_set` (`'grade'`: the default, on from 3ro; `'setup'`: forced on or off at setup); since T18 `sound` (the effective sound setting now) and `sound_source` (`'admin'`\|`'url'`\|`'adult'`\|`'default'`: which layer decided it, see the `sound` event and the table `class_settings`); since T27 `voice` (this device's "Voz" switch now: `true` unless the adult turned it off here; independent of `sound` — off, speech is silenced but sfx/music keep playing — and, unlike the adult's `sound` override, persisted so it survives a new session on this computer). | 1 (device capability vs. tool failures), 3 (captions, sound, voice) |
 | `survey` | jsonb, nullable | See "survey_answer" below; the final answers, keyed by question. | 9 |
 | `adult_form` | jsonb, nullable | The adult's form: `{engagement: 'low'|'mid'|'high'|null, help_needed: 'none'|'some'|'a_lot'|null, comment?: string, step?: string}`. Round 1: a step after the goodbye, both answers required. Since round 2 it is optional, from the corner menu ("Comentario del adulto") at any time of the session; any answer may be left out (`null`), saving again replaces it, and `step` is the flow step it was saved on (see the `adult_form` event). Most round-2 sessions will have none. | 3, 5 |
 | `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, and since T14 `'class_end'`; round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. | 5 |
@@ -1090,11 +1090,14 @@ once a session is open (the value a session started with is only on
 same choice `captions` makes for the on-screen text). Fires for an admin
 push arriving mid-session (`/admin`'s "Con sonido"/"Sin sonido"/"Como diga
 el link", or that setting expiring back to `'link'`) and for the adult's
-corner-menu "Sonido: sí / no" on this one device.
+corner-menu "Sonido: sí / no" on this one device. T27: also fires for the
+corner-menu "Voz: sí / no" on this one device (speech only); the event
+and `sessions.device` fields stay the same shape either way, with `voice`
+riding along.
 ```
-{ on: boolean, source: 'admin' | 'url' | 'adult' | 'default' }
+{ on: boolean, source: 'admin' | 'url' | 'adult' | 'default', voice: boolean }
 ```
-`source` names which layer decided the new value (`src/playtest/
+`source` names which layer decided the new `on` value (`src/playtest/
 soundSetting.ts`): `admin` (the class setting, while live), `adult` (the
 corner-menu toggle, this page load only), `url` (the bookmark's
 `?sonido=`/localStorage baseline) or `default` (on, nothing else said
@@ -1107,6 +1110,20 @@ also cancels a line already speaking. The state is also kept on
 `sessions.device.sound`/`sound_source`. **RQ 3** (and data cleaning: a
 muted session's lack of spoken-line timing is expected, not a tool
 failure).
+
+`voice` (T27, `src/playtest/voiceSetting.ts`/`src/ui/voice.ts`) is a
+second, independent on/off: `true` unless the adult turned this device's
+voice off from the corner menu. Voice off silences `speak`'s
+`speechSynthesis.speak` call only — sfx and music (`ringNote`) keep
+playing regardless of `voice`, the opposite split from the master
+`sound`/`on` above — so a teacher can turn one noisy computer's speech
+off while its sound effects and music (and every other computer's
+sound) stay exactly as they were. The on-screen text falls back on
+exactly as it does when muted (always shown; capital letters for
+1ro/2do). Unlike the adult's `sound` override (this page load only), the
+voice choice is saved on the device (`localStorage`) and is restored on
+a new session or a reload on the same computer — a teacher sets it once
+per machine. Also kept on `sessions.device.voice`.
 
 ### `adult_form`
 Round 2: the adult saved "Comentario del adulto" from the corner menu (the

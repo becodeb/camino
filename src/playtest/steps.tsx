@@ -30,6 +30,7 @@ import { Goodbye, Survey } from './closing';
 import { CaptionsIcon, GradeArt } from './round2Art';
 import { fetchClassSettings } from './runtime';
 import { currentSound, ensureSoundSettingStarted } from './soundSetting';
+import { isVoiceOff } from '../ui/voice';
 import { FreePlay } from './FreePlay';
 import { Ladder } from './Ladder';
 import { ToolCheck } from './ToolCheck';
@@ -72,7 +73,7 @@ function Setup({ start }: StepViewProps) {
     const sound = currentSound();
     start({
       grade: g, division: null, captions: captionsFor(g, cap), captionsSet: cap === 'auto' ? 'grade' : 'setup',
-      sound: sound.on, soundSource: sound.source, ...(demo.on ? { demo: true } : {}),
+      sound: sound.on, soundSource: sound.source, voice: !isVoiceOff(), ...(demo.on ? { demo: true } : {}),
     });
   }, [start, cap, demo.on]);
   useEffect(() => {

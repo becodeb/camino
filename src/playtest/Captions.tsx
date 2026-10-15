@@ -20,6 +20,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMuted } from '../ui/mute';
+import { useVoiceOff } from '../ui/voice';
 import { speak } from '../ui/speech';
 import { captionsShown, captionsUpper, useCaptionLine, useCaptionsOn } from './captions';
 import { usePlaytest } from './context';
@@ -50,12 +51,15 @@ const sizeOf = (t: string) => (t.length > 150 ? ' is-longer' : t.length > 95 ? '
 export function Captions({ step }: { step: StepId }) {
   const on = useCaptionsOn();
   const muted = useMuted();
+  const voiceOff = useVoiceOff();
+  // T27: the "Voz" switch silences speech only, but the on-screen text falls back exactly as it does when muted.
+  const silent = muted || voiceOff;
   const api = usePlaytest();
   const line = useCaptionLine();
   const bar = useBar();
   if (step === 'setup') return null;
-  const shown = captionsShown(on, muted);
-  const upper = captionsUpper(muted, api.session?.grade ?? 99);
+  const shown = captionsShown(on, silent);
+  const upper = captionsUpper(silent, api.session?.grade ?? 99);
   const toggle = (
     <button
       type="button" className={`pp-cap-toggle cut${shown ? ' is-on' : ''}`} aria-pressed={shown}
