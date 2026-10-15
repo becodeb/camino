@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHold, SLOP_PX, type HoldPointer } from './hold';
-import { HELP_BUTTON, HELP_HOLD_MS } from './AdultControls';
+import { CORNER_HOLD_MS, HAND_HOLD_MS, HELP_BUTTON, HELP_HOLD_MS } from './AdultControls';
 
 /** A hold on a fake clock; `on` says whether the press started on ✋. */
 function rig(ms = HELP_HOLD_MS) {
@@ -26,9 +26,14 @@ function rig(ms = HELP_HOLD_MS) {
 }
 
 describe('holding ✋ (T14): the adult\'s "¿En qué lo ayudaste?"', () => {
-  it('watches every ✋ of a page bar, for 1.5 s', () => {
+  it('watches every ✋ of a page bar, for ~0.8 s (T25: was 1.5 s)', () => {
     expect(HELP_BUTTON).toBe('.level-bar .help');
-    expect(HELP_HOLD_MS).toBe(1500);
+    expect(HELP_HOLD_MS).toBe(800);
+  });
+
+  it('T25: every adult hold takes the same time, wherever it is done — the corner, ✋, and the raised hand all open with one feel', () => {
+    expect(CORNER_HOLD_MS).toBe(HELP_HOLD_MS);
+    expect(HAND_HOLD_MS).toBe(HELP_HOLD_MS);
   });
 
   it('a short tap does nothing here: the click reaches ✋ and the child gets the help as before', () => {
@@ -46,12 +51,12 @@ describe('holding ✋ (T14): the adult\'s "¿En qué lo ayudaste?"', () => {
     expect(r.log).toEqual([]);
   });
 
-  it('held 1.5 s it opens the question once, and the click that ends the press is swallowed (no help step)', () => {
+  it('held ~0.8 s it opens the question once, and the click that ends the press is swallowed (no help step)', () => {
     const r = rig();
     r.hold.down(r.p(), r.now());
-    r.advance(750);
+    r.advance(400);
     expect(r.hold.progress(r.now())).toBeCloseTo(0.5);
-    r.advance(750);
+    r.advance(400);
     expect(r.log).toEqual(['swallow', 'question']);
     expect(r.hold.progress(r.now())).toBeNull();
     r.hold.up(r.p());
@@ -77,9 +82,9 @@ describe('holding ✋ (T14): the adult\'s "¿En qué lo ayudaste?"', () => {
   it('another finger lifting does not cancel the adult\'s press', () => {
     const r = rig();
     r.hold.down(r.p(10, 10, 1), r.now());
-    r.advance(800);
+    r.advance(500);
     r.hold.up(r.p(200, 200, 2));
-    r.advance(700);
+    r.advance(400);
     expect(r.log).toEqual(['swallow', 'question']);
   });
 });

@@ -15,6 +15,9 @@
   display: grid;
   place-items: center;
   padding: 0;
+  /* T25: the playtest's adult corner hold lives nearby; without this, a touchscreen can read a still-held finger
+     as the start of a page scroll/zoom and fire a spurious pointercancel partway through the hold. */
+  touch-action: none;
 }
 .speak svg { width: 32px; height: 32px; }
 .help {
@@ -26,6 +29,8 @@
   display: grid;
   place-items: center;
   padding: 0;
+  /* T25: the adult holds ✋ for ~0.8 s to log help; see the .speak comment above. */
+  touch-action: none;
 }
 .help svg { width: 40px; height: 40px; overflow: visible; transition: transform 0.15s ease-out; }
 .help:hover svg { transform: rotate(-8deg) translateY(-2px); }

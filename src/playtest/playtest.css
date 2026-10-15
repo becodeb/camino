@@ -69,7 +69,10 @@
 
 /* ------------------------------------------------ on-screen text: the line as a bubble in the bar (or floating), and 💬 */
 .piloto .level-bar > * { order: 4; }
-.piloto .level-bar > .speak { order: 0; }
+/* T25: extra left margin so .speak's own 54×54 box clears the adult's 64×64 corner-hold zone (AdultControls.tsx
+   CORNER_PX) entirely — a teacher's slow press right in the corner used to land on this button, which could be
+   cancelled mid-hold on a touchscreen ("el del parlante no me toma"). */
+.piloto .level-bar > .speak { order: 0; margin-left: 44px; }
 .piloto .level-bar > .drawn-task, .piloto .level-bar > .bar-face { order: 1; }
 .piloto .level-bar > .adult-title, .piloto .level-bar > .pp-survey-adult { order: 2; }
 .piloto .level-bar > .pp-cap { order: 3; }

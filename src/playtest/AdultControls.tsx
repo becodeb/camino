@@ -1,23 +1,32 @@
 // The adult's hidden controls, never a button the child sees:
-// - a long press (1.5 s) on the top-left corner of the screen opens the
-//   adult menu: the survey (T14: the adult opens it, usually once the green
-//   flag shows), log help given without a call, the adult's optional
-//   comment ("Comentario del adulto": sessions.adult_form), skip the step,
-//   end the session (straight to the survey), the sync status; never the
-//   session code (round 2);
+// - a long press (~0.8 s, T25: was 1.5 s) on the top-left corner of the
+//   screen opens the adult menu: the survey (T14: the adult opens it,
+//   usually once the green flag shows), log help given without a call, the
+//   adult's optional comment ("Comentario del adulto": sessions.adult_form),
+//   skip the step, end the session (straight to the survey), the sync
+//   status; never the session code (round 2);
 // - in free play, the adult menu also opens a probe for any grade ("Hacé
 //   tu juego", "Del bloque al texto": for testing, or for a child who wants it);
-// - T14: holding ✋ (1.5 s) whenever the adult helps asks "¿En qué lo
-//   ayudaste?": four big answers, one tap closes it and logs `adult_help`
-//   (`prompted` when a hand was up, which goes down). A short tap on ✋ is
-//   still the child's help. The child no longer raises the hand by holding
-//   ✋ (it still rises after the automatic help steps);
-// - a long press (1.2 s) on the character's raised hand asks the same.
+// - T14: holding ✋ (~0.8 s, T25: was 1.5 s) whenever the adult helps asks
+//   "¿En qué lo ayudaste?": four big answers, one tap closes it and logs
+//   `adult_help` (`prompted` when a hand was up, which goes down). A short
+//   tap on ✋ is still the child's help. The child no longer raises the hand
+//   by holding ✋ (it still rises after the automatic help steps);
+// - a long press (~0.8 s, T25: was 1.2 s) on the character's raised hand
+//   asks the same question (CORNER_HOLD_MS, HAND_HOLD_MS and HELP_HOLD_MS
+//   are kept equal on purpose: the same gesture should feel the same
+//   wherever the adult does it).
 // - T18: "Sonido: sí / no" mutes or unmutes this one device for the rest of
 //   this page load (soundSetting.ts); the admin's class-wide setting still
 //   wins while it is live.
 // The corner is watched on the window (capture phase), so the page under it
-// (the 🔊 of a level's bar) keeps working for a normal tap.
+// keeps working for a normal tap. T25: the 🔊 button used to sit inside that
+// same 64×64 px corner (a teacher's slow press there landed on the icon
+// itself and, on a touchscreen, could be cancelled mid-hold — "el del
+// parlante no me toma"); `.piloto .level-bar > .speak` now carries extra
+// left margin so the button's own box never overlaps the corner zone, and
+// every held target gets `touch-action: none` plus pointer capture (see
+// useHold below) so a touchscreen never fires a spurious pointercancel.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMuted } from '../ui/mute';
@@ -35,10 +44,11 @@ import { getPreviousChild, type PreviousChild } from './previousChild';
 import { setAdultOverride } from './soundSetting';
 
 export const CORNER_PX = 64;
-export const CORNER_HOLD_MS = 1500;
-export const HAND_HOLD_MS = 1200;
-/** T14: the adult keeps ✋ pressed this long: "¿En qué lo ayudaste?". */
-export const HELP_HOLD_MS = 1500;
+/** T25: ~0.8 s for every adult hold (was 1.5 s corner / 1.2 s hand / 1.5 s ✋); kept equal on purpose. */
+export const CORNER_HOLD_MS = 800;
+export const HAND_HOLD_MS = 800;
+/** T14: the adult keeps ✋ pressed this long: "¿En qué lo ayudaste?" (T25: kept equal to HAND_HOLD_MS, the same question opened from the raised hand). */
+export const HELP_HOLD_MS = 800;
 /** Any ✋ of a page's bar (levels, the typing game, the probes, the tool check). */
 export const HELP_BUTTON = '.level-bar .help';
 
@@ -63,7 +73,12 @@ function swallowNextClick() {
   realTimeout(off, 600);
 }
 
-/** Calls `fire` after a press held `ms` on the window where `where(e)` holds (hold.ts); `progress` reports the hold (0–1) for a ring. */
+/**
+ * Calls `fire` after a press held `ms` on the window where `where(e)` holds (hold.ts); `progress` reports the hold
+ * (0–1) for a ring. T25: while a press is live, the pointer is captured on its actual DOM target (`setPointerCapture`)
+ * so a touchscreen keeps routing move/up to it (and never silently drops the gesture) even if the finger drifts a
+ * little within SLOP_PX; capture is released as soon as the press ends, fires, or this hook unmounts.
+ */
 export function useHold(ms: number, where: (e: PointerEvent) => boolean, fire: () => void, onProgress?: (p: number | null) => void) {
   const ref = useRef({ where, fire, onProgress });
   ref.current = { where, fire, onProgress };
@@ -71,10 +86,16 @@ export function useHold(ms: number, where: (e: PointerEvent) => boolean, fire: (
     let raf = 0;
     let active = false;
     let last: PointerEvent | null = null;
+    let captured: { el: Element; id: number } | null = null;
+    const releaseCapture = () => {
+      if (!captured) return;
+      try { captured.el.releasePointerCapture(captured.id); } catch { /* already released, or gone */ }
+      captured = null;
+    };
     const hold = createHold({
       ms,
       where: () => !!last && ref.current.where(last),
-      fire: () => { active = false; cancelAnimationFrame(raf); ref.current.onProgress?.(null); ref.current.fire(); },
+      fire: () => { active = false; cancelAnimationFrame(raf); releaseCapture(); ref.current.onProgress?.(null); ref.current.fire(); },
       swallowClick: swallowNextClick,
       // the real clock: the demo's "más rápido" must not shorten an adult's long press
       setTimer: (fn, t) => realTimeout(fn, t),
@@ -90,12 +111,21 @@ export function useHold(ms: number, where: (e: PointerEvent) => boolean, fire: (
       if (!active || hold.progress(performance.now()) != null) return;
       active = false;
       cancelAnimationFrame(raf);
+      releaseCapture();
       ref.current.onProgress?.(null);
     };
     const down = (e: PointerEvent) => {
       last = e;
       hold.down(at(e), performance.now());
-      if (hold.progress(performance.now()) != null) { active = true; cancelAnimationFrame(raf); raf = requestAnimationFrame(tick); }
+      if (hold.progress(performance.now()) != null) {
+        active = true;
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(tick);
+        const target = e.target as (Element & { setPointerCapture?: (id: number) => void }) | null;
+        if (target?.setPointerCapture) {
+          try { target.setPointerCapture(e.pointerId); captured = { el: target, id: e.pointerId }; } catch { /* no pointer capture here, the window listeners still cover it */ }
+        }
+      }
     };
     const move = (e: PointerEvent) => { hold.move(at(e)); settle(); };
     const up = (e: PointerEvent) => { hold.up(at(e)); settle(); };
@@ -106,6 +136,7 @@ export function useHold(ms: number, where: (e: PointerEvent) => boolean, fire: (
     return () => {
       hold.cancel();
       cancelAnimationFrame(raf);
+      releaseCapture();
       window.removeEventListener('pointerdown', down, true);
       window.removeEventListener('pointermove', move, true);
       window.removeEventListener('pointerup', up, true);

@@ -299,14 +299,14 @@ such event (the hand stayed up until the adult answered or the survey).
 
 ### `adult_help`
 The adult told how they helped. Since T14 the main way is to **hold ✋ for
-~1.5 s** whenever they help a child (any ✋ of a page bar: levels, the
-typing game, the probes, the tool check): "¿En qué lo ayudaste?" opens with
-the four answers as big buttons, and one tap logs it and closes. A blue
-ring fills round ✋ while it is held; a shorter press is the child's help,
-exactly as before (the click that ends a 1.5 s hold is swallowed, so it
-gives no help step). The same question opens with a long press on the
-raised hand (which lowers it) and from the corner menu ("Registrar
-ayuda"). **RQ 3.**
+~0.8 s** (T25: was 1.5 s) whenever they help a child (any ✋ of a page bar:
+levels, the typing game, the probes, the tool check): "¿En qué lo ayudaste?"
+opens with the four answers as big buttons, and one tap logs it and closes.
+A blue ring fills round ✋ while it is held; a shorter press is the child's
+help, exactly as before (the click that ends a held press is swallowed, so
+it gives no help step). The same question opens with a long press
+(~0.8 s) on the raised hand (which lowers it) and from the corner menu
+("Registrar ayuda"). **RQ 3.**
 ```
 { level_id?: string, kind: 'instruction' | 'tool' | 'hint' | 'solved_together', prompted: boolean, duration_ms?: number, via?: 'help_hold' | 'hand' | 'menu' }
 ```

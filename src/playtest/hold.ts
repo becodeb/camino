@@ -6,7 +6,9 @@
 // finger does not also give the child a help); a short tap is left alone,
 // so the control under it works as before.
 
-export const SLOP_PX = 14;
+// T25: 24 px (not 14) tolerates the natural drift of a real finger held
+// still on glass for ~0.8 s without making the hold trivial to break.
+export const SLOP_PX = 24;
 
 export interface HoldPointer { x: number; y: number; id: number }
 
