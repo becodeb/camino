@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialFlow, reduce, type FlowState } from './flow';
 import {
   pickResume, rememberFlow, rememberPart, rememberProgress, resetResumeForTests, RESUME_KEY, RESUME_MAX_AGE_MS,
@@ -100,5 +100,38 @@ describe('resume after a reload', () => {
     rememberFlow('s1', walked(3), 1);
     rememberPart('x', 1, 2);
     expect(takeResume('s1', 3)).toBeNull();
+  });
+});
+
+describe('T29: a closed tab (not just a reload) still resumes', () => {
+  const fakeGlobalStorage = () => {
+    const m = new Map<string, string>();
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v); }, removeItem: (k: string) => { m.delete(k); }, m };
+  };
+  let fakeLocal: ReturnType<typeof fakeGlobalStorage>;
+  let fakeSession: ReturnType<typeof fakeGlobalStorage>;
+  beforeEach(() => {
+    vi.resetModules();
+    fakeLocal = fakeGlobalStorage();
+    fakeSession = fakeGlobalStorage();
+    vi.stubGlobal('localStorage', fakeLocal);
+    vi.stubGlobal('sessionStorage', fakeSession);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('saves to localStorage, not sessionStorage (a fresh module instance, so it really probes the global itself)', async () => {
+    const mod = await import('./resume');
+    mod.rememberFlow('s1', walked(2), 1000);
+    expect(fakeLocal.m.has(mod.RESUME_KEY)).toBe(true);
+    expect(fakeSession.m.has(mod.RESUME_KEY)).toBe(false);
+  });
+
+  it('a reload of a DIFFERENT tab (a fresh module instance, same device, same global localStorage) still resumes the saved session', async () => {
+    const tab1 = await import('./resume');
+    tab1.rememberFlow('s1', walked(3), 1000); // setup → character → tool_check → ladder
+    vi.resetModules();
+    const tab2 = await import('./resume');
+    const r = tab2.takeResume('s1', 2000)!;
+    expect(r.flow.step).toBe('ladder');
   });
 });

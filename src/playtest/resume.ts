@@ -1,22 +1,31 @@
-// A reload does not lose the child's session. The classroom's tab may
-// reload (a stray F5, a Chromebook discarding a background tab, the adult
-// reloading an app that looked stuck), often while the internet is down (the
-// service worker, serviceWorker.ts, still opens the app then). Without this
-// the adult would have to set the session up again and the same child would
+// Closing the tab (or reloading it) does not lose the child's session. The
+// classroom's tab may reload (a stray F5, a Chromebook discarding a
+// background tab, the adult reloading an app that looked stuck) or get
+// closed outright (T29: a child or an adult closes it by mistake, a
+// Chromebook kills it instead of merely discarding it, the bookmark is
+// tapped again later), often while the internet is down (the service
+// worker, serviceWorker.ts, still opens the app then). Without this the
+// adult would have to set the session up again and the same child would
 // show up in the data as a second child with a new code.
 //
-// So the tab keeps, in sessionStorage (this tab only, gone when it closes),
-// the flow of the session being played, the playtest's progress (seeds,
-// character, outfit) and a few steps' own state (`parts`: the ladder's items
-// so far, free play's clock). After a reload the playtest opens again on
-// the step it was on, from that step's start (the ladder and free play carry
-// on where they were), and logs `resume`. The event queue itself was never
-// lost: it lives in localStorage (telemetry.ts).
+// So this device keeps, in localStorage (T29: not sessionStorage — it must
+// survive the tab closing, not just a reload of the same tab), the flow of
+// the session being played, the playtest's progress (seeds, character,
+// outfit) and a few steps' own state (`parts`: the ladder's items so far,
+// free play's clock). Reopening the app (a reload, or the bookmark again)
+// opens on the step it was on, from that step's start (the ladder and free
+// play carry on where they were), and logs `resume`. The event queue itself
+// was never lost either: it already lives in localStorage (telemetry.ts).
 //
 // A resume needs the queue's current session to be the one saved, a step
 // past the adult's setup (and never the class-end/rest screen: pickResume
-// below), and a save younger than RESUME_MAX_AGE_MS (a tab left open
-// overnight starts fresh).
+// below), and a save younger than RESUME_MAX_AGE_MS (the tab left closed
+// overnight starts fresh). Being in localStorage, this is now shared by
+// every tab of this device rather than private to one: two tabs open on the
+// same device at once would overwrite each other's saved step (the last
+// write wins) — a real risk only if someone deliberately opens the kiosk
+// bookmark twice, not the ordinary one-tab-per-device classroom use this is
+// built for; left as a known limitation (see the feature document).
 
 import { STEPS, type FlowState } from './flow';
 
@@ -63,18 +72,19 @@ export function pickResume(raw: string | null, sessionId: string | null | undefi
   };
 }
 
-function tabStorage(): Backing | null {
+/** T29: localStorage (not sessionStorage), so a closed tab still resumes; try/catch, like every storage access here (a private window, or storage blocked or full, falls back to "no resume": a reopened tab just starts fresh). */
+function deviceStorage(): Backing | null {
   try {
-    if (typeof sessionStorage === 'undefined') return null;
-    sessionStorage.getItem(RESUME_KEY);
-    return sessionStorage;
+    if (typeof localStorage === 'undefined') return null;
+    localStorage.getItem(RESUME_KEY);
+    return localStorage;
   } catch {
     return null;
   }
 }
 
 let storage: Backing | null | undefined;
-const store = () => (storage === undefined ? (storage = tabStorage()) : storage);
+const store = () => (storage === undefined ? (storage = deviceStorage()) : storage);
 let saved: SavedSession | null = null;
 /** The resumed step's parts (only until the step changes). */
 let resumed: Record<string, unknown> = {};

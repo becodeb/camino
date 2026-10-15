@@ -1169,11 +1169,13 @@ session's real seq count (see "The previous child's comment").
 
 ### `resume`
 The tab reloaded (a stray F5, a Chromebook discarding the tab, the adult
-reloading) and the session carried on (`src/playtest/resume.ts`). The tab
-keeps the session's flow, progress and a few steps' state in
-`sessionStorage` (`camino.piloto.resume.v1`, this tab only); after a reload
-the playtest opens on the same step, from that step's start: the ladder
-carries on with the item that was on screen (its earlier items stand) and
+reloading) — or, T29, the tab was closed outright and the bookmark opened
+again — and the session carried on (`src/playtest/resume.ts`). The device
+keeps the session's flow, progress and a few steps' state in `localStorage`
+(`camino.piloto.resume.v1` — T29: moved off `sessionStorage`, which a
+closed tab loses; the 2-hour window below is unchanged); after a reload or
+reopen the playtest opens on the same step, from that step's start: the
+ladder carries on with the item that was on screen (its earlier items stand) and
 free play keeps its clock and visit count (the child is back on the menu);
 the tool check, typing game, wardrobe and survey start that step again.
 Offline, the service worker (`src/playtest/serviceWorker.ts`) still opens
@@ -1191,6 +1193,16 @@ data cleaning: the page that was open logged a `level_start` with no
   step_ms: number        // since the step began (before the reload)
 }
 ```
+
+T29 also added a `beforeunload` prompt (the browser's own "leave this
+page?") while a session is actually being played (not the setup, not the
+class-end countdown/rest, not the goodbye) — a second chance before the
+tab closes, on top of resume surviving it either way; none of the app's
+own transitions (the goodbye's restart, the adult's "Terminar la sesión",
+demo mode) navigate the page, so the prompt never fires for them. The
+telemetry queue itself (`camino.piloto.queue.v1`) was already in
+`localStorage`, unaffected by either change — only `resume`'s own key
+moved.
 
 ## Demo mode (T14)
 

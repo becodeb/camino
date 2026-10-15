@@ -323,6 +323,21 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
 
   useEffect(() => installWatchers(() => (flowRef.current.step === 'setup' ? null : flowRef.current.step)), []);
 
+  // T29: closing the tab never loses progress (resume.ts), but the browser's
+  // own leave prompt still gives a second chance — only while a session is
+  // actually being played (isLiveStep: not the setup, not resting after
+  // "terminar la clase", not the goodbye). None of the app's own transitions
+  // (the goodbye's restart, the adult's "Terminar la sesión", demo mode) ever
+  // navigate the page away — they only change this same tab's React state —
+  // so this can never block any of them; it only ever answers a real close,
+  // reload or address-bar navigation.
+  useEffect(() => {
+    if (!session || !isLiveStep(flow.step)) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [session, flow.step]);
+
   // a reloaded tab carried on: the data says so (the step starts over; the ladder and free play keep their state)
   const resumeLogged = useRef(false);
   useEffect(() => {
