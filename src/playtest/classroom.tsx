@@ -50,7 +50,7 @@ export const REST_HIDDEN_MIN_MS = 2000;
 const LINES = {
   flag: '¡Terminaste el camino! Seguí jugando a lo que quieras.',
   five: '¡Quedan cinco minutos! Terminá lo que estás haciendo.',
-  endingSoon: '¡Ya terminamos! Guardá lo que estás haciendo.',
+  endingSoon: '¡Últimos segundos! Terminá lo que estás haciendo.',
   rest: '¡Gracias por jugar! Hasta la próxima.',
 };
 
@@ -216,7 +216,7 @@ export function ClassEndBanner({ done }: { done(): void }) {
         <span className="tape tape-l" aria-hidden="true" />
         <span className="tape tape-r" aria-hidden="true" />
         <CountdownArt left={left} total={CLASS_END_SECONDS} />
-        <p className="pp-end-banner-text">¡Ya terminamos!</p>
+        <p className="pp-end-banner-text">¡Últimos segundos!</p>
       </div>
     </div>
   );
