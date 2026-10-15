@@ -448,7 +448,7 @@ function RuleGame({ levelEnded, listen, done }: { levelEnded: (end: LevelEnd) =>
     return k >= 0 ? k : RULE_GAME_PAGES.length - 1;
   });
   const [walk, setWalk] = useState(0);
-  if (walk) return <WalkOn key={walk} seed={60 + walk} line="¡Otro juego!" done={() => setWalk(0)} />;
+  if (walk) return <WalkOn key={walk} line="¡Otro juego!" done={() => setWalk(0)} />;
   const id = RULE_GAME_PAGES[i];
   const level = pilotLevel(id)!;
   return (

@@ -56,11 +56,20 @@ function huddled(g: Garden): Garden {
   };
 }
 
-export function SessionGarden({ cheer }: { cheer: number }) {
+/**
+ * `cheer`: changing it makes the character celebrate (the goodbye tour's
+ * last stop, an interlude's own look). `onlyNewest` (T31, the interlude
+ * between activities): every plant but the very last one earned sits
+ * still (already there, nothing new to show); only that last one plays
+ * its own grow-in animation — a short, wordless "you got something", not
+ * the goodbye's full staggered reveal of everything at once.
+ */
+export function SessionGarden({ cheer, onlyNewest }: { cheer: number; onlyNewest?: boolean }) {
   const p = useProgress();
   // the child stands by the first bed (the year puts them at the front left, far from a session's few plants)
   const g = useMemo(() => huddled(gardenOf(p)), [p]);
   const box = useMemo(() => frameOf(g), [g]);
+  const newest = g.seeds - 1;
   const drawn: { y: number; key: string; node: ReactNode }[] = [];
   for (const b of g.beds) {
     if (!b.plants.length && b.i > 0) continue;
@@ -69,11 +78,15 @@ export function SessionGarden({ cheer }: { cheer: number }) {
       node: (
         <g key={`bed${b.i}`}>
           <BedSoil x={b.x} y={b.y} s={b.s} i={b.i} open={false} />
-          {b.plants.map((pl) => (
-            <g key={pl.i} className="pp-garden-plant" style={{ animationDelay: `${300 + pl.i * 110}ms` }}>
-              <SeedPlant x={pl.x} y={pl.y} s={b.s} stage={pl.stage} color={pl.color} i={pl.i} />
-            </g>
-          ))}
+          {b.plants.map((pl) => {
+            const grow = onlyNewest && pl.i === newest;
+            const cls = onlyNewest ? (grow ? 'pp-garden-plant-grow' : '') : 'pp-garden-plant';
+            return (
+              <g key={pl.i} className={cls} style={onlyNewest ? undefined : { animationDelay: `${300 + pl.i * 110}ms` }}>
+                <SeedPlant x={pl.x} y={pl.y} s={b.s} stage={pl.stage} color={pl.color} i={pl.i} />
+              </g>
+            );
+          })}
         </g>
       ),
     });

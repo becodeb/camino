@@ -99,7 +99,6 @@ export function Ladder() {
     return (
       <WalkOn
         key={`walk-${view.n}`}
-        seed={40 + view.n}
         line={WALK_LINES[(view.n - 1) % WALK_LINES.length]}
         done={() => {
           if (wrapping()) { endLadder('wrap_up'); setView({ kind: 'end' }); return; }

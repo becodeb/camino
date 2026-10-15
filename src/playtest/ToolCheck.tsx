@@ -179,7 +179,7 @@ export function ToolCheck() {
   const hearRef = useRef(hear);
   hearRef.current = hear;
 
-  if (walk) return <WalkOn seed={31} line="¡Vamos!" done={next} />;
+  if (walk) return <WalkOn line="¡Vamos!" done={next} />;
   return (
     <BarProgressContext.Provider value={{ kind: 'dots', done: GESTURES.map((_, i) => i < gi), here: gi }}>
       <PlaytestLevel
