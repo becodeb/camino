@@ -91,6 +91,31 @@ Back-to-back classes round (user request 2026-10-07: ~50-minute classes one afte
 - [x] T23 The survey alone, without sound or reading: each question recognisable from its pictures (the difficulty answers drawn differently from the liking faces, e.g. the "¿Cómo seguís?" hills; play again with a clear yes/no drawing), checked silently at 1ro.
 - [ ] T24 Verification and redeploy (redeploy only on the user's explicit request).
 
+### Round after the first real 1ro classes (user feedback 2026-10-15)
+
+Three back-to-back 1ro classes on 2026-10-13, all without sound (no headphones), production still at T21. Data: `exports/playtest-2026-10-15-1741.json` (42 real sessions after filtering noise, the projector session and 2026-10-14). The user asked to implement what needs implementing and to keep the rest recorded (see "Recorded, not implemented" below). Route per task: delegated direct, one writer at a time (each touches 2+ non-trivial files); T24's redeploy folds into T32.
+
+- [ ] T25 Adult holds that take on the first try: shorter holds (corner and ✋ about 0.8 s instead of 1.5/1.2 s); `touch-action: none` and pointer capture on every held target so a touchscreen never cancels a hold mid-way; the corner hot-zone no longer overlaps the 🔊 button (the user's "el del parlante no me toma": the speaker sits inside the 64×64 corner), and a hold that fires never also triggers a click underneath.
+- [ ] T26 Dropping inside the repeat: a block whose top is aligned with the bottom of the last block inside a repeat lands inside it (`slotAt`'s inside tolerance as wide as a block's half-height). Data: 18/42 sessions dropped a block right after a repeat instead of inside (79 attempts).
+- [ ] T27 Voice switch separate from sound: a per-device "Voz sí/no" in the adult corner menu (persisted on the device, survives new sessions) that silences speech only and keeps sound effects and music, so the teacher can turn the computers' volume up and silence just a talking one; the on-screen text stays on while the voice is off; the music activity is offered in 1ro whenever sound is on, even with the voice off.
+- [ ] T28 Class end that leaves time and shows the garden: "Terminar la clase" first shows a non-blocking 10 s countdown the child can keep playing through, then the session ends and the device shows the child's garden (what they grew) while resting; the device goes back to the start by itself only after the lid was closed and reopened (page hidden then visible) or after a few minutes, and opening the bookmark or reloading on the class-end/rest screen always starts fresh (never resumes into `class_end`). `/admin` explains what "Quedan 5 minutos" and "Terminar la clase" do, in one line each.
+- [ ] T29 Closing the tab never loses progress: resume survives a closed tab (device storage instead of `sessionStorage`, same 2 h window), and a live session asks before leaving the page (browser's leave prompt), never on the class-end/rest screen. Data: `resume` in 19/42 sessions.
+- [ ] T30 Predict that cannot be guessed by watching: ▶ does nothing visible until a cell is chosen (the "?" pulses and the hand points at the board instead; data: 56 ▶ presses with no guess in 6 sessions); after a wrong guess the next try is a different puzzle (another start or program), so tapping where it ended is not the answer; the first-time ghost demo of this format re-checked on a real first show (the user saw it misbehave; the code read found nothing, so reproduce with screenshots first).
+- [ ] T31 The garden instead of the hop to the leaf: the "vamos al siguiente paso" interlude (character hopping slowly to a leaf, read as a loading screen) becomes a short look at the child's garden with the new plant growing, then the next step.
+- [ ] T32 Verification (typecheck, tests, builds, scripted checks incl. `check-class`, `check-backtoback`, `check-silent`, screenshots) and push; redeploy only on the user's explicit request, outside class hours.
+
+#### Recorded, not implemented (user feedback 2026-10-15)
+
+- The repeat is not discovered on its own: kids first try without it, run out of blocks and ask; once told, they use it. The progression does not introduce the repeat slowly, nor blocks before/after it (known: this is the pilot). Data: ladder ceiling at rung 1 in 19/39 (they pass `sequence`, fail `long_sequence`); only 3/42 reached the repeat item; 2.99 attempts per repeat level vs 1.47 without.
+- Tapping the character to see a gesture is a hit; the character choice keeps some kids busy spamming confetti. Favourite activity in the survey: character 10, typing 6, wardrobe 6.
+- The free-play activities bore them ("el de dibujar es aburrido"); they try all and there is still class left (median ~14 min of free play after the green flag). Add more activities for 1ro.
+- Typing game: many tap the on-screen keyboard instead of the computer's; lighting the key is fine. Data: 42% of keys were touch; physical keys 25% correct vs touch 73%.
+- "¿Cómo seguís?" (easier / harder / challenge) is not understood; picks look random (boss 11, easy 10, medium 8, hard 1).
+- Kids noticed a classmate got a different level: maybe they prefer something more structured (note only, change nothing).
+- The ✋ help: almost nobody used it on purpose (12/42 touched it, `call_adult` in 6/42); the right end of the bar is crowded with icons they do not know, so they touch nothing. Its usefulness is doubtful.
+- Survey: liked 22 yes / 5 no; difficulty 19 easy / 5 mid / 3 hard; play again 18 yes / 8 no.
+- Data noise: bathroom breaks, the teacher's projector computer, lids closed mid-session (class 1's `end_class` reached 5 devices 24–26 min late, at the start of class 2, which T22/T28 address).
+
 ## Progress
 
 - 2026-09-30: worktree and branch created from `feat/primer-grado` (fe6a277); code mapped; this document created before the first source write.
@@ -703,4 +728,4 @@ Back-to-back classes round (user request 2026-10-07: ~50-minute classes one afte
 
 ## Next step
 
-T24: redeploy on the user's request; then the back-to-back classes.
+T25–T31 (one writer at a time), then T32; redeploy on the user's request.
