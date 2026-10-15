@@ -138,11 +138,28 @@ describe('block editor layout and hit testing', () => {
     expect(slotAt(L, b.y + 5, cmd('x'))).toEqual({ tape: 1, at: 0 });
     expect(slotAt(L, c.y + 5, cmd('x'))).toEqual({ tape: 1, at: 1 });
     expect(slotAt(L, c.y + c.h - 5, cmd('x'))).toEqual({ tape: 1, at: 2 });
-    expect(slotAt(L, loop.y + loop.h - 3, cmd('x'))).toEqual({ at: 2 });
+    // T26: just inside the foot's own drawn height (the old, too-narrow tolerance) is still inside the tape
+    expect(slotAt(L, loop.y + loop.h - 3, cmd('x'))).toEqual({ tape: 1, at: 2 });
+    // just past the widened tolerance (more than a block's half-height beyond the last card) still goes after it
+    expect(slotAt(L, c.y + c.h + DIMS.h / 2 + 1, cmd('x'))).toEqual({ at: 2 });
     expect(slotAt(L, a2.y + a2.h + 40, cmd('x'))).toEqual({ at: 3 });
     // a tape over a tape's mouth stays at the top level: before or after it
     expect(slotAt(L, b.y + 5, tape())).toEqual({ at: 1 });
     expect(slotAt(L, c.y + c.h - 5, tape())).toEqual({ at: 2 });
+  });
+
+  it('T26: a block dropped with its top lined up with the bottom of the last card inside the repeat lands inside it, not after it', () => {
+    const L = layoutProgram(p);
+    const [, , loop, , c] = L.items;
+    // BlockEditor's own probe is the dragged block's center, capped at d.h / 2 past its top
+    // (`Math.min(dr.look.h, d.h) / 2`) — this is exactly that cap, lined up with the last card's bottom edge.
+    const draggedTop = c.y + c.h;
+    expect(slotAt(L, draggedTop + DIMS.h / 2, cmd('x'))).toEqual({ tape: 1, at: 2 });
+    // tap-to-add (no drag): the first open line of the tape still takes the tap, unaffected
+    expect(slotAt(L, loop.y + 5, cmd('x'))).toEqual({ at: 1 });
+    expect(slotAt(L, c.y + 5, cmd('x'))).toEqual({ tape: 1, at: 1 });
+    // nested: a tape dragged near the same spot still stays at the top level, never inside another tape
+    expect(slotAt(L, draggedTop + DIMS.h / 2, tape())).toEqual({ at: 2 });
   });
 });
 

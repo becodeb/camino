@@ -352,6 +352,17 @@ export function layoutProgram(p: Program, o: LayoutOptions = {}): Layout {
  * *without* a gap — falls into. Only height decides: over the upper half of
  * a block it goes before it; inside a tape's mouth a card goes among the
  * tape's cards; a tape never goes inside another.
+ *
+ * T26: the zone that counts as "inside the tape" reaches a full block's
+ * half-height past the last card (`arm` is always a plain block's height in
+ * both Dims presets, so `arm / 2` stands in for it here without needing the
+ * Dims themselves) rather than only half the drawn foot's own height (~11 px
+ * — much narrower). BlockEditor's own probe is the dragged block's center,
+ * capped at `d.h / 2` past its top (`Math.min(dr.look.h, d.h) / 2`), so a
+ * child who lines the dragged block's top up with the bottom of the last
+ * card inside the repeat (a natural way to mean "right after it") lands
+ * exactly at that cap — `<=` (not `<`) keeps that exact alignment inside.
+ * Past that, a drop still lands after the tape, at the top level, as before.
  */
 export function slotAt(layout: Layout, y: number, block: Block): Slot {
   const top = layout.items.filter((it) => (it.kind === 'cmd' || it.kind === 'loop') && it.ref && it.ref.inner == null);
@@ -360,9 +371,12 @@ export function slotAt(layout: Layout, y: number, block: Block): Slot {
       const i = it.ref!.item;
       const arm = it.arm ?? 0;
       const armMid = it.y + arm / 2;
-      const footMid = it.y + arm + (it.mouth ?? 0) + (it.h - arm - (it.mouth ?? 0)) / 2;
+      const footStart = it.y + arm + (it.mouth ?? 0);
+      const footHeight = it.h - arm - (it.mouth ?? 0);
+      const insideTolerance = Math.max(footHeight, arm) / 2;
+      const footMid = footStart + insideTolerance;
       if (y < armMid) return { at: i };
-      if (y < footMid) {
+      if (y <= footMid) {
         const inner = layout.items.filter((c) => c.kind === 'cmd' && c.ref?.item === i && c.ref.inner != null);
         for (const c of inner) if (y < c.y + c.h / 2) return { tape: i, at: c.ref!.inner! };
         return { tape: i, at: inner.length };
