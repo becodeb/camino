@@ -89,7 +89,7 @@ Back-to-back classes round (user request 2026-10-07: ~50-minute classes one afte
 
 - [x] T22 Class end leaves the computer ready: after "Terminar la clase" (10 s countdown, session ended and flushed) the device goes back by itself to the start for the next child (with `?grado` the character choice), no adult hold; the next session never receives the old commands; avoid piling up empty sessions while nobody plays if cheap. A "Comentario del chico anterior" item in the adult corner menu writes the adult form of the previous session ended on this device (recent, e.g. last 3 h), synced to that session.
 - [x] T23 The survey alone, without sound or reading: each question recognisable from its pictures (the difficulty answers drawn differently from the liking faces, e.g. the "¿Cómo seguís?" hills; play again with a clear yes/no drawing), checked silently at 1ro.
-- [ ] T24 Verification and redeploy (redeploy only on the user's explicit request).
+- [x] T24 Verification and redeploy (redeploy only on the user's explicit request).
 
 ### Round after the first real 1ro classes (user feedback 2026-10-15)
 
@@ -102,7 +102,7 @@ Three back-to-back 1ro classes on 2026-10-13, all without sound (no headphones),
 - [x] T29 Closing the tab never loses progress: resume survives a closed tab (device storage instead of `sessionStorage`, same 2 h window), and a live session asks before leaving the page (browser's leave prompt), never on the class-end/rest screen. Data: `resume` in 19/42 sessions.
 - [x] T30 Predict that cannot be guessed by watching: ▶ does nothing visible until a cell is chosen (the "?" pulses and the hand points at the board instead; data: 56 ▶ presses with no guess in 6 sessions); after a wrong guess the next try is a different puzzle (another start or program), so tapping where it ended is not the answer; the first-time ghost demo of this format re-checked on a real first show (the user saw it misbehave; the code read found nothing, so reproduce with screenshots first).
 - [x] T31 The garden instead of the hop to the leaf: the "vamos al siguiente paso" interlude (character hopping slowly to a leaf, read as a loading screen) becomes a short look at the child's garden with the new plant growing, then the next step.
-- [ ] T32 Verification (typecheck, tests, builds, scripted checks incl. `check-class`, `check-backtoback`, `check-silent`, screenshots) and push; redeploy only on the user's explicit request, outside class hours.
+- [x] T32 Verification (typecheck, tests, builds, scripted checks incl. `check-class`, `check-backtoback`, `check-silent`, screenshots) and push; redeploy only on the user's explicit request, outside class hours.
 
 #### Recorded, not implemented (user feedback 2026-10-15)
 
@@ -806,6 +806,8 @@ Three back-to-back 1ro classes on 2026-10-13, all without sound (no headphones),
 
 - 2026-10-15: parent review of T25–T31 (screenshots `shots/t25-27/`, `shots/t2829/`, `shots/t30t31/` read; one copy fix sent back: the class-end banner said "¡Ya terminamos!" while play continued). Parent spot check: `npm run typecheck` clean, `npm test` 50 files / 1158 passed. Pushed `5ee7eef` to `origin/feat/prueba-piloto`. Production is still at T21 (T22–T31 not deployed); redeploy waits for the user's explicit request and a time with no class on the devices.
 
+- 2026-10-16: redeploy after the user's explicit request ("hacé el redeploy"): Coolify deployment `ptqd0hanvfdj4rdbarmyz6td` finished, app `running:healthy`; live `/api/health` 200; the served `assets/index-wXQDlstf.js` has the same sha256 as the local `VITE_PLAYTEST=1` build of `6b071a2` and contains the T28 banner copy. Production now runs T22–T31. No scripted checks against production (they would create sessions and send class commands).
+
 ## Next step
 
-T32: redeploy on the user's explicit request, outside class hours (production still at T21); then the next 1ro classes, and export the data again with `node tools/export-playtest.mjs`.
+The next 1ro classes with T22–T31 live; afterwards export with `node tools/export-playtest.mjs` and compare with the 2026-10-13 classes.
