@@ -673,8 +673,8 @@ menu opens and when the card is held (a tap picks it). **RQ 5.**
 
 | Grade | Menu (in order) |
 |---|---|
-| 1ro | `sheet` (sheet 6 "La escalera", its doors and boss), `recess` (sheet 9, the music recess), `guardas` (sheet 14), `editor` (sheet 7's workshop and corkboard) |
-| 2do | `sheet` (sheet 8 "Zigzag"), `recess`, `guardas`, `editor` (sheet 7) |
+| 1ro | `race` (T33, "La carrera"; see below), `sheet` (sheet 6 "La escalera", its doors and boss), `recess` (sheet 9, the music recess; left off while muted), `guardas` (sheet 14), `editor` (sheet 7's workshop and corkboard) |
+| 2do | `race`, `sheet` (sheet 8 "Zigzag"), `recess`, `guardas`, `editor` (sheet 7) |
 | 3ro | `rule_game`, `sheet` (sheet 13 "Antes y después"), `recess`, `editor` (sheet 7) |
 | 4to | `rule_game`, `editor` (sheet 15, the workshop with few lines), `recess`, `game_maker` (T7's probe "Hacé tu juego"; see below) |
 | 5to | `rule_game`, `editor` (sheet 15), `recess`, `text_probe` (the probe "Del bloque al texto", T8, rebuilt in T16; see below) |
@@ -964,6 +964,89 @@ lit a line with its block). **Done alone** = completed with
 `{ probe: 'text', reason: 'done' | 'left', time_ms, steps_completed, steps_alone, runs }`
 (`steps_*` count the stretch too; `runs` = every ▶). Round 1 logged
 `items_tried`, `items_correct`.
+
+### La carrera, the race (T33, 1ro and 2do)
+
+A free-play activity (`src/playtest/Race.tsx`, pure logic and tuning in
+`src/playtest/race.ts`), first on 1ro's and 2do's menus. **RQ 5** (what
+they choose, voluntary "¡Otra carrera!", time per race) and **RQ 6**
+(motivators: cups, the seed at the finish). The child's kart races two
+forest critters (never classmates; no ranking anywhere); each stretch of
+road is a short row of pieces (flat →, a ramp up ↑, a ramp down ↓) with an
+empty slot under each; the child fills them with the levels' arrow blocks
+(a tap, a drag onto the stretch, or the keyboard's arrow keys). A right
+block nudges the kart; a full, right tape makes it zoom through the
+stretch (no ▶); a wrong block makes the kart bump a bush and pops out
+(nothing lost). Long straights (tier 3 on) offer the real `repetir` block
+holding one →, its count the pieces left: the turbo. The critters are
+rubber-banded to the child's pace and always cross after the child. Each
+finish: a podium, a cup on the session's shelf (kept in the resume state),
+one seed for the garden (the cup is solved as `race-cup-<n>` in the session's progress, which also keeps the shelf across a step change or a reload), and "¡Otra carrera!" (a new
+race, one tier harder; endless). Tiers: 1: six stretches of 1–2 arrows in
+one direction; 2: six of 2–3 mixing directions; 3: seven of 2–3 plus two
+turbo straights of 4–6 →; 4 and on: seven of 3–5 plus two turbos. A
+race's roads come from `tier` and `seed` (`generateRace`, deterministic).
+Free play logs the pick (`choice` {activity: 'race'}) and the time in it
+(`activity_end`, where each race finished counts as a won level); free
+play's time never ends mid-race (it waits for the race on screen to
+finish). Its `help`, `speak` and `ghost_demo` carry `level_id: 'race'` (✋
+1: the next piece and slot glow and the road is said; ✋ 2 and 3: the
+ghost hand also carries the right block to the slot; a fourth press raises
+the hand; the first race of a session opens with a wordless ghost demo,
+`kind: 'intro'`).
+
+#### `race_start`
+A race began (on screen). **RQ 5.**
+```
+{
+  race_no: number,          // 1, 2, … in the session (kept across a reload; a reload mid-race starts the next number)
+  tier: number,             // 1, 2, 3, 4… (4 and on play as 4)
+  seed: number,             // with `tier`, draws the race again (generateRace)
+  stretches: number,        // stretches in the race (6 or 7)
+  roads: string[],          // each stretch's road, one letter a piece: R(ight), U(p), D(own); a turbo straight starts with T, e.g. 'TRRRRR'
+  turbo_stretches: number,  // turbo straights in the race (0 or 2)
+  rivals: [string, string], // the two critters (in turn: zorro & coati, carpincho & rana, lechuza & carpintero)
+  again?: true              // started from the podium's "¡Otra carrera!" (voluntary); absent for the first race of a visit
+}
+```
+
+#### `race_stretch`
+A stretch was finished (or left open). **RQ 5** (and RQ 1 for `sources`).
+```
+{
+  race_no: number, stretch: number,   // 1-based
+  road: string,             // 'RUD'… (as in race_start.roads, without T)
+  length: number,           // pieces
+  turbo_offered: boolean,   // a turbo straight (the palette offered `repetir`)
+  used_repeat: boolean,     // the child placed the repeat (the turbo)
+  blocks_placed: number,    // blocks placed, right and wrong (a repeat counts one)
+  wrong_blocks: number,     // blocks that did not match (each bumped a bush and popped out)
+  removed: number,          // taps on a filled slot (that block and the ones after it came out)
+  sources: { tap: number, drag: number, key: number },  // how the blocks were placed
+  ms: number,               // from the stretch becoming the one to build to its last block
+  completed: boolean        // false: the child left the race in the middle of this stretch (logged only if a block was placed in it)
+}
+```
+
+#### `race_end`
+A race ended: the child crossed the line, or left. **RQ 5, 6.**
+```
+{
+  race_no: number, tier: number, seed: number,
+  reason: 'finished' | 'left',   // crossed the line; left the race ("volver al menú", the flow moved on, the class ended)
+  ms: number,                    // from the race on screen to crossing the line (or leaving)
+  play_ms: number,               // from the first block placed
+  stretches: number, stretches_done: number,
+  blocks_placed: number, wrong_total: number, removed: number,
+  turbo_offered: number,         // turbo straights reached
+  turbo_used: number,            // of them, done with the repeat
+  sources: { tap: number, drag: number, key: number },
+  margin_ms: number | null,      // finished: from the child crossing to the first critter crossing (the "small but visible" margin)
+  help_levels: number,           // ✋ presses (0–3)
+  adult_helped: boolean,
+  cups: number                   // cups on the shelf after this race
+}
+```
 
 ### `survey_answer`
 One spoken survey question answered with drawn faces/pictures. **RQ 9.**
@@ -1303,7 +1386,7 @@ for a session therefore mean a 400-dropped batch, never a network failure.
 
 ## SQL views
 
-Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`, `004_game_maker.sql`, `005_text_probe.sql`, `007_typing_rounds.sql`, `009_game_maker_steps.sql`, `010_text_probe_steps.sql`), always available for ad hoc
+Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`, `004_game_maker.sql`, `005_text_probe.sql`, `007_typing_rounds.sql`, `009_game_maker_steps.sql`, `010_text_probe_steps.sql`, `012_race.sql`), always available for ad hoc
 analysis (`psql`, or any tool that can read Postgres directly).
 
 Since T14 (`008_class_control.sql`) every view reads only real sessions:
@@ -1384,6 +1467,22 @@ too; the tables themselves still hold the demo rows until they are deleted.
   `<step>_median_s`; `write_reached`, `write_alone`, `write_help`;
   `median_steps_alone`, `parse_errors`, `liked_yes`, `liked_mid`,
   `liked_no`.
+
+- **`v_race_by_grade`** — T33, one row per grade that raced (real sessions
+  only): `sessions`, `races_started`, `again_races` (voluntary "¡Otra
+  carrera!"), `median_races_per_session`, `max_tier`; from `race_end`
+  `races_finished`, `races_left`, `median_race_ms`, `median_wrong_per_race`,
+  `median_margin_ms`, `races_with_help`; from `race_stretch`
+  `stretches_done`, `median_stretch_ms`, `wrong_blocks`, `turbo_offered`,
+  `turbo_used`, `turbo_use_pct` (the repeat chosen when it paid),
+  `placed_tap`, `placed_drag`, `placed_key`. `server/migrations/012_race.sql`.
+  Feeds RQ 5, 6.
+- **`v_race_stretches_by_tier`** — T33, one row per grade and tier (each
+  stretch joined to its race's `race_start.tier`): `stretches_done`,
+  `median_stretch_ms`, `avg_wrong_per_stretch`, `stretches_without_wrong`,
+  `turbo_offered`, `turbo_used`, `median_turbo_stretch_ms` (with the
+  repeat) and `median_turbo_by_hand_ms` (the same straights with single
+  arrows). Feeds RQ 5.
 
 ## Retention and deletion
 

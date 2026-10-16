@@ -5,15 +5,17 @@
 // boss, the music recess, the guardas, the workshop (make a level, pin it,
 // play the corkboard), and for 3ro–5to the rule game. The 4to and 5to probes
 // (T7 "Hacé tu juego", T8 "Del bloque al texto") get a card only once their
-// component is in PROBES (probes.ts).
+// component is in PROBES (probes.ts). T33: "La carrera" (Race.tsx), a kart
+// race against two critters built with arrow blocks, first on 1ro's and
+// 2do's menus.
 
 import { sheetByN } from '../curriculum/primer';
 
-export type ActivityId = 'sheet' | 'recess' | 'guardas' | 'editor' | 'rule_game' | 'game_maker' | 'text_probe';
+export type ActivityId = 'sheet' | 'recess' | 'guardas' | 'editor' | 'rule_game' | 'game_maker' | 'text_probe' | 'race';
 export type ProbeId = Extract<ActivityId, 'game_maker' | 'text_probe'>;
 
-/** How an activity is played: a sheet of 1ro's year (its pages move by the hash), the rule game's pages, or a probe's component. */
-export type ActivityKind = { sheet: number } | { rules: true } | { probe: ProbeId };
+/** How an activity is played: a sheet of 1ro's year (its pages move by the hash), the rule game's pages, a probe's component, or the race (T33). */
+export type ActivityKind = { sheet: number } | { rules: true } | { probe: ProbeId } | { race: true };
 
 export interface Activity {
   id: ActivityId;
@@ -32,10 +34,10 @@ export const WORKSHOP_FOR: Record<number, number> = { 1: 7, 2: 7, 3: 7, 4: 15, 5
 export const RECESS_SHEET = 9;
 export const GUARDAS_SHEET = 14;
 
-/** What each grade's menu shows, in order (a probe only when it is registered). */
+/** What each grade's menu shows, in order (a probe only when it is registered). T33: the race first for 1ro and 2do. */
 export const MENU: Record<number, readonly ActivityId[]> = {
-  1: ['sheet', 'recess', 'guardas', 'editor'],
-  2: ['sheet', 'recess', 'guardas', 'editor'],
+  1: ['race', 'sheet', 'recess', 'guardas', 'editor'],
+  2: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   3: ['rule_game', 'sheet', 'recess', 'editor'],
   4: ['rule_game', 'editor', 'recess', 'game_maker'],
   5: ['rule_game', 'editor', 'recess', 'text_probe'],
@@ -56,6 +58,7 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
     case 'rule_game': return { id, kind: { rules: true }, say: 'El juego de reglas: armá tu propio juego.', caption: 'Juego de reglas' };
     case 'game_maker': return { id, kind: { probe: id }, say: 'Hacé tu juego.', caption: 'Hacé tu juego' };
     case 'text_probe': return { id, kind: { probe: id }, say: 'Del bloque al texto.', caption: 'Bloques y texto' };
+    case 'race': return { id, kind: { race: true }, say: 'La carrera: armá el camino con flechas y ganá la carrera.', caption: 'La carrera' };
     default: return null;
   }
 }

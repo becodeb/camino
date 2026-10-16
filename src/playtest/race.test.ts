@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BAND, CONNECTOR, RIVAL_START, LURCH, MAX_HEIGHT, RACE_START, RUN_OUT, TURBO_LEN, ZOOM_SPEED, afterWin, arrowBlock, courseOf, cutAt, filledOf,
+  BAND, CONNECTOR, CUP_PREFIX, RIVAL_START, cupsIn, withCups, LURCH, MAX_HEIGHT, RACE_START, RUN_OUT, TURBO_LEN, ZOOM_SPEED, afterWin, arrowBlock, courseOf, cutAt, filledOf,
   generateRace, heightAt, judge, ownerOf, paceOf, raceProblems, readSaved, repeatFor, restingSpot, rivalOffset, roadCode, slopeAt,
   stepRival, tapeDirs, tierRule, type BandInput, type RaceDef, type RoadDir,
 } from './race';
@@ -321,6 +321,12 @@ describe('the rubber band', () => {
 describe('the session\'s race state', () => {
   it('a win adds a cup and the next race is a tier harder', () => {
     expect(afterWin(RACE_START)).toEqual({ cups: 1, raceNo: 0, tier: 2 });
+  });
+
+  it('counts the cups from the session\'s progress and never keeps fewer cups, races or tiers than the wins', () => {
+    expect(cupsIn({ [`${CUP_PREFIX}1`]: true, [`${CUP_PREFIX}2`]: true, 'pp-l1': true, 'race-1': true })).toBe(2);
+    expect(withCups(RACE_START, 2)).toEqual({ cups: 2, raceNo: 2, tier: 3 });
+    expect(withCups({ cups: 2, raceNo: 5, tier: 4 }, 1)).toEqual({ cups: 2, raceNo: 5, tier: 4 });
   });
 
   it('reads a saved state, falling back for anything malformed', () => {

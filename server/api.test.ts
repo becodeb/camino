@@ -242,6 +242,83 @@ dbDescribe('API against Postgres', () => {
     expect(t.rows).toEqual([{ seconds: 245 }]);
   });
 
+  it('T33: v_race_by_grade sums up the races per grade; v_race_stretches_by_tier reads each stretch by its race\'s tier; demo races stay out', async () => {
+    const app = createApp(pool, { distDir });
+    const post = (session: Record<string, unknown>, events: unknown[]) => app.request('/api/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session, events }),
+    });
+    const ev = (seq: number, type: string, payload: Record<string, unknown>) => event(seq, { type, payload });
+    const start = (seq: number, race_no: number, tier: number, again = false) =>
+      ev(seq, 'race_start', { race_no, tier, seed: 42, stretches: 6, roads: ['R', 'U'], turbo_stretches: tier >= 3 ? 2 : 0, rivals: ['zorro', 'coati'], ...(again ? { again: true } : {}) });
+    const stretch = (seq: number, race_no: number, n: number, o: { ms: number; wrong?: number; turbo?: boolean; repeat?: boolean; completed?: boolean; tap?: number; drag?: number; key?: number }) =>
+      ev(seq, 'race_stretch', {
+        race_no, stretch: n, road: o.turbo ? 'RRRRR' : 'RU', length: o.turbo ? 5 : 2, turbo_offered: !!o.turbo, used_repeat: !!o.repeat,
+        blocks_placed: 2, wrong_blocks: o.wrong ?? 0, removed: 0, sources: { tap: o.tap ?? 2, drag: o.drag ?? 0, key: o.key ?? 0 }, ms: o.ms,
+        completed: o.completed ?? true,
+      });
+    const end = (seq: number, race_no: number, tier: number, reason: 'finished' | 'left', ms: number, wrong_total: number, margin_ms: number | null, help_levels = 0) =>
+      ev(seq, 'race_end', {
+        race_no, tier, seed: 42, reason, ms, play_ms: ms - 3000, stretches: 6, stretches_done: reason === 'finished' ? 6 : 2, blocks_placed: 9,
+        wrong_total, removed: 0, turbo_offered: 0, turbo_used: 0, sources: { tap: 9, drag: 0, key: 0 }, margin_ms, help_levels, adult_helped: false, cups: 1,
+      });
+    // 2do: no other test writes race events. Child a: two races (the second a voluntary "otra carrera" at tier 3, with a turbo used); child b leaves mid-race.
+    const a = newSession({ grade: 2 });
+    expect((await post(a, [
+      start(0, 1, 1),
+      stretch(1, 1, 1, { ms: 4000 }), stretch(2, 1, 2, { ms: 8000, wrong: 1, key: 1, tap: 1 }),
+      end(3, 1, 1, 'finished', 60_000, 1, 900),
+      start(4, 2, 3, true),
+      stretch(5, 2, 1, { ms: 6000, drag: 2, tap: 0 }), stretch(6, 2, 2, { ms: 2000, turbo: true, repeat: true }), stretch(7, 2, 3, { ms: 12_000, turbo: true }),
+      end(8, 2, 3, 'finished', 80_000, 0, 1100, 1),
+    ])).status).toBe(200);
+    const b = newSession({ grade: 2 });
+    expect((await post(b, [
+      start(0, 1, 1),
+      stretch(1, 1, 1, { ms: 10_000, wrong: 2 }), stretch(2, 1, 2, { ms: 3000, completed: false }),
+      end(3, 1, 1, 'left', 20_000, 2, null),
+    ])).status).toBe(200);
+    // a demo session's race never counts
+    const demo = newSession({ grade: 2, demo: true });
+    expect((await post(demo, [start(0, 1, 1), stretch(1, 1, 1, { ms: 1000 }), end(2, 1, 1, 'finished', 30_000, 0, 500)])).status).toBe(200);
+
+    const { rows } = await pool.query('SELECT * FROM v_race_by_grade WHERE grade = 2');
+    expect(rows).toHaveLength(1);
+    const r = rows[0];
+    expect(Number(r.sessions)).toBe(2);
+    expect(Number(r.races_started)).toBe(3);
+    expect(Number(r.again_races)).toBe(1);
+    expect(Number(r.median_races_per_session)).toBe(1.5);
+    expect(Number(r.max_tier)).toBe(3);
+    expect(Number(r.races_finished)).toBe(2);
+    expect(Number(r.races_left)).toBe(1);
+    expect(Number(r.median_race_ms)).toBe(70_000);
+    expect(Number(r.median_wrong_per_race)).toBe(0.5);
+    expect(Number(r.median_margin_ms)).toBe(1000);
+    expect(Number(r.races_with_help)).toBe(1);
+    // stretches: a's 5 and b's 1 completed (b's open one left out); medians over 2000, 4000, 6000, 8000, 10000, 12000
+    expect(Number(r.stretches_done)).toBe(6);
+    expect(Number(r.median_stretch_ms)).toBe(7000);
+    expect(Number(r.wrong_blocks)).toBe(3);
+    expect(Number(r.turbo_offered)).toBe(2);
+    expect(Number(r.turbo_used)).toBe(1);
+    expect(Number(r.turbo_use_pct)).toBe(50);
+    expect([Number(r.placed_tap), Number(r.placed_drag), Number(r.placed_key)]).toEqual([2 + 1 + 0 + 2 + 2 + 2 + 2, 2, 1]);
+
+    const byTier = (await pool.query('SELECT * FROM v_race_stretches_by_tier WHERE grade = 2 ORDER BY tier')).rows;
+    expect(byTier.map((x) => Number(x.tier))).toEqual([1, 3]);
+    expect(byTier.map((x) => Number(x.stretches_done))).toEqual([3, 3]);
+    expect(Number(byTier[0].median_stretch_ms)).toBe(8000);
+    expect(Number(byTier[0].stretches_without_wrong)).toBe(1);
+    expect(Number(byTier[1].turbo_offered)).toBe(2);
+    expect(Number(byTier[1].turbo_used)).toBe(1);
+    expect(Number(byTier[1].median_turbo_stretch_ms)).toBe(2000);
+    expect(Number(byTier[1].median_turbo_by_hand_ms)).toBe(12_000);
+    // the demo session goes (the demo tests below count the demo sessions they make)
+    await pool.query('DELETE FROM sessions WHERE id = $1', [demo.id]);
+  });
+
   it('v_probe_game_maker sums up the step-by-step game maker per session; the by-grade view counts each step for RQ 8', async () => {
     const app = createApp(pool, { distDir });
     const post = (session: Record<string, unknown>, events: unknown[]) => app.request('/api/sync', {

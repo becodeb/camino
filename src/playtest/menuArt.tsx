@@ -1,7 +1,8 @@
 // The free-play menu's pictures, one per activity, in the notebook's style:
 // a taped page with a small drawing of the real thing (the sheet's own
 // board, the recess's song and xylophone, a guarda on squared paper, a
-// board being made, the rule game's falling seeds), and what goes with it
+// board being made, the rule game's falling seeds; T33's race: a road, the
+// child's kart ahead of a critter's, the flag and a cup), and what goes with it
 // drawn beside the page (the ways on and the boss page, mallets and
 // notes, the pencil, the corkboard, the arrow keys and the jar). Also the
 // "volver al menú" button's drawing: the menu's cards with a blue pen arrow
@@ -17,6 +18,7 @@ import { BossPageArt } from '../ui/forestArt';
 import { Sprout } from './round2Art';
 import { Pencil } from '../ui/workshopArt';
 import type { Activity } from './freePlay';
+import { RaceCardArt } from './raceArt';
 
 const INK = '#2b2622';
 const PEN = '#3d6ea5';
@@ -242,6 +244,7 @@ function CardArt({ a }: { a: Pick<Activity, 'id' | 'kind'> }) {
     case 'rule_game': return <RulesCard />;
     case 'game_maker': return <GameMakerCard />;
     case 'text_probe': return <TextProbeCard />;
+    case 'race': return <RaceCardArt />;
   }
 }
 

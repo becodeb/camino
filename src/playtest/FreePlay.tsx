@@ -3,8 +3,10 @@
 // menu opens and when the card is held. An activity is the year's own screen
 // with the session's progress: a sheet with its doors and boss, the music
 // recess, the guardas, the workshop and its corkboard (SheetScreen, moving by
-// the hash the playtest holds: hashHold.ts), the rule game's pages, or a
-// probe (probes.ts). A drawn "volver al menú" button is always there.
+// the hash the playtest holds: hashHold.ts), the rule game's pages, a
+// probe (probes.ts), or T33's race (Race.tsx: free play's time waits for
+// the race on screen to finish, like a level). A drawn "volver al menú"
+// button is always there.
 //
 // Logged: `choice` {activity, visit} on every pick, `choice` {activity, door}
 // when a door is chosen, every page's level_start/run/level_end with its
@@ -48,6 +50,7 @@ import { pilotLevel, RULE_GAME_PAGES } from './levels';
 import { ActivityArt, MenuBackArt } from './menuArt';
 import { InstrumentedPage, PlaytestLevel, type LevelEnd } from './PlaytestLevel';
 import { hasProbe, OPEN_PROBE_EVENT, PROBES } from './probes';
+import { Race } from './Race';
 import { rememberPart, resumedPart } from './resume';
 import { NextChoice } from './NextChoice';
 import { BarProgressContext, type BarProgress } from './barProgress';
@@ -208,7 +211,8 @@ export function FreePlay() {
       const wrapping = wrapPending(f);
       if (f.routeDone && !wrapping) return;
       const cur = viewRef.current;
-      const inProbe = cur.kind === 'activity' && 'probe' in cur.a.kind;
+      // T33: the race, like a probe, is an activity of its own: "quedan 5 minutos" gives it the grace of a non-level page (its podium may already be told)
+      const inProbe = cur.kind === 'activity' && ('probe' in cur.a.kind || 'race' in cur.a.kind);
       const levelOpen = cur.kind === 'activity' && ('sheet' in cur.a.kind ? levelsOpen.current > 0 : !(wrapping && inProbe));
       // "¿Cómo seguís?" is a menu too: the time ends there at once
       const onMenu = cur.kind === 'menu' || (cur.kind === 'activity' && cur.page?.kind === 'doors');
@@ -305,6 +309,9 @@ export function FreePlay() {
     );
   } else if ('rules' in a.kind) {
     body = <RuleGame key={view.n} levelEnded={levelEnded} listen={counted} done={() => toMenu('done')} />;
+  } else if ('race' in a.kind) {
+    // T33: endless races; each one finished is a won "level" and the place where free play's time may end
+    body = <Race key={view.n} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} />;
   } else {
     const Probe = PROBES[a.kind.probe];
     body = Probe ? <Probe key={view.n} activity={a.kind.probe} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} done={() => toMenu('done')} /> : null;

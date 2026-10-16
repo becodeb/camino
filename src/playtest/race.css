@@ -1,0 +1,133 @@
+/* "La carrera" (T33): the track above (a taped sheet with the side-scrolling
+   road), the palette and the stretch ahead below; the podium after the
+   finish. Same paper, ink and cut-paper primitives as the rest. */
+
+.pp-page.pp-race {
+  height: 100dvh;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  place-items: stretch;
+  gap: 12px;
+  padding: 10px 18px 14px;
+  overflow: hidden;
+}
+.pp-race .level-bar { grid-area: auto; }
+.rc-task-block { position: relative; display: inline-block; flex: none; width: 52px; height: 38px; }
+.rc-cups { display: inline-flex; align-items: flex-end; gap: 0; min-width: 8px; }
+.rc-cups svg { overflow: visible; }
+.rc-cups-more { font: 700 18px/1 var(--body); color: var(--ink-2); margin-left: 4px; }
+
+/* ------------------------------------------------ the track */
+.rc-track { position: relative; min-height: 0; display: grid; padding: 6px; }
+.rc-scene { display: block; width: 100%; height: 100%; min-height: 0; overflow: hidden; border-radius: 4px; }
+.rc-kart-in { transform-box: fill-box; transform-origin: 50% 100%; }
+.rc-kart-in.is-bump { animation: rc-bump 620ms ease-out both; }
+@keyframes rc-bump {
+  0% { translate: 0 0; rotate: 0deg; }
+  18% { translate: 6px 0; rotate: -9deg; }
+  40% { translate: -10px -4px; rotate: 6deg; }
+  62% { translate: -6px 0; rotate: -3deg; }
+  100% { translate: 0 0; rotate: 0deg; }
+}
+.rc-dust path { transform-box: fill-box; transform-origin: center; animation: rc-dust 600ms ease-out both; }
+@keyframes rc-dust { 0% { scale: 0.4; opacity: 0.95; translate: 0 0; } 100% { scale: 1.4; opacity: 0; translate: -26px -8px; } }
+.rc-bush { animation: pop-in 260ms ease-out both; }
+.rc-bush-shake { transform-box: fill-box; transform-origin: 50% 100%; animation: rc-shake 700ms ease-in-out 120ms both; }
+@keyframes rc-shake { 0%, 100% { rotate: 0deg; } 20% { rotate: -10deg; } 45% { rotate: 8deg; } 70% { rotate: -4deg; } }
+.rc-bush { opacity: 1; }
+.rc-leaf { animation: rc-leaf 900ms cubic-bezier(.2, .6, .4, 1) both; }
+@keyframes rc-leaf { 0% { translate: 0 0; rotate: 0deg; opacity: 1; } 100% { translate: var(--dx) var(--dy); rotate: var(--r); opacity: 0; } }
+.rc-flame { transform-box: fill-box; transform-origin: 100% 50%; animation: rc-flame 160ms ease-in-out infinite alternate; }
+@keyframes rc-flame { from { scale: 0.85 1; } to { scale: 1.15 1.08; } }
+.rc-flames { animation: pop-in 200ms ease-out both; }
+.rc-here { animation: rc-here 1.4s linear infinite; }
+@keyframes rc-here { to { stroke-dashoffset: -18; } }
+.rc-mark { transition: none; }
+
+/* ------------------------------------------------ the panel: the palette and the stretch ahead */
+.rc-panel { display: flex; align-items: stretch; justify-content: center; gap: 16px; min-height: 0; }
+.rc-pal { display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px; }
+.rc-pal-arrows { display: flex; flex-direction: column; gap: 10px; }
+.rc-pal-turbo { position: relative; flex: none; }
+.rc-pblk { touch-action: none; }
+.rc-pblk[aria-disabled] { cursor: default; }
+.rc-pblk[aria-disabled] .blk-face, .rc-pblk[aria-disabled] .blk-arm, .rc-pblk[aria-disabled] .rc-inner { opacity: 0.55; }
+.rc-pblk:active:not([aria-disabled]) { translate: 2px 3px; }
+.rc-pblk.is-repeat { animation: pop-in 320ms ease-out both, rc-glow 1.8s ease-in-out 400ms 3; }
+@keyframes rc-glow { 0%, 100% { filter: none; } 50% { filter: drop-shadow(0 0 6px rgba(240, 210, 122, 0.95)); } }
+.rc-inner { position: absolute; pointer-events: none; }
+.rc-drag { position: fixed; }
+.rc-ghost-c { position: absolute; left: 0; top: 0; }
+
+.rc-stretch { position: relative; display: grid; place-items: center; padding: 10px 26px 12px; min-width: 420px; }
+.rc-stretch-in { display: grid; justify-items: start; gap: 2px; animation: rc-stretch-in 420ms cubic-bezier(.3, .6, .35, 1) both; }
+@keyframes rc-stretch-in { 0% { translate: 60px 0; opacity: 0; } 100% { translate: 0 0; opacity: 1; } }
+.rc-panel.is-done .rc-stretch-in { opacity: 0.85; }
+.rc-mini { display: block; overflow: visible; }
+.rc-piece.is-next .rc-piece-ring { stroke-dasharray: 1; animation: rc-ring 1.5s ease-in-out infinite; }
+@keyframes rc-ring { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+.rc-tape { position: relative; margin-left: 12px; }
+.rc-slot { position: absolute; top: 0; display: block; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; }
+button.rc-slot { cursor: pointer; touch-action: manipulation; }
+.rc-slot-block { position: absolute; inset: 0; animation: rc-land 280ms cubic-bezier(.3, .6, .35, 1) both; }
+@keyframes rc-land { 0% { translate: 0 -40px; scale: 1.12; rotate: -8deg; opacity: 0.4; } 70% { translate: 0 3px; scale: 0.97; rotate: 2deg; opacity: 1; } 100% { translate: 0 0; scale: 1; rotate: 0deg; } }
+.rc-slot.is-wrong .rc-slot-block { animation: rc-wrong 750ms ease-in both; }
+@keyframes rc-wrong {
+  0% { translate: 0 -40px; opacity: 0.4; }
+  18% { translate: 0 0; opacity: 1; rotate: 0deg; }
+  30% { rotate: -9deg; }
+  42% { rotate: 8deg; }
+  54% { rotate: -4deg; translate: 0 0; }
+  100% { translate: 10px 60px; rotate: 30deg; scale: 0.5; opacity: 0; }
+}
+.rc-slot.is-next .blk-hole { stroke: var(--blue-ink); fill: rgba(114, 152, 193, 0.12); stroke-width: 2.8; }
+.rc-slot.is-next { animation: slot-call 1.6s ease-in-out infinite; }
+.rc-covered { position: absolute; pointer-events: none; }
+.rc-bracket { display: block; overflow: visible; }
+
+/* ------------------------------------------------ the podium */
+.pp-page.pp-race.is-podium { grid-template-rows: auto minmax(0, 1fr); }
+.rc-podium {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 280px);
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 24px;
+  padding: 14px 28px 20px;
+}
+.rc-podium-scene { grid-column: 1; grid-row: 1; justify-self: end; display: block; width: 100%; max-width: 860px; height: 100%; min-height: 0; overflow: visible; }
+.rc-podium-n { font: 700 46px var(--body); fill: var(--ink); }
+.rc-podium-me { cursor: pointer; }
+.rc-podium-critter { animation: rc-hop 1.4s ease-in-out 600ms 3; }
+.rc-podium-critter.is-late { animation-delay: 900ms; }
+@keyframes rc-hop { 0%, 100% { translate: 0 0; } 30% { translate: 0 -14px; } 50% { translate: 0 0; } }
+.rc-podium-cup { animation: pop-in 420ms ease-out 450ms both; }
+.rc-podium-sun { animation: rc-sun 30s linear infinite; transform-origin: 410px 40px; }
+@keyframes rc-sun { to { rotate: 360deg; } }
+.rc-shelf-box { grid-column: 2; grid-row: 1; align-self: center; justify-self: start; width: 100%; display: grid; justify-items: center; }
+.rc-shelf { display: block; width: 100%; height: auto; overflow: visible; }
+.rc-cup-fresh { animation: rc-cup-in 620ms cubic-bezier(.3, .6, .35, 1.4) both; transform-box: fill-box; transform-origin: 50% 100%; }
+@keyframes rc-cup-in { 0% { translate: 0 -90px; opacity: 0; } 60% { translate: 0 4px; opacity: 1; } 100% { translate: 0 0; } }
+.rc-again {
+  --fill: var(--orange);
+  grid-column: 1 / -1;
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 96px;
+  padding: 8px 30px 8px 18px;
+  animation: pop-in 360ms ease-out 1.2s both;
+  touch-action: manipulation;
+}
+.rc-again:hover { transform: translateY(-3px); }
+.rc-again:active { transform: translate(2px, 3px); }
+.rc-again-art { width: 140px; height: 94px; overflow: visible; }
+.rc-again-word { font: 400 36px/1 var(--hand); color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .rc-here, .rc-podium-sun, .rc-flame, .rc-piece.is-next .rc-piece-ring, .rc-slot.is-next { animation: none; }
+}

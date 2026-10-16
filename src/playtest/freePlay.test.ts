@@ -9,16 +9,16 @@ const all = () => true;
 
 describe('the free-play menu', () => {
   it('offers each grade its activities, in order, without the probes nobody built', () => {
-    expect(menuFor(1, none).map((a) => a.id)).toEqual(['sheet', 'recess', 'guardas', 'editor']);
-    expect(menuFor(2, none).map((a) => a.id)).toEqual(['sheet', 'recess', 'guardas', 'editor']);
+    expect(menuFor(1, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
+    expect(menuFor(2, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(3, none).map((a) => a.id)).toEqual(['rule_game', 'sheet', 'recess', 'editor']);
     expect(menuFor(4, none).map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess']);
     expect(menuFor(5, none).map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess']);
   });
 
   it('T20: muted, 1ro loses its recess (music) card; not muted, or another grade: unchanged', () => {
-    expect(menuFor(1, none, true).map((a) => a.id)).toEqual(['sheet', 'guardas', 'editor']);
-    expect(menuFor(1, none, false).map((a) => a.id)).toEqual(['sheet', 'recess', 'guardas', 'editor']);
+    expect(menuFor(1, none, true).map((a) => a.id)).toEqual(['race', 'sheet', 'guardas', 'editor']);
+    expect(menuFor(1, none, false).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(1, none).map((a) => a.id)).toContain('recess'); // the default, unchanged
     expect(menuFor(2, none, true).map((a) => a.id)).toContain('recess');
     expect(menuFor(3, none, true).map((a) => a.id)).toContain('recess');
@@ -56,7 +56,15 @@ describe('the free-play menu', () => {
 
   it('names every card aloud (the child does not need to read)', () => {
     for (const g of [1, 2, 3, 4, 5]) for (const a of menuFor(g, all)) expect(a.say.length).toBeGreaterThan(8);
-    expect(menuFor(1, none)[0].say).toBe('La escalera: una hoja con caminos y un desafío.');
+    expect(menuFor(1, none)[1].say).toBe('La escalera: una hoja con caminos y un desafío.');
+  });
+
+  it('T33: the race is first on 1ro\'s and 2do\'s menus (muted too: it needs no sound), not on 3ro–5to\'s', () => {
+    for (const g of [1, 2]) {
+      expect(menuFor(g, none)[0]).toMatchObject({ id: 'race', kind: { race: true }, caption: 'La carrera' });
+      expect(menuFor(g, none, true)[0].id).toBe('race');
+    }
+    for (const g of [3, 4, 5]) expect(menuFor(g, all).map((a) => a.id)).not.toContain('race');
   });
 
   it('plays the rule game\'s pages, the last one the child\'s own game', () => {

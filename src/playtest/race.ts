@@ -397,6 +397,17 @@ export const RACE_START: RaceSaved = { cups: 0, raceNo: 0, tier: 1 };
 /** A finished race: a cup, and the next one a tier harder. */
 export const afterWin = (s: RaceSaved): RaceSaved => ({ ...s, cups: s.cups + 1, tier: s.tier + 1 });
 
+/**
+ * Each cup won is also a level solved in the session's progress (it plants
+ * the race's seed): `race-cup-<n>`. The progress outlives a step change and
+ * a reload (resume.ts keeps it), so the cups are counted from it too.
+ */
+export const CUP_PREFIX = 'race-cup-';
+export const cupsIn = (solved: Readonly<Record<string, boolean>>) => Object.keys(solved).filter((k) => k.startsWith(CUP_PREFIX) && solved[k]).length;
+
+/** A saved race state reconciled with the cups in the progress: never fewer cups, races or tiers than the wins say. */
+export const withCups = (s: RaceSaved, cups: number): RaceSaved => ({ cups: Math.max(s.cups, cups), raceNo: Math.max(s.raceNo, cups), tier: Math.max(s.tier, cups + 1) });
+
 /** Reads a saved race state (resume), falling back to the start for anything malformed. */
 export function readSaved(x: unknown): RaceSaved {
   const o = (x && typeof x === 'object' ? x : {}) as Partial<RaceSaved>;

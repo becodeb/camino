@@ -335,6 +335,11 @@
   display: grid; grid-template-columns: repeat(2, auto); justify-content: center; gap: 18px 30px;
 }
 .pp-menu-sheet.n3 .pp-fp-cards { grid-template-columns: repeat(3, auto); }
+/* T33: five cards (the race added to 1ro's and 2do's menus): three, then two, a bit smaller */
+.pp-menu-sheet.n5 { --art-h: clamp(120px, calc((100dvh - 340px) / 2), 210px); }
+.pp-menu-sheet.n5 .pp-fp-cards { grid-template-columns: repeat(6, auto); }
+.pp-menu-sheet.n5 .pp-fp-cards > li { grid-column: span 2; }
+.pp-menu-sheet.n5 .pp-fp-cards > li:nth-child(4) { grid-column: 2 / span 2; }
 .pp-menu-sheet.n1 .pp-fp-cards, .pp-menu-sheet.n2 .pp-fp-cards { grid-template-columns: repeat(2, auto); }
 .pp-fp-cards > li { rotate: var(--tilt, 0deg); }
 .pp-fp-card {
