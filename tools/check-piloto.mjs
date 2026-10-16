@@ -218,7 +218,7 @@ await p.locator('.level-bar .speak').click();
 await p.waitForSelector('.level-bar .pp-cap', { timeout: 5000 });
 ok((await p.locator('.level-bar .pp-cap').innerText()).includes('¿A qué querés jugar?'), '💬 turned on: the spoken line shows in a bubble in the bar');
 const cards = await p.locator('.pp-fp-card').evaluateAll((els) => els.map((e) => e.dataset.activity));
-ok(cards.join(',') === 'sheet,recess,guardas,editor', `1ro menu: ${cards.join(',')}`);
+ok(cards.join(',') === 'race,sheet,recess,guardas,editor', `1ro menu (T33: the race first): ${cards.join(',')}`);
 await p.waitForTimeout(800);
 await p.locator('.pp-fp-card[data-activity="sheet"]').click();
 await onLevel(p, '1ro-h6-1');
