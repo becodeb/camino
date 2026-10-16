@@ -103,6 +103,35 @@ The goal is motivation that lasts a school year and several years, without the m
 
 Public rankings, punishing countdowns, attendance streaks (being absent is not the student's choice), random reward packs, spending progress, rewards for time or clicks, notifications outside school, and any meta-game moment that runs longer than its slot.
 
+### Game feel and motivation profiles (after the 2026-10 pilot)
+
+Evidence from the first 1ro classes (2026-10-13, no sound): kids finished the core route and had about 14 minutes of free play left, and got bored of the activities; the "favourite activity" answers split between the character (10), typing (6) and the wardrobe (6); nobody discovered `repetir` alone. Teachers report that 1ro kids love keyboard games, especially Cokitos' "Teclado en Español", a motorbike race against a CPU rider where every word typed right speeds your bike up, tuned so the child wins.
+
+**Why keyboard games hook 1ro.** (1) Every input has an instant, juicy effect: motion and sound, no waiting; it is the strongest feeling of competence at six. (2) Tiny goals with a very high success rate: one letter at a time. (3) The keyboard itself: the "real computer", tactile, fun to press even when the aim is poor (pilot: physical keys 25% correct, touch 73%, and they still loved it). (4) A fantasy frame: racing, not "practising letters". (5) Suspense with a happy ending: a rival close behind that lets you win. The only child who suffers is the one who loses. (6) Short rounds and "again!".
+
+**Principles.**
+
+- **Intrinsic integration: the fun mechanic is the concept.** Children learned more from a maths game where dividing was the sword attack than from the same game with a quiz between play periods, and in free time played it seven times longer (Habgood & Ainsworth, 2011, *Journal of the Learning Sciences* 20(2)). A Camino minigame must practise programming through its core action, not be a break bought with programming.
+- **Do not announce rewards for learning.** Preschoolers promised a certificate for drawing later drew less on their own (Lepper, Greene & Nisbett, 1973). "Finish the levels and you get to play" turns the levels into the toll. Games are a place you reach, not a payment; surprises (a cup, a confetti burst) are not promised in advance; seeds stay informational.
+- **Competence, autonomy, relatedness.** Instant feedback and a high success rate (competence); a small choice of games (autonomy); a shared class goal (relatedness). Pilot note: kids noticed a classmate had a different level, so choice works best inside a shared, clear structure.
+- **Dynamic difficulty instead of losing.** Rivals and speeds adapt to the child; the race is close but always won. No countdown, no score against classmates.
+- **Speed never pays more than accuracy.** Unlocks depend on finishing well, never on time, so nobody rushes by guessing.
+
+**Different children, different hooks.** One game per motivation, each practising the day's concept:
+
+| Hook | Game in Camino |
+|---|---|
+| Speed and suspense | La carrera: each stretch is a short program, a right block nudges the kart at once, `repetir` is the turbo on long straights |
+| Collecting | Cups on a shelf, wardrobe pieces, plants in the garden: an album that fills up, known in advance |
+| Expression | Dressing the character, later decorating the kart or the garden |
+| Surprise and exploring | The character reacts when tapped, hidden things on the maps, confetti |
+| Keyboard and rhythm | Arrow keys add blocks in the race, Teclas del bosque, the xylophone recess |
+| Helping | A class goal (the class garden on the projector) and pair play, never a ranking |
+
+**Class structure.** The games zone opens when a child finishes the day's core, and for everyone in the last minutes of class (a teacher command, "Juegos para todos"). Fast finishers get more time, but slow children, who need motivation most, are never left out, and rushing gains nothing. The races of a class are generated from the day's concept: sequences of arrows early in the year, then `repetir` as the turbo, later conditions as "if the road is blocked". This makes the race the review of the class, not an escape from it. A race works as the boss of a unit too, or as an every-few-classes break (5–10 minutes, as above).
+
+**What the pilot measures to judge it.** Voluntary replays ("¡Otra carrera!" without an adult), whether `repetir` is chosen when it is optional and pays (turbo use by tier), time per stretch and wrong blocks per tier (the difficulty curve), free-play choice patterns per child grouped into simple profiles (racer, collector, dresser, explorer, keyboard), and whether kids still on the core route engage once "Juegos para todos" opens the zone. `tools/analyze-playtest.mjs` prints all of it per class.
+
 ## 8. Showcase (muestra) and its rehearsal
 
 - The current sheet 17 (favorites, family mode, garden tour, poster) is a good base but needs work.
