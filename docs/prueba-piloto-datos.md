@@ -983,7 +983,7 @@ rubber-banded to the child's pace and always cross after the child. Each
 finish: a podium, a cup on the session's shelf (kept in the resume state),
 one seed for the garden (the cup is solved as `race-cup-<n>` in the session's progress, which also keeps the shelf across a step change or a reload), and "¡Otra carrera!" (a new
 race, one tier harder; endless). Tiers: 1: six stretches of 1–2 arrows in
-one direction; 2: six of 2–3 mixing directions; 3: seven of 2–3 plus two
+one direction (at least two of two); 2: six of 2–3 mixing directions; 3: seven of 2–3 plus two
 turbo straights of 4–6 →; 4 and on: seven of 3–5 plus two turbos. A
 race's roads come from `tier` and `seed` (`generateRace`, deterministic).
 Free play logs the pick (`choice` {activity: 'race'}) and the time in it
@@ -1041,7 +1041,8 @@ A race ended: the child crossed the line, or left. **RQ 5, 6.**
   turbo_offered: number,         // turbo straights reached
   turbo_used: number,            // of them, done with the repeat
   sources: { tap: number, drag: number, key: number },
-  margin_ms: number | null,      // finished: from the child crossing to the first critter crossing (the "small but visible" margin)
+  margin_ms: number | null,      // finished: from the child crossing to the first critter crossing (the "small but visible" margin); null when left
+  margin_estimated?: true,       // no critter crossed within 3.5 s (a very fast child): margin_ms estimated from the nearest one's distance
   help_levels: number,           // ✋ presses (0–3)
   adult_helped: boolean,
   cups: number                   // cups on the shelf after this race

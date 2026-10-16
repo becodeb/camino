@@ -24,7 +24,7 @@ describe('the race generator', () => {
     expect(distinct.size).toBeGreaterThan(30);
   });
 
-  it('tier 1: six stretches of 1–2 arrows, one direction each, opening with one flat piece; ups and downs appear', () => {
+  it('tier 1: six stretches of 1–2 arrows (at least two of two), one direction each, opening with one flat piece; ups and downs appear', () => {
     for (const seed of SEEDS) {
       const r = generateRace(1, seed);
       expect(r.stretches).toHaveLength(6);
@@ -35,6 +35,7 @@ describe('the race generator', () => {
         expect(s.road.length).toBeLessThanOrEqual(2);
         expect(new Set(s.road).size).toBe(1);
       }
+      expect(r.stretches.filter((s) => s.road.length === 2).length).toBeGreaterThanOrEqual(2);
       const all = r.stretches.flatMap((s) => s.road);
       expect(all).toContain('up');
       expect(all).toContain('down');
@@ -271,8 +272,9 @@ describe('the rubber band', () => {
         // the tick the child crosses in already lets them drive on: well behind the line all the same
         for (const r of s.rivalsAtCross) expect(r).toBeLessThan(c.finish - 1);
         expect(s.margins.length).toBe(2);
-        // the first critter crosses at least half a second after the child
+        // the first critter crosses at least half a second after the child, and within about three (the race stays close)
         expect(Math.min(...s.margins)).toBeGreaterThan(0.5);
+        expect(Math.min(...s.margins)).toBeLessThan(3.2);
       }
     }
   });

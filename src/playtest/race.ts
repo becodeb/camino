@@ -49,7 +49,7 @@ export interface TierRule {
  * in tier 2, about 13 plus two turbos in tier 3, about 20 plus two turbos in tier 4.
  */
 const RULES: readonly TierRule[] = [
-  { stretches: 6, min: 1, max: 2, mixed: false, turbo: 0 },
+  { stretches: 6, min: 1, max: 2, mixed: false, turbo: 0 }, // and at least two stretches of two (raceProblems)
   { stretches: 6, min: 2, max: 3, mixed: true, turbo: 0 },
   { stretches: 7, min: 2, max: 3, mixed: true, turbo: 2 },
   { stretches: 7, min: 3, max: 5, mixed: true, turbo: 2 },
@@ -155,6 +155,8 @@ export function raceProblems(race: RaceDef): string[] {
   for (let i = 1; i < race.stretches.length; i++) if (race.stretches[i].turbo && race.stretches[i - 1].turbo) out.push(`turbos ${i - 1} and ${i} touch`);
   if (race.tier <= 1) {
     if (race.stretches[0]?.road.join() !== 'right') out.push('tier 1 does not open with one flat piece');
+    // a race of single pieces only would be over in a few taps: at least two stretches of two
+    if (race.stretches.filter((x) => x.road.length >= 2).length < 2) out.push('tier 1 has fewer than two stretches of two pieces');
     if (!seen.has('up') || !seen.has('down')) out.push('tier 1 lacks an up or a down stretch');
   } else if (seen.size < 3) out.push('the race does not use all three directions');
   return out;
@@ -322,6 +324,9 @@ export const TURBO_SPEED = 5.2;
 export const BAND = {
   maxLead: 1.3,
   maxSpeed: 2.2,
+  /** Far behind where it wants to be (a fast child left it): it may hurry this much, so the race stays close. */
+  catchUp: 3.0,
+  catchUpFrom: 2.5,
   /** Still alive while behind: a slow creep forward. */
   creep: 0.12,
   /** The last stretch: they creep slower and wait well before the line. */
@@ -364,7 +369,8 @@ export function rivalSpeed(pos: number, inp: BandInput, role: 0 | 1): number {
   const desired = inp.me + rivalOffset(role, inp.me / Math.max(1, inp.finish), inp.last);
   const pace = Math.max(BAND.minPace, inp.pace);
   const creep = inp.last ? BAND.lastCreep : BAND.creep;
-  const v = Math.min(BAND.maxSpeed, Math.max(creep, pace + BAND.gain * (desired - pos)));
+  const top = desired - pos > BAND.catchUpFrom ? BAND.catchUp : BAND.maxSpeed;
+  const v = Math.min(top, Math.max(creep, pace + BAND.gain * (desired - pos)));
   const idle = inp.idleMs <= BAND.idleFrom ? 1
     : Math.max(BAND.idleFloor, 1 - (inp.idleMs - BAND.idleFrom) / (BAND.idleFull - BAND.idleFrom) * (1 - BAND.idleFloor));
   return v * idle;

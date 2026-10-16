@@ -252,7 +252,10 @@ function RaceRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
       race_no: no, tier, seed, reason, ms: end - s.mountAt, play_ms: s.startAt ? end - s.startAt : 0,
       stretches: n, stretches_done: reason === 'finished' ? n : s.k, blocks_placed: s.totals.placed, wrong_total: s.totals.wrong,
       removed: s.totals.removed, turbo_offered: s.totals.turboOffered, turbo_used: s.totals.turboUsed, sources: { ...s.totals.sources },
-      margin_ms: reason === 'finished' && crossed.length ? Math.min(...crossed) - s.crossedAt : null,
+      // no critter crossed within the wait (a very fast child): estimated from the nearest one's distance at its after-line speed
+      margin_ms: reason !== 'finished' ? null : crossed.length ? Math.min(...crossed) - s.crossedAt
+        : Math.round(Date.now() - s.crossedAt + ((course.finish - Math.max(...s.rivals)) / BAND.afterSpeed) * 1000),
+      ...(reason === 'finished' && !crossed.length ? { margin_estimated: true } : {}),
       help_levels: s.helpStep, adult_helped: !!lv?.adultHelped, cups: reason === 'finished' ? cups0 + 1 : cups0,
     });
   }
