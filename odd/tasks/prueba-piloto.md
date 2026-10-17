@@ -109,9 +109,9 @@ Three back-to-back 1ro classes on 2026-10-13, all without sound (no headphones),
 The user: kids had class time left over, so more levels or different games are welcome; 1ro kids love Cokitos' "Teclado en Español" (a motorbike race against a CPU rider: each word typed correctly makes your bike go faster; it is tuned so the child wins, only a kid who loses gets frustrated). Capture that motivation, not necessarily with a keyboard: a new kind of level or a class stage (for the real version), plus more measurement. Authorized: "empezá a implementar". Design tension recorded: `docs/next-iteration.md` §7 says "no losing" and "cooperation, never competition: rankings demotivate the bottom half"; the race keeps both — rivals are forest critters, never classmates, and the child never loses (rubber-banded rivals), no ranking anywhere.
 
 - [x] T33 "La carrera", a free-play activity (1ro and 2do first): the child's character in a kart against two critter rivals (e.g. zorro, coatí) on a side-scrolling track; each stretch ahead is drawn as a road shape with empty slots (how many blocks it needs); the child fills the slots with arrow blocks (tap, drag, or the keyboard's arrow keys); every right block nudges the kart forward at once (the moto game's per-key feedback); a full, right tape makes the kart zoom through the stretch by itself (no ▶); a wrong block makes the kart bump a bush with a funny wobble and that block pops out (diegetic, no punishment); long straights offer `repetir` as a turbo (flames, bigger boost), optional, so we can measure whether kids choose it; rivals rubber-banded (sometimes one edges ahead for tension, the child always crosses first by a small margin); a race lasts about 60–90 s (6–8 stretches); finish: podium, confetti, a cup added to a shelf of cups won this session; "¡Otra carrera!" starts a new generated race one tier harder (single arrows → two directions → turbo straights → mixed), endless. Understood without sound or reading (first-time wordless ghost demo, captions). Telemetry: `race_start`, `race_stretch`, `race_end`, documented in the data dictionary with a SQL view. Pure logic (stretch generator by tier, checking a tape against a road with `repetir`, rubber band) unit-tested.
-- [ ] T34 Class report script: `tools/analyze-playtest.mjs <export.json>` prints the per-class summary made by hand on 2026-10-15 (noise filter, sessions per class, ladder ceilings, free-play choices and time left after the green flag, drops after a repeat, predict ▶ without a guess, typing touch vs physical, help usage, garden views, reloads, late class commands, survey) plus the race (races per child, voluntary "otra carrera", turbo use by tier, time per stretch, wrong blocks), so each new class is read the same way.
+- [x] T34 Class report script: `tools/analyze-playtest.mjs <export.json>` prints the per-class summary made by hand on 2026-10-15 (noise filter, sessions per class, ladder ceilings, free-play choices and time left after the green flag, drops after a repeat, predict ▶ without a guess, typing touch vs physical, help usage, garden views, reloads, late class commands, survey) plus the race (races per child, voluntary "otra carrera", turbo use by tier, time per stretch, wrong blocks), so each new class is read the same way.
 - [ ] T35 Motivation design note for the real version in `docs/next-iteration.md` (user, 2026-10-16: "pensá gamificada y psicológicamente lo que mejores resultados logre; cada chico se motiva por cosas distintas"): why keyboard games hook 1ro (instant juicy cause→effect per input, tiny goals with a high success rate, the "real computer" keyboard, fantasy, suspense against a rival that lets you win, short loops with "otra vez"); the principles (intrinsic integration: the fun mechanic IS the concept, Habgood & Ainsworth 2011; avoid announced rewards for the learning itself, overjustification, Lepper et al. 1973; competence/autonomy/relatedness; dynamic difficulty; no losing, no rankings per §7); several motivation profiles (speed/tension, collecting, expressing/dressing up, surprise/exploring, keyboard/rhythm, helping/cooperating) each served by a game that practises the day's concept; the class structure (a "juegos" zone that opens when a child finishes the day's core AND for everyone in the last minutes, so slow kids are not left out and nobody rushes); what to measure in the pilot to tell profiles apart.
-- [ ] T37 Measure motivation profiles in the pilot: the class report (T34) groups each child's free-play choices, voluntary replays, time per activity and quits into a simple profile (racer, collector, dresser, explorer, keyboard), and `/admin` gets a "Juegos para todos" class command that opens the games zone on every device (for the last minutes of class, so kids still on the core route also get to play; logged like the other class commands).
+- [x] T37 Measure motivation profiles in the pilot: the class report (T34) groups each child's free-play choices, voluntary replays, time per activity and quits into a simple profile (racer, collector, dresser, explorer, keyboard), and `/admin` gets a "Juegos para todos" class command that opens the games zone on every device (for the last minutes of class, so kids still on the core route also get to play; logged like the other class commands).
 - [ ] T36 Verification and push; redeploy only on the user's explicit request.
 
 #### Recorded, not implemented (user feedback 2026-10-15)
@@ -838,6 +838,101 @@ The user: kids had class time left over, so more levels or different games are w
     - Rivals rotate per race (zorro & coatí, carpincho & rana, lechuza & carpintero) for "¡Otra carrera!" novelty; one spoken "¡Uy, el zorro va adelante! ¡Vamos!" per race at most. Idle 10 s: ✋ wiggles and the next piece and slot glow (every 6 s), muted or not. ✋ 1: the line and the glow; ✋ 2–3: the ghost hand carries the right block; a fourth raises the hand.
   - Open: nothing tried with real children, a touch screen or the classroom network; whether 1ro reads ↑ as "the ramp goes up" is the main unknown (watch `wrong_blocks` by road in T34); the race takes the first slot on 1ro's and 2do's menus, which shifts the free-play choice data from the 2026-10-13 classes (compare with care); a reload while in another step and then back to the race restarts `race_no` from the cups count (unique per session only while cups grow); the empty space the palette keeps for the repeat in tier 3+ non-turbo stretches is deliberate (no layout jump). Nothing pushed or deployed.
 
+- 2026-10-17: T37 and T34 done (route: delegated direct, one writer; 2+ non-trivial files each). Three commits on `feat/prueba-piloto` (not pushed, not deployed):
+  - `c2c7150` T37, "Juegos para todos": `server/lib/commands.ts` (`CommandKind`/`COMMAND_KINDS` widened; `cancelWarnings` generalized to `cancelPending(pool, kind)`, `games_all` cancellable like `five_min`, `end_class` never), `server/migrations/013_games_all.sql` (widens the `class_commands.kind` CHECK constraint), `server/routes/admin.ts` (the kind in `/commands`, a `kind` body on `/commands/cancel`, default `five_min` for older callers), `server/admin/page.ts` (the third big button with its one-line explanation, "Cancelar «Juegos para todos»", the state line), `src/playtest/flow.ts` (`games_all` action, `canGamesAll` — eligible only from `tool_check`/`ladder`/`typing`/`wardrobe`, recorded as its own step reason, never marks the route done), `src/playtest/classroom.tsx`/`playtest.css` (`GamesAllBanner`, a new drawn game-controller icon, "¡Hora de juegos!"), `src/playtest/PlaytestScreen.tsx`/`telemetry.ts` (wires the command; logs `class_command` `games_all`/`cancel_games_all` whether or not the device actually moved, per the dictionary), `docs/prueba-piloto-datos.md`, `tools/check-class.mjs` (a third device C, mid-ladder).
+  - `11af258` found while running T37's own verification: a SQL operator-precedence bug in the new check (`->>` and `||` share precedence, so unparenthesized chained lookups parsed wrong); fixed, plus the two required screenshots.
+  - `0e259d8` T34, the class report: `src/playtest/report.ts` (pure, unit-tested — noise filter; classes by start-time clustering; ladder; free play incl. time after the green flag; the repeat-dropped-after-not-inside heuristic over `run.program` tokens; predict's no-guess/wrong→right; typing touch vs physical; help; garden/resume/visibility/idle; late class commands (by `payload.late` or, for data from before T28, the timestamps themselves); survey; T33's race (gracefully empty when the export predates it); T37's profile heuristic), `src/playtest/report.test.ts` (24 tests, small synthetic fixtures), `tools/analyze-playtest.mjs` (the CLI: reads the export, prints the Spanish-headed report; imports `report.ts` directly by its `.ts` path — no build step, Node strips the types the same way `server/*.ts` does), `docs/prueba-piloto-datos.md`.
+
+  Evidence:
+  - `npm run typecheck` clean; `npm test` (`--maxWorkers=2`) 52 files, 1211 tests passed (new: `flow.test.ts`'s `games_all` cases, `telemetry.test.ts`'s `games_all` delivery/cancel, `report.test.ts`'s 24 tests). `npm run build` and `VITE_PLAYTEST=1 npm run build` both ok (same bundle size as before T34 — `report.ts` is never imported by the app).
+  - `npm run test:api` against a disposable `postgres:16-alpine` on `:54340` — 46/46 passed (new: `games_all` delivered and cancellable, `end_class` still not cancellable, the default-kind `/commands/cancel` body still means `five_min`).
+  - `node tools/analyze-playtest.mjs exports/playtest-2026-10-15-1741.json --since 2026-10-13 --until 2026-10-13` (the real export; excerpt below). The noise filter keeps **exactly 42 of 57** sessions (13 short, 1 projector, 1 outside the window) — the same cohort the hand analysis used. Most headline numbers match it closely or exactly: ladder ceiling 1 in **19** sessions (exact); **56** predict presses with no guess (exact); typing touch **42.4%** of keys, physical accuracy **24.7%** vs touch **72.8%** (both ≈ the hand's 25%/73%); help touched in **12** sessions (exact); garden viewed in **4** (exact); `resume` in **19** (exact); the survey tallies match exactly (liked 22/5, difficulty 19/5/3, play again 18/8); favourite activity matches (character 10, typing 6, wardrobe 6). Two numbers differ, both explained rather than forced to match: the repeat-dropped-after-not-inside heuristic finds **24 sessions / 109 attempts** vs the hand count's 18/42 (79 attempts) — the hand count most likely scoped to the ladder's own repeat rungs only (reproduced: restricting to ladder item ids alone gives 8/20, too low the other way), while this script's heuristic (per the brief) scans every `run.program` with a `rep…(…)` token anywhere, including the free-play sheets that also teach repeats; and late `end_class` commands: **6** vs the hand's 5 (five at 24–26 minutes, matching exactly, plus one borderline case at 16.4 minutes past the 2-minute `LATE_END_CLASS_MS` threshold the hand count evidently didn't include). No T33 race data exists in this export (recorded 2026-10-13, before T33 shipped); the race section reports that plainly instead of printing zeroes as if nothing happened.
+  - Local stack (disposable `postgres:16-alpine` `camino-prueba-testdb` on `:54340`, `node server/index.ts` on `:8810` serving the rebuilt `VITE_PLAYTEST=1` dist, `PW=/home/opencode/.render-tools`, chromium `/usr/bin/chromium`):
+    - `node tools/check-class.mjs http://127.0.0.1:8810/` (`ADMIN_PASSWORD=devpw`, `PSQL` against the disposable container): **all checks passed**, including the new device C (grade 3, mid-ladder) — "Juegos para todos" moves it to the free-play menu (`main.pp-menu`, no activity forced open), the route is not marked done, the ladder's own `ladder_end` logs `reason: left` (not a floor/ceiling stop, the generic mid-step-interruption path `Ladder.tsx` already had), the `step` event logs `ladder->free_play:games_all`, the "¡Hora de juegos!" notice goes away on its own, and "Terminar la clase" still ends C normally afterwards. A and B's existing five_min/end_class/back-online scenarios still passed unchanged.
+    - `node tools/check-race.mjs http://127.0.0.1:8810/`: **all checks passed** (regression — T37/T34 touch no race code).
+    - `node tools/check-piloto.mjs http://127.0.0.1:8810/` (regression): **all checks passed** (187/187, including the database section).
+    - `node tools/check-silent.mjs http://127.0.0.1:8810/` (regression): **all checks passed** (13/13).
+    - Local stack and the disposable Postgres container stopped and removed afterwards; the user's dev server on 8797 was never touched.
+  - Screenshots (`shots/t34t37/`, not committed) at 1366×768, reviewed with the Read tool: `admin-panel-three-buttons` (the three class buttons — "Quedan 5 minutos", "Terminar la clase", "Juegos para todos" — each with its one-line explanation, the new drawn game-controller icon rendering cleanly), `games-all-kid` (a grade-3 device right after the command: the "¡Hora de juegos!" banner over 3ro's free-play menu — Juego de reglas, Antes y después, La música, El taller — readable without sound). Also reviewed: `admin-login`, `admin-panel`, `class-five-min`, `class-end-banner`, `class-rest` (unchanged from T22/T28's own review).
+
+  Report excerpt (first ~60 lines, `--since 2026-10-13 --until 2026-10-13`):
+  ```
+  Informe de la prueba piloto — exports/playtest-2026-10-15-1741.json (2026-10-13 a 2026-10-13)
+  Sesiones consideradas (después del filtro de ruido): 42 de 57.
+
+  == Filtro de ruido ==
+  Sesiones totales en el export: 57.
+  - sesiones muy cortas (≤10 eventos o <60 s): 13 (Ciervo 19, Hornero 47, Ballena 96, Erizo 82, Pingüino 27, Búho 17, Panda 91, Panda 76, Nutria 30, Foca 36, Tortuga 67, Tucán 52, Castor 67)
+  - la sesión del proyector (comentario del adulto): 1 (Rana 15)
+  - fuera de la ventana de fechas pedida: 1 (Gato 97)
+  Total descartado: 15.
+
+  == Clases (agrupadas por inicio, hueco > 20 min) ==
+  Clase 1: 1 sesión(es), grado(s) 1°, 12:41–13:03.
+    Cómo terminaron: adult_ended: 1
+  Clase 2: 19 sesión(es), grado(s) 1°, 13:41–14:51.
+    Cómo terminaron: abandoned: 10, class_end: 5, open: 2, completed: 1, adult_ended: 1
+  Clase 3: 14 sesión(es), grado(s) 1°, 14:46–17:07.
+    Cómo terminaron: class_end: 12, open: 2
+  Clase 4: 8 sesión(es), grado(s) 1°, 15:39–16:10.
+    Cómo terminaron: open: 7, completed: 1
+
+  == Escalera ==
+  Sesiones que llegaron al final de la escalera: 39.
+  Distribución del techo (rung más alto pasado, "null" = ninguno): 1: 19, null: 14, 3: 2, 4: 2, 5: 1, 7: 1
+  Por qué terminó: ceiling: 22, bottom: 13, max_time: 2, max_items: 1, left: 1
+  Tiempo mediano: 1 min 55 s. Ítems medianos: 2.
+
+  == Juego libre ==
+  Actividades elegidas: sheet: 53, guardas: 40, editor: 36, recess: 1
+  Actividades distintas por chico (mediana): 2
+  Tiempo mediano por actividad:
+    - editor: 3 min 11 s
+    - guardas: 6 min 38 s
+    - sheet: 5 min 19 s
+    - recess: 7 min 35 s
+  Llegaron a la bandera verde (route_done): 31.
+  Tiempo mediano de juego libre después de la bandera: 14 min 7 s
+
+  == El repeat: bloque después en vez de adentro ==
+  Sesiones con al menos un intento así: 24.
+  Intentos totales: 109.
+  Intentos medianos por ítem — con repeat: 2, sin (sequence/long_sequence): 2.
+
+  == Predecir (▶ sin elegir, y qué pasa después de errar) ==
+  Presiones de ▶ sin elegir celda: 56 (en 4 sesión(es)).
+  Después de errar, el siguiente intento fue: ganó 3 vez(ces), volvió a errar 0 vez(ces).
+
+  == Teclas del bosque ==
+  Teclas físicas: 784 (acierto 24.7%). Teclas táctiles: 577 (acierto 72.8%).
+  Porción táctil del total: 42.4%.
+  Rondas completadas: 3: 27, 0: 4, 2: 4 (mediana 3).
+
+  == Ayuda ==
+  ✋ tocado: 37 vez(ces), en 12 sesión(es).
+  Mano levantada (call_adult): 23 vez(ces), en 6 sesión(es).
+  El adulto contó cómo ayudó (adult_help): 9 vez(ces), en 7 sesión(es).
+
+  == Jardín, recargas, visibilidad, inactividad ==
+  Vieron el jardín (garden_view): 4 sesión(es).
+  Recargas que siguieron la sesión (resume): 29 vez(ces), en 19 sesión(es).
+  La pestaña se ocultó (visibility hidden): 85 vez(ces).
+  Tramos de inactividad (idle): 154, mediana 43 s.
+  ```
+
+  Decisions and deviations:
+  - T37: `games_all` is eligible only from `tool_check`/`ladder`/`typing`/`wardrobe` — not `character` (nothing played yet to preserve) and not `free_play` itself (already the games zone, a no-op) — matching the brief's own list of steps that ignore it (`setup`/`character`/`survey`/`goodbye`/`class_end`) plus `free_play`. The interrupted step ends exactly the way every other mid-step interruption already does (`PlaytestLevel.tsx`'s unmount guard → `level_end` `'skipped'`; `Ladder.tsx`'s own unmount guard → `ladder_end` `reason: 'left'`); no new "abandoned by games_all" code path was needed, since the flow transition alone (a plain `FlowAction`, same shape as `goto`/`route_done`) already triggers it.
+  - T37: `games_all` is cancellable like `five_min` (the brief's "if that fits" — a misclick is plausible, and the existing `cancelWarnings` was trivial to generalize into `cancelPending(pool, kind)`); `end_class` stays never-cancellable, unchanged (its own second-tap confirm already covers a misclick).
+  - T37: a cancelled `games_all` a device never saw at all is dropped by the client's own queue before it ever reaches `onCommand` (same rule as `five_min`'s "never applied"); a cancellation reaching a device that *already* moved only logs `cancel_games_all` (nothing to undo — the move was immediate, not a pending wrap-up like `five_min`'s).
+  - T34: the noise filter's exact thresholds (≤10 events, <60 s, "proyector" in the adult form comment, the date window) were reverse-engineered against the real export until the kept count matched the feature document's own "42 real sessions" exactly (51 sessions on 2026-10-13, minus 1 projector, minus 8 short) — not guessed from the brief's prose alone.
+  - T34: the repeat-drop heuristic parses `run.program` into top-level tokens (a tiny hand-written tokenizer — parens nest a repeat's body, never split on) and flags a `rep…(…)` token immediately followed by a plain command, or an empty `rep…()`, exactly as the brief specifies; it is **not** scoped to the ladder (the brief did not ask for that scoping, and the dictionary's `run` event carries no `activity` field to scope by cheaply — only `level_start`/`level_end` do).
+  - T34: "late" class commands are read from `payload.late` where present (T28 on) **and**, independently, from `received_at - sent_at` against the same `LATE_END_CLASS_MS` (2 min) the client uses — so the script reads correctly both from data recorded after T28 (which has the flag) and from this round's own 2026-10-13 data (recorded before T28 existed, so every `late` field is simply absent).
+  - T34: free play's "time after the green flag" is `(session duration) − route_done.time_ms` per session, median across sessions that reached it — the brief's own "children who reached the green flag… and median free-play time after it" read literally as *after reaching it*, not total free-play time.
+  - T37 profiles: a documented, named-constant heuristic (`PROFILE_RULES` in `report.ts`) scored from free-play signals only (races/again, cups, wardrobe taps and time, distinct activities and their median time, physical typing keys) — never from the core route. Character taps are not scored: no such event is logged yet (the "Recorded, not implemented" section's own open note), so `explorer` is read from "many distinct, short-lived activities" alone. Below a minimum total score the child is `undecided` rather than forced into a weak best guess. Explicitly labelled in the report's own heading as a heuristic to learn from, not a diagnosis, per the brief.
+  - Advisory line-count heuristic: both tasks together are well over ~400 lines (a new server command kind plus a sizeable new pure module and its CLI); not split further — T37 is one coherent command end to end, and T34's report sections share the same module and CLI by design.
+
+  Open: the profile heuristic is unvalidated against real race data (none exists before T33); worth revisiting once a class plays T33–T37 together. The repeat-drop and late-`end_class` counts differ from the hand analysis as explained above — not a bug, a scoping difference, left for a human to judge which framing is more useful going forward. Nothing tried with real children, a touch Chromebook or the classroom network since T33. Nothing pushed or deployed; the parent (per the delegation boundary) owns `docs/next-iteration.md`/T35, not touched here.
+
 ## Next step
 
-T34 (class report script, including the race), then T35, T37, T36.
+T36 (verification and push; redeploy only on the user's explicit request) — T35 is the parent's own task (`docs/next-iteration.md`), not tracked here.
