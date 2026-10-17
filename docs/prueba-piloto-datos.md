@@ -1587,6 +1587,18 @@ wipe the data early):
   fetches all three exports and writes them to `exports/` (gitignored) as
   `playtest-<YYYY-MM-DD-HHMM>.json` / `.sessions.csv` / `.events.csv`. Run
   it with `node tools/export-playtest.mjs`.
+- `tools/analyze-playtest.mjs <export.json> [--since YYYY-MM-DD] [--until
+  YYYY-MM-DD]` (T34) — no dependencies; prints a plain-text class report
+  (what noise was dropped and why; classes clustered by start time; the
+  ladder's ceiling and end reasons; free play's activities and time after
+  the green flag; the repeat dropped-after-not-inside heuristic; predict's
+  no-guess presses and wrong→right patterns; typing's touch vs physical
+  accuracy; help usage; garden views/reloads/visibility/idle; late class
+  commands; the survey; T33's race; T37's motivation profiles). The actual
+  computations are a pure module, `src/playtest/report.ts` (unit-tested in
+  `report.test.ts`), imported directly by its `.ts` path — Node strips the
+  types at load time, same as `server/*.ts`. Run it with `node
+  tools/analyze-playtest.mjs exports/playtest-….json`.
 - `tools/check-session-data.mjs <exports/playtest-…> <SESSION_IDS>` — checks
   the scripted check sessions in an export (rows, seq without gaps, event
   types, survey and adult form, both CSVs); with `PSQL` set, the SQL views
