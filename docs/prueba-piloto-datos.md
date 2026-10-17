@@ -43,16 +43,16 @@ One row per playtest session (one child, one sitting).
 ## Table `class_commands`
 
 T14: el docente's class commands from `/admin` ("Quedan 5 minutos",
-"Terminar la clase"). No session or child is named: a command is for "the
-sessions active now".
+"Terminar la clase"); T37 adds "Juegos para todos" (`games_all`). No session
+or child is named: a command is for "the sessions active now".
 
 | Column | Type | Meaning |
 |---|---|---|
 | `id` | bigserial, PK | The command's id; each device applies an id once. |
-| `kind` | text | `'five_min'` ("quedan 5 minutos") or `'end_class'` ("terminar la clase"). |
+| `kind` | text | `'five_min'` ("quedan 5 minutos"), `'end_class'` ("terminar la clase") or `'games_all'` (T37: "Juegos para todos"). |
 | `created_at` | timestamptz | When el docente sent it. |
 | `expires_at` | timestamptz | `created_at` + 2 hours: after that no device gets it (a device offline longer than that never ends by an old command). |
-| `cancelled_at` | timestamptz, nullable | "Cancelar aviso" (only `five_min`): devices still waiting to apply it drop it. |
+| `cancelled_at` | timestamptz, nullable | "Cancelar aviso" / "Cancelar «Juegos para todos»" (`five_min` and `games_all` only; `end_class` is never cancellable, its second tap already confirms it): devices still waiting to apply it drop it. |
 
 Delivery: every `POST /api/sync` answers `{ok, acked, commands}`, where
 `commands` lists `{id, kind, at, expires_at, cancelled}` for each live
@@ -1101,13 +1101,21 @@ The session moved to another flow step (the same change also updates
 {
   from: string | null,          // the step left (null for the first one)
   to: string,                   // one of the current_step values above
-  reason: 'start' | 'next' | 'skip' | 'end_now' | 'adult' | 'class_end' | 'demo',
+  reason: 'start' | 'next' | 'skip' | 'end_now' | 'adult' | 'class_end' | 'demo' | 'games_all',
   time_ms?: number,             // time spent on `from`
   budget_ms?: number,           // `from`'s planned time (recorded, not enforced)
   over_budget?: boolean,
   wrap_up?: boolean             // T14: the move was "quedan 5 minutos"'s way out
 }
 ```
+`games_all` (T37): "Juegos para todos" moved the device straight to
+`free_play` (`to: 'free_play'`) from `tool_check`, `ladder`, `typing` or
+`wardrobe` — never from `character` (nothing played yet) or from
+`free_play` itself (already there), both of which the client treats as a
+no-op (no `step` event, no banner). The page open on `from` ends the same
+way any other interruption does (`level_end`/`ladder_end`/… `'skipped'` or
+`'left'`), never `routeDone`: a child moved to the games zone this way has
+not "finished the path".
 `skip` is the adult skipping a step (or a step with nothing to show);
 `end_now` is the adult's "end the session" gesture (straight to the survey).
 Round 2: the first `step` goes from `setup` straight to `character` (no
@@ -1143,16 +1151,27 @@ under "quedan 5 minutos", `demo` from the demo bar.
 
 ### `class_command`
 T14: a class command from `/admin` reached this device and was applied
-(see the table `class_commands`). **RQ 5** (and data cleaning: what the
-class end cut).
+(see the table `class_commands`); T37 adds `games_all`/`cancel_games_all`.
+**RQ 5** (and data cleaning: what the class end cut).
 ```
-{ kind: 'five_min' | 'cancel_five_min' | 'end_class', id: number, sent_at: string, received_at: string, step: string, late?: true }
+{ kind: 'five_min' | 'cancel_five_min' | 'end_class' | 'games_all' | 'cancel_games_all', id: number, sent_at: string, received_at: string, step: string, late?: true }
 ```
 `five_min`: "¡Quedan 5 minutos!" was shown and said; the step on screen
 ends after its item (`ladder_end`/`typing_end` `wrap_up`, free play like its
 time), then the wardrobe and the survey, then free play. `cancel_five_min`:
 "Cancelar aviso" reached the device while the warning was still pending
 (a warning cancelled before the device saw it is never applied).
+
+`games_all` (T37): "Juegos para todos" reached the device; `step` is the
+step it was on when the command was seen (`from` of the `step` event this
+also logs, where the move was not a no-op — see `step` above). Logged
+whether or not the device actually moved (a device on `character`,
+`free_play`, `survey`, `goodbye` or `class_end` ignores the move itself but
+still logs this event, so the data shows the command reached it).
+`cancel_games_all`: "Cancelar «Juegos para todos»" reached a device that had
+already moved — the move is immediate, so there is nothing left to undo,
+only to log (same "never applied" rule as `cancel_five_min` for a device
+that never saw the uncancelled command at all).
 
 `end_class` (T28: non-blocking): the child keeps playing through a
 10-second on-screen countdown banner (over whatever is on screen, never
@@ -1539,8 +1558,11 @@ wipe the data early):
   ADMIN_TOKEN` keeps working for the tools. A change made with the cookie
   (POST/DELETE) must carry the header `x-camino-admin: 1` (403 otherwise).
 - **Class commands**: `POST /api/admin/commands {kind: 'five_min' |
-  'end_class'}` → `{ok, command}`; `POST /api/admin/commands/cancel` →
-  `{ok, cancelled}` (live five-minute warnings).
+  'end_class' | 'games_all'}` → `{ok, command}` (T37 adds `games_all`,
+  "Juegos para todos"); `POST /api/admin/commands/cancel {kind?: 'five_min' |
+  'games_all'}` (default `five_min`, kept for older callers) → `{ok,
+  cancelled}` (that kind's still-pending commands; `end_class` is never
+  cancellable).
 - **Sound setting** (T18): `POST /api/admin/settings {sound: 'on' | 'off' |
   'link'}` → `{ok, setting}` (same auth as the class commands); the public
   `GET /api/class-settings` (no auth, rate limited, `cache-control:
@@ -1554,11 +1576,12 @@ wipe the data early):
   sessions exist, not listed); `commands` (the live ones, newest first);
   `sound_setting` (the live `class_settings` row, T18).
 - The page: a password form; then "Quedan 5 minutos", "Terminar la clase"
-  (a second tap confirms) and "Cancelar aviso"; "Sonido": "Con sonido" /
-  "Sin sonido" / "Como diga el link", highlighting the one in effect and
-  when it expires (T18); "Esta clase": who is playing, on which step,
-  "Terminó" (the green flag) and "Encuesta"; all sessions with "Borrar";
-  the exports. It polls every 5 s.
+  (a second tap confirms) and T37's "Juegos para todos", each with a
+  one-line explanation; "Cancelar aviso" / "Cancelar «Juegos para todos»";
+  "Sonido": "Con sonido" / "Sin sonido" / "Como diga el link", highlighting
+  the one in effect and when it expires (T18); "Esta clase": who is
+  playing, on which step, "Terminó" (the green flag) and "Encuesta"; all
+  sessions with "Borrar"; the exports. It polls every 5 s.
 - `tools/export-playtest.mjs` — no dependencies; reads `EXPORT_TOKEN` and
   `PLAYTEST_URL` from `~/.credentials/camino-prueba.env` (never printed),
   fetches all three exports and writes them to `exports/` (gitignored) as

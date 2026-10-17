@@ -853,6 +853,36 @@ dbDescribe('API against Postgres', () => {
       await pool.query('DELETE FROM class_commands');
       expect(await deleteOldCommands(pool)).toBe(0);
     });
+
+    it('T37: "games_all" is delivered and cancellable, same as five_min; end_class is never cancellable', async () => {
+      await pool.query('DELETE FROM class_commands');
+      const a = app();
+      const s = newSession({ started_at: new Date(Date.now() - 60_000).toISOString() });
+      await sync(a, s);
+      const res = await send(a, 'games_all');
+      expect(res.status).toBe(200);
+      const { command } = (await res.json()) as { command: { kind: string } };
+      expect(command.kind).toBe('games_all');
+      expect((await sync(a, s)).commands.map((c) => [c.kind, c.cancelled])).toEqual([['games_all', false]]);
+      const cancel = await a.request('/api/admin/commands/cancel', {
+        method: 'POST', headers: auth, body: JSON.stringify({ kind: 'games_all' }),
+      });
+      expect(await cancel.json()).toEqual({ ok: true, cancelled: 1 });
+      expect((await sync(a, s)).commands.map((c) => [c.kind, c.cancelled])).toEqual([['games_all', true]]);
+      await pool.query('DELETE FROM class_commands');
+      // cancelling with no body (the older callers' shape) still means five_min, not games_all
+      await send(a, 'five_min');
+      await send(a, 'games_all');
+      const defaultCancel = await a.request('/api/admin/commands/cancel', { method: 'POST', headers: auth });
+      expect(await defaultCancel.json()).toEqual({ ok: true, cancelled: 1 });
+      expect((await sync(a, s)).commands.map((c) => [c.kind, c.cancelled]).sort()).toEqual([['five_min', true], ['games_all', false]]);
+      // end_class has no cancellable kind
+      const badCancel = await a.request('/api/admin/commands/cancel', {
+        method: 'POST', headers: auth, body: JSON.stringify({ kind: 'end_class' }),
+      });
+      expect(badCancel.status).toBe(400);
+      await pool.query('DELETE FROM class_commands');
+    });
   });
 
   describe('the sound setting (T18)', () => {

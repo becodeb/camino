@@ -318,7 +318,7 @@ describe('automatic events', () => {
 });
 
 describe('class commands and the poll (T14)', () => {
-  const cmd = (id: number, kind: 'five_min' | 'end_class', cancelled = false) => ({ id, kind, at: '2026-10-01T12:00:00Z', expires_at: '2026-10-01T14:00:00Z', cancelled });
+  const cmd = (id: number, kind: 'five_min' | 'end_class' | 'games_all', cancelled = false) => ({ id, kind, at: '2026-10-01T12:00:00Z', expires_at: '2026-10-01T14:00:00Z', cancelled });
 
   it('polls every 10 s with an empty queue while a session is open (the session record alone), and stops once it ended', async () => {
     const w = world();
@@ -403,6 +403,20 @@ describe('class commands and the poll (T14)', () => {
     await w.advance(30_000);
     expect(w.posts.some((p) => p.body.session.end_reason === 'abandoned')).toBe(true);
     expect(got).toEqual(['end_class']);
+  });
+
+  it('T37: hands "games_all" out and its cancellation, same as five_min', async () => {
+    const w = world();
+    const tel = new Telemetry(w.deps, { pollMs: 10_000 });
+    const got: string[] = [];
+    tel.onCommand((c) => got.push(`${c.kind}#${c.id}${c.cancelled ? ':cancelled' : ''}`));
+    tel.startSession({ grade: 1, division: null });
+    w.commands.push(cmd(11, 'games_all'));
+    await w.advance(25_000);
+    expect(got).toEqual(['games_all#11']);
+    (w.commands[0] as { cancelled: boolean }).cancelled = true;
+    await w.advance(10_000);
+    expect(got).toEqual(['games_all#11', 'games_all#11:cancelled']);
   });
 
   it('a demo session says so in its record', () => {

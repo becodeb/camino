@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUDGET_MS, STEPS, canOpenSurvey, initialFlow, isLiveStep, reduce, routeComplete, stepAfter, timeOnStep, wrapPending, wrapTarget, type FlowAction, type FlowState } from './flow';
+import { BUDGET_MS, STEPS, canGamesAll, canOpenSurvey, initialFlow, isLiveStep, reduce, routeComplete, stepAfter, timeOnStep, wrapPending, wrapTarget, type FlowAction, type FlowState } from './flow';
 
 const walk = (state: FlowState, n: number, t0 = 0) => {
   let s = state;
@@ -167,5 +167,29 @@ describe('the playtest flow', () => {
 
   it('T29: isLiveStep is false only for setup, class_end and goodbye', () => {
     for (const s of STEPS) expect(isLiveStep(s)).toBe(s !== 'setup' && s !== 'class_end' && s !== 'goodbye');
+  });
+
+  it('T37: "Juegos para todos" moves tool_check/ladder/typing/wardrobe to free_play, recorded distinctly, never marking the route done; ignores every other step', () => {
+    for (const s of STEPS) expect(canGamesAll(s)).toBe(s === 'tool_check' || s === 'ladder' || s === 'typing' || s === 'wardrobe');
+    // mid-ladder
+    const mid = walk(initialFlow(0), 3);
+    const t = act(mid, { type: 'games_all' });
+    expect(t.change).toMatchObject({ from: 'ladder', to: 'free_play', reason: 'games_all' });
+    expect(t.state.routeDone).toBeFalsy();
+    expect(t.routeDoneNow).toBeFalsy();
+    // already in free play, or not past the character screen: a no-op (no step event)
+    expect(act(t.state, { type: 'games_all' }).change).toBeNull();
+    expect(act(walk(initialFlow(0), 1), { type: 'games_all' }).change).toBeNull(); // character
+    expect(act(initialFlow(0), { type: 'games_all' }).change).toBeNull(); // setup
+    // ignored from the survey and the goodbye too
+    const surveyed = act(walk(initialFlow(0), 3), { type: 'survey' }).state;
+    expect(act(surveyed, { type: 'games_all' }).change).toBeNull();
+    const bye = act(act(walk(initialFlow(0), 3), { type: 'end_now' }).state, { type: 'next' }).state;
+    expect(bye.step).toBe('goodbye');
+    expect(act(bye, { type: 'games_all' }).change).toBeNull();
+    // from the wardrobe too, same as the other core-route steps
+    const wardrobe = walk(initialFlow(0), 6);
+    expect(wardrobe.step).toBe('wardrobe');
+    expect(act(wardrobe, { type: 'games_all' }).change).toMatchObject({ from: 'wardrobe', to: 'free_play', reason: 'games_all' });
   });
 });

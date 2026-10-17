@@ -13,7 +13,9 @@
 // sync answers (telemetry.ts onCommand): "quedan 5 minutos" shows a banner
 // and wraps the session up (the item on screen, the wardrobe, the survey),
 // "terminar la clase" shows "Actividad terminada" (classroom.tsx) and ends
-// it. A demo session (demo.ts) gets the demo bar (DemoBar.tsx).
+// it. T37's "Juegos para todos" (`games_all`) moves a device still on the
+// core route straight to the free-play menu (a short banner, no end). A
+// demo session (demo.ts) gets the demo bar (DemoBar.tsx).
 //
 // T18 (the silent classroom round): the device's `?sonido=`/localStorage
 // baseline is set as early as possible (before Setup even renders), and
@@ -44,7 +46,7 @@ import { AdultControls } from './AdultControls';
 import { PlaytestContext, type AdultHelpKind, type AdultHelpVia, type HandState, type LevelTrack, type PlaytestApi } from './context';
 import { initialFlow, isLiveStep, reduce, ROUTE, visited, wrapPending, type FlowAction, type FlowState, type StepId, type Transition } from './flow';
 import { savePreviousChild } from './previousChild';
-import { ClassEndBanner, FiveMinBanner, RouteFlag, isLateEndClass } from './classroom';
+import { ClassEndBanner, FiveMinBanner, GamesAllBanner, RouteFlag, isLateEndClass } from './classroom';
 import { DemoBar } from './DemoBar';
 import { setFast } from './demo';
 import { setPageHooks } from '../screens/levelKit';
@@ -100,6 +102,8 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
   const [banner, setBanner] = useState<number | null>(null);
   /** T28: "terminar la clase"'s own non-blocking countdown on screen (the command's id), or null; while set, the five-minute banner stays hidden. */
   const [ending, setEnding] = useState<number | null>(null);
+  /** T37: "Juegos para todos"'s short notice on screen (the command's id), or null; only set when the device actually moved (see onCommand). */
+  const [gamesAll, setGamesAll] = useState<number | null>(null);
   // a reloaded demo session keeps the page hooks the demo bar plays through
   useState(() => { if (resumed && tel.session?.demo) setPageHooks(true); return true; });
   const handRef = useRef(hand);
@@ -164,6 +168,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     setFast(false);
     setPageHooks(!!input.demo);
     setBanner(null);
+    setGamesAll(null);
     progress.reset();
     // a new child: the pages' first-entry demos play again
     forgetRealtimeIntros();
@@ -180,6 +185,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     setFast(false);
     setPageHooks(false);
     setBanner(null);
+    setGamesAll(null);
     setHand(null);
     setCaptions(false);
     clearCaption();
@@ -275,6 +281,19 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
       log('class_command', { kind: 'five_min', ...received });
       setBanner(cmd.id);
       apply({ type: 'wrap_up', on: true });
+    } else if (cmd.kind === 'games_all') {
+      // T37: a command cancelled before this device ever saw it is dropped
+      // by telemetry.ts's own queue and never reaches here (same as
+      // `five_min`'s "a warning cancelled before this device ever saw it is
+      // never applied"); `cmd.cancelled` here means a device that already
+      // moved just learned it was cancelled — the move was immediate, so
+      // there is nothing left to undo, only to log.
+      log('class_command', { kind: cmd.cancelled ? 'cancel_games_all' : 'games_all', ...received });
+      if (cmd.cancelled) return;
+      // `apply` returns null when nothing changed (flow.ts's `canGamesAll`:
+      // already in free play, or not past the character screen) — then
+      // there is nothing to announce.
+      if (apply({ type: 'games_all' })) setGamesAll(cmd.id);
     } else {
       // T28: a device asleep (lid closed) when this was sent can wake up long
       // after, with a new child already sitting down — never show them the
@@ -381,6 +400,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
             <ClassEndBanner key={ending} done={() => { setEnding(null); endSession('class_end'); apply({ type: 'class_end' }); }} />
           )}
           {session && banner != null && ending == null && live && <FiveMinBanner key={banner} done={() => setBanner(null)} />}
+          {session && gamesAll != null && ending == null && live && <GamesAllBanner key={gamesAll} done={() => setGamesAll(null)} />}
           {session && flow.step !== 'class_end' && <AdultControls />}
           {session?.demo && <DemoBar />}
         </div>

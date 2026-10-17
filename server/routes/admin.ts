@@ -9,9 +9,10 @@
 //
 // Routes: a live summary for /admin (demo sessions left out, with "terminó"
 // and the survey per session), the class commands ("quedan 5 minutos",
-// "terminar la clase", "cancelar aviso"), the sound setting (T18: "Con
-// sonido" / "Sin sonido" / "Como diga el link"), the same JSON/CSV export
-// as /api/export, and the deletion of one session (check and test sessions).
+// "terminar la clase", T37's "juegos para todos", "cancelar aviso" /
+// "cancelar juegos para todos"), the sound setting (T18: "Con sonido" /
+// "Sin sonido" / "Como diga el link"), the same JSON/CSV export as
+// /api/export, and the deletion of one session (check and test sessions).
 
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { timingSafeEqual } from 'node:crypto';
@@ -22,7 +23,10 @@ import {
   COOKIE_MAX_AGE_S, clientKey, cookieOf, createLoginLimiter, isHttps, passwordMatches, setCookieHeader, signCookie, verifyCookie,
   type AdminSecrets, type LoginLimiter,
 } from '../lib/adminSession.ts';
-import { COMMAND_KINDS, cancelWarnings, createCommand, liveCommands, type CommandKind } from '../lib/commands.ts';
+import {
+  CANCELLABLE_KINDS, COMMAND_KINDS, cancelPending, createCommand, liveCommands,
+  type CancellableKind, type CommandKind,
+} from '../lib/commands.ts';
 import { liveSoundSetting, setSoundSetting, type SoundSetting } from '../lib/classSettings.ts';
 import { APP_VERSION } from '../version.ts';
 
@@ -144,20 +148,28 @@ export function adminRoute(pool: pg.Pool, opts: AdminOptions | string | undefine
     });
   });
 
-  // "quedan 5 minutos" / "terminar la clase" for every device of the class
+  // "quedan 5 minutos" / "terminar la clase" / "juegos para todos" for every device of the class
   app.post('/commands', async (c) => {
     let body: unknown;
     try { body = await c.req.json(); } catch { body = null; }
     const kind = (body as { kind?: unknown } | null)?.kind;
     if (typeof kind !== 'string' || !COMMAND_KINDS.includes(kind as CommandKind)) {
-      return c.json({ error: 'kind must be five_min or end_class' }, 400);
+      return c.json({ error: 'kind must be five_min, end_class or games_all' }, 400);
     }
     const command = await createCommand(pool, kind as CommandKind);
     return c.json({ ok: true, command });
   });
 
-  // "cancelar aviso": the five-minute warning is dropped where it is still pending
-  app.post('/commands/cancel', async (c) => c.json({ ok: true, cancelled: await cancelWarnings(pool) }));
+  // "cancelar aviso" / "cancelar juegos para todos": the given kind's still-pending commands are dropped (default five_min, kept for older callers)
+  app.post('/commands/cancel', async (c) => {
+    let body: unknown;
+    try { body = await c.req.json(); } catch { body = null; }
+    const kind = (body as { kind?: unknown } | null)?.kind ?? 'five_min';
+    if (typeof kind !== 'string' || !CANCELLABLE_KINDS.includes(kind as CancellableKind)) {
+      return c.json({ error: 'kind must be five_min or games_all' }, 400);
+    }
+    return c.json({ ok: true, cancelled: await cancelPending(pool, kind as CancellableKind) });
+  });
 
   // T18: "Con sonido" / "Sin sonido" / "Como diga el link", a class-wide setting (not a one-time command)
   app.post('/settings', async (c) => {

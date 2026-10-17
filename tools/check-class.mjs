@@ -16,6 +16,9 @@
 //   countdown, then class_end and its own garden.
 // - The panel lists both sessions (step, terminó, encuesta); with PSQL, the
 //   rows: class_command events, end_reason and current_step class_end.
+// - T37: a third device C (mid-ladder) gets "Juegos para todos" — moves to
+//   the free-play menu (the ladder's item ends as `left`, not a pass), then
+//   "Terminar la clase" still ends it normally.
 //
 // PW=<dir with playwright> ADMIN_PASSWORD=<the local throwaway> node tools/check-class.mjs [base]
 //   base:      the app with /api and /admin (the API serving a build, e.g. http://127.0.0.1:8810/, the default)
@@ -176,6 +179,25 @@ try {
   await B.p.waitForSelector('.pp-setup', { timeout: 20_000 });
   ok(true, 'B: back to the setup by itself once the lid closed and reopened, no adult hold');
 
+  // ---------------------------------------------------------------- T37: "Juegos para todos" mid-ladder, then "terminar la clase" still works
+  // (after A and B are both done and back at the setup with no open session, so neither reacts to these new commands)
+  const C = await device('C', 3, 'ladder');
+  await a.click('#games-all');
+  await C.p.waitForSelector('.pp-games-all', { timeout: 20_000 });
+  ok(await C.p.locator('.piloto[data-step="free_play"]').count() === 1, 'C: "Juegos para todos" moved it to the free-play menu');
+  ok(await C.p.locator('main.pp-menu').count() === 1 && await C.p.locator('.pp-fp-activity').count() === 0, 'C: on the free-play menu itself (no activity forced open)');
+  const flowC = await flow(C);
+  ok(!flowC.routeDone, 'C: the route is NOT marked done by "Juegos para todos"');
+  await C.p.waitForSelector('.pp-games-all', { state: 'detached', timeout: 20_000 });
+  ok(true, 'C: the "¡Hora de juegos!" notice went away on its own');
+  await a.click('#end-class');
+  await a.click('#end-class');
+  await C.p.waitForSelector('.pp-end-banner', { timeout: 20_000 });
+  await C.p.waitForSelector('[data-class-end="rest"]', { timeout: 20_000 });
+  const sc = await C.p.evaluate(() => window.__piloto.session());
+  ok(sc.end_reason === 'class_end' && !!sc.ended_at, 'C: "Terminar la clase" still ends it after "Juegos para todos"');
+  await C.p.evaluate(() => window.__piloto.flush());
+
   // ---------------------------------------------------------------- the rows
   if (PSQL) {
     const cmds = (sid) => sql(`select string_agg(payload->>'kind', ',' order by seq) from events where session_id = '${sid}' and type = 'class_command';`);
@@ -189,11 +211,21 @@ try {
     ok(ladderEnd === 'wrap_up', `A: ladder_end reason ${ladderEnd}`);
     const wrapSteps = sql(`select string_agg(payload->>'to' || ':' || coalesce(payload->>'wrap_up', '-'), ' ' order by seq) from events where session_id = '${A.sid}' and type = 'step';`);
     ok(wrapSteps.endsWith('wardrobe:true class_end:-'), `A's steps: ${wrapSteps}`);
+    // T37
+    const cmdsC = sql(`select string_agg(payload->>'kind', ',' order by seq) from events where session_id = '${C.sid}' and type = 'class_command';`);
+    ok(cmdsC === 'games_all,end_class', `C's class_command events: ${cmdsC}`);
+    const stepC = sql(`select payload->>'from' || '->' || payload->>'to' || ':' || payload->>'reason' from events where session_id = '${C.sid}' and type = 'step' and payload->>'reason' = 'games_all';`);
+    ok(stepC === 'ladder->free_play:games_all', `C's "Juegos para todos" step: ${stepC}`);
+    const ladderEndC = sql(`select payload->>'reason' from events where session_id = '${C.sid}' and type = 'ladder_end';`);
+    ok(ladderEndC === 'left', `C: ladder_end reason ${ladderEndC} (interrupted, not a floor/ceiling stop)`);
+    const routeDoneC = sql(`select count(*) from events where session_id = '${C.sid}' and type = 'route_done';`);
+    ok(routeDoneC === '0', 'C: never got the green flag from "Juegos para todos"');
     sql('DELETE FROM class_commands;');
   }
   await admin.ctx.close();
   await A.ctx.close();
   await B.ctx.close();
+  await C.ctx.close();
 } catch (e) {
   ok(false, `stopped: ${String(e.message ?? e).split('\n')[0]}`);
 } finally {

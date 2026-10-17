@@ -1,9 +1,9 @@
 // Class commands (T14): /admin's "quedan 5 minutos" and "terminar la clase"
-// for every device of the class. A command is a row (class_commands) with an
-// expiry; each POST /api/sync answers with the commands its session must
-// see, so a device that was offline gets them when it reconnects, unless
-// they expired. Still anonymous: a command is for "the sessions active now",
-// never for a child.
+// for every device of the class; T37 adds "Juegos para todos" (`games_all`).
+// A command is a row (class_commands) with an expiry; each POST /api/sync
+// answers with the commands its session must see, so a device that was
+// offline gets them when it reconnects, unless they expired. Still
+// anonymous: a command is for "the sessions active now", never for a child.
 //
 // A session sees a command when:
 // - it started before the command was sent (a child who starts afterwards
@@ -13,14 +13,18 @@
 // - it was seen (synced) within ACTIVE_WINDOW_MS before the command, or is
 //   syncing for the first time (it started before it, offline), and
 // - the command has not expired.
-// A cancelled warning is still handed out (`cancelled: true`) until it
-// expires, so a device that has it pending drops it; the client applies
-// each command id once.
+// A cancelled warning (`five_min` or `games_all`) is still handed out
+// (`cancelled: true`) until it expires, so a device that has it pending
+// drops it; the client applies each command id once. `end_class` is never
+// cancellable (a second tap already confirms it on /admin).
 
 import type pg from 'pg';
 
-export type CommandKind = 'five_min' | 'end_class';
-export const COMMAND_KINDS: readonly CommandKind[] = ['five_min', 'end_class'];
+export type CommandKind = 'five_min' | 'end_class' | 'games_all';
+export const COMMAND_KINDS: readonly CommandKind[] = ['five_min', 'end_class', 'games_all'];
+/** `five_min` and `games_all` can be cancelled while still pending; `end_class` cannot. */
+export type CancellableKind = 'five_min' | 'games_all';
+export const CANCELLABLE_KINDS: readonly CancellableKind[] = ['five_min', 'games_all'];
 export const COMMAND_TTL_MS = 2 * 60 * 60_000;
 export const ACTIVE_WINDOW_MS = 2 * 60 * 60_000;
 
@@ -51,11 +55,12 @@ export async function createCommand(pool: pg.Pool, kind: CommandKind, ttlMs = CO
   return toCommand(rows[0]);
 }
 
-/** "Cancelar aviso": the five-minute warnings still live. Returns how many. */
-export async function cancelWarnings(pool: pg.Pool): Promise<number> {
+/** "Cancelar aviso" / "Cancelar juegos para todos": the given kind's still-live commands. Returns how many. */
+export async function cancelPending(pool: pg.Pool, kind: CancellableKind): Promise<number> {
   const res = await pool.query(
     `UPDATE class_commands SET cancelled_at = now()
-     WHERE kind = 'five_min' AND cancelled_at IS NULL AND expires_at > now()`,
+     WHERE kind = $1 AND cancelled_at IS NULL AND expires_at > now()`,
+    [kind],
   );
   return res.rowCount ?? 0;
 }

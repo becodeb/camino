@@ -7,6 +7,11 @@
 //   adult's long press opens the survey.
 // - FiveMinBanner: "¡Quedan 5 minutos!", calm, spoken (and captioned), for
 //   a few seconds below the bar.
+// - GamesAllBanner (T37): "¡Hora de juegos!", a short friendly notice (also
+//   spoken and captioned) shown once a device actually moves to the
+//   free-play menu from "Juegos para todos" (no banner where the command
+//   was a no-op: the device was already in free play, or not past the
+//   character screen).
 // - ClassEndBanner (T28): "terminar la clase" no longer cuts the child off
 //   at once — a non-blocking banner (the clock-face countdown, captioned)
 //   floats over whatever is on screen for CLASS_END_SECONDS while the child
@@ -52,6 +57,7 @@ const LINES = {
   five: '¡Quedan cinco minutos! Terminá lo que estás haciendo.',
   endingSoon: '¡Últimos segundos! Terminá lo que estás haciendo.',
   rest: '¡Gracias por jugar! Hasta la próxima.',
+  gamesAll: '¡Hora de juegos! Elegí uno del menú.',
 };
 
 // ------------------------------------------------------------------ the green flag
@@ -138,6 +144,49 @@ export function FiveMinBanner({ done }: { done(): void }) {
         <span className="tape tape-r" aria-hidden="true" />
         <FiveClockArt />
         <p className="pp-five-text">¡Quedan 5 minutos!</p>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ T37: "Juegos para todos"
+
+/** A drawn game controller: the d-pad cross and two round buttons. */
+export function GameControllerArt() {
+  return (
+    <svg className="pp-games-controller" viewBox="0 0 96 64" aria-hidden="true">
+      <g filter="url(#rough)" strokeLinecap="round" strokeLinejoin="round">
+        <path d={blob(48, 34, 42, 24, { wob: 0.05, n: 10, seed: 7 })} transform="translate(3 4)" fill={SHADOW} />
+        <path d={blob(48, 34, 42, 24, { wob: 0.05, n: 10, seed: 7 })} fill={PAPER} stroke={INK} strokeWidth={3.2} />
+        <path d="M22,28 L22,40 M16,34 L28,34" stroke={INK} strokeWidth={5.4} />
+        <circle cx={66} cy={26} r={5.4} fill={GREEN} stroke={INK} strokeWidth={2.2} />
+        <circle cx={78} cy={34} r={5.4} fill="#de8a56" stroke={INK} strokeWidth={2.2} />
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * T37: "Juegos para todos" opened the free-play menu on a device that was
+ * still on the core route — a short, friendly, wordless-safe notice (also
+ * spoken and captioned) over the new free-play menu, gone on its own; it
+ * never blocks the menu itself (the child can tap a card right away).
+ */
+export function GamesAllBanner({ done }: { done(): void }) {
+  const doneRef = useRef(done);
+  doneRef.current = done;
+  useEffect(() => {
+    speak(LINES.gamesAll);
+    const t = realTimeout(() => doneRef.current(), 5000);
+    return () => window.clearTimeout(t);
+  }, []);
+  return (
+    <div className="pp-games-all" role="status" aria-label="Hora de juegos">
+      <div className="pp-games-all-card sheet">
+        <span className="tape tape-l" aria-hidden="true" />
+        <span className="tape tape-r" aria-hidden="true" />
+        <GameControllerArt />
+        <p className="pp-games-all-text">¡Hora de juegos!</p>
       </div>
     </div>
   );

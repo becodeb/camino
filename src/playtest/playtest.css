@@ -625,6 +625,18 @@ button.pp-key:focus-visible { outline: 3px dashed var(--blue-ink); outline-offse
 .pp-end-banner .pp-countdown { width: 72px; height: 72px; flex: none; }
 .pp-end-banner-text { margin: 0; font: 700 clamp(26px, 3.2vw, 38px)/1.1 var(--body); color: var(--ink); }
 
+/* ------------------------------------------------ T37: "Juegos para todos"'s short notice over the new free-play menu (like .pp-five, shorter) */
+.pp-games-all { position: fixed; top: 2px; left: 0; right: 0; z-index: 77; display: flex; justify-content: center; pointer-events: none; }
+.pp-games-all-card {
+  display: flex; align-items: center; gap: 18px;
+  padding: 12px 34px 12px 22px;
+  background: #e2eece;
+  box-shadow: 5px 6px 0 var(--shadow);
+  animation: pp-five-in 700ms cubic-bezier(.3, 1.4, .5, 1) both, pp-five-out 600ms ease-in 4.4s both;
+}
+.pp-games-controller { width: 86px; height: 58px; overflow: visible; flex: none; }
+.pp-games-all-text { margin: 0; font: 700 clamp(30px, 3.6vw, 44px)/1.1 var(--body); color: var(--ink); }
+
 /* ------------------------------------------------ the resting page: the child's own garden, until the device is put away */
 .pp-end { position: fixed; inset: 0; z-index: 85; background: var(--paper); place-items: center; }
 .pp-end-card { width: min(980px, 100%); display: grid; justify-items: center; gap: 10px; padding: 26px 34px 30px; }
@@ -644,7 +656,7 @@ button.pp-key:focus-visible { outline: 3px dashed var(--blue-ink); outline-offse
   width: calc(var(--hold, 0) * 100%); background: var(--blue-ink);
 }
 @media (prefers-reduced-motion: reduce) {
-  .pp-flag, .pp-flag .pp-flag-cloth, .pp-five-card, .pp-end-banner-card { animation: none; }
+  .pp-flag, .pp-flag .pp-flag-cloth, .pp-five-card, .pp-end-banner-card, .pp-games-all-card { animation: none; }
 }
 
 /* ------------------------------------------------ demo mode: the setup's discreet switch */

@@ -2,11 +2,12 @@
 // step) for el docente to run the class and watch the pilot live.
 // - Login with the password (ADMIN_PASSWORD): POST /api/admin/login sets a
 //   signed HttpOnly cookie (12 h); nothing secret is kept by the page.
-// - The class panel: two big buttons, "Quedan 5 minutos" and "Terminar la
-//   clase" (with a confirm), plus "Cancelar aviso"; who is playing now, on
-//   which step, who finished the route ("terminó") and who did the survey.
-//   Demo sessions are not listed (only counted). T28: one short line under
-//   each button says what it actually does on the computers.
+// - The class panel: three big buttons, "Quedan 5 minutos", "Terminar la
+//   clase" (with a confirm) and T37's "Juegos para todos", plus "Cancelar
+//   aviso" / "Cancelar juegos para todos"; who is playing now, on which
+//   step, who finished the route ("terminó") and who did the survey. Demo
+//   sessions are not listed (only counted). T28: one short line under each
+//   button says what it actually does on the computers.
 // - T18: "Sonido" — "Con sonido" / "Sin sonido" / "Como diga el link",
 //   highlighting the one in effect and when it expires (4 hours).
 // - Every session (older ones too), the delete button and the exports.
@@ -112,6 +113,7 @@ button.secondary { background: var(--sheet); }
 .big.warn { background: var(--yellow); }
 .big.stop { background: #e69a8c; }
 .big.stop.is-confirm { background: var(--red); color: #fff; }
+.big.games { background: #cfe0a8; }
 .big.sound { background: var(--sheet); font-size: 1.15rem; min-height: 72px; }
 .big.sound.is-current { background: var(--blue); outline: 3px solid var(--blue-ink); outline-offset: 2px; }
 .class-state { margin: 12px 0 0; font-size: 1rem; min-height: 1.5em; }
@@ -178,9 +180,17 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
       </button>
       <p class="big-note">10 segundos para terminar, después cada chico ve su jardín; la compu arranca sola de nuevo al cerrar y abrir la tapa.</p>
     </div>
+    <div class="big-wrap">
+      <button type="button" class="big games" id="games-all">
+        <svg viewBox="0 0 60 60" aria-hidden="true"><rect x="8" y="20" width="44" height="24" rx="11" fill="#fbf7ee" stroke="#2b2622" stroke-width="3.5"/><path d="M18 28 L18 36 M14 32 L22 32" stroke="#2b2622" stroke-width="3.6" stroke-linecap="round"/><circle cx="38" cy="29" r="3.4" fill="#8fae4f" stroke="#2b2622" stroke-width="2"/><circle cx="46" cy="35" r="3.4" fill="#de8a56" stroke="#2b2622" stroke-width="2"/></svg>
+        Juegos para todos
+      </button>
+      <p class="big-note">Cada compu pasa a los juegos (la carrera y los demás), aunque no haya terminado; lo que estaba haciendo queda guardado.</p>
+    </div>
   </div>
   <p class="class-state" id="class-state" role="status"></p>
   <button type="button" class="secondary" id="cancel-warn" hidden>Cancelar aviso de 5 minutos</button>
+  <button type="button" class="secondary" id="cancel-games" hidden>Cancelar «Juegos para todos»</button>
   <p class="note">Las compus reciben el aviso en unos segundos. Una compu sin internet lo recibe cuando vuelve la conexión (hasta 2 horas).</p>
 </section>
 
@@ -309,11 +319,14 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
     var live = data.commands || [];
     var end = live.filter(function (c) { return c.kind === 'end_class'; })[0];
     var warn = live.filter(function (c) { return c.kind === 'five_min' && !c.cancelled; })[0];
+    var games = live.filter(function (c) { return c.kind === 'games_all' && !c.cancelled; })[0];
     var text = '';
     if (end) text = 'Clase terminada a las <b>' + fmtTime(end.at) + '</b>: las compus muestran «Actividad terminada» y se cierran solas.';
     else if (warn) text = 'Aviso de 5 minutos enviado a las <b>' + fmtTime(warn.at) + '</b>: cada chico termina lo que está haciendo, el vestidor y la encuesta.';
+    else if (games) text = '«Juegos para todos» enviado a las <b>' + fmtTime(games.at) + '</b>: cada compu pasa a los juegos libres.';
     $('class-state').innerHTML = text;
     show($('cancel-warn'), !!warn && !end);
+    show($('cancel-games'), !!games && !end);
 
     var cc = data.class_counts || { sessions: 0, route_done: 0, survey_done: 0 };
     $('c-active').textContent = data.active_now;
@@ -428,7 +441,13 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
     command('/api/admin/commands', { kind: 'end_class' }, 'Clase terminada: las compus se cierran en unos segundos.');
   });
   $('cancel-warn').addEventListener('click', function () {
-    command('/api/admin/commands/cancel', {}, 'Aviso cancelado.');
+    command('/api/admin/commands/cancel', { kind: 'five_min' }, 'Aviso cancelado.');
+  });
+  $('games-all').addEventListener('click', function () {
+    command('/api/admin/commands', { kind: 'games_all' }, '«Juegos para todos» enviado.');
+  });
+  $('cancel-games').addEventListener('click', function () {
+    command('/api/admin/commands/cancel', { kind: 'games_all' }, '«Juegos para todos» cancelado.');
   });
   ['on', 'off', 'link'].forEach(function (v) {
     $('sound-' + v).addEventListener('click', function () {

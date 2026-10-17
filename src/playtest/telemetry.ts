@@ -87,10 +87,10 @@ export interface SessionRecord {
 /** T18: the admin's class-wide sound setting, as /api/sync and /api/class-settings hand it out. 'link': no class override. */
 export type AdminSound = 'on' | 'off' | 'link';
 
-/** A class command from /admin, as /api/sync hands it out. */
+/** A class command from /admin, as /api/sync hands it out. T37: `games_all` ("Juegos para todos"). */
 export interface ClassCommand {
   id: number;
-  kind: 'five_min' | 'end_class';
+  kind: 'five_min' | 'end_class' | 'games_all';
   at: string;
   expires_at: string;
   cancelled: boolean;
@@ -485,7 +485,7 @@ export class Telemetry {
     const seen = (e.cmds ??= {});
     const fresh: ClassCommand[] = [];
     for (const c of raw as Partial<ClassCommand>[]) {
-      if (!c || !Number.isInteger(c.id) || (c.kind !== 'five_min' && c.kind !== 'end_class')) continue;
+      if (!c || !Number.isInteger(c.id) || (c.kind !== 'five_min' && c.kind !== 'end_class' && c.kind !== 'games_all')) continue;
       const id = String(c.id);
       const cancelled = c.cancelled === true;
       if (id in seen && (seen[id] || !cancelled)) continue;

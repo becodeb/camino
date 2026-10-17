@@ -18,6 +18,13 @@
 //   visited) and the survey (if not done), then free play.
 // - "Terminar la clase" (`class_end`): the "Actividad terminada" screen,
 //   from any step of a session.
+// - T37: "Juegos para todos" (`games_all`) moves a device still on the core
+//   route (tool check, ladder, typing, wardrobe) straight to the free-play
+//   menu, for the last minutes of class — a device already in free play, or
+//   not yet past the character screen, ignores it (no-op); it never marks
+//   the route done, and the step it interrupts still ends generically as
+//   "left"/"skipped" (PlaytestLevel.tsx, Ladder.tsx's own unmount guards),
+//   same as any other mid-step interruption.
 // - The adult's demo tools (`goto`, `route_done`) jump anywhere.
 // Round 2 dropped the session-code screen and the adult form step.
 
@@ -45,7 +52,7 @@ export const BUDGET_MS: Partial<Record<StepId, number>> = {
   goodbye: 60_000,
 };
 
-export type StepReason = 'start' | 'next' | 'skip' | 'end_now' | 'adult' | 'class_end' | 'demo';
+export type StepReason = 'start' | 'next' | 'skip' | 'end_now' | 'adult' | 'class_end' | 'demo' | 'games_all';
 
 export interface Visit {
   step: StepId;
@@ -92,6 +99,8 @@ export type FlowAction =
   | { type: 'survey' }
   | { type: 'wrap_up'; on: boolean }
   | { type: 'class_end' }
+  /** T37: "Juegos para todos" — a no-op where `canGamesAll` is false (character, free play itself, survey, goodbye, class_end, setup). */
+  | { type: 'games_all' }
   /** Demo tools: straight to a step / to the route done. */
   | { type: 'goto'; to: StepId }
   | { type: 'route_done' };
@@ -111,6 +120,8 @@ export function initialFlow(now: number): FlowState {
 export const stepAfter = (s: StepId): StepId | null => (s === 'goodbye' || s === 'class_end' ? null : STEPS[STEPS.indexOf(s) + 1] ?? null);
 export const canSkip = (s: StepId) => CHILD_STEPS.includes(s) || s === 'survey';
 export const canEndNow = (s: StepId) => CHILD_STEPS.includes(s);
+/** T37: "Juegos para todos" only moves a device off a core-route step that is not free play itself (already the games zone) and not the character screen (nothing to preserve yet). */
+export const canGamesAll = (s: StepId) => s === 'tool_check' || s === 'ladder' || s === 'typing' || s === 'wardrobe';
 /** T29: the session is actively being played — not the adult's setup, not resting after "terminar la clase", not the goodbye. Closing the tab asks first only then (PlaytestScreen.tsx's `beforeunload`); the classroom bar (the green flag, "quedan 5 minutos") also only shows then. */
 export const isLiveStep = (s: StepId) => s !== 'setup' && s !== 'class_end' && s !== 'goodbye';
 /** The adult may open the survey from any step of the child's part (it was always the adult's call). */
@@ -191,6 +202,8 @@ export function reduce(state: FlowState, action: FlowAction, now: number): Trans
       return !!state.wrapUp === action.on ? same : { state: { ...state, wrapUp: action.on }, change: null };
     case 'class_end':
       return state.step === 'setup' || state.step === 'class_end' ? same : go(state, 'class_end', 'class_end', now);
+    case 'games_all':
+      return canGamesAll(state.step) ? go(state, 'free_play', 'games_all', now) : same;
     case 'goto':
       return action.to === state.step || action.to === 'setup' ? same : go(state, action.to, 'demo', now);
     case 'route_done': {
