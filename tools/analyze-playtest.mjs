@@ -169,11 +169,15 @@ function reportRace(r) {
 
 function reportProfiles(r) {
   section('Perfiles de motivación (T37, una heurística para aprender — no un diagnóstico)');
+  if (!r.hasRaceData) {
+    line('Este export no tiene datos de la carrera (de antes de T33): "racer" y "collector" casi no tienen señal voluntaria para apoyarse, así que los perfiles de esta clase son débiles.');
+  }
   line(`Distribución general: ${fmtDist(r.distribution)}`);
   line('Por grado:');
   for (const [grade, dist] of Object.entries(r.byGrade)) line(`  - ${grade}°: ${fmtDist(dist)}`);
+  line(`Mediana de tiempo en el vestidor (paso obligatorio; solo referencia para la señal débil de "dresser"): ${fmtMs(r.classMedianWardrobeMs)}`);
   line('Evidencia por chico (código de sesión anónimo):');
-  for (const c of r.children) line(`  - ${c.sessionId}: ${c.profile} (${c.evidence})`);
+  for (const c of r.children) line(`  - ${c.code}: ${c.profile} (${c.evidence})`);
 }
 
 async function main() {

@@ -251,65 +251,73 @@ describe('raceReport', () => {
 });
 
 describe('classifyChild and profileReport (T37)', () => {
+  // classifyChild's second argument is the report's own median wardrobe
+  // time (ms) — 0 here means "no reference, the wardrobe signal never
+  // fires" (the common case when nobody's wardrobe time stands out).
+  const sig = (over: Partial<Parameters<typeof classifyChild>[0]> & { sessionId: string }) => ({
+    code: over.sessionId, racesStarted: 0, racesAgain: 0, cups: 0, distinctActivities: 0, totalFreePlayPicks: 0,
+    repeatPicks: 0, medianActivityMs: null, wardrobeMs: 0, physicalTypingKeys: 0, ...over,
+  });
+
   it('too little data is undecided', () => {
-    expect(classifyChild({
-      sessionId: 'a', racesStarted: 0, racesAgain: 0, cups: 0, distinctActivities: 1,
-      medianActivityMs: null, wardrobeTaps: 0, wardrobeMs: 0, physicalTypingKeys: 0,
-    }).profile).toBe('undecided');
+    expect(classifyChild(sig({ sessionId: 'a', distinctActivities: 1 }), 0).profile).toBe('undecided');
   });
 
   it('a racer: finished races and chose to race again voluntarily', () => {
-    const p = classifyChild({
-      sessionId: 'a', racesStarted: 3, racesAgain: 2, cups: 3, distinctActivities: 1,
-      medianActivityMs: null, wardrobeTaps: 0, wardrobeMs: 0, physicalTypingKeys: 0,
-    });
+    const p = classifyChild(sig({ sessionId: 'a', racesStarted: 3, racesAgain: 2, cups: 3 }), 0);
     expect(p.profile).toBe('racer');
   });
 
-  it('a dresser: long wardrobe time outweighs a couple of taps', () => {
-    const p = classifyChild({
-      sessionId: 'a', racesStarted: 0, racesAgain: 0, cups: 0, distinctActivities: 1,
-      medianActivityMs: null, wardrobeTaps: 2, wardrobeMs: 120_000, physicalTypingKeys: 0,
-    });
-    expect(p.profile).toBe('dresser');
-  });
-
-  it('a collector: cups and many wardrobe taps, little time per piece', () => {
-    const p = classifyChild({
-      sessionId: 'a', racesStarted: 1, racesAgain: 0, cups: 4, distinctActivities: 1,
-      medianActivityMs: null, wardrobeTaps: 6, wardrobeMs: 5_000, physicalTypingKeys: 0,
-    });
+  it('a collector: cups and returning to the same free-play activity, not wardrobe', () => {
+    const p = classifyChild(sig({ sessionId: 'a', racesStarted: 1, cups: 4, totalFreePlayPicks: 5, distinctActivities: 2, repeatPicks: 3 }), 0);
     expect(p.profile).toBe('collector');
   });
 
+  it('the wardrobe alone, even with a lot of time, is never "collector" — it only ever scores "dresser", and only weakly', () => {
+    // a lot of wardrobe time, nothing else at all — the median of this one
+    // child's own time is itself (no spread across the class), so it never
+    // clears 1.5x of *itself*: this is the "no reference" case too.
+    const p = classifyChild(sig({ sessionId: 'a', wardrobeMs: 300_000 }), 300_000);
+    expect(p.profile).toBe('undecided');
+    expect(p.evidence).toMatch(/mandatory step, not counted as voluntary/);
+  });
+
+  it('a dresser: wardrobe time well above the class median (the only context the signal has)', () => {
+    const p = classifyChild(sig({ sessionId: 'a', wardrobeMs: 120_000 }), 20_000); // 6x the median, past the 1.5x bar
+    expect(p.profile).toBe('dresser');
+    expect(p.evidence).toMatch(/weak: ≥1\.5× the class median/);
+  });
+
+  it('a notable wardrobe time never outscores a real voluntary signal elsewhere (it is deliberately weak)', () => {
+    const p = classifyChild(sig({ sessionId: 'a', wardrobeMs: 120_000, racesStarted: 5, racesAgain: 3 }), 20_000);
+    expect(p.profile).toBe('racer');
+  });
+
   it('an explorer: many distinct short-lived activities', () => {
-    const p = classifyChild({
-      sessionId: 'a', racesStarted: 0, racesAgain: 0, cups: 0, distinctActivities: 4,
-      medianActivityMs: 20_000, wardrobeTaps: 0, wardrobeMs: 0, physicalTypingKeys: 0,
-    });
+    const p = classifyChild(sig({ sessionId: 'a', distinctActivities: 4, medianActivityMs: 20_000 }), 0);
     expect(p.profile).toBe('explorer');
   });
 
   it('many activities but each one long-lived is not an explorer (a settler, not scored here, stays undecided)', () => {
-    const p = classifyChild({
-      sessionId: 'a', racesStarted: 0, racesAgain: 0, cups: 0, distinctActivities: 4,
-      medianActivityMs: PROFILE_RULES.EXPLORER_MAX_MEDIAN_MS + 1, wardrobeTaps: 0, wardrobeMs: 0, physicalTypingKeys: 0,
-    });
+    const p = classifyChild(sig({ sessionId: 'a', distinctActivities: 4, medianActivityMs: PROFILE_RULES.EXPLORER_MAX_MEDIAN_MS + 1 }), 0);
     expect(p.profile).toBe('undecided');
   });
 
   it('a keyboard kid: many physical keypresses', () => {
-    const p = classifyChild({
-      sessionId: 'a', racesStarted: 0, racesAgain: 0, cups: 0, distinctActivities: 0,
-      medianActivityMs: null, wardrobeTaps: 0, wardrobeMs: 0, physicalTypingKeys: 40,
-    });
+    const p = classifyChild(sig({ sessionId: 'a', physicalTypingKeys: 40 }), 0);
     expect(p.profile).toBe('keyboard');
   });
 
-  it('profileReport groups by grade and tallies the distribution', () => {
+  it('the evidence line shows the session code, not raw ids', () => {
+    const p = classifyChild({ ...sig({ sessionId: 'uuid-1' }), code: 'Zorro 27', racesStarted: 3, racesAgain: 2 }, 0);
+    expect(p.code).toBe('Zorro 27');
+    expect(p.sessionId).toBe('uuid-1');
+  });
+
+  it('profileReport groups by grade, tallies the distribution, shows the session code, and flags missing race data', () => {
     const sessions: PtSession[] = [
-      session({ id: 'a', grade: 1 }),
-      session({ id: 'b', grade: 2 }),
+      session({ id: 'a', grade: 1, code: 'Zorro 27' }),
+      session({ id: 'b', grade: 2, code: 'Coatí 4' }),
     ];
     const events = [
       ev('a', 'race_start', { race_no: 1, again: false }),
@@ -319,8 +327,29 @@ describe('classifyChild and profileReport (T37)', () => {
       ev('b', 'help', {}), // not enough signal: undecided
     ];
     const r = profileReport(sessions, events);
-    expect(r.children.map((c) => [c.sessionId, c.profile])).toEqual([['a', 'racer'], ['b', 'undecided']]);
+    expect(r.children.map((c) => [c.code, c.profile])).toEqual([['Zorro 27', 'racer'], ['Coatí 4', 'undecided']]);
     expect(r.distribution).toEqual({ racer: 1, undecided: 1 });
     expect(r.byGrade).toEqual({ '1': { racer: 1 }, '2': { undecided: 1 } });
+    expect(r.hasRaceData).toBe(true);
+  });
+
+  it('profileReport flags hasRaceData false when no race_start exists at all (data from before T33)', () => {
+    const sessions: PtSession[] = [session({ id: 'a', grade: 1, code: 'Zorro 27' })];
+    const events = [ev('a', 'wardrobe', { action: 'close', duration_ms: 10_000 })];
+    expect(profileReport(sessions, events).hasRaceData).toBe(false);
+  });
+
+  it('collectChildSignals (via profileReport) counts repeat free-play picks correctly', () => {
+    const sessions: PtSession[] = [session({ id: 'a', grade: 1, code: 'Zorro 27' })];
+    const events = [
+      ev('a', 'choice', { activity: 'sheet', visit: 1 }),
+      ev('a', 'choice', { activity: 'sheet', visit: 2 }), // the same activity again: a repeat pick
+      ev('a', 'choice', { activity: 'guardas', visit: 3 }),
+      ev('a', 'race_start', { race_no: 1 }), // just enough to have race data so this is not the "weak" branch
+    ];
+    const r = profileReport(sessions, events);
+    // 3 picks, 2 distinct, 1 repeat: collectorScore = 0 cups*2 + 1 repeat*1 = 1, racerScore = 1 start*1 = 1 — a tie under MIN_TOTAL_SCORE either way
+    expect(r.children[0].profile).toBe('undecided');
+    expect(r.children[0].evidence).toMatch(/3 picks \(2 distinct, 1 repeat\)/);
   });
 });

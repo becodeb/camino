@@ -548,43 +548,79 @@ export function raceReport(events: PtEvent[]): RaceReport {
 }
 
 // ------------------------------------------------------------------ T37: motivation profiles (a heuristic, not a measurement)
+//
+// Parent review (2026-10-17, on the real export): the first cut let the
+// wardrobe dominate the distribution — but the wardrobe is a MANDATORY
+// route step every child passes through once, never a free choice, so its
+// taps/time are not evidence of a "collector" or "dresser" preference by
+// themselves. Rewritten to rest on signals that are actually voluntary:
+// - `racer`: races started and, especially, a voluntary "¡Otra carrera!".
+// - `collector`: cups won (the tangible reward of racing) and returning to
+//   the SAME free-play activity more than once (`repeatPicks` — choosing
+//   more of something, not just trying it once).
+// - `dresser`: the wardrobe IS used, but only as a weak, relative signal —
+//   this app has no way to tell a voluntary wardrobe revisit from the one
+//   mandatory pass (it is not a free-play menu card, so it cannot be
+//   reopened from there, and the data carries no "reopened" marker), so a
+//   session only counts as notably-dressed when its wardrobe time is at
+//   least `DRESSER_MEDIAN_MULTIPLIER`× this report's own median — and even
+//   then it scores a small, fixed, deliberately weak amount, never enough
+//   on its own to call a child `collector`.
+// - `explorer`: many distinct free-play activities, each visited briefly.
+// - `keyboard`: typing is also a mandatory route step, so total exposure is
+//   not voluntary either — but WHICH input the child reaches for (the real
+//   keyboard vs. the on-screen one, always offered alongside it) is a real
+//   choice, so physical keypresses are the signal, not keys overall.
+// Character taps are not scored: no such event is logged yet (see
+// "Recorded, not implemented" in the feature document), so `explorer`
+// relies on free-play breadth alone. "Typing beyond what the route
+// requires" was considered too (the brief's own wording) but found
+// undetectable: the game's length is fixed by rounds/time/budget, not by
+// the child's choice, so there is no "extra" to measure from this data.
 
 export type Profile = 'racer' | 'collector' | 'dresser' | 'explorer' | 'keyboard' | 'undecided';
 
 export interface ChildProfile {
   sessionId: string;
+  /** The anonymous session code (e.g. "Zorro 27") — never the UUID — for reading the evidence list. */
+  code: string;
   profile: Profile;
   evidence: string;
 }
 
 /** Named thresholds, so the rule is documented in one place, not buried in arithmetic. */
 export const PROFILE_RULES = {
-  /** Below this total score every signal gives, the child is `undecided` (too little free-play data). */
+  /** Below this total score every signal gives, the child is `undecided` (too little voluntary signal). */
   MIN_TOTAL_SCORE: 3,
   /** A voluntary "¡Otra carrera!" counts for more than just finishing the first race (it was not required). */
   RACE_AGAIN_WEIGHT: 3,
-  RACE_FINISH_WEIGHT: 2,
-  /** Wardrobe pieces tried on/off (not how long): the "collector" count signal, alongside cups won. */
-  WARDROBE_TAP_WEIGHT: 1,
+  RACE_START_WEIGHT: 1,
+  /** Cups are the tangible reward collected by racing. */
   CUP_WEIGHT: 2,
-  /** Every 10s in the wardrobe is one "dresser" point: this profile is about lingering, not counting. */
-  WARDROBE_MS_PER_POINT: 10_000,
+  /** Choosing the SAME free-play activity again (not just trying many): a collecting-more-of-it signal. */
+  REPEAT_PICK_WEIGHT: 1,
   /** `explorer` only scores when activities are both numerous AND short-lived (many quick tries, not one deep one). */
   EXPLORER_MIN_ACTIVITIES: 3,
   EXPLORER_MAX_MEDIAN_MS: 90_000,
   EXPLORER_WEIGHT_PER_ACTIVITY: 2,
-  /** Every 5 physical keypresses in the typing game is one "keyboard" point. */
+  /** Every 5 physical keypresses in the typing game is one "keyboard" point (the choice of input, not the total). */
   KEYBOARD_KEYS_PER_POINT: 5,
+  /** The wardrobe (a mandatory step) only counts as a "dresser" signal once it clears this multiple of the class's own median wardrobe time. */
+  DRESSER_MEDIAN_MULTIPLIER: 1.5,
+  /** Fixed and deliberately small: just enough to clear `MIN_TOTAL_SCORE` alone, so it is read as weak and never outweighs a real voluntary signal elsewhere. */
+  DRESSER_WEAK_WARDROBE_SCORE: 3,
 };
 
 interface ChildSignals {
   sessionId: string;
+  code: string;
   racesStarted: number;
   racesAgain: number;
   cups: number;
   distinctActivities: number;
+  totalFreePlayPicks: number;
+  repeatPicks: number;
   medianActivityMs: number | null;
-  wardrobeTaps: number;
   wardrobeMs: number;
   physicalTypingKeys: number;
 }
@@ -600,18 +636,19 @@ function collectChildSignals(sessions: PtSession[], events: PtEvent[]): ChildSig
     const distinctActivities = new Set(picks.map((e) => String(e.payload.activity))).size;
     const activityEnds = rows.filter((e) => e.type === 'activity_end');
     const medianActivityMs = median(activityEnds.map((e) => Number(e.payload.time_ms)).filter(Number.isFinite));
-    const wardrobeTaps = rows.filter((e) => e.type === 'wardrobe' && (e.payload.action === 'on' || e.payload.action === 'off')).length;
     const wardrobeClose = rows.find((e) => e.type === 'wardrobe' && e.payload.action === 'close');
     const wardrobeMs = Number(wardrobeClose?.payload.duration_ms ?? 0) || 0;
     const physicalTypingKeys = rows.filter((e) => e.type === 'typing' && e.payload.input === 'physical').length;
     return {
       sessionId: s.id,
+      code: s.code ?? s.id,
       racesStarted: starts.length,
       racesAgain: starts.filter((e) => e.payload.again === true).length,
       cups: lastCups,
       distinctActivities,
+      totalFreePlayPicks: picks.length,
+      repeatPicks: Math.max(0, picks.length - distinctActivities),
       medianActivityMs,
-      wardrobeTaps,
       wardrobeMs,
       physicalTypingKeys,
     };
@@ -619,17 +656,18 @@ function collectChildSignals(sessions: PtSession[], events: PtEvent[]): ChildSig
 }
 
 /**
- * A simple, documented heuristic learned from free-play behaviour only
- * (never from the core route): the highest-scoring profile wins, `racer`
- * breaking a tie with `collector` since a race finish already implies at
- * least one cup. Below `MIN_TOTAL_SCORE` the child is `undecided` — this is
- * a rule to learn from, not a diagnosis.
+ * A simple, documented heuristic learned from voluntary behaviour only
+ * (never from a mandatory route step, except the wardrobe's weak,
+ * relative-to-the-class fallback — see the section comment above): the
+ * highest-scoring profile wins. Below `MIN_TOTAL_SCORE` the child is
+ * `undecided` — this is a rule to learn from, not a diagnosis.
  */
-export function classifyChild(sig: ChildSignals): ChildProfile {
+export function classifyChild(sig: ChildSignals, classMedianWardrobeMs: number): ChildProfile {
   const r = PROFILE_RULES;
-  const racerScore = sig.racesStarted * r.RACE_FINISH_WEIGHT + sig.racesAgain * r.RACE_AGAIN_WEIGHT;
-  const collectorScore = sig.cups * r.CUP_WEIGHT + sig.wardrobeTaps * r.WARDROBE_TAP_WEIGHT;
-  const dresserScore = sig.wardrobeMs / r.WARDROBE_MS_PER_POINT;
+  const racerScore = sig.racesStarted * r.RACE_START_WEIGHT + sig.racesAgain * r.RACE_AGAIN_WEIGHT;
+  const collectorScore = sig.cups * r.CUP_WEIGHT + sig.repeatPicks * r.REPEAT_PICK_WEIGHT;
+  const wardrobeNotable = classMedianWardrobeMs > 0 && sig.wardrobeMs >= classMedianWardrobeMs * r.DRESSER_MEDIAN_MULTIPLIER;
+  const dresserScore = wardrobeNotable ? r.DRESSER_WEAK_WARDROBE_SCORE : 0;
   const explorerScore = sig.distinctActivities >= r.EXPLORER_MIN_ACTIVITIES
     && sig.medianActivityMs != null && sig.medianActivityMs < r.EXPLORER_MAX_MEDIAN_MS
     ? sig.distinctActivities * r.EXPLORER_WEIGHT_PER_ACTIVITY : 0;
@@ -640,23 +678,33 @@ export function classifyChild(sig: ChildSignals): ChildProfile {
     ['explorer', explorerScore], ['keyboard', keyboardScore],
   ];
   const [top, topScore] = scores.reduce((best, cur) => (cur[1] > best[1] ? cur : best));
+  const wardrobeNote = wardrobeNotable
+    ? `wardrobe ${Math.round(sig.wardrobeMs / 1000)}s (weak: ≥${r.DRESSER_MEDIAN_MULTIPLIER}× the class median of ${Math.round(classMedianWardrobeMs / 1000)}s, never alone enough for collector)`
+    : `wardrobe ${Math.round(sig.wardrobeMs / 1000)}s (mandatory step, not counted as voluntary)`;
+  // always the full, honest evidence line — even `undecided` says what little voluntary signal there was, not just that it was too little.
+  const evidence = `races ${sig.racesStarted} (again ${sig.racesAgain}), cups ${sig.cups}`
+    + `, free play ${sig.totalFreePlayPicks} picks (${sig.distinctActivities} distinct, ${sig.repeatPicks} repeat)`
+    + `, ${wardrobeNote}, physical typing keys ${sig.physicalTypingKeys}`;
   if (topScore < r.MIN_TOTAL_SCORE) {
-    return { sessionId: sig.sessionId, profile: 'undecided', evidence: 'too little free-play signal' };
+    return { sessionId: sig.sessionId, code: sig.code, profile: 'undecided', evidence: `too little voluntary signal — ${evidence}` };
   }
-  const evidence = `races ${sig.racesStarted} (again ${sig.racesAgain}), cups ${sig.cups}, activities ${sig.distinctActivities}`
-    + `, wardrobe ${sig.wardrobeTaps} taps/${Math.round(sig.wardrobeMs / 1000)}s, physical keys ${sig.physicalTypingKeys}`;
-  return { sessionId: sig.sessionId, profile: top, evidence };
+  return { sessionId: sig.sessionId, code: sig.code, profile: top, evidence };
 }
 
 export interface ProfileReport {
   children: ChildProfile[];
   distribution: Record<string, number>;
   byGrade: Record<string, Record<string, number>>;
+  /** This report's own median wardrobe time (ms) — the reference the weak `dresser` signal compares against. */
+  classMedianWardrobeMs: number;
+  /** False when no `race_start` exists at all (data from before T33): `racer`/`collector` then have almost no voluntary signal to work with. */
+  hasRaceData: boolean;
 }
 
 export function profileReport(sessions: PtSession[], events: PtEvent[]): ProfileReport {
   const signals = collectChildSignals(sessions, events);
-  const children = signals.map(classifyChild);
+  const classMedianWardrobeMs = median(signals.map((s) => s.wardrobeMs)) ?? 0;
+  const children = signals.map((s) => classifyChild(s, classMedianWardrobeMs));
   const gradeOf = new Map(sessions.map((s) => [s.id, s.grade]));
   const byGrade: Record<string, Record<string, number>> = {};
   for (const c of children) {
@@ -665,7 +713,13 @@ export function profileReport(sessions: PtSession[], events: PtEvent[]): Profile
     bucket[c.profile] = (bucket[c.profile] ?? 0) + 1;
     byGrade[g] = bucket;
   }
-  return { children, distribution: count(children, (c) => c.profile), byGrade };
+  return {
+    children,
+    distribution: count(children, (c) => c.profile),
+    byGrade,
+    classMedianWardrobeMs,
+    hasRaceData: events.some((e) => e.type === 'race_start'),
+  };
 }
 
 // ------------------------------------------------------------------ putting a report together
