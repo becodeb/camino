@@ -182,8 +182,10 @@ try {
   // ---------------------------------------------------------------- T37: "Juegos para todos" mid-ladder, then "terminar la clase" still works
   // (after A and B are both done and back at the setup with no open session, so neither reacts to these new commands)
   const C = await device('C', 3, 'ladder');
+  await shot(a, 'admin-panel-three-buttons');
   await a.click('#games-all');
   await C.p.waitForSelector('.pp-games-all', { timeout: 20_000 });
+  await shot(C.p, 'games-all-kid');
   ok(await C.p.locator('.piloto[data-step="free_play"]').count() === 1, 'C: "Juegos para todos" moved it to the free-play menu');
   ok(await C.p.locator('main.pp-menu').count() === 1 && await C.p.locator('.pp-fp-activity').count() === 0, 'C: on the free-play menu itself (no activity forced open)');
   const flowC = await flow(C);
@@ -214,7 +216,7 @@ try {
     // T37
     const cmdsC = sql(`select string_agg(payload->>'kind', ',' order by seq) from events where session_id = '${C.sid}' and type = 'class_command';`);
     ok(cmdsC === 'games_all,end_class', `C's class_command events: ${cmdsC}`);
-    const stepC = sql(`select payload->>'from' || '->' || payload->>'to' || ':' || payload->>'reason' from events where session_id = '${C.sid}' and type = 'step' and payload->>'reason' = 'games_all';`);
+    const stepC = sql(`select (payload->>'from') || '->' || (payload->>'to') || ':' || (payload->>'reason') from events where session_id = '${C.sid}' and type = 'step' and payload->>'reason' = 'games_all';`);
     ok(stepC === 'ladder->free_play:games_all', `C's "Juegos para todos" step: ${stepC}`);
     const ladderEndC = sql(`select payload->>'reason' from events where session_id = '${C.sid}' and type = 'ladder_end';`);
     ok(ladderEndC === 'left', `C: ladder_end reason ${ladderEndC} (interrupted, not a floor/ceiling stop)`);
