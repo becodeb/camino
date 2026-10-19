@@ -67,6 +67,25 @@
 .pp-cap-choice { font-size: 16px; font-weight: 400; }
 .pp-start { margin-top: 4px; }
 
+/* ------------------------------------------------ T38: "¿Cómo te llamás?" */
+.pp-name-card { width: min(640px, 100%); gap: 22px; padding: 34px 38px 38px; }
+.pp-name-q { display: flex; align-items: center; gap: 14px; }
+.pp-name-q h1 { margin: 0 0 0 4px; font: 700 clamp(28px, 4vw, 40px)/1.1 var(--body); color: var(--ink); }
+.pp-name-q .bar-face { width: 56px; height: 64px; }
+.pp-name-input {
+  width: 100%;
+  font: 700 clamp(26px, 4vw, 38px)/1.2 var(--body);
+  color: var(--ink);
+  text-align: center;
+  padding: 14px 18px;
+  border: 3px solid var(--ink);
+  border-radius: 16px 12px 17px 11px / 12px 17px 11px 16px;
+  background: #fff;
+}
+.pp-name-input::placeholder { color: rgba(43, 38, 34, 0.35); font-weight: 400; }
+.pp-name-input:focus-visible { outline: 3px dashed var(--blue-ink); outline-offset: 3px; }
+.pp-name-go { min-width: 220px; }
+
 /* ------------------------------------------------ on-screen text: the line as a bubble in the bar (or floating), and 💬 */
 .piloto .level-bar > * { order: 4; }
 /* T25: extra left margin so .speak's own 54×54 box clears the adult's 64×64 corner-hold zone (AdultControls.tsx
@@ -232,6 +251,8 @@
 /* T23: the card's own layout (padding, tape) — the question's header picture above, the answers' own grid below;
    separate elements so a header never disturbs the grid that sizes the option buttons */
 .pp-question { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 34px 44px 38px; }
+/* T38: the question's own text, large inside the card, for 3ro and up (above the options; 1ro/2do never render this) */
+.pp-q-text { margin: 0; font: 700 clamp(26px, 3.4vw, 36px)/1.25 var(--body); color: var(--ink); text-align: center; }
 .pp-options { display: grid; justify-items: center; width: auto; max-width: 100%; grid-auto-flow: column; gap: 34px; }
 /* a single row of 4 full-size cards already overflows a 760px card: 2x2 instead */
 .pp-options.n4 { grid-auto-flow: row; grid-template-columns: repeat(2, auto); }

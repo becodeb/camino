@@ -3,6 +3,10 @@
 //   tapping drawn faces or pictures, never by reading. "¿Qué te gustó más?"
 //   shows only the activities the child did (asked when there are two or
 //   more). Each answer is a `survey_answer`; all of them go on the session.
+//   T38: for 3ro and up the question's own short text (`q.adult`, already
+//   said aloud and shown small in the bar) also appears large inside the
+//   card (`.pp-q-text`); 1ro/2do keep the pictures and the spoken line
+//   alone, unchanged (they are not expected to read yet).
 // - The goodbye: the session's garden (every page solved planted a seed; a
 //   boss won sent its critter or plant) with the character in it, wearing
 //   the outfit kept in the wardrobe; a big drawn "jugar otra vez" starts the
@@ -94,7 +98,8 @@ export function surveyQuestions(activities: readonly string[], grade = 1): Quest
 
 export function Survey() {
   const api = usePlaytest();
-  const [questions] = useState(() => surveyQuestions(api.flow.activities, api.session?.grade));
+  const grade = api.session?.grade ?? 1;
+  const [questions] = useState(() => surveyQuestions(api.flow.activities, grade));
   const [i, setI] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const answers = useRef<Record<string, string>>({});
@@ -138,6 +143,8 @@ export function Survey() {
         <span className="tape tape-l" aria-hidden="true" />
         <span className="tape tape-r" aria-hidden="true" />
         {q.header && <div className="pp-q-header">{q.header}</div>}
+        {/* T38: 3ro and up read; 1ro/2do keep the pictures + spoken line alone, unchanged */}
+        {grade >= 3 && <p className="pp-q-text">{q.adult}</p>}
         <div className={`pp-options n${q.options.length}`}>
           {q.options.map((o) => (
             <button key={o.value} type="button" className={`pp-option cut${picked === o.value ? ' is-picked' : ''}${picked && picked !== o.value ? ' is-other' : ''}`}

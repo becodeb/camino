@@ -7,10 +7,14 @@ import type { EventInput, SessionInput, SyncBody } from '../types.ts';
 export const MAX_BODY_BYTES = 1_000_000; // 1 MB
 export const MAX_EVENTS_PER_BATCH = 500;
 export const MAX_PAYLOAD_BYTES = 8_000; // 8 KB per event payload
+// T38: mirrors the client's own cap (childName.ts's MAX_CHILD_NAME_CHARS) — the server never trusts the client alone.
+export const MAX_CHILD_NAME_CHARS = 24;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DIVISION_RE = /^[A-Za-z]$/;
 const EVENT_TYPE_RE = /^[a-z_]{1,40}$/;
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
 
 export type ValidationResult =
   | { ok: true; value: SyncBody }
@@ -79,6 +83,17 @@ function validateSession(input: unknown): SessionInput | string {
   const demo = input.demo ?? false;
   if (typeof demo !== 'boolean') return 'session.demo must be a boolean';
 
+  // T38: trimmed, control characters stripped, capped — same rule childName.ts applies client-side, applied again
+  // here since this is the only write endpoint the kid app uses and the client is never trusted alone.
+  const childNameRaw = input.child_name ?? null;
+  if (childNameRaw !== null && typeof childNameRaw !== 'string') return 'session.child_name must be a string or null';
+  const child_name = childNameRaw === null
+    ? null
+    : (() => {
+      const cleaned = childNameRaw.replace(CONTROL_CHAR_RE, '').replace(/\s+/g, ' ').trim().slice(0, MAX_CHILD_NAME_CHARS);
+      return cleaned.length > 0 ? cleaned : null;
+    })();
+
   return {
     id,
     code,
@@ -94,6 +109,7 @@ function validateSession(input: unknown): SessionInput | string {
     adult_form: adult_form as Record<string, unknown> | null,
     current_step: current_step as string | null,
     demo,
+    child_name,
   };
 }
 

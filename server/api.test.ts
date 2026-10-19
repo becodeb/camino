@@ -147,6 +147,44 @@ dbDescribe('API against Postgres', () => {
     expect((await post({ session: newSession({ consent: 'yes' }), events: [] })).status).toBe(400);
   });
 
+  it('T38: child_name upserts (COALESCE, like every other field), is trimmed/stripped/capped server-side, and shows in /admin/summary and both export formats', async () => {
+    const app = createApp(pool, { adminToken: 'admin-t', exportToken: 'export-t', distDir });
+    const post = (body: unknown) => app.request('/api/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+    // no name at all: stays null (every grade but 4to/5to by default)
+    const anon = newSession({ code: 'Zorro 1' });
+    expect((await post({ session: anon, events: [] })).status).toBe(200);
+    expect((await pool.query('SELECT child_name FROM sessions WHERE id = $1', [anon.id])).rows[0].child_name).toBeNull();
+
+    // a name given: trimmed, control characters stripped, capped at 24
+    const named = newSession({ code: 'Zorro 2', child_name: `  Sof\u0007ía   Pérez and a very long extra tail  ` });
+    expect((await post({ session: named, events: [] })).status).toBe(200);
+    const row1 = (await pool.query('SELECT child_name FROM sessions WHERE id = $1', [named.id])).rows[0];
+    expect(row1.child_name).toBe('Sofía Pérez and a very l');
+    expect(row1.child_name.length).toBeLessThanOrEqual(24);
+
+    // a later sync with no child_name (an older client, or a retried partial batch) never erases it
+    expect((await post({ session: { ...named, child_name: undefined }, events: [] })).status).toBe(200);
+    expect((await pool.query('SELECT child_name FROM sessions WHERE id = $1', [named.id])).rows[0].child_name).toBe('Sofía Pérez and a very l');
+
+    // a non-string child_name is refused, same as any other malformed field
+    expect((await post({ session: newSession({ child_name: 123 }), events: [] })).status).toBe(400);
+
+    // /api/admin/summary carries it
+    const sum = await (await app.request('/api/admin/summary', { headers: { authorization: 'Bearer admin-t' } })).json() as { sessions: Array<{ session_id: string; child_name: string | null }> };
+    const summaryRow = sum.sessions.find((s) => s.session_id === named.id);
+    expect(summaryRow?.child_name).toBe('Sofía Pérez and a very l');
+    const anonRow = sum.sessions.find((s) => s.session_id === anon.id);
+    expect(anonRow?.child_name).toBeNull();
+
+    // both export formats
+    const jsonBody = await (await app.request('/api/export?format=json', { headers: { authorization: 'Bearer export-t' } })).json() as { sessions: Array<{ id: string; child_name: string | null }> };
+    expect(jsonBody.sessions.find((s) => s.id === named.id)?.child_name).toBe('Sofía Pérez and a very l');
+    const csv = await (await app.request('/api/export?format=csv&table=sessions', { headers: { authorization: 'Bearer export-t' } })).text();
+    expect(csv.split('\n')[0]).toContain('child_name');
+    expect(csv).toContain('Sofía Pérez and a very l');
+  });
+
   it('v_activity_time counts a free-play visit whole (activity_end) and the other activities by their pages', async () => {
     const app = createApp(pool, { distDir });
     const session = newSession();

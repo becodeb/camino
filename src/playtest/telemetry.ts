@@ -82,6 +82,8 @@ export interface SessionRecord {
   current_step: string | null;
   /** T14: a demo session (the adult's demo mode): stored, but out of the data. */
   demo?: boolean;
+  /** T38: the child's first name (childName.ts's `normalizeChildName`), when the name screen is on; null/absent otherwise. Makes the session no longer anonymous — see docs/prueba-piloto-datos.md. */
+  child_name?: string | null;
 }
 
 /** T18: the admin's class-wide sound setting, as /api/sync and /api/class-settings hand it out. 'link': no class override. */
@@ -96,7 +98,7 @@ export interface ClassCommand {
   cancelled: boolean;
 }
 
-export type SessionPatch = Partial<Pick<SessionRecord, 'ended_at' | 'end_reason' | 'survey' | 'adult_form' | 'current_step' | 'device'>>;
+export type SessionPatch = Partial<Pick<SessionRecord, 'ended_at' | 'end_reason' | 'survey' | 'adult_form' | 'current_step' | 'device' | 'child_name'>>;
 
 export interface QueuedEvent {
   seq: number;

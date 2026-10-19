@@ -23,6 +23,8 @@ export interface PtDevice {
 export interface PtSession {
   id: string;
   code?: string;
+  /** T38: the child's first name, when the name screen was on; null/absent for every anonymous session. */
+  child_name?: string | null;
   grade: number;
   division?: string | null;
   started_at: string;
@@ -74,6 +76,12 @@ export function groupBy<T>(items: T[], keyOf: (item: T) => string): Map<string, 
     else m.set(k, [it]);
   }
   return m;
+}
+
+/** T38: how a session reads in the report's per-child lines — its given name when the name screen was on, else the anonymous code (or the raw id as a last resort). */
+export function childLabel(s: Pick<PtSession, 'child_name' | 'code' | 'id'>): string {
+  const name = s.child_name?.trim();
+  return name ? name : (s.code ?? s.id);
 }
 
 export function count<T>(items: T[], keyOf: (item: T) => string): Record<string, number> {
@@ -582,7 +590,7 @@ export type Profile = 'racer' | 'collector' | 'dresser' | 'explorer' | 'keyboard
 
 export interface ChildProfile {
   sessionId: string;
-  /** The anonymous session code (e.g. "Zorro 27") — never the UUID — for reading the evidence list. */
+  /** T38: the child's name when the name screen gave one, else the anonymous session code (e.g. "Zorro 27") — never the UUID — for reading the evidence list (`childLabel`). */
   code: string;
   profile: Profile;
   evidence: string;
@@ -641,7 +649,7 @@ function collectChildSignals(sessions: PtSession[], events: PtEvent[]): ChildSig
     const physicalTypingKeys = rows.filter((e) => e.type === 'typing' && e.payload.input === 'physical').length;
     return {
       sessionId: s.id,
-      code: s.code ?? s.id,
+      code: childLabel(s),
       racesStarted: starts.length,
       racesAgain: starts.filter((e) => e.payload.again === true).length,
       cups: lastCups,

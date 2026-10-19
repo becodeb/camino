@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUDGET_MS, STEPS, canGamesAll, canOpenSurvey, initialFlow, isLiveStep, reduce, routeComplete, stepAfter, timeOnStep, wrapPending, wrapTarget, type FlowAction, type FlowState } from './flow';
+import { BUDGET_MS, STEPS, canEndNow, canGamesAll, canOpenSurvey, canSkip, initialFlow, isLiveStep, reduce, routeComplete, stepAfter, timeOnStep, wrapPending, wrapTarget, type FlowAction, type FlowState } from './flow';
 
 const walk = (state: FlowState, n: number, t0 = 0) => {
   let s = state;
@@ -191,5 +191,23 @@ describe('the playtest flow', () => {
     const wardrobe = walk(initialFlow(0), 6);
     expect(wardrobe.step).toBe('wardrobe');
     expect(act(wardrobe, { type: 'games_all' }).change).toMatchObject({ from: 'wardrobe', to: 'free_play', reason: 'games_all' });
+  });
+
+  it('T38: the name screen is an ordinary step, reached only when `nameOn` rides on the one `next` that leaves setup', () => {
+    // nameOn omitted (every other `next`/`skip` in the app): straight to character, exactly as before
+    expect(act(initialFlow(0), { type: 'next' }).state.step).toBe('character');
+    expect(act(initialFlow(0), { type: 'next', nameOn: false }).state.step).toBe('character');
+    // nameOn true: setup -> name -> character, then the rest of the route is unaffected
+    let s = act(initialFlow(0), { type: 'next', nameOn: true }).state;
+    expect(s.step).toBe('name');
+    s = act(s, { type: 'next' }).state; // a later `nameOn` (there is none downstream) never matters again
+    expect(s.step).toBe('character');
+    expect(walk(s, 5).step).toBe('wardrobe');
+    // skippable, end-now-able and live, like `character` (CHILD_STEPS)
+    expect(canSkip('name')).toBe(true);
+    expect(canEndNow('name')).toBe(true);
+    expect(isLiveStep('name')).toBe(true);
+    const named = act(initialFlow(0), { type: 'next', nameOn: true }).state;
+    expect(act(named, { type: 'skip' }).state.step).toBe('character');
   });
 });

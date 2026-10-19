@@ -41,6 +41,7 @@ import { clearCaption, installCaptions, setCaptions } from './captions';
 import { Captions } from './Captions';
 import { PLAYTEST_UNLOCKS } from './WardrobeStep';
 import { withName } from './characterName';
+import { nameParamFromUrl, nameScreenOn } from './childName';
 import { holdHash } from './hashHold';
 import { AdultControls } from './AdultControls';
 import { PlaytestContext, type AdultHelpKind, type AdultHelpVia, type HandState, type LevelTrack, type PlaytestApi } from './context';
@@ -177,7 +178,9 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     setHand(null);
     level.current = null;
     setSession(tel.startSession(input));
-    apply({ type: 'next' });
+    // T38: decided once, right as the session starts (the grade is known, nothing else is yet)
+    const nameOn = nameScreenOn(input.grade, nameParamFromUrl(typeof location !== 'undefined' ? location.search : ''));
+    apply({ type: 'next', nameOn });
   }, [tel, apply]);
 
   const newSession = useCallback(() => {

@@ -27,14 +27,24 @@
 //   same as any other mid-step interruption.
 // - The adult's demo tools (`goto`, `route_done`) jump anywhere.
 // Round 2 dropped the session-code screen and the adult form step.
+//
+// T38: an optional `name` step between `setup` and `character` ("¿Cómo te
+// llamás?", NamePrompt.tsx), on by default for 4to/5to and toggled by
+// `?nombre=si|no` for any grade (childName.ts's `nameScreenOn`). The flow
+// itself stays unconditional (`name` is always in STEPS/CHILD_STEPS, so the
+// generic skip/end-now/resume/demo-goto machinery already covers it); only
+// the single `setup` → `next` transition is conditional, via the `nameOn`
+// carried on that one `FlowAction` (computed once, where the session starts,
+// from the just-known grade) — every other `next`/`skip` call in the app
+// omits it and nothing downstream needs to know whether this session asked.
 
 export const STEPS = [
-  'setup', 'character', 'tool_check', 'ladder', 'free_play', 'typing', 'wardrobe', 'survey', 'goodbye', 'class_end',
+  'setup', 'name', 'character', 'tool_check', 'ladder', 'free_play', 'typing', 'wardrobe', 'survey', 'goodbye', 'class_end',
 ] as const;
 export type StepId = typeof STEPS[number];
 
 /** The child's part: what "end now" cuts short, and what can be skipped. */
-export const CHILD_STEPS: readonly StepId[] = ['character', 'tool_check', 'ladder', 'free_play', 'typing', 'wardrobe'];
+export const CHILD_STEPS: readonly StepId[] = ['name', 'character', 'tool_check', 'ladder', 'free_play', 'typing', 'wardrobe'];
 
 /** The core route, in order: done when the child leaves the wardrobe having been through these. */
 export const ROUTE: readonly StepId[] = ['tool_check', 'ladder', 'free_play', 'typing', 'wardrobe'];
@@ -42,6 +52,8 @@ export const ROUTE: readonly StepId[] = ['tool_check', 'ladder', 'free_play', 't
 /** Planned time per step (the brief's minutes), recorded with each step change; nothing is cut when it runs out. */
 export const BUDGET_MS: Partial<Record<StepId, number>> = {
   setup: 30_000,
+  /** T38: the name screen, when it is on (nameScreenOn). */
+  name: 30_000,
   character: 60_000,
   tool_check: 2 * 60_000,
   ladder: 8 * 60_000,
@@ -91,7 +103,8 @@ export interface StepChange {
 }
 
 export type FlowAction =
-  | { type: 'next' }
+  /** T38: `nameOn` (only meaningful leaving `setup`) says whether this session's name screen is on (childName.ts's `nameScreenOn`); every other `next` omits it. */
+  | { type: 'next'; nameOn?: boolean }
   | { type: 'skip' }
   | { type: 'end_now' }
   | { type: 'did'; activity: string }
@@ -142,11 +155,11 @@ export function wrapTarget(state: FlowState): StepId {
 /** Whether "quedan 5 minutos" still has to move the child on from the step on screen (free play after both is the end). */
 export const wrapPending = (state: FlowState) => !!state.wrapUp && !(state.step === 'free_play' && wrapTarget(state) === 'free_play');
 
-/** Where `next` goes, and whether that finishes the route. */
-function nextOf(state: FlowState): { to: StepId; done?: boolean } | null {
+/** Where `next` goes, and whether that finishes the route. `nameOn`: T38's name screen, only consulted leaving `setup`. */
+function nextOf(state: FlowState, nameOn?: boolean): { to: StepId; done?: boolean } | null {
   const { step } = state;
   if (step === 'goodbye' || step === 'class_end') return null;
-  if (step === 'setup') return { to: 'character' };
+  if (step === 'setup') return { to: nameOn ? 'name' : 'character' };
   if (state.endedEarly) return step === 'survey' ? { to: 'goodbye' } : null;
   if (state.wrapUp) {
     const to = wrapTarget(state);
@@ -188,7 +201,7 @@ export function reduce(state: FlowState, action: FlowAction, now: number): Trans
     case 'next':
     case 'skip': {
       if (action.type === 'skip' && !canSkip(state.step)) return same;
-      const n = nextOf(state);
+      const n = nextOf(state, action.type === 'next' ? action.nameOn : undefined);
       if (!n) return same;
       const t = go(state, n.to, action.type, now, n.done ? { routeDone: true } : {});
       return n.done ? { ...t, routeDoneNow: true } : t;

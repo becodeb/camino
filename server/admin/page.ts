@@ -4,10 +4,11 @@
 //   signed HttpOnly cookie (12 h); nothing secret is kept by the page.
 // - The class panel: three big buttons, "Quedan 5 minutos", "Terminar la
 //   clase" (with a confirm) and T37's "Juegos para todos", plus "Cancelar
-//   aviso" / "Cancelar juegos para todos"; who is playing now, on which
-//   step, who finished the route ("terminó") and who did the survey. Demo
-//   sessions are not listed (only counted). T28: one short line under each
-//   button says what it actually does on the computers.
+//   aviso" / "Cancelar juegos para todos"; who is playing now (T38: by name
+//   when the name screen gave one, "—" otherwise), on which step, who
+//   finished the route ("terminó") and who did the survey. Demo sessions
+//   are not listed (only counted). T28: one short line under each button
+//   says what it actually does on the computers.
 // - T18: "Sonido" — "Con sonido" / "Sin sonido" / "Como diga el link",
 //   highlighting the one in effect and when it expires (4 hours).
 // - Every session (older ones too), the delete button and the exports.
@@ -215,7 +216,7 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
   </div>
   <div class="scroll">
     <table class="class-table">
-      <thead><tr><th>Código</th><th>Grado</th><th>Está en</th><th>Terminó</th><th>Encuesta</th><th>Visto</th></tr></thead>
+      <thead><tr><th>Nombre</th><th>Código</th><th>Grado</th><th>Está en</th><th>Terminó</th><th>Encuesta</th><th>Visto</th></tr></thead>
       <tbody id="class-rows"></tbody>
     </table>
   </div>
@@ -338,6 +339,7 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
       var active = !s.ended_at && (now - new Date(s.last_seen_at).getTime()) < data.active_window_minutes * 60000;
       var where = s.ended_at ? ('terminada' + (s.end_reason === 'class_end' ? ' (fin de clase)' : '')) : (STEP[s.current_step] || s.current_step || '—');
       return '<tr class="' + (active ? 'active-row' : '') + '" data-id="' + escapeHtml(s.session_id) + '">' +
+        '<td>' + escapeHtml(s.child_name || '—') + '</td>' +
         '<td>' + escapeHtml(s.code) + '</td>' +
         '<td>' + escapeHtml(s.grade) + '°</td>' +
         '<td>' + escapeHtml(where) + '</td>' +
@@ -346,7 +348,7 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
         '<td>' + fmtAgo(s.last_seen_at) + '</td>' +
         '</tr>';
     });
-    $('class-rows').innerHTML = rows.join('') || '<tr><td colspan="6">Nadie jugando en esta clase todavía.</td></tr>';
+    $('class-rows').innerHTML = rows.join('') || '<tr><td colspan="7">Nadie jugando en esta clase todavía.</td></tr>';
     $('demo-note').textContent = data.demo_hidden ? ('Hay ' + data.demo_hidden + ' sesión(es) de demo: no se muestran ni se exportan, y se borran solas a las 24 horas.') : '';
   }
 

@@ -7,15 +7,30 @@ must emit event payloads exactly matching the shapes below — this document
 is the contract between the front end (T2–T8) and the analysis that will
 read this data later.
 
-## Anonymous by design
+## Anonymous by design (unless the T38 name screen is on)
 
-`sessions` and `events` never store a name, a photo, audio or free text
-typed by a child. `device` is whatever the client puts there (user agent,
-screen size, touch capability); the server never adds the request IP or any
-other header to it. Under Argentina's Ley 25.326 (art. 2), data that cannot
-be tied to a determined or determinable person is not personal data — this
-schema is designed to stay that way. If a teacher follows individual
-children, the names stay on the teacher's own paper, never in this database.
+`sessions` and `events` never store a photo, audio or free text typed by a
+child. `device` is whatever the client puts there (user agent, screen size,
+touch capability); the server never adds the request IP or any other header
+to it. Under Argentina's Ley 25.326 (art. 2), data that cannot be tied to a
+determined or determinable person is not personal data — this schema is
+designed to stay that way whenever the name screen is off (every grade
+except 4to/5to by default, and any grade with `?nombre=no`).
+
+**T38 exception:** 4to and 5to (by default) and any grade with `?nombre=si`
+show a first screen asking the child's name, so the teacher can read each
+child's level individually and spot who knows less than expected. When this
+is on, `sessions.child_name` holds that name and **the session is no longer
+anonymous: it is personal data of a minor**, kept for the school's own
+internal use (the user — the school — decides how that is covered; this app
+only stores what it is given). A name is **never shown to another child**
+(no rankings, no name on the other children's screens, never spoken aloud —
+NamePrompt.tsx's own note on why) and never leaves the session row it
+belongs to (it is not mirrored into any event payload). Same retention as
+the rest of the row (`RETENTION_DAYS`); a demo session's name is discarded
+with it after 24 hours, like everything else demo. If a teacher follows
+individual children without this screen on, the names stay on the teacher's
+own paper, never in this database.
 
 ## Table `sessions`
 
@@ -35,10 +50,11 @@ One row per playtest session (one child, one sitting).
 | `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang, captions?, captions_set?, sound?, sound_source?, voice?}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language; since round 2 `captions` (on-screen text on now: set at the start and updated by every 💬 toggle, see `captions`) and `captions_set` (`'grade'`: the default, on from 3ro; `'setup'`: forced on or off at setup); since T18 `sound` (the effective sound setting now) and `sound_source` (`'admin'`\|`'url'`\|`'adult'`\|`'default'`: which layer decided it, see the `sound` event and the table `class_settings`); since T27 `voice` (this device's "Voz" switch now: `true` unless the adult turned it off here; independent of `sound` — off, speech is silenced but sfx/music keep playing — and, unlike the adult's `sound` override, persisted so it survives a new session on this computer). | 1 (device capability vs. tool failures), 3 (captions, sound, voice) |
 | `survey` | jsonb, nullable | See "survey_answer" below; the final answers, keyed by question. | 9 |
 | `adult_form` | jsonb, nullable | The adult's form: `{engagement: 'low'|'mid'|'high'|null, help_needed: 'none'|'some'|'a_lot'|null, comment?: string, step?: string}`. Round 1: a step after the goodbye, both answers required. Since round 2 it is optional, from the corner menu ("Comentario del adulto") at any time of the session; any answer may be left out (`null`), saving again replaces it, and `step` is the flow step it was saved on (see the `adult_form` event). Most round-2 sessions will have none. | 3, 5 |
-| `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, and since T14 `'class_end'`; round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. | 5 |
+| `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, since T14 `'class_end'`, and since T38 `'name'` — only for a session whose name screen was on; round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. | 5 |
 | `created_at` | timestamptz | First time this session row was written. | — |
 | `last_seen_at` | timestamptz | Updated on every sync; drives the admin page's "active now" indicator. Since T14 a device with a session open syncs at least every ~10 s, so this is also the class's "seen" time. | 5 |
 | `demo` | boolean, default false | T14: a session played in demo mode (the adult showing or trying the pilot; see "Demo mode" below). Stored like any other, but left out of `/api/export`, `/api/admin/*` lists and counts and every SQL view, and deleted 24 hours after it started. A later sync never turns it back to `false` (migration `008_class_control.sql`). | — |
+| `child_name` | text, nullable | T38 (migration `014_child_name.sql`): the child's first name, typed once on "¿Cómo te llamás?" before the character choice — on by default for 4to/5to, optional for any grade via `?nombre=si` (`?nombre=no` always turns it off). `NULL` for every session where that screen is off (the default for 1ro–3ro). Trimmed, control characters stripped, capped at 24 characters, both client-side (`childName.ts`) and again server-side (`validate.ts`) — the server never trusts the client alone. Shown in `/admin`'s live class list (first column, "—" when absent), exported as its own column, and read by `tools/analyze-playtest.mjs`'s per-child lines and profiles (`report.ts`'s `childLabel`: the name when present, else the anonymous `code`). **Makes the session personal data of a minor — see "Anonymous by design" above.** Same retention as the rest of the row; never mirrored into any event payload, never shown to another child. | 3 |
 
 ## Table `class_commands`
 
@@ -372,7 +388,10 @@ when the child opens a page behind another door than the page before: round
 1 from the doors page or the bar; round 2 from "¿Cómo seguís?", which comes
 between pages, so every pick of a way on logs one). A probe opened from the adult's corner menu
 ("Abrir «Hacé tu juego»", any grade) is a pick with `by: 'adult'`.
-Wardrobe pieces are in `wardrobe` events.
+Wardrobe pieces are in `wardrobe` events. T38: `{activity: 'name'}` is
+logged when the name screen's "Listo" is pressed (the name itself is never
+in this payload — see `sessions.child_name` above); nothing is logged when
+the screen is off or skipped by the adult.
 
 ### `ladder_step`
 One item of the fixed placement-ladder item bank (`src/playtest/ladder.ts`),
@@ -1067,7 +1086,11 @@ or more. `play_again`: `'yes'|'no'`. The first tap answers (the choice is
 said aloud and the next question comes). The
 full set of answers is also mirrored onto `sessions.survey` (keyed by
 `question`) when the survey step ends, so a session's answers can be read
-without scanning events.
+without scanning events. T38: for 3ro and up each question's own short text
+(already said aloud and shown small in the bar) also appears large inside
+the card (`.pp-q-text`, `closing.tsx`'s `Survey`); 1ro/2do are unchanged
+(pictures and the spoken line alone, no reading expected). This is a
+display-only change: no new field, no new event.
 
 ### `idle`
 No pointer or key input for 30 s. One event per idle stretch, logged when
@@ -1119,7 +1142,11 @@ not "finished the path".
 `skip` is the adult skipping a step (or a step with nothing to show);
 `end_now` is the adult's "end the session" gesture (straight to the survey).
 Round 2: the first `step` goes from `setup` straight to `character` (no
-`code` step), and the last one reaches `goodbye` (no `adult_form` step).
+`code` step), and the last one reaches `goodbye` (no `adult_form` step). T38:
+when the name screen is on for a session, the first `step` instead goes
+`setup` → `name`, and the next one `name` → `character` (the screen itself
+is a child step like any other: skippable from the corner menu, counted by
+"end now"); every other session is unaffected.
 
 T14 (the classroom round): the core route is `character` → `tool_check` →
 `ladder` → `free_play` → `typing` → `wardrobe`, and then `free_play` again

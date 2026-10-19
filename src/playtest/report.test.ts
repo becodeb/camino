@@ -314,6 +314,16 @@ describe('classifyChild and profileReport (T37)', () => {
     expect(p.sessionId).toBe('uuid-1');
   });
 
+  it('T38: childLabel (via profileReport) prefers the child\'s name over the anonymous code; falls back to the code, then the raw id', () => {
+    const sessions: PtSession[] = [
+      session({ id: 'a', grade: 4, code: 'Zorro 27', child_name: 'Sofía' }),
+      session({ id: 'b', grade: 4, code: 'Coatí 4', child_name: null }),
+      session({ id: 'c', grade: 4, child_name: '   ' }), // blank: not a usable name
+    ];
+    const r = profileReport(sessions, []);
+    expect(r.children.map((c) => c.code)).toEqual(['Sofía', 'Coatí 4', 'c']);
+  });
+
   it('profileReport groups by grade, tallies the distribution, shows the session code, and flags missing race data', () => {
     const sessions: PtSession[] = [
       session({ id: 'a', grade: 1, code: 'Zorro 27' }),

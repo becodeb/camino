@@ -19,6 +19,7 @@ export const SESSION_COLUMNS = [
   'survey',
   'adult_form',
   'current_step',
+  'child_name',
   'created_at',
   'last_seen_at',
 ];

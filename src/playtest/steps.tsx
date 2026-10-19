@@ -27,6 +27,7 @@ import type { StepId } from './flow';
 import { gradeFromUrl } from './gradeParam';
 import { GRADES, GRADE_LABEL } from './labels';
 import { Goodbye, Survey } from './closing';
+import { NamePrompt } from './NamePrompt';
 import { CaptionsIcon, GradeArt } from './round2Art';
 import { fetchClassSettings } from './runtime';
 import { currentSound, ensureSoundSettingStarted } from './soundSetting';
@@ -182,6 +183,7 @@ function Character() {
 
 export const STEP_VIEWS: Record<StepId, ComponentType<StepViewProps>> = {
   setup: Setup,
+  name: NamePrompt,
   character: Character,
   tool_check: ToolCheck,
   ladder: Ladder,

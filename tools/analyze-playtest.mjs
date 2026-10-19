@@ -10,7 +10,7 @@
 
 import { readFileSync } from 'node:fs';
 import {
-  analyze, localTime,
+  analyze, childLabel, localTime,
 } from '../src/playtest/report.ts';
 
 function parseArgs(argv) {
@@ -61,7 +61,7 @@ function reportDropped(dropped, totalSessions) {
     return;
   }
   const byReason = {};
-  for (const d of dropped) (byReason[d.reason] ??= []).push(d.session.code ?? d.session.id);
+  for (const d of dropped) (byReason[d.reason] ??= []).push(childLabel(d.session));
   const labels = {
     demo: 'sesiones de demo',
     short: 'sesiones muy cortas (≤10 eventos o <60 s)',

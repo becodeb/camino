@@ -39,8 +39,8 @@ async function upsertSessionAndEvents(
     await client.query(
       `INSERT INTO sessions (
          id, code, grade, division, consent, started_at, ended_at, end_reason,
-         app_version, device, survey, adult_form, current_step, last_seen_at, demo
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now(), $14)
+         app_version, device, survey, adult_form, current_step, child_name, last_seen_at, demo
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, now(), $15)
        ON CONFLICT (id) DO UPDATE SET
          code = COALESCE(EXCLUDED.code, sessions.code),
          grade = COALESCE(EXCLUDED.grade, sessions.grade),
@@ -54,6 +54,7 @@ async function upsertSessionAndEvents(
          survey = COALESCE(EXCLUDED.survey, sessions.survey),
          adult_form = COALESCE(EXCLUDED.adult_form, sessions.adult_form),
          current_step = COALESCE(EXCLUDED.current_step, sessions.current_step),
+         child_name = COALESCE(EXCLUDED.child_name, sessions.child_name),
          last_seen_at = now(),
          demo = sessions.demo OR EXCLUDED.demo`,
       [
@@ -70,6 +71,7 @@ async function upsertSessionAndEvents(
         session.survey === null ? null : JSON.stringify(session.survey),
         session.adult_form === null ? null : JSON.stringify(session.adult_form),
         session.current_step,
+        session.child_name ?? null,
         session.demo === true,
       ],
     );

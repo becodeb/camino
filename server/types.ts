@@ -17,6 +17,8 @@ export interface SessionInput {
   current_step?: string | null;
   /** A demo session (T14): stored, but out of the export, /admin and the views; deleted after 24 h. */
   demo?: boolean;
+  /** T38: the child's first name, when the name screen is on (4to/5to by default, `?nombre=`); makes the session no longer anonymous. */
+  child_name?: string | null;
 }
 
 export interface EventInput {

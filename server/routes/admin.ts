@@ -7,8 +7,9 @@
 // header `x-camino-admin: 1` (a cross-site form cannot set it; SameSite=
 // Strict already keeps the cookie off cross-site requests).
 //
-// Routes: a live summary for /admin (demo sessions left out, with "terminó"
-// and the survey per session), the class commands ("quedan 5 minutos",
+// Routes: a live summary for /admin (demo sessions left out, with the
+// child's name when the T38 name screen gave one, "terminó" and the survey
+// per session), the class commands ("quedan 5 minutos",
 // "terminar la clase", T37's "juegos para todos", "cancelar aviso" /
 // "cancelar juegos para todos"), the sound setting (T18: "Con sonido" /
 // "Sin sonido" / "Como diga el link"), the same JSON/CSV export as
@@ -102,7 +103,7 @@ export function adminRoute(pool: pg.Pool, opts: AdminOptions | string | undefine
   app.get('/summary', async (c) => {
     const sessionsQuery = pool.query(
       `SELECT
-         s.id AS session_id, s.code, s.grade, s.division, s.started_at, s.last_seen_at,
+         s.id AS session_id, s.code, s.child_name, s.grade, s.division, s.started_at, s.last_seen_at,
          s.current_step, s.ended_at, s.end_reason,
          EXTRACT(EPOCH FROM (COALESCE(s.ended_at, s.last_seen_at) - s.started_at)) AS duration_seconds,
          (SELECT count(*) FROM events e WHERE e.session_id = s.id) AS event_count,

@@ -20,6 +20,7 @@ import type { StepId } from './flow';
 
 /** "Ir a…": the steps, by the names the children hear. */
 export const DEMO_STEPS: { step: StepId; label: string }[] = [
+  { step: 'name', label: 'El nombre' },
   { step: 'character', label: 'Elegir el personaje' },
   { step: 'tool_check', label: 'Probar los botones' },
   { step: 'ladder', label: 'La escalera' },
