@@ -66,6 +66,8 @@ export function pickResume(raw: string | null, sessionId: string | null | undefi
     flow: {
       step: f.step, visits: f.visits, activities: f.activities, endedEarly: !!f.endedEarly,
       ...(f.routeDone ? { routeDone: true } : {}), ...(f.surveyDone ? { surveyDone: true } : {}), ...(f.wrapUp ? { wrapUp: true } : {}),
+      // T39: 4to's own route and its Arcade
+      ...(f.route === '4to' ? { route: '4to' as const } : {}), ...(f.arcadeOpen ? { arcadeOpen: true } : {}),
     },
     progress: typeof o.progress === 'string' ? o.progress : null,
     parts: o.parts && typeof o.parts === 'object' ? o.parts : {},

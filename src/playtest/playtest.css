@@ -744,10 +744,9 @@ html.pp-demo .pad > .sheet { max-width: calc(100vw - var(--demo-w) - 36px - 2 * 
 
 /* ------------------------------------------------ T39: 4to's Arcade, opened from the Workshop */
 .pp-arcade-btn {
+  --fill: #e2eece;
   display: inline-flex; align-items: center; gap: 6px;
   min-height: 48px; padding: 4px 14px 4px 8px; margin-right: 8px;
-  border: 2.5px solid var(--ink); border-radius: 12px; background: #e2eece;
-  box-shadow: 3px 3px 0 var(--shadow);
   font: 700 20px var(--body); color: var(--ink); cursor: pointer;
   animation: pp-arcade-glow 1.6s ease-in-out 3;
 }
@@ -764,15 +763,15 @@ html.pp-demo .pad > .sheet { max-width: calc(100vw - var(--demo-w) - 36px - 2 * 
 .pp-arcade-open-title { margin: 0; font: 700 clamp(44px, 5.6vw, 66px)/1.05 var(--body); color: var(--ink); text-align: center; }
 .pp-arcade-open-sub { margin: 0; font: 400 clamp(22px, 2.3vw, 28px)/1.3 var(--body); color: var(--ink); text-align: center; max-width: 30ch; }
 .pp-arcade-open-btns { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
-.pp-arcade-go, .pp-arcade-stay {
-  min-height: 58px; padding: 8px 26px; border: 3px solid var(--ink); border-radius: 14px;
-  font: 700 26px var(--body); color: var(--ink); cursor: pointer; box-shadow: 4px 4px 0 var(--shadow);
+.pp-arcade-open .pp-arcade-go, .pp-arcade-open .pp-arcade-stay {
+  min-height: 62px; padding: 8px 28px;
+  font: 700 26px/1.1 var(--body); color: var(--ink); cursor: pointer;
 }
-.pp-arcade-go { background: #f5c64f; }
-.pp-arcade-stay { background: var(--paper); }
+.pp-arcade-open .pp-arcade-go { --fill: #f5c64f; }
+.pp-arcade-open .pp-arcade-stay { --fill: var(--sheet); }
 @media (prefers-reduced-motion: reduce) { .pp-arcade-btn, .pp-arcade-open-card { animation: none; } }
 .pp-arcade-h { margin: 0 0 6px; font: 700 clamp(40px, 4.6vw, 58px)/1 var(--body); color: var(--ink); text-align: center; }
-.pp-fp-wardrobe { display: grid; place-items: center; width: 100%; height: 100%; }
+.pp-fp-wardrobe { display: grid; place-items: center; width: 100%; height: 100%; min-width: clamp(220px, 22vw, 320px); min-height: clamp(200px, 21vw, 250px); }
 
 /* ------------------------------------------------ T39: 4to's long ladder: the climbing path beside the page */
 .pp-climb-wrap { display: grid; grid-template-columns: 112px minmax(0, 1fr); min-height: 100dvh; }

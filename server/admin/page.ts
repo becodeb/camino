@@ -173,7 +173,7 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
         <svg viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="32" r="22" fill="#fbf7ee" stroke="#2b2622" stroke-width="3.5"/><path d="M30 32 L30 17 M30 32 L41 38" stroke="#2b2622" stroke-width="4" stroke-linecap="round" fill="none"/><path d="M22 6 L38 6" stroke="#2b2622" stroke-width="4" stroke-linecap="round"/></svg>
         Quedan 5 minutos
       </button>
-      <p class="big-note">Cada compu termina lo que está haciendo y pasa al vestidor y la encuesta.</p>
+      <p class="big-note">Cada compu termina lo que está haciendo y pasa al vestidor y la encuesta (en 4to, directo a la encuesta).</p>
     </div>
     <div class="big-wrap">
       <button type="button" class="big stop" id="end-class">
@@ -187,7 +187,7 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
         <svg viewBox="0 0 60 60" aria-hidden="true"><rect x="8" y="20" width="44" height="24" rx="11" fill="#fbf7ee" stroke="#2b2622" stroke-width="3.5"/><path d="M18 28 L18 36 M14 32 L22 32" stroke="#2b2622" stroke-width="3.6" stroke-linecap="round"/><circle cx="38" cy="29" r="3.4" fill="#8fae4f" stroke="#2b2622" stroke-width="2"/><circle cx="46" cy="35" r="3.4" fill="#de8a56" stroke="#2b2622" stroke-width="2"/></svg>
         Juegos para todos
       </button>
-      <p class="big-note">Cada compu pasa a los juegos (la carrera y los demás), aunque no haya terminado; lo que estaba haciendo queda guardado.</p>
+      <p class="big-note">Cada compu pasa a los juegos (la carrera y los demás; en 4to se abre el Arcade), aunque no haya terminado; lo que estaba haciendo queda guardado.</p>
     </div>
   </div>
   <p class="class-state" id="class-state" role="status"></p>

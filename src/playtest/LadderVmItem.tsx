@@ -164,14 +164,18 @@ export function LadderVmItem({ item, extra, onEnd, watch, autoNextMs = 8000 }: V
     if (seen.has(kind)) return;
     seen.add(kind);
     const root = rootRef.current;
+    let run: ReturnType<typeof playGhost> | null = null;
+    // any real input stops it (as the level pages' ghost)
+    const stop = (e: Event) => { if (e.isTrusted) run?.cancel(); };
     const t = window.setTimeout(() => {
-      const run = playGhost(root, kind === 'predict'
+      run = playGhost(root, kind === 'predict'
         ? [{ do: 'point', at: ['.pp-vm-spot'] }, { do: 'wait', ms: 500 }]
         : [{ do: 'drag', from: '.ws-pal-item[data-op="show"]', to: '.ws-paper' }, { do: 'point', at: ['.ws-go'] }], { pace: 0.9 });
       log('ghost_demo', { level_id: item.id, kind: 'intro' });
-      void run.done;
     }, 1400);
-    return () => clearTimeout(t);
+    window.addEventListener('pointerdown', stop, true);
+    window.addEventListener('keydown', stop, true);
+    return () => { clearTimeout(t); run?.cancel(); window.removeEventListener('pointerdown', stop, true); window.removeEventListener('keydown', stop, true); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

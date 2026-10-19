@@ -129,7 +129,8 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
    * it once the device has moved on.
    */
   const finishSession = useCallback((patch: Parameters<typeof tel.updateSession>[0], flowAtEnd: FlowState) => {
-    const empty = flowAtEnd.activities.length === 0 && !routeOf(flowAtEnd).some((s) => visited(flowAtEnd, s));
+    // T39: 4to's Arcade (free_play, not on its core route) counts as played too, as it always did for the default route
+    const empty = flowAtEnd.activities.length === 0 && ![...routeOf(flowAtEnd), 'free_play' as const].some((s) => visited(flowAtEnd, s));
     tel.updateSession(empty && patch.end_reason ? { ...patch, end_reason: 'abandoned' } : patch);
     const s = tel.session;
     if (s && s.ended_at && !s.demo && !empty) {

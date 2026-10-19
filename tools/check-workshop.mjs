@@ -402,6 +402,11 @@ try {
   await shot('ws-arcade');
   ok((await ws()).arcade === true, 'the Arcade flag is set');
   await closeParty();
+  // T39: on 4to's route the Workshop is a step; challenges 1–5 open the Arcade with its announcement: stay in the Workshop
+  await p.waitForSelector('.pp-arcade-open', { timeout: 6000 }).then(async () => {
+    await p.locator('[data-act="arcade-stay"]').click();
+    ok(true, 'T39: "¡Se abrió el Arcade!" shown; "Seguir en el taller" keeps the Workshop');
+  }, () => {});
 
   // ---------------------------------------------------------------- 6: speed in an expression
   await p.waitForSelector('[data-card="goal"]', { timeout: 10_000 });
@@ -502,8 +507,9 @@ try {
   ok(await p.locator('.ws-star-slot.is-solved').count() === 7, 'the strip shows seven stars');
   await p.locator('[data-act="close-free"]').click().catch(() => {});
 
-  // leave the Workshop (workshop_end) through free play's own "volver al menú"
-  await p.locator('.pp-menu-back').click();
+  // leave the Workshop (workshop_end) through free play's own "volver al menú" (T39, 4to's route: the Arcade button)
+  if (await p.locator('.level-bar [data-act="arcade"]').count()) await p.locator('.level-bar [data-act="arcade"]').click();
+  else await p.locator('.pp-menu-back').click();
   await p.waitForSelector('.pp-fp-card', { timeout: 10_000 });
   await p.waitForTimeout(6500); // the queue syncs every 5 s
 
