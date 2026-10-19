@@ -119,7 +119,7 @@ const four = await page();
 let p = four.p;
 const s4 = await newSession(p, '4to');
 const menu = await p.locator('.pp-fp-card').evaluateAll((els) => els.map((e) => e.dataset.activity));
-ok(menu.join(',') === 'rule_game,editor,recess,game_maker', `4to menu: ${menu.join(',')}`);
+ok(menu.join(',') === 'workshop,rule_game,editor,recess,game_maker', `4to menu (T40: the Workshop first): ${menu.join(',')}`);
 await p.locator('.pp-fp-card[data-activity="game_maker"]').click();
 
 // 1 move

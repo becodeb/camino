@@ -280,6 +280,78 @@ dbDescribe('API against Postgres', () => {
     expect(t.rows).toEqual([{ seconds: 245 }]);
   });
 
+  it('T40: v_workshop_challenges reads each child\'s challenges (predict, investigate, help, solved or skipped); v_workshop_by_grade sums them up; demo sessions stay out', async () => {
+    const app = createApp(pool, { distDir });
+    const post = (session: Record<string, unknown>, events: unknown[]) => app.request('/api/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session, events }),
+    });
+    const ev = (seq: number, type: string, payload: Record<string, unknown>) => event(seq, { type, payload });
+    const ch = (seq: number, n: number, phase: string, o: Record<string, unknown> = {}) =>
+      ev(seq, 'workshop_challenge', { n, phase, attempts: 0, help_level: 0, runs: 0, ms: 0, ...o });
+    // 4to, child a: predicts wrong, investigates right, solves 1–2 alone, 3 with help 2, skips 4; one free challenge; runs and edits
+    const a = newSession({ grade: 4, child_name: 'Sofía' });
+    expect((await post(a, [
+      ch(0, 1, 'start'),
+      ch(1, 1, 'predict', { predict_choice: 'leaves', predict_correct: false }),
+      ch(2, 1, 'solved', { runs: 3, attempts: 1, ms: 120_000, predict_choice: 'leaves', predict_correct: false }),
+      ev(3, 'workshop_edit', { n: 1, edits: 12, counts: { add: 9, input: 3 }, ops: { add: { flag: 1 } }, sprites: { Suelo: 12 }, max_stack: 6 }),
+      ch(4, 2, 'start'),
+      ch(5, 2, 'investigate', { investigate_block: 'setY', investigate_correct: true }),
+      ch(6, 2, 'solved', { runs: 2, ms: 60_000, investigate_block: 'setY', investigate_correct: true }),
+      ch(7, 3, 'start'),
+      ch(8, 3, 'solved', { runs: 4, attempts: 2, help_level: 2, ms: 180_000 }),
+      ch(9, 4, 'start'),
+      ch(10, 4, 'skipped', { runs: 5, attempts: 5, help_level: 3, ms: 400_000 }),
+      ch(11, 11, 'solved', { free: true, runs: 1, ms: 30_000 }),
+      ev(12, 'workshop_run', { n: 4, ms_played: 8000, result: 'lost', lives: 0, points: 2, check: 'fail', why: 'x' }),
+      ev(13, 'workshop_run', { n: 8, ms_played: 30_000, result: 'won', lives: 1, points: 20, check: 'none' }),
+      ev(14, 'workshop_edit', { n: 3, edits: 5, counts: { duplicate: 1, input: 4 }, ops: {}, sprites: { Tronco2: 5 }, max_stack: 6 }),
+    ])).status).toBe(200);
+    // child b: predicts right, solves 1 only, then stops
+    const b = newSession({ grade: 4 });
+    expect((await post(b, [
+      ch(0, 1, 'start'),
+      ch(1, 1, 'predict', { predict_choice: 'wraps', predict_correct: true }),
+      ch(2, 1, 'solved', { runs: 1, ms: 90_000, predict_choice: 'wraps', predict_correct: true }),
+      ch(3, 2, 'start'),
+      ev(4, 'workshop_run', { n: 2, ms_played: 2000, result: 'stopped', lives: 3, points: 0, check: 'fail' }),
+    ])).status).toBe(200);
+    // a demo session never counts
+    const demo = newSession({ grade: 4, demo: true });
+    expect((await post(demo, [ch(0, 1, 'start'), ch(1, 1, 'solved', { runs: 1, ms: 5000 })])).status).toBe(200);
+
+    const { rows: va } = await pool.query('SELECT * FROM v_workshop_challenges WHERE session_id = $1 ORDER BY n', [a.id]);
+    expect(va.map((r) => r.n)).toEqual([1, 2, 3, 4, 11]);
+    expect(va[0]).toMatchObject({ child_name: 'Sofía', free: false, started: true, predict_choice: 'leaves', predict_correct: false, outcome: 'solved', attempts: 1, runs: 3 });
+    expect(Number(va[0].ms)).toBe(120_000);
+    expect(va[1]).toMatchObject({ investigate_block: 'setY', investigate_correct: true, outcome: 'solved', help_level: 0 });
+    expect(va[2]).toMatchObject({ outcome: 'solved', help_level: 2 });
+    expect(va[3]).toMatchObject({ outcome: 'skipped', help_level: 3 });
+    expect(va[4]).toMatchObject({ free: true, started: false, outcome: 'solved' });
+    const { rows: vb } = await pool.query('SELECT * FROM v_workshop_challenges WHERE session_id = $1 ORDER BY n', [b.id]);
+    expect(vb.map((r) => [r.n, r.outcome])).toEqual([[1, 'solved'], [2, null]]);
+    const { rows: vd } = await pool.query('SELECT * FROM v_workshop_challenges WHERE session_id = $1', [demo.id]);
+    expect(vd).toHaveLength(0);
+
+    const { rows } = await pool.query('SELECT * FROM v_workshop_by_grade WHERE grade = 4');
+    expect(rows).toHaveLength(1);
+    const g = rows[0];
+    expect(Number(g.sessions)).toBe(2);
+    expect(Number(g.median_core_solved)).toBe(2); // a: 3 solved, b: 1
+    expect(Number(g.max_core_solved)).toBe(3);
+    expect(Number(g.core_solved_without_help)).toBe(3); // a's 1 and 2, b's 1
+    expect(Number(g.core_skipped)).toBe(1);
+    expect(Number(g.free_solved)).toBe(1);
+    expect(Number(g.arcade_sessions)).toBe(0);
+    expect([Number(g.predicted), Number(g.predicted_right), Number(g.investigated), Number(g.investigated_right)]).toEqual([2, 1, 1, 1]);
+    expect(Number(g.median_challenge_ms)).toBe(105_000); // the median of 60k, 90k, 120k and 180k
+    expect([Number(g.runs), Number(g.runs_won), Number(g.runs_lost), Number(g.edits)]).toEqual([3, 1, 1, 17]);
+    // the admin summary counts every demo session: leave none behind
+    await pool.query('DELETE FROM sessions WHERE id = $1', [demo.id]);
+  });
+
   it('T33: v_race_by_grade sums up the races per grade; v_race_stretches_by_tier reads each stretch by its race\'s tier; demo races stay out', async () => {
     const app = createApp(pool, { distDir });
     const post = (session: Record<string, unknown>, events: unknown[]) => app.request('/api/sync', {

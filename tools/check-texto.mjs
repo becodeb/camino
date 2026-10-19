@@ -121,7 +121,7 @@ const five = await page();
 let p = five.p;
 const s5 = await newSession(p, '5to');
 const menu = await p.locator('.pp-fp-card').evaluateAll((els) => els.map((e) => e.dataset.activity));
-ok(menu.join() === 'rule_game,editor,recess,text_probe', `5to menu: ${menu.join()}`);
+ok(menu.join() === 'workshop,rule_game,editor,recess,text_probe', `5to menu (T40: the Workshop first): ${menu.join()}`);
 await p.locator('.pp-fp-card[data-activity="text_probe"]').click();
 
 // 1 move: a move block is a line

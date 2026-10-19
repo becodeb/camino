@@ -345,7 +345,7 @@ export const Stage = forwardRef<StageHandle, StageProps>(function Stage(props, r
               )}
             </g>
           ))}
-          {fx.map((f) => <g key={f.id} transform={`translate(${f.x} ${-f.y})`}><Burst hit={f.kind === 'hit'} /></g>)}
+          {fx.map((f) => <g key={f.id} className={`ws-fx ws-fx-${f.kind}`} transform={`translate(${f.x} ${-f.y})`}><Burst hit={f.kind === 'hit'} /></g>)}
           {monitors.length > 0 && (
             <g className="ws-monitors" transform="translate(-234 -174)">
               {monitors.map((v, i) => {

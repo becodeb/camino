@@ -472,7 +472,7 @@ const SESSIONS = {
     // free play: the limited workshop (sheet 15)
     await p.waitForSelector('.pp-menu');
     const cards = await p.locator('.pp-fp-card').evaluateAll((els) => els.map((e) => e.dataset.activity));
-    ok(cards.join(',') === 'rule_game,editor,recess,text_probe', `5to menu: ${cards.join(',')}`);
+    ok(cards.join(',') === 'workshop,rule_game,editor,recess,text_probe', `5to menu (T40: the Workshop first): ${cards.join(',')}`);
     await shot(p, 'menu', 1500);
     await p.locator('.pp-fp-card[data-activity="editor"]').click();
     await p.waitForSelector('.lines-note', { timeout: 20_000 });

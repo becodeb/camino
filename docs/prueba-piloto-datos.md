@@ -1068,6 +1068,122 @@ A race ended: the child crossed the line, or left. **RQ 5, 6.**
 }
 ```
 
+### The Game Workshop, "El taller de juegos" (T40, 4to; on 5to's menu too)
+
+A small Scratch inside Camino (`src/workshop/`): Scratch 3's Spanish
+blocks and category colours on a free, pannable workspace per sprite, a
+deterministic VM (`vm.ts`, 30 fps, one thread per script) and the game
+"Al revés" (a corridor runner with flipping gravity) built through PRIMM
+challenges (`challenges.ts`): **1** "Que el mundo corra" (predict the
+log's given script, run it, then make the floor's), **2** "Que dé vuelta"
+(investigate a buggy flip that only goes up: tap the block to blame, then
+fix it with `si … si no`), **3** "Trampas arriba y abajo" (duplicate the log,
+put the copy on the ceiling), **4** "¡Auch!" (a hit takes one life and sends
+the log back, in both logs), **5** "Puntos" (a seed gives a point and comes
+back), **6** "Cada vez más rápido" (the logs move with `velocidad`, which
+rises with each seed — "every 5 points" became "with each seed": 4to has no
+`módulo`, and a kid's `si puntos = 5` or a timer also passes), **7** "Ganar o
+perder" (0 lives → `perder`, 20 points → `ganar`); then the free
+challenges **8–13** (more traps, a bird, a power-up star, a sound, a new
+costume, their own idea), any order, each optional.
+**RQ 8** (can 4to build a game, understanding rather than copying), **RQ 4**
+(the predict and investigate formats), **RQ 3** (graded help), **RQ 5**
+(engagement: runs, free challenges, time), **RQ 1** (drag skills, through
+the edit counts).
+
+Every challenge is checked from the game's behaviour, never against one
+exact script: on ▶ the child's project is run headless with scripted
+players (no keys; space once; space now and then) and its positions,
+variables, contacts and end are read (any correct solution passes). Help
+is graded: ✋ or "Pista" → 1 a hint line inside the screen, 2 the relevant
+blocks glow in the palette, 3 a similar worked example on a side card (never
+the answer); a fourth ✋ raises the character's hand (`call_adult`). After
+help level 3, or six minutes on a challenge, it can be skipped (its
+canonical solution is put in place so the game keeps working). The project
+and the progress are saved on the device by session (`camino.piloto.workshop.v1`,
+`src/workshop/store.ts`), so a reload, a closed tab or another step never
+loses them; the Arcade's "Tu juego" (T41) plays the same save. Free play
+logs the pick (`choice` {activity: 'workshop'}) and the time in it
+(`activity_end`, where finishing challenges 1–7 counts as one won level).
+Its `help` events carry `level_id: 'workshop'` and the challenge `n`.
+
+**Understands vs copies (T42).** Read per child from `workshop_challenge`:
+`predict_correct` (challenge 1, before running) and `investigate_correct`
+(challenge 2, before fixing) are first answers, given once, before any
+help could show the answer (help level 1 on those cards is a hint about
+what to read, never the answer, and is counted in `help_level`); for each
+make/modify challenge, `help_level` 0 with `attempts` low means built
+alone; `phase: 'skipped'` means not built. Both answers are logged the
+moment they are given, so a reload never lets the child answer twice.
+
+#### `workshop_challenge`
+A challenge's moment. **RQ 8, 4, 3.**
+```
+{
+  n: number,                    // 1–7 core, 8–13 free
+  phase: 'start' | 'predict' | 'investigate' | 'solved' | 'skipped',
+                                // start: its goal card opened (once per session, even across reloads; core only)
+                                // predict: challenge 1's answer, before running; investigate: challenge 2's tap
+  attempts: number,             // runs whose check failed so far (make phase)
+  help_level: number,           // highest help level shown on it (0–3)
+  runs: number,                 // ▶ presses on it so far
+  ms: number,                   // from its card opening (0 at start; at solved/skipped: the whole time)
+  free?: true,                  // a free challenge (8–13)
+  predict_choice?: 'wraps' | 'leaves' | 'still',  // the drawn choice tapped (right: 'wraps')
+  predict_correct?: boolean,
+  investigate_block?: string,   // the tapped block's op (right: 'setY', "fijar y a 100")
+  investigate_correct?: boolean
+}
+```
+`predict_*` is repeated on challenge 1's later rows, `investigate_*` on
+challenge 2's, so a `solved` row carries its own answers.
+
+#### `workshop_edit`
+Edits, counted per challenge and sent in batches (when the challenge ends,
+when the Workshop closes, and at most once a minute), never one event per
+drag. **RQ 1, 8.**
+```
+{
+  n: number,                    // the challenge open while editing
+  edits: number,                // all edits in the batch
+  counts: { add?, move?, detach?, delete?, input?, duplicate?, copy?: number },
+                                // add: a block dragged from the palette into the workspace (snapped or loose)
+                                // move: a whole stack dragged by its top block ("ordenar" counts one)
+                                // detach: a block taken from the middle of a stack (with what was below it) or a reporter out of its slot
+                                // delete: dropped on the palette, or "Borrar"; input: a number, text or dropdown changed
+                                // duplicate: a block (and what is below it) or a sprite duplicated; copy: a script dropped on another sprite's card
+  ops: { [action]: { [op]: number } },  // which blocks, by Scratch op (e.g. add.forever: 2)
+  sprites: { [spriteName]: number },     // edits per sprite
+  max_stack: number             // the biggest stack moved, added or deleted in the batch (blocks)
+}
+```
+
+#### `workshop_run`
+A run of the game ended (■, `detener todo`, `ganar` or `perder`). **RQ 5, 8.**
+```
+{
+  n: number,                    // the challenge open (8: the free challenges)
+  ms_played: number,
+  result: 'stopped' | 'won' | 'lost',
+  lives: number, points: number,   // the variables at the end
+  check: 'pass' | 'fail' | 'none', // the open challenge's check on this run ('none': not in its make phase)
+  why?: string                  // a failed check's line, as shown ("El suelo se va… pero no vuelve a empezar.")
+}
+```
+
+#### `workshop_end`
+The Workshop closed (free play's menu, the flow moving on, the class ending). **RQ 5, 8.**
+```
+{
+  challenges_solved: number, challenges_skipped: number,   // core (1–7)
+  free_challenges: number,      // 8–13 starred
+  current: number,              // the challenge open (8: the free ones)
+  arcade: boolean,              // "Tu juego" is in the Arcade (challenge 5 done)
+  best: number,                 // best points in one run
+  ms: number                    // since the Workshop first opened in this session
+}
+```
+
 ### `survey_answer`
 One spoken survey question answered with drawn faces/pictures. **RQ 9.**
 ```
@@ -1433,7 +1549,7 @@ for a session therefore mean a 400-dropped batch, never a network failure.
 
 ## SQL views
 
-Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`, `004_game_maker.sql`, `005_text_probe.sql`, `007_typing_rounds.sql`, `009_game_maker_steps.sql`, `010_text_probe_steps.sql`, `012_race.sql`), always available for ad hoc
+Defined in `server/migrations/001_init.sql` (and `002_activity_time.sql`, `003_typing.sql`, `004_game_maker.sql`, `005_text_probe.sql`, `007_typing_rounds.sql`, `009_game_maker_steps.sql`, `010_text_probe_steps.sql`, `012_race.sql`, `015_workshop.sql`), always available for ad hoc
 analysis (`psql`, or any tool that can read Postgres directly).
 
 Since T14 (`008_class_control.sql`) every view reads only real sessions:
@@ -1530,6 +1646,19 @@ too; the tables themselves still hold the demo rows until they are deleted.
   `turbo_offered`, `turbo_used`, `median_turbo_stretch_ms` (with the
   repeat) and `median_turbo_by_hand_ms` (the same straights with single
   arrows). Feeds RQ 5.
+
+- **`v_workshop_challenges`** — T40, one row per session and challenge
+  (real sessions only): `grade`, `child_name`, `n`, `free`, `started`,
+  `predict_choice`, `predict_correct`, `investigate_block`,
+  `investigate_correct`, `outcome` ('solved' | 'skipped' | null), `attempts`,
+  `help_level`, `runs`, `ms`. The base of T42's "understands vs copies"
+  signal. `server/migrations/015_workshop.sql`. Feeds RQ 8, 4, 3.
+- **`v_workshop_by_grade`** — T40, one row per grade: `sessions`,
+  `median_core_solved`, `max_core_solved`, `core_solved_without_help`,
+  `core_skipped`, `free_solved`, `arcade_sessions`, `predicted`,
+  `predicted_right`, `investigated`, `investigated_right`,
+  `median_challenge_ms`, `median_runs_per_challenge`, `runs`, `runs_won`,
+  `runs_lost`, `edits`. Feeds RQ 8, 5.
 
 ## Retention and deletion
 
