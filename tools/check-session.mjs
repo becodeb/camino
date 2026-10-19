@@ -180,7 +180,13 @@ async function newSession(p, grade, character, query) {
   // round 2: one tap on the grade starts (no consent tick, no code screen)
   ok(!(await p.getByRole('checkbox').count()), 'no consent tick at setup');
   await p.getByRole('button', { name: grade, exact: true }).click();
-  await p.waitForSelector('.choice-row');
+  // T38: 4to/5to default to a name screen before the character choice
+  await p.waitForSelector('.pp-name-input, .choice-row');
+  if (await p.locator('.pp-name-input').count()) {
+    await p.locator('.pp-name-input').fill(`Prueba ${grade}`);
+    await p.locator('.pp-name-go').click();
+    await p.waitForSelector('.choice-row');
+  }
   const sid = await p.evaluate(() => window.__piloto.session().id);
   const code = await p.evaluate(() => window.__piloto.session().code);
   ids.push(sid);

@@ -15,7 +15,13 @@ const SIZES = (process.env.SIZES ?? '1366x768,1280x800').split(',').map((x) => x
 async function setup(p, grade = '1ro', division = null) {
   if (division) await p.getByRole('button', { name: division, exact: true }).click();
   await p.getByRole('button', { name: grade, exact: true }).click();
-  await p.waitForSelector('.choice-row');
+  // T38: 4to/5to default to a name screen before the character choice
+  await p.waitForSelector('.pp-name-input, .choice-row');
+  if (await p.locator('.pp-name-input').count()) {
+    await p.locator('.pp-name-input').fill(`Prueba ${grade}`);
+    await p.locator('.pp-name-go').click();
+    await p.waitForSelector('.choice-row');
+  }
 }
 const pil = (p, js, arg) => p.evaluate(js, arg);
 const jump = (p, step) => pil(p, (s) => window.__piloto.jump(s), step);

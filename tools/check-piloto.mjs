@@ -116,7 +116,13 @@ async function newSession(p, grade, query = 'debug', captions = null) {
   ok(!(await p.getByRole('button', { name: 'A', exact: true }).count()), `${grade}: no division buttons at setup (T14)`);
   if (captions) await p.locator(`[data-captions="${captions}"]`).click();
   await p.locator(`.pp-grade-card[aria-label="${grade}"]`).click();
-  await p.waitForSelector('.choice-row');
+  // T38: 4to/5to default to a name screen before the character choice (any grade with ?nombre=si too)
+  await p.waitForSelector('.pp-name-input, .choice-row');
+  if (await p.locator('.pp-name-input').count()) {
+    await p.locator('.pp-name-input').fill(`Prueba ${grade}`);
+    await p.locator('.pp-name-go').click();
+    await p.waitForSelector('.choice-row');
+  }
   const sid = await p.evaluate(() => window.__piloto.session().id);
   const code = await p.evaluate(() => window.__piloto.session().code);
   ok(!(await p.locator('.pp-code-word').count()) && !(await p.evaluate((c) => document.body.innerText.includes(c), code)), `${grade}: one tap on the grade started; the code is shown nowhere`);

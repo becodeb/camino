@@ -61,7 +61,13 @@ async function device(name, grade, step) {
   await d.p.goto(`${base}?debug&nointro#/piloto`);
   await d.p.waitForSelector('.pp-setup', { timeout: 60_000 });
   await d.p.locator(`.pp-grade-card[data-grade="${grade}"]`).click();
-  await d.p.waitForSelector('.choice-row');
+  // T38: 4to/5to default to a name screen before the character choice
+  await d.p.waitForSelector('.pp-name-input, .choice-row');
+  if (await d.p.locator('.pp-name-input').count()) {
+    await d.p.locator('.pp-name-input').fill(`Prueba ${grade}`);
+    await d.p.locator('.pp-name-go').click();
+    await d.p.waitForSelector('.choice-row');
+  }
   await d.p.evaluate((s) => window.__piloto.jump(s), step);
   await d.p.waitForSelector(`.piloto[data-step="${step}"]`);
   d.sid = await d.p.evaluate(() => window.__piloto.session().id);

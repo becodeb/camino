@@ -47,7 +47,13 @@ async function newSession(p, grade) {
   await p.goto(`${base}?debug&caps=fast#/piloto`);
   await p.waitForSelector('.pp-setup');
   await p.getByRole('button', { name: grade, exact: true }).click();
-  await p.waitForSelector('.choice-row');
+  // T38: 4to/5to default to a name screen before the character choice
+  await p.waitForSelector('.pp-name-input, .choice-row');
+  if (await p.locator('.pp-name-input').count()) {
+    await p.locator('.pp-name-input').fill(`Prueba ${grade}`);
+    await p.locator('.pp-name-go').click();
+    await p.waitForSelector('.choice-row');
+  }
   const sid = await p.evaluate(() => window.__piloto.session().id);
   await p.waitForTimeout(500);
   await p.locator('[data-choice-char="mina"]').click();
