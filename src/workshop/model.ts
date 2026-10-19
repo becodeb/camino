@@ -129,8 +129,8 @@ export const countBlocks = (blocks: readonly Block[]) => { let n = 0; for (const
 // ------------------------------------------------------------------ layout
 
 export type Measure = (text: string) => number;
-/** A stand-in for the browser's text measure (Andika bold 15 px): tests and the first paint. */
-export const approxMeasure: Measure = (s) => s.length * 8.3;
+/** A stand-in for the browser's text measure (Andika bold 14 px): tests and the first paint. */
+export const approxMeasure: Measure = (s) => s.length * 7.8;
 
 /** Sizes in workspace pixels. */
 export const DIM = {
