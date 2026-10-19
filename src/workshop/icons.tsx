@@ -53,3 +53,9 @@ export const IconStar = ({ on }: { on: boolean }) => (
     <path d="M0,-12 L3.5,-4 L12,-3.5 L5.5,2.5 L7.5,11 L0,6.5 L-7.5,11 L-5.5,2.5 L-12,-3.5 L-3.5,-4 Z" fill={on ? '#f0d27a' : '#f2ebde'} stroke="#2b2622" strokeWidth={1.8} strokeLinejoin="round" />
   </svg>
 );
+export const IconSound = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" className="ws-ico">
+    <path d="M3,9.5 L7,9.5 L12,5 L12,19 L7,14.5 L3,14.5 Z" {...S} fill="#e59ad0" />
+    <path d="M15,9 Q17,12 15,15 M17.5,6.5 Q21.5,12 17.5,17.5" {...S} strokeWidth={2} />
+  </svg>
+);

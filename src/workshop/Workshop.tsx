@@ -53,7 +53,7 @@ import {
 import { Stage, type RunResult, type StageHandle } from './Stage';
 import { SpriteThumb } from './art';
 import { loadWorkshop, saveWorkshop, type WorkshopSaved } from './store';
-import { IconBigger, IconBulb, IconDup, IconEye, IconStar } from './icons';
+import { IconBigger, IconBulb, IconDup, IconEye, IconSound, IconStar } from './icons';
 import type { VM } from './vm';
 import './workshop.css';
 
@@ -622,6 +622,16 @@ function Party({ party, onDone }: { party: { n: number; title: string; arcade: b
   );
 }
 
+/** Each free challenge's picture: the sprite it is about, drawn like the game. */
+const FREE_PIC: Record<number, ReactNode> = {
+  8: <SpriteThumb kind="obstacle" costume="pinches" />,
+  9: <SpriteThumb kind="bird" costume="pájaro" />,
+  10: <SpriteThumb kind="star" costume="estrella" />,
+  11: <IconSound />,
+  12: <SpriteThumb kind="player" costume="mareado" />,
+  13: <IconBulb />,
+};
+
 function FreeList({ prog, onPick, close, onDone }: { prog: WsProgress; onPick(n: number): void; close(): void; onDone?: () => void }) {
   return (
     <section className="ws-card ws-free sheet" data-card="free" aria-label="Desafíos libres">
@@ -640,6 +650,7 @@ function FreeList({ prog, onPick, close, onDone }: { prog: WsProgress; onPick(n:
               <span className="ws-free-star" aria-hidden="true"><IconStar on={!!prog.free[c.n]} /></span>
               <b>{c.title}</b>
               <span>{c.goal}</span>
+              <span className="ws-free-pic" aria-hidden="true">{FREE_PIC[c.n]}</span>
             </button>
           </li>
         ))}

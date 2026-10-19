@@ -159,9 +159,22 @@
 .ws-reveal-text { margin: 0; font: 700 24px/1.3 var(--body); color: var(--ink); }
 .ws-reveal .ws-card-go { justify-self: center; }
 .ws-free-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.ws-free-item { --fill: var(--sheet); width: 100%; min-height: 130px; display: grid; align-content: start; gap: 4px; padding: 12px 14px; text-align: left; color: var(--ink); cursor: pointer; }
-.ws-free-item b { font: 700 19px/1.15 var(--body); }
-.ws-free-item span { font: 400 16px/1.3 var(--body); }
+.ws-free-item { --fill: var(--sheet); width: 100%; min-height: 160px; display: grid; grid-template-columns: minmax(0, 1fr) 76px; grid-template-rows: auto auto 1fr; align-content: start; column-gap: 8px; row-gap: 4px; padding: 12px 14px; text-align: left; color: var(--ink); cursor: pointer; }
+.ws-free-item > :not(.ws-free-pic) { grid-column: 1; }
+.ws-free-item b { font: 700 21px/1.15 var(--body); }
+.ws-free-item span { font: 400 17px/1.3 var(--body); }
+.ws-free-item .ws-free-pic { grid-column: 2; grid-row: 1 / span 3; align-self: center; width: 76px; height: 76px; display: grid; place-items: center; }
+.ws-free-pic svg { width: 76px; height: 76px; }
+.ws-free-pic .ws-ico { width: 60px; height: 60px; }
+/* narrower screens: the picture moves up beside the star and the title, the text takes the card's whole width */
+@media (max-width: 1300px) {
+  .ws-free-item { min-height: 0; grid-template-columns: minmax(0, 1fr) 54px; grid-template-rows: auto auto auto; }
+  .ws-free-item > span:not(.ws-free-pic):not(.ws-free-star) { grid-column: 1 / -1; }
+  .ws-free-item .ws-free-pic { grid-row: 1 / span 2; align-self: start; width: 54px; height: 54px; }
+  .ws-free-pic svg { width: 54px; height: 54px; }
+  .ws-free-pic .ws-ico { width: 44px; height: 44px; }
+  .ws-free-item span { font-size: 16px; }
+}
 .ws-free-item .ws-free-star { line-height: 0; }
 .ws-free-item.is-done { --fill: #fff4cf; }
 .ws-free-item.is-focus { --fill: #dfe9f5; }
