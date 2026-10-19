@@ -279,4 +279,110 @@ const R12 = item(12, {
 
 /** The bank, rung 1 to 12. */
 export const LADDER_ITEMS: readonly LevelDef[] = [R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12];
-export const ladderItem = (id: string) => LADDER_ITEMS.find((l) => l.id === id) ?? null;
+
+// ------------------------------------------------------------------ T39: a second item for rungs 7–12
+
+// 4to's long ladder plays a rung's second item when its first one is not
+// passed, before stepping down (ladder.ts `decide`): the same concept and
+// difficulty on a different board, so a lucky pass and a near miss are told
+// apart. Each mirrors its rung's first item (direction, sizes, where the
+// steps before/after a repeat go, the rocks, the way through the game).
+
+const R7B = item(7, {
+  id: 'pp-l7b',
+  title: 'La escalera del bosque',
+  say: 'Subí la escalera hasta la semilla, para este lado. Mirá bien: ¿qué se repite?',
+  worlds: [carvedBoard([4, 4], times(4, 'up', 'left'), { seed: 3207 })],
+  blocks: ['up', 'left', 'repeat'],
+  slots: 2,
+  solution: [loop(4, ['up', 'left'])],
+  intro: { program: [loop(2, ['up', 'left'])], after: 'full' },
+});
+
+const R8B = item(8, {
+  id: 'pp-l8b',
+  title: 'Bajar, la escalera y dos pasos más',
+  say: 'Bajá un escalón, bajá la escalera de piedras y da dos pasos más hasta la semilla. Hay renglones antes y después del repetir.',
+  worlds: [carvedBoard([0, 0], ['down', ...times(3, 'right', 'down'), 'right', 'right'], { seed: 3208, look: 'river' })],
+  blocks: ['down', 'right', 'repeat'],
+  slots: 4,
+  solution: [cmd('down'), loop(3, ['right', 'down']), cmd('right'), cmd('right')],
+  intro: { program: [loop(2, ['right', 'down'])], after: 'full' },
+});
+
+const R9B = item(9, {
+  id: 'pp-l9b',
+  title: 'Niebla en el sendero',
+  say: 'Hay niebla: Brote solo ve lo que tiene al lado. Hacé que camine hasta la semilla y que salte si hay una piedra.',
+  worlds: [strip(8, [3, 6], 3209)],
+  blocks: ['right', 'ifrock:right', 'repeat-goal'],
+  slots: 3,
+  solution: WALK_OR_JUMP,
+  fog: true,
+  intro: { program: [{ t: 'loop', count: 'goal', body: ['right'] }], after: 'fail' },
+});
+
+const R10B = item(10, {
+  id: 'pp-l10b',
+  title: 'Tres orillas, un programa',
+  say: 'Un solo programa para las tres orillas. Tiene que llegar a la semilla en las tres.',
+  worlds: [strip(5, [2], 3215, 'river'), strip(7, [1, 4], 3216, 'river'), strip(6, [3], 3217, 'river')],
+  blocks: ['right', 'ifrock:right', 'repeat-goal'],
+  slots: 3,
+  solution: WALK_OR_JUMP,
+  silentDemo: 'worlds',
+});
+
+const R11B = item(11, {
+  id: 'pp-l11b',
+  title: 'Un juego: las flechas del otro lado',
+  say: 'Esto es un juego: cuando aprieto una flecha, Brote se mueve. Mirá.',
+  mode: 'realtime',
+  worlds: [{
+    cols: 5, rows: 4, start: { c: 4, r: 3 }, goal: { c: 0, r: 0 }, goalKind: 'seed',
+    // R11 mirrored: ← alone bumps the puddles, ↑ alone bumps the top puddle: the way needs both
+    obstacles: [
+      { c: 2, r: 3, kind: 'puddle', seed: 3211 }, { c: 1, r: 3, kind: 'puddle', seed: 3212 },
+      { c: 4, r: 0, kind: 'puddle', seed: 3213 }, { c: 1, r: 1, kind: 'rock', seed: 3214 },
+    ],
+    pickups: [], deco: grass(3211, [[0, 3], [3, 0], [2, 1]]), seed: 3211, look: 'river',
+  }],
+  blocks: ['key:up', 'key:left', 'up', 'left'],
+  solution: [],
+  realtime: {
+    initial: [],
+    solution: [arrowRule('left'), arrowRule('up')],
+    win: { kind: 'goal' },
+    maxActions: 2,
+    intro: arrowRule('left'),
+    afterIntro: 'Ahora vos: tocá las flechas del teclado o de la pantalla para mover a Brote hasta la semilla.',
+    noRule: 'Esa flecha todavía no tiene regla. Armala: cuando aprieto esa flecha, Brote se mueve.',
+  },
+});
+
+const R12B = item(12, {
+  id: 'pp-l12b',
+  title: 'Un juego: semillas en el bosque',
+  say: 'Caen semillas. Para juntar puntos hace falta una regla nueva: cuando Brote toca una semilla, suma un punto.',
+  mode: 'realtime',
+  worlds: [{
+    cols: 6, rows: 4, start: { c: 2, r: 3 }, goal: { c: 0, r: 0 }, goalKind: 'none',
+    obstacles: [], pickups: [], deco: grass(3221, [[5, 1], [0, 0], [1, 2], [4, 2]]), seed: 3221,
+  }],
+  blocks: ['key:left', 'key:right', 'touch:seed', 'left', 'right', 'score'],
+  solution: [],
+  realtime: {
+    initial: [arrowRule('left'), arrowRule('right')],
+    solution: [arrowRule('left'), arrowRule('right'), { hat: 'touch:seed', actions: ['score'] }],
+    win: { kind: 'score', n: 4 },
+    spawner: { every: [28, 38], speed: 0.05, seed: 23, first: 10 },
+    maxActions: 2,
+    intro: arrowRule('left'),
+    afterIntro: 'Ahora vos: movete con las flechas del teclado o de la pantalla y juntá cuatro semillas.',
+  },
+});
+
+/** T39: each rung's second item (rungs 7–12), by rung. */
+export const LADDER_VARIANT_ITEMS: Readonly<Record<number, LevelDef>> = { 7: R7B, 8: R8B, 9: R9B, 10: R10B, 11: R11B, 12: R12B };
+
+export const ladderItem = (id: string) => LADDER_ITEMS.find((l) => l.id === id) ?? Object.values(LADDER_VARIANT_ITEMS).find((l) => l.id === id) ?? null;

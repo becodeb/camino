@@ -773,3 +773,33 @@ html.pp-demo .pad > .sheet { max-width: calc(100vw - var(--demo-w) - 36px - 2 * 
 @media (prefers-reduced-motion: reduce) { .pp-arcade-btn, .pp-arcade-open-card { animation: none; } }
 .pp-arcade-h { margin: 0 0 6px; font: 700 clamp(40px, 4.6vw, 58px)/1 var(--body); color: var(--ink); text-align: center; }
 .pp-fp-wardrobe { display: grid; place-items: center; width: 100%; height: 100%; }
+
+/* ------------------------------------------------ T39: 4to's long ladder: the climbing path beside the page */
+.pp-climb-wrap { display: grid; grid-template-columns: 84px minmax(0, 1fr); min-height: 100dvh; }
+.pp-climb-col { position: sticky; top: 0; height: 100dvh; padding: 12px 0 14px 8px; display: grid; }
+.pp-climb { width: 100%; height: 100%; overflow: visible; }
+.pp-climb-ring { animation: pp-climb-pulse 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes pp-climb-pulse { 50% { transform: scale(1.18); opacity: 0.6; } }
+.pp-climb-page { min-width: 0; }
+@media (prefers-reduced-motion: reduce) { .pp-climb-ring { animation: none; } }
+
+/* ------------------------------------------------ T39: rungs 13–18 on the Workshop's blocks */
+.pp-page.ws-page.pp-vm { grid-template-rows: auto auto minmax(0, 1fr); }
+.pp-vm-goal { --fill: #fff4cf; padding: 10px 18px; display: grid; gap: 4px; }
+.pp-vm-goal.is-glow { box-shadow: 0 0 0 5px rgba(245, 198, 79, 0.65); }
+.pp-vm-goal-text { margin: 0; font: 700 clamp(22px, 2.1vw, 27px)/1.25 var(--body); color: var(--ink); }
+.pp-vm-hint { margin: 0; font: 700 20px/1.25 var(--body); color: var(--blue-ink); }
+.pp-vm-why { margin: 0; font: 700 21px/1.25 var(--body); color: #a93c2e; }
+.pp-vm-won { margin: 0; font: 700 26px/1.2 var(--body); color: #3f6b2a; }
+.pp-vm-stage { position: relative; }
+.pp-vm-spots { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; aspect-ratio: 4 / 3; height: auto; }
+.pp-vm-spot { cursor: pointer; }
+.pp-vm-spot-hit { fill: transparent; }
+.pp-vm-spot-ring { fill: rgba(250, 246, 236, 0.55); stroke: var(--ink); stroke-width: 3; stroke-dasharray: 7 6; }
+.pp-vm-spot:hover .pp-vm-spot-ring { fill: rgba(245, 198, 79, 0.45); }
+.pp-vm-spot.is-guess .pp-vm-spot-ring { fill: rgba(122, 166, 232, 0.5); stroke-dasharray: none; stroke-width: 4; }
+.pp-vm-spot.is-answer .pp-vm-spot-ring { fill: rgba(164, 184, 109, 0.6); stroke: #3f6b2a; stroke-dasharray: none; stroke-width: 5; }
+.pp-vm-scripts { --fill: var(--sheet); align-self: start; display: grid; gap: 18px; padding: 18px 22px; overflow: auto; max-height: 100%; }
+.pp-vm-script { display: grid; gap: 6px; justify-items: start; }
+.pp-vm-script-who { display: inline-flex; align-items: center; gap: 6px; font: 700 18px/1 var(--body); color: var(--ink-2); }
+.pp-vm-script-who .ws-thumb { width: 34px; height: 34px; }

@@ -5,7 +5,7 @@ import { isWin, type Board, type Dir, type Program } from '../game/model';
 import { MOVE_TICKS, chaseSeed, rtInit, rtPlay, rtStep, type RealtimeDef, type RtEvent, type Rule } from '../game/rules';
 import { withName } from './characterName';
 import { LADDER } from './ladder';
-import { LADDER_ITEMS, ladderItem } from './ladderItems';
+import { LADDER_ITEMS, LADDER_VARIANT_ITEMS, ladderItem } from './ladderItems';
 import { pilotLevel } from './levels';
 
 const ARROWS: Dir[] = ['left', 'up', 'down', 'right'];
@@ -31,6 +31,7 @@ describe('the round-2 item bank', () => {
       expect(l.id).toBe(`pp-l${i + 1}`);
       expect(l.page).toBe(i + 1);
       expect(LADDER[i].item).toBe(l.id);
+      expect(LADDER[i].engine).toBe('grid');
       expect(pilotLevel(l.id)).toBe(l);
       expect(ladderItem(l.id)).toBe(l);
     });
@@ -192,6 +193,53 @@ describe('the round-2 item bank', () => {
     expect(won.state.score).toBe(4);
     // shorter than 3ro-2: under a minute of falling
     expect(won.state.tick * 100).toBeLessThan(60_000);
+    expect(chase(def.initial).state.score).toBe(0);
+  });
+});
+
+describe('T39: the second item of rungs 7–12', () => {
+  const pairs = Object.entries(LADDER_VARIANT_ITEMS).map(([r, b]) => ({ a: at(Number(r)), b }));
+
+  it('one per rung 7–12, the same format, mode and palette size, a different board, opened by pilotLevel', () => {
+    expect(Object.keys(LADDER_VARIANT_ITEMS).map(Number)).toEqual([7, 8, 9, 10, 11, 12]);
+    for (const { a, b } of pairs) {
+      expect(b.id).toBe(`${a.id}b`);
+      expect(pilotLevel(b.id)).toBe(b);
+      expect(ladderItem(b.id)).toBe(b);
+      expect(formatOf(b)).toBe(formatOf(a));
+      expect(b.mode).toBe(a.mode);
+      expect(b.blocks.length).toBe(a.blocks.length);
+      expect(b.slots ?? null).toBe(a.slots ?? null);
+      expect(JSON.stringify(b.worlds), b.id).not.toBe(JSON.stringify(a.worlds));
+      expect(withName(b.title, 'mina')).not.toMatch(/Brote/);
+      expect(b.say.length).toBeLessThanOrEqual(130);
+    }
+  });
+
+  it('every program page is solved by its own solution, and needs it (a flat plan or a plain walk does not fit)', () => {
+    for (const { b } of pairs.filter((x) => x.b.mode === 'program')) {
+      expect(solvesAll(b.worlds, b.solution), b.id).toBe(true);
+      if (b.fog || b.worlds.length > 1) expect(solvesAll(b.worlds, [{ t: 'loop', count: 'goal', body: ['right'] }]), b.id).toBe(false);
+      else expect((shortestPlan(b.worlds[0], ARROWS) ?? []).length, b.id).toBeGreaterThan(b.slots!);
+    }
+  });
+
+  it('11b: the intro\'s ← alone does not reach the seed, ← and ↑ do', () => {
+    const l = LADDER_VARIANT_ITEMS[11];
+    const def = l.realtime!;
+    const b = l.worlds[0];
+    const way = shortestMoves(b)!;
+    expect(way.every((d) => d === 'up' || d === 'left')).toBe(true);
+    expect(playPresses(b, def, def.solution, way).state.won).toBe(true);
+    const alone = playPresses(b, def, [def.intro!], [...way, 'left', 'left', 'left', 'left']);
+    expect(alone.state.won).toBe(false);
+  });
+
+  it('12b: chasing with the reference rules wins at four; without the touch rule, never', () => {
+    const l = LADDER_VARIANT_ITEMS[12];
+    const def = l.realtime!;
+    const chase = (rules: Rule[]) => rtPlay(l.worlds[0], def, rules, 3000, (s) => { const d = chaseSeed(s); return d && s.busy === 0 && !s.queue.length ? [d] : []; });
+    expect(chase(def.solution).state.score).toBe(4);
     expect(chase(def.initial).state.score).toBe(0);
   });
 });

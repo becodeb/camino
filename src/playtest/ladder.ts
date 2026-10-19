@@ -13,33 +13,64 @@
 // - An item ends as a fail on its own caps (itemVerdict, with a reason).
 // The ceiling is the highest rung passed (v_ladder_ceiling /
 // v_session_summary.ladder_ceiling_rung read the same from `ladder_step`).
+//
+// T39, 4to's long ladder (`long` on the state, set by startLadder for 4to;
+// every other grade keeps the rules above, unchanged): up to MAX_ITEMS_LONG
+// items or CAPS_LONG's 15 minutes (16 for an item open then), up to rung 18
+// (six new rungs, 13–18, built on the Game Workshop's blocks:
+// ladderVm.ts), and a second item per rung from 7 (`variant` 1): a first
+// item not passed gets the rung's second item before the ladder steps down
+// or stops; the second item's result is the rung's. The floor check and the
+// ceiling are the same rules.
 
 import type { LevelStats } from './PlaytestLevel';
-import { LADDER_ITEMS } from './ladderItems';
+import { LADDER_ITEMS, LADDER_VARIANT_ITEMS } from './ladderItems';
+import { VM_ITEMS, VM_VARIANT_ITEMS } from './ladderVm';
 
 export interface Rung {
   rung: number;
   /** The concept the rung measures (docs/prueba-piloto-datos.md, `ladder_step.concept`). */
   concept: string;
-  /** The page played (curriculum/primer.ts or game/levels.ts). */
+  /** The page played (curriculum/primer.ts or game/levels.ts; rungs 13–18: ladderVm.ts). */
   item: string;
+  /** T39: the rung's second item (rungs 7–18), played by the long ladder after a first item not passed. */
+  variant?: string;
+  /** T39: a level page (`grid`: PlaytestLevel) or a Workshop-blocks item (`vm`: LadderVmItem). */
+  engine: 'grid' | 'vm';
 }
 
 const CONCEPTS = [
   'sequence', 'long_sequence', 'fix', 'predict', 'repeat', 'repeat_count',
   'repeat_pattern', 'before_after_repeat', 'fog_si', 'three_worlds', 'events_rules', 'rules_score',
+  // T39: 4to's long ladder, on the Workshop's blocks (ladderVm.ts)
+  'events_predict', 'fix_rule', 'if_else', 'variables', 'broadcast', 'modify_make',
 ] as const;
 
-/** The item bank, easiest first: round 2's own pages (ladderItems.ts), one per concept. */
-export const LADDER: readonly Rung[] = CONCEPTS.map((concept, i) => ({ rung: i + 1, concept, item: LADDER_ITEMS[i].id }));
+/** The base bank's top rung (the round-2 pages): every grade but 4to stops here. */
+export const TOP = LADDER_ITEMS.length;
+
+/** The item bank, easiest first: round 2's own pages (ladderItems.ts), one per concept; T39: rungs 13–18 on the Workshop's blocks. */
+export const LADDER: readonly Rung[] = CONCEPTS.map((concept, i) => {
+  const rung = i + 1;
+  const vm = i >= TOP;
+  const item = vm ? VM_ITEMS[i - TOP].id : LADDER_ITEMS[i].id;
+  const variant = vm ? VM_VARIANT_ITEMS[rung]?.id : LADDER_VARIANT_ITEMS[rung]?.id;
+  return { rung, concept, item, ...(variant ? { variant } : {}), engine: vm ? 'vm' : 'grid' };
+});
+
+/** T39: the long ladder's top rung. */
+export const TOP_LONG = LADDER.length;
+/** T39: the grades with the long ladder. */
+export const LONG_GRADES: readonly number[] = [4];
 
 /** Round 1's bank (sheet and demo pages), kept for reading round 1's data: same rungs and concepts. */
 export const LADDER_ROUND1: readonly string[] = [
   '1ro-h1-2', '1ro-h2-1', '1ro-h3-3', '1ro-h3-4', '1ro-h4-1', '1ro-h5-1', '1ro-h6-2', '1ro-h13-2', '2do-1', '2do-2', '3ro-1', '3ro-2',
 ];
 
-export const TOP = LADDER.length;
 export const rungOf = (n: number): Rung => LADDER[n - 1];
+/** The item a rung plays: its first, or (T39) its second (`variant` 1). */
+export const itemOf = (r: Rung, variant = 0): string => (variant && r.variant ? r.variant : r.item);
 
 /** Where each grade (1–5) starts. */
 export const ENTRY: Readonly<Record<number, number>> = { 1: 1, 2: 2, 3: 5, 4: 7, 5: 9 };
@@ -65,7 +96,11 @@ export interface Caps { itemMs: number; idleMs: number; ladderMs: number; hardMs
 export const CAPS: Caps = { itemMs: ITEM_MS, idleMs: IDLE_MS, ladderMs: MAX_MS, hardMs: HARD_MS };
 /** `?caps=fast` (scripted checks, a quick look): the same rules in seconds. */
 export const FAST_CAPS: Caps = { itemMs: 30_000, idleMs: 12_000, ladderMs: 60_000, hardMs: 70_000 };
-export const capsFrom = (search: string): Caps => (/[?&]caps=fast\b/.test(search) ? FAST_CAPS : CAPS);
+/** T39: 4to's long ladder: up to 18 items in 15 minutes (an item open then ends by 16); the per-item caps unchanged. */
+export const MAX_ITEMS_LONG = 18;
+export const CAPS_LONG: Caps = { itemMs: ITEM_MS, idleMs: IDLE_MS, ladderMs: 15 * 60_000, hardMs: 16 * 60_000 };
+export const FAST_CAPS_LONG: Caps = { itemMs: 30_000, idleMs: 12_000, ladderMs: 150_000, hardMs: 160_000 };
+export const capsFrom = (search: string, long = false): Caps => (/[?&]caps=fast\b/.test(search) ? (long ? FAST_CAPS_LONG : FAST_CAPS) : long ? CAPS_LONG : CAPS);
 /** Failed runs (levels.ts `isFailedRun`) that end an item. */
 export const FAILED_RUNS = 2;
 
@@ -81,19 +116,30 @@ export type StopReason = 'top' | 'ceiling' | 'floor' | 'bottom' | 'max_items' | 
  */
 export type EndReason = 'runs' | 'solution_hint' | 'adult' | 'time_cap' | 'idle_cap' | 'ladder_time';
 
-export interface Attempt { rung: number; check: Check; result: ItemResult }
+export interface Attempt {
+  rung: number;
+  check: Check;
+  result: ItemResult;
+  /** T39: the rung's second item (absent: its first). */
+  variant?: 1;
+}
 
 export interface LadderState {
   entry: number;
   startedAt: number;
   items: Attempt[];
+  /** T39: 4to's long ladder (MAX_ITEMS_LONG, rungs up to TOP_LONG, a second item per rung). */
+  long?: boolean;
 }
 
-export type Decision = { rung: number; check: Check } | { stop: StopReason };
+export type Decision = { rung: number; check: Check; variant?: 1 } | { stop: StopReason };
 
 export function startLadder(grade: number, now: number): LadderState {
-  return { entry: entryRung(grade), startedAt: now, items: [] };
+  return { entry: entryRung(grade), startedAt: now, items: [], ...(LONG_GRADES.includes(grade) ? { long: true } : {}) };
 }
+
+const maxItemsOf = (s: LadderState) => (s.long ? MAX_ITEMS_LONG : MAX_ITEMS);
+const topOf = (s: LadderState) => (s.long ? TOP_LONG : TOP);
 
 export const firstItem = (s: LadderState): Decision => ({ rung: s.entry, check: 'climb' });
 
@@ -111,9 +157,11 @@ export function decide(s: LadderState, now: number, caps: Caps = CAPS): Decision
   const last = s.items[s.items.length - 1];
   if (!last) return firstItem(s);
   if (last.check === 'floor') return { stop: 'floor' };
-  if (s.items.length >= MAX_ITEMS) return { stop: 'max_items' };
+  if (s.items.length >= maxItemsOf(s)) return { stop: 'max_items' };
   if (now - s.startedAt >= caps.ladderMs) return { stop: 'max_time' };
-  if (last.result === 'pass') return last.rung >= TOP ? { stop: 'top' } : { rung: last.rung + 1, check: 'climb' };
+  if (last.result === 'pass') return last.rung >= topOf(s) ? { stop: 'top' } : { rung: last.rung + 1, check: 'climb' };
+  // T39: the long ladder's second chance on the same rung, a different item
+  if (s.long && !last.variant && rungOf(last.rung)?.variant) return { rung: last.rung, check: 'climb', variant: 1 };
   const below = last.rung - 1;
   if (below < 1) return { stop: 'bottom' };
   if (passed(s, below)) return { stop: 'ceiling' };

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { formatOf } from '../game/formats';
 import {
-  CAPS, ENTRY, FAILED_RUNS, FAST_CAPS, HARD_MS, IDLE_MS, ITEM_MS, LADDER, LADDER_ROUND1, MAX_ITEMS, MAX_MS, TOP, capsFrom, ceiling, decide,
-  entryRung, firstItem, itemResult, itemVerdict, newItemMemo, record, startLadder, type Attempt, type LadderState,
+  CAPS, CAPS_LONG, ENTRY, FAILED_RUNS, FAST_CAPS, FAST_CAPS_LONG, HARD_MS, IDLE_MS, ITEM_MS, LADDER, LADDER_ROUND1, MAX_ITEMS, MAX_ITEMS_LONG, MAX_MS, TOP, TOP_LONG,
+  capsFrom, ceiling, decide, entryRung, firstItem, itemOf, itemResult, itemVerdict, newItemMemo, record, rungOf, startLadder, type Attempt, type LadderState,
 } from './ladder';
+import { ladderItem, LADDER_VARIANT_ITEMS } from './ladderItems';
+import { vmItem } from './ladderVm';
 import { pilotLevel } from './levels';
 import type { LevelStats } from './PlaytestLevel';
 
@@ -13,16 +15,34 @@ const fail = (rung: number, check: Attempt['check'] = 'climb'): Attempt => ({ ru
 const play = (s: LadderState, ...as: Attempt[]) => as.reduce(record, s);
 
 describe('the item bank', () => {
-  it('has twelve fixed rungs, each a real page, in order', () => {
-    expect(LADDER.map((r) => r.rung)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  it('has twelve fixed rungs of pages and (T39) six more on the Workshop blocks, each real, in order', () => {
+    expect(LADDER.map((r) => r.rung)).toEqual(Array.from({ length: 18 }, (_, i) => i + 1));
     expect(TOP).toBe(12);
-    for (const r of LADDER) expect(pilotLevel(r.item), r.item).not.toBeNull();
-    expect(new Set(LADDER.map((r) => r.concept)).size).toBe(12);
+    expect(TOP_LONG).toBe(18);
+    for (const r of LADDER.slice(0, 12)) { expect(r.engine).toBe('grid'); expect(pilotLevel(r.item), r.item).not.toBeNull(); }
+    for (const r of LADDER.slice(12)) { expect(r.engine).toBe('vm'); expect(vmItem(r.item), r.item).not.toBeNull(); }
+    expect(new Set(LADDER.map((r) => r.concept)).size).toBe(18);
     expect(LADDER.map((r) => r.item)).toEqual(LADDER.map((r) => `pp-l${r.rung}`));
   });
 
+  it('T39: rungs 7–18 have a second item (rung 7–12 pages, 13–18 Workshop items), rungs 1–6 none', () => {
+    for (const r of LADDER) {
+      if (r.rung < 7) { expect(r.variant, `${r.rung}`).toBeUndefined(); continue; }
+      expect(r.variant).toBe(`pp-l${r.rung}b`);
+      expect(itemOf(r, 1)).toBe(r.variant);
+      expect(itemOf(r, 0)).toBe(r.item);
+      if (r.engine === 'grid') {
+        const a = pilotLevel(r.item)!, b = pilotLevel(r.variant!)!;
+        expect(b).toBe(ladderItem(r.variant!));
+        expect(b).toBe(LADDER_VARIANT_ITEMS[r.rung]);
+        expect(formatOf(b)).toBe(formatOf(a));
+        expect(b.mode).toBe(a.mode);
+      } else expect(vmItem(r.variant!)!.concept).toBe(r.concept);
+    }
+  });
+
   it('keeps the same twelve concepts as round 1, rung by rung, and round 1\'s pages still open', () => {
-    expect(LADDER.map((r) => r.concept)).toEqual([
+    expect(LADDER.slice(0, 12).map((r) => r.concept)).toEqual([
       'sequence', 'long_sequence', 'fix', 'predict', 'repeat', 'repeat_count',
       'repeat_pattern', 'before_after_repeat', 'fog_si', 'three_worlds', 'events_rules', 'rules_score',
     ]);
@@ -118,6 +138,60 @@ describe('where the ladder goes', () => {
   it('the caps win over the floor check', () => {
     const s = play(startLadder(5, T0), fail(9));
     expect(decide(s, T0 + MAX_MS)).toEqual({ stop: 'max_time' });
+  });
+});
+
+describe('T39: 4to\'s long ladder', () => {
+  it('only 4to gets it: up to 18 items, 15 minutes (16 for an item open then), rung 18 on top', () => {
+    expect([1, 2, 3, 5].map((g) => !!startLadder(g, T0).long)).toEqual([false, false, false, false]);
+    expect(startLadder(4, T0).long).toBe(true);
+    expect(MAX_ITEMS_LONG).toBe(18);
+    expect(CAPS_LONG).toEqual({ itemMs: ITEM_MS, idleMs: IDLE_MS, ladderMs: 15 * 60_000, hardMs: 16 * 60_000 });
+    expect(capsFrom('', true)).toBe(CAPS_LONG);
+    expect(capsFrom('?caps=fast', true)).toBe(FAST_CAPS_LONG);
+    expect(capsFrom('', false)).toBe(CAPS);
+  });
+
+  it('climbs past 12 to 18 and stops at the top', () => {
+    let s = startLadder(4, T0);
+    for (let r = 7; r <= 12; r++) s = record(s, pass(r));
+    expect(decide(s, T0, CAPS_LONG)).toEqual({ rung: 13, check: 'climb' });
+    for (let r = 13; r <= 18; r++) s = record(s, pass(r));
+    expect(decide(s, T0, CAPS_LONG)).toEqual({ stop: 'top' });
+    expect(ceiling(s)).toBe(18);
+    // 5to keeps the top at 12
+    const five = play(startLadder(5, T0), pass(9), pass(10), pass(11), pass(12));
+    expect(decide(five, T0)).toEqual({ stop: 'top' });
+  });
+
+  it('a first item not passed gets the second item of the same rung, then the old rules', () => {
+    const s = play(startLadder(4, T0), pass(7), fail(8));
+    expect(decide(s, T0, CAPS_LONG)).toEqual({ rung: 8, check: 'climb', variant: 1 });
+    // the second passes: up
+    expect(decide(play(s, { rung: 8, check: 'climb', result: 'pass', variant: 1 }), T0, CAPS_LONG)).toEqual({ rung: 9, check: 'climb' });
+    // the second fails too: the rung below was passed, so the ceiling is 7
+    const both = play(s, { rung: 8, check: 'climb', result: 'fail', variant: 1 });
+    expect(decide(both, T0, CAPS_LONG)).toEqual({ stop: 'ceiling' });
+    expect(ceiling(both)).toBe(7);
+    // at the entry: the second item, then the floor check
+    const entry = play(startLadder(4, T0), fail(7));
+    expect(decide(entry, T0, CAPS_LONG)).toEqual({ rung: 7, check: 'climb', variant: 1 });
+    expect(decide(play(entry, { rung: 7, check: 'climb', result: 'fail', variant: 1 }), T0, CAPS_LONG)).toEqual({ rung: 6, check: 'floor' });
+    // other grades never get a second item
+    expect(decide(play(startLadder(5, T0), pass(9), fail(10)), T0)).toEqual({ stop: 'ceiling' });
+    expect(decide(play(startLadder(3, T0), fail(5)), T0)).toEqual({ rung: 4, check: 'floor' });
+    expect(rungOf(5).variant).toBeUndefined();
+  });
+
+  it('stops at 18 items or 15 minutes, not before', () => {
+    let s = startLadder(4, T0);
+    // a slow climber: every rung needs its second item
+    for (let r = 7; r <= 15; r++) s = play(s, fail(r), { rung: r, check: 'climb', result: 'pass', variant: 1 });
+    expect(s.items).toHaveLength(18);
+    expect(decide(s, T0, CAPS_LONG)).toEqual({ stop: 'max_items' });
+    const t = play(startLadder(4, T0), pass(7), pass(8));
+    expect(decide(t, T0 + 15 * 60_000 - 1, CAPS_LONG)).toEqual({ rung: 9, check: 'climb' });
+    expect(decide(t, T0 + 15 * 60_000, CAPS_LONG)).toEqual({ stop: 'max_time' });
   });
 });
 
