@@ -185,6 +185,31 @@ dbDescribe('API against Postgres', () => {
     expect(csv).toContain('Sofía Pérez and a very l');
   });
 
+  it('T39: /admin/summary tells 4to\'s ladder rung, Workshop challenge and Arcade from the events already synced', async () => {
+    const app = createApp(pool, { adminToken: 'admin-t', distDir });
+    const post = (body: unknown) => app.request('/api/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const kid = newSession({ grade: 4, code: 'Zorro 39', child_name: 'Lola', current_step: 'ladder' });
+    expect((await post({ session: kid, events: [
+      event(0, { type: 'level_start', payload: { level_id: 'pp-l7', activity: 'ladder', rung: 7 } }),
+      event(1, { type: 'ladder_step', payload: { rung: 7, concept: 'repeat_pattern', result: 'pass', variant: 0 } }),
+      event(2, { type: 'level_start', payload: { level_id: 'pp-l13', activity: 'ladder', rung: 13 } }),
+    ] })).status).toBe(200);
+    const row = async () => {
+      const sum = await (await app.request('/api/admin/summary', { headers: { authorization: 'Bearer admin-t' } })).json() as { sessions: Array<Record<string, unknown>> };
+      return sum.sessions.find((s) => s.session_id === kid.id)!;
+    };
+    expect(await row()).toMatchObject({ ladder_rung: '13', workshop_challenge: null, arcade_open: false });
+    expect((await post({ session: { ...kid, current_step: 'workshop' }, events: [
+      event(3, { type: 'workshop_challenge', payload: { n: 4, phase: 'start' } }),
+      event(4, { type: 'workshop_challenge', payload: { n: 9, phase: 'solved', free: true } }),
+      event(5, { type: 'arcade_open', payload: { via: 'workshop', step: 'workshop' } }),
+    ] })).status).toBe(200);
+    // a free challenge is not "the challenge it is on"
+    expect(await row()).toMatchObject({ current_step: 'workshop', workshop_challenge: '4', arcade_open: true });
+    // the later blocks count sessions by grade: leave none behind
+    await pool.query('DELETE FROM sessions WHERE id = $1', [kid.id]);
+  });
+
   it('v_activity_time counts a free-play visit whole (activity_end) and the other activities by their pages', async () => {
     const app = createApp(pool, { distDir });
     const session = newSession();

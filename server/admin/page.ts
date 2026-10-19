@@ -130,6 +130,7 @@ th { color: var(--ink-2); font-weight: 700; }
 .yes { color: var(--green-ink); font-weight: 700; font-size: 1.25rem; }
 .no { color: rgba(43,38,34,0.35); }
 .flag { display: inline-block; width: 28px; height: 22px; vertical-align: -4px; }
+.arcade { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: #e2eece; border: 1.5px solid #2b2622; font-weight: 700; font-size: 0.85rem; }
 .active-row { color: var(--green-ink); font-weight: 700; }
 .error { color: var(--red); }
 button.del { padding: 3px 9px; font-size: 0.8rem; background: var(--sheet); border-color: var(--red); color: var(--red); box-shadow: none; }
@@ -257,8 +258,15 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
   var STEP = {
     setup: 'preparación', character: 'personaje', tool_check: 'probar los botones', ladder: 'escalera de niveles',
     free_play: 'juego libre', typing: 'Teclas del bosque', wardrobe: 'vestidor', survey: 'encuesta', goodbye: 'despedida',
-    class_end: 'actividad terminada'
+    class_end: 'actividad terminada', name: 'nombre', workshop: 'taller de juegos'
   };
+  // T39: 4to's live detail: the ladder's rung, the Workshop's challenge, the Arcade
+  function detail(s) {
+    var d = '';
+    if (s.current_step === 'ladder' && s.ladder_rung) d = ' · escalón ' + s.ladder_rung;
+    else if (s.current_step === 'workshop' && s.workshop_challenge) d = ' · desafío ' + s.workshop_challenge;
+    return d;
+  }
   var FLAG = '<svg class="flag" viewBox="0 0 28 22" aria-hidden="true"><path d="M3 21 L3 2" stroke="#2b2622" stroke-width="2.4" stroke-linecap="round"/><path d="M4 3 C10 0 15 6 24 3 L24 13 C15 16 10 10 4 13 Z" fill="#8fae4f" stroke="#2b2622" stroke-width="2" stroke-linejoin="round"/></svg>';
   var statusEl = document.getElementById('status');
   var timer = null;
@@ -337,12 +345,12 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
     var now = Date.now();
     var rows = data.sessions.filter(function (s) { return s.in_class; }).map(function (s) {
       var active = !s.ended_at && (now - new Date(s.last_seen_at).getTime()) < data.active_window_minutes * 60000;
-      var where = s.ended_at ? ('terminada' + (s.end_reason === 'class_end' ? ' (fin de clase)' : '')) : (STEP[s.current_step] || s.current_step || '—');
+      var where = s.ended_at ? ('terminada' + (s.end_reason === 'class_end' ? ' (fin de clase)' : '')) : ((STEP[s.current_step] || s.current_step || '—') + detail(s));
       return '<tr class="' + (active ? 'active-row' : '') + '" data-id="' + escapeHtml(s.session_id) + '">' +
         '<td>' + escapeHtml(s.child_name || '—') + '</td>' +
         '<td>' + escapeHtml(s.code) + '</td>' +
         '<td>' + escapeHtml(s.grade) + '°</td>' +
-        '<td>' + escapeHtml(where) + '</td>' +
+        '<td data-where="' + escapeHtml(s.current_step || '') + '">' + escapeHtml(where) + (s.arcade_open ? ' <span class="arcade" data-arcade="1">Arcade</span>' : '') + '</td>' +
         '<td class="' + (s.route_done ? 'yes' : 'no') + '" data-done="' + (s.route_done ? '1' : '0') + '">' + (s.route_done ? FLAG + ' ✓' : '—') + '</td>' +
         '<td class="' + (s.survey_done ? 'yes' : 'no') + '" data-survey="' + (s.survey_done ? '1' : '0') + '">' + (s.survey_done ? '✓' : '—') + '</td>' +
         '<td>' + fmtAgo(s.last_seen_at) + '</td>' +

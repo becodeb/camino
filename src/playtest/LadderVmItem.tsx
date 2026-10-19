@@ -302,12 +302,19 @@ export function LadderVmItem({ item, extra, onEnd, watch, autoNextMs = 8000 }: V
   // the floor is scenery here; the stage last (as in the Workshop)
   const spritesShown = [...project.sprites.filter((s) => s.kind !== 'floor' && s.kind !== 'stage'), ...project.sprites.filter((s) => s.kind === 'stage')];
   const goal = (
-    <section className={`pp-vm-goal sheet${help === 1 ? ' is-glow' : ''}`} aria-live="polite">
+    <section className={`pp-vm-goal sheet${help === 1 ? ' is-glow' : ''}`}>
       <p className="pp-vm-goal-text">{item.goal}</p>
-      {help >= 2 && (predict || help >= 3) && <p className="pp-vm-hint">{item.hint}</p>}
+      {predict && help >= 2 && <p className="pp-vm-hint">{item.hint}</p>}
+      {predict && won && <p className="pp-vm-won">¡Muy bien!</p>}
+    </section>
+  );
+  // edit items: what the check saw, the hint, the pass, right above the paper
+  const feedback = (
+    <div className="pp-vm-head" aria-live="polite">
+      {help >= 3 && <p className="pp-vm-hint">{item.hint}</p>}
       {why && !won && <p className="pp-vm-why" data-why>{why}</p>}
       {won && <p className="pp-vm-won">¡Muy bien!</p>}
-    </section>
+    </div>
   );
 
   return (
@@ -337,6 +344,7 @@ export function LadderVmItem({ item, extra, onEnd, watch, autoNextMs = 8000 }: V
               project={project} spriteId={sel} ctx={ctx} onChange={onEdit}
               paletteGlow={help >= 2 ? item.highlight : null}
               disabled={won}
+              header={feedback}
             />
           )}
         </div>

@@ -277,7 +277,7 @@ function jumpProject(c: JumpCase, solved: boolean): Project {
   const player = sprite(ID.player, 'Personaje', 'player', c.start, c.lane, {
     stacks: solved
       ? scripts([hat, make('ifElse', { COND: cond }, [[jump], [step]])])
-      : [stackOf(30, 30, [hat]), stackOf(40, 120, [make('ifElse', { COND: cond }, [[], []])]), stackOf(330, 40, [step]), stackOf(330, 120, [jump])],
+      : [stackOf(30, 30, [hat]), stackOf(40, 120, [make('ifElse', { COND: cond }, [[], []])]), stackOf(40, 300, [step]), stackOf(230, 300, [jump])],
   });
   return project([player, sprite(c.blockId, c.block, c.kind, c.at, c.lane, { costume: c.costume })]);
 }

@@ -775,8 +775,8 @@ html.pp-demo .pad > .sheet { max-width: calc(100vw - var(--demo-w) - 36px - 2 * 
 .pp-fp-wardrobe { display: grid; place-items: center; width: 100%; height: 100%; }
 
 /* ------------------------------------------------ T39: 4to's long ladder: the climbing path beside the page */
-.pp-climb-wrap { display: grid; grid-template-columns: 84px minmax(0, 1fr); min-height: 100dvh; }
-.pp-climb-col { position: sticky; top: 0; height: 100dvh; padding: 12px 0 14px 8px; display: grid; }
+.pp-climb-wrap { display: grid; grid-template-columns: 112px minmax(0, 1fr); min-height: 100dvh; }
+.pp-climb-col { position: sticky; top: 0; height: 100dvh; padding: 96px 0 14px 10px; display: grid; }
 .pp-climb { width: 100%; height: 100%; overflow: visible; }
 .pp-climb-ring { animation: pp-climb-pulse 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes pp-climb-pulse { 50% { transform: scale(1.18); opacity: 0.6; } }
@@ -803,3 +803,5 @@ html.pp-demo .pad > .sheet { max-width: calc(100vw - var(--demo-w) - 36px - 2 * 
 .pp-vm-script { display: grid; gap: 6px; justify-items: start; }
 .pp-vm-script-who { display: inline-flex; align-items: center; gap: 6px; font: 700 18px/1 var(--body); color: var(--ink-2); }
 .pp-vm-script-who .ws-thumb { width: 34px; height: 34px; }
+.pp-vm-head { display: grid; gap: 4px; }
+.pp-vm.is-predict .ws-main { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
