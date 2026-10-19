@@ -8,6 +8,7 @@
 // "volver al menú" button's drawing: the menu's cards with a blue pen arrow
 // curling back to them. Ink boiled by #rough, flat facets, no text needed.
 
+import { WardrobeIcon } from '../ui/wardrobeArt';
 import { memo, type ReactNode } from 'react';
 import { useProgress } from '../curriculum/progress';
 import { blob, leaf, wobblyLine, wobblyPoly } from '../ink/ink.js';
@@ -247,6 +248,8 @@ function CardArt({ a }: { a: Pick<Activity, 'id' | 'kind'> }) {
     case 'text_probe': return <TextProbeCard />;
     case 'race': return <RaceCardArt />;
     case 'workshop': return <WorkshopCardArt />;
+    // T39: 4to's Arcade offers the wardrobe as a card
+    case 'wardrobe': return <span className="pp-fp-wardrobe"><WardrobeIcon open size={150} /></span>;
   }
 }
 

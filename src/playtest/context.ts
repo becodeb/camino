@@ -64,6 +64,10 @@ export interface PlaytestApi {
   demoGoto(step: import('./flow').StepId): void;
   demoRouteDone(): void;
   demoEnd(): void;
+  /** T39 (4to): the child moves between the Workshop, the Arcade and the Arcade's wardrobe. */
+  arcade(to: 'workshop' | 'free_play' | 'wardrobe'): void;
+  /** T39 (4to): the Workshop's challenges 1–5 are done: the Arcade opens (and the green flag). */
+  openArcade(): void;
 }
 
 export const PlaytestContext = createContext<PlaytestApi | null>(null);

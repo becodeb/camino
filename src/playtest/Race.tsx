@@ -116,12 +116,13 @@ let memory: { sid: string; saved: RaceSaved } | null = null;
  * survives both. A race counts as begun when it mounts (a reload mid-race
  * starts the next number at the same tier); a win adds a cup and a tier.
  */
-export function Race({ levelEnded }: { levelEnded(end: LevelEnd): void }) {
+export function Race({ levelEnded, startTier = 1 }: { levelEnded(end: LevelEnd): void; startTier?: number }) {
   const sid = usePlaytest().session?.id ?? '';
-  const [saved, setSaved] = useState<RaceSaved>(() => withCups(
-    memory?.sid === sid ? memory.saved : readSaved(resumedPart('race')),
-    cupsIn(progress.get().solved),
-  ));
+  const [saved, setSaved] = useState<RaceSaved>(() => {
+    const s = withCups(memory?.sid === sid ? memory.saved : readSaved(resumedPart('race')), cupsIn(progress.get().solved));
+    // T39: 4to's Arcade starts at the turbo straights
+    return s.tier < startTier ? { ...s, tier: startTier } : s;
+  });
   const savedRef = useRef(saved);
   const [cur, setCur] = useState(() => ({ no: saved.raceNo + 1, tier: saved.tier, again: false }));
   const keep = (s: RaceSaved) => { savedRef.current = s; memory = { sid, saved: s }; setSaved(s); rememberPart('race', s); };

@@ -172,11 +172,11 @@ export function GameControllerArt() {
  * spoken and captioned) over the new free-play menu, gone on its own; it
  * never blocks the menu itself (the child can tap a card right away).
  */
-export function GamesAllBanner({ done }: { done(): void }) {
+export function GamesAllBanner({ done, text }: { done(): void; text?: string }) {
   const doneRef = useRef(done);
   doneRef.current = done;
   useEffect(() => {
-    speak(LINES.gamesAll);
+    speak(text ?? LINES.gamesAll);
     const t = realTimeout(() => doneRef.current(), 5000);
     return () => window.clearTimeout(t);
   }, []);
@@ -186,7 +186,7 @@ export function GamesAllBanner({ done }: { done(): void }) {
         <span className="tape tape-l" aria-hidden="true" />
         <span className="tape tape-r" aria-hidden="true" />
         <GameControllerArt />
-        <p className="pp-games-all-text">¡Hora de juegos!</p>
+        <p className="pp-games-all-text">{text ?? '¡Hora de juegos!'}</p>
       </div>
     </div>
   );

@@ -12,7 +12,8 @@ describe('the free-play menu', () => {
     expect(menuFor(1, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(2, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(3, none).map((a) => a.id)).toEqual(['rule_game', 'sheet', 'recess', 'editor']);
-    expect(menuFor(4, none).map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess']);
+    // T39: 4to's free play is the Arcade: back to the Workshop (a flow step, no probe needed), La carrera, the wardrobe
+    expect(menuFor(4, none).map((a) => a.id)).toEqual(['workshop', 'race', 'wardrobe']);
     expect(menuFor(5, none).map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess']);
   });
 
@@ -25,7 +26,7 @@ describe('the free-play menu', () => {
   });
 
   it('shows a probe\'s card once its component is registered, on its grade only', () => {
-    expect(menuFor(4, all).map((a) => a.id)).toEqual(['workshop', 'rule_game', 'editor', 'recess', 'game_maker']);
+    expect(menuFor(4, all).map((a) => a.id)).toEqual(['workshop', 'race', 'wardrobe']);
     expect(menuFor(5, (id: ProbeId) => id === 'text_probe').map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess', 'text_probe']);
     expect(menuFor(5, all).map((a) => a.id)).toEqual(['workshop', 'rule_game', 'editor', 'recess', 'text_probe']);
     expect(menuFor(3, all).map((a) => a.id)).not.toContain('workshop');
@@ -66,7 +67,7 @@ describe('the free-play menu', () => {
       expect(menuFor(g, none)[0]).toMatchObject({ id: 'race', kind: { race: true }, caption: 'La carrera' });
       expect(menuFor(g, none, true)[0].id).toBe('race');
     }
-    for (const g of [3, 4, 5]) expect(menuFor(g, all).map((a) => a.id)).not.toContain('race');
+    for (const g of [3, 5]) expect(menuFor(g, all).map((a) => a.id)).not.toContain('race');
   });
 
   it('plays the rule game\'s pages, the last one the child\'s own game', () => {
@@ -117,5 +118,19 @@ describe('the free-play time', () => {
     expect(budgetVerdict({ ...base, now: due, dueSince: null })).toBe('after_level');
     expect(budgetVerdict({ ...base, now: due + FREE_PLAY_GRACE_MS - 1, dueSince: due })).toBe('after_level');
     expect(budgetVerdict({ ...base, now: due + FREE_PLAY_GRACE_MS, dueSince: due })).toBe('now');
+  });
+});
+
+describe('T39: 4to\'s Arcade', () => {
+  it('no xylophone, no 1ro sheet editor, no rule game, no old game maker; the Workshop and the wardrobe are steps; the race from tier 4', async () => {
+    const { activityFor, menuFor, RACE_START_TIER } = await import('./freePlay');
+    const ids = menuFor(4, () => true).map((a) => a.id);
+    for (const gone of ['recess', 'editor', 'rule_game', 'game_maker', 'sheet']) expect(ids).not.toContain(gone);
+    expect(activityFor('workshop', 4)!.kind).toEqual({ step: 'workshop' });
+    expect(activityFor('wardrobe', 4)!.kind).toEqual({ step: 'wardrobe' });
+    // 5to keeps the Workshop as its free-play card
+    expect(activityFor('workshop', 5)!.kind).toEqual({ probe: 'workshop' });
+    expect(RACE_START_TIER[4]).toBe(4);
+    expect(RACE_START_TIER[1]).toBeUndefined();
   });
 });

@@ -24,6 +24,7 @@ export const DEMO_STEPS: { step: StepId; label: string }[] = [
   { step: 'character', label: 'Elegir el personaje' },
   { step: 'tool_check', label: 'Probar los botones' },
   { step: 'ladder', label: 'La escalera' },
+  { step: 'workshop', label: 'El taller de juegos' },
   { step: 'free_play', label: 'Jugar libre' },
   { step: 'typing', label: 'Teclas del bosque' },
   { step: 'wardrobe', label: 'El vestidor' },

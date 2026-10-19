@@ -45,7 +45,7 @@ import { nameParamFromUrl, nameScreenOn } from './childName';
 import { holdHash } from './hashHold';
 import { AdultControls } from './AdultControls';
 import { PlaytestContext, type AdultHelpKind, type AdultHelpVia, type HandState, type LevelTrack, type PlaytestApi } from './context';
-import { initialFlow, isLiveStep, reduce, ROUTE, visited, wrapPending, type FlowAction, type FlowState, type StepId, type Transition } from './flow';
+import { initialFlow, is4to, isLiveStep, reduce, routeOf, visited, wrapPending, type FlowAction, type FlowState, type StepId, type Transition } from './flow';
 import { savePreviousChild } from './previousChild';
 import { ClassEndBanner, FiveMinBanner, GamesAllBanner, RouteFlag, isLateEndClass } from './classroom';
 import { DemoBar } from './DemoBar';
@@ -129,7 +129,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
    * it once the device has moved on.
    */
   const finishSession = useCallback((patch: Parameters<typeof tel.updateSession>[0], flowAtEnd: FlowState) => {
-    const empty = flowAtEnd.activities.length === 0 && !ROUTE.some((s) => visited(flowAtEnd, s));
+    const empty = flowAtEnd.activities.length === 0 && !routeOf(flowAtEnd).some((s) => visited(flowAtEnd, s));
     tel.updateSession(empty && patch.end_reason ? { ...patch, end_reason: 'abandoned' } : patch);
     const s = tel.session;
     if (s && s.ended_at && !s.demo && !empty) {
@@ -139,13 +139,25 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
 
   const apply = useCallback((action: FlowAction): Transition | null => {
     const now = Date.now();
-    const t = reduce(flowRef.current, action, now);
-    if (t.state === flowRef.current) return null;
+    const prev = flowRef.current;
+    const t = reduce(prev, action, now);
+    if (t.state === prev) return null;
     flowRef.current = t.state;
     setFlow(t.state);
     rememberFlow(tel.session?.id, t.state, now);
     const c = t.change;
-    if (!c) return t;
+    // T39 (4to): the Arcade opened (the Workshop's challenges 1–5, "Juegos para todos", the demo)
+    if (t.state.arcadeOpen && !prev.arcadeOpen) {
+      tel.log('arcade_open', { via: action.type === 'games_all' ? 'games_all' : action.type === 'route_done' ? 'demo' : 'workshop', step: prev.step });
+    }
+    if (!c) {
+      // T39: 4to's green flag rises in the Workshop, with no step change
+      if (t.routeDoneNow) {
+        const started = tel.session?.started_at ? Date.parse(tel.session.started_at) : now;
+        tel.log('route_done', { time_ms: now - started, via: 'workshop', survey_done: !!t.state.surveyDone });
+      }
+      return t;
+    }
     tel.log('step', { ...c });
     const patch: Parameters<typeof tel.updateSession>[0] = { current_step: c.to };
     const at = new Date(now).toISOString();
@@ -180,7 +192,8 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     setSession(tel.startSession(input));
     // T38: decided once, right as the session starts (the grade is known, nothing else is yet)
     const nameOn = nameScreenOn(input.grade, nameParamFromUrl(typeof location !== 'undefined' ? location.search : ''));
-    apply({ type: 'next', nameOn });
+    // T39: the grade picks the route (4to's own), once
+    apply({ type: 'next', nameOn, grade: input.grade });
   }, [tel, apply]);
 
   const newSession = useCallback(() => {
@@ -268,6 +281,8 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     endSession,
     demoGoto: (to) => { apply({ type: 'goto', to }); },
     demoRouteDone: () => { apply({ type: 'route_done' }); },
+    arcade: (to) => { apply({ type: 'arcade', to }); },
+    openArcade: () => { apply({ type: 'arcade_open', via: 'workshop' }); },
     demoEnd: () => { apply({ type: 'goto', to: 'goodbye' }); },
   }), [session, flow, apply, log, hand, raiseHand, lowerHand, adultHelp, toggleCaptions, tel, endSession]);
 
@@ -382,6 +397,9 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
       /** Straight to a step (screenshots, checks). */
       jump: (to: StepId) => { apply({ type: 'goto', to }); },
       routeDone: () => { apply({ type: 'route_done' }); },
+      /** T39 (4to): the Arcade opened as by the Workshop, and the moves between the Workshop and the Arcade. */
+      openArcade: () => { apply({ type: 'arcade_open', via: 'workshop' }); },
+      arcade: (to: 'workshop' | 'free_play' | 'wardrobe') => { apply({ type: 'arcade', to }); },
       /** Checks: the hand raised as after the third help step (the child's hold no longer raises it). */
       raiseHand: () => raiseHand('help_step_3'),
       start,
@@ -403,7 +421,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
             <ClassEndBanner key={ending} done={() => { setEnding(null); endSession('class_end'); apply({ type: 'class_end' }); }} />
           )}
           {session && banner != null && ending == null && live && <FiveMinBanner key={banner} done={() => setBanner(null)} />}
-          {session && gamesAll != null && ending == null && live && <GamesAllBanner key={gamesAll} done={() => setGamesAll(null)} />}
+          {session && gamesAll != null && ending == null && live && <GamesAllBanner key={gamesAll} done={() => setGamesAll(null)} {...(is4to(flow) ? { text: '¡Se abrió el Arcade!' } : {})} />}
           {session && flow.step !== 'class_end' && <AdultControls />}
           {session?.demo && <DemoBar />}
         </div>

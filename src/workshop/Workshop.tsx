@@ -67,6 +67,8 @@ export interface WorkshopProps {
   onProgress?(info: WorkshopInfo): void;
   /** Offered as "Terminé" once the core challenges are done (a flow step moves on). */
   onDone?(): void;
+  /** T39: something of the host's in the bar, before the seed pouch (4to's route: the Arcade button). */
+  barExtra?: ReactNode;
 }
 
 const SKIP_AFTER_MS = 6 * 60_000;
@@ -84,7 +86,7 @@ const PHASE_HINT = {
   2: 'Probá tocar espacio dos veces. ¿A qué número va la y? ¿Cambia alguna vez?',
 } as Record<number, string>;
 
-export function Workshop({ grade, initial, onProgress, onDone }: WorkshopProps) {
+export function Workshop({ grade, initial, onProgress, onDone, barExtra }: WorkshopProps) {
   const api = usePlaytest();
   const apiRef = useRef(api);
   apiRef.current = api;
@@ -379,7 +381,7 @@ export function Workshop({ grade, initial, onProgress, onDone }: WorkshopProps) 
         instruction={<span className="drawn-task" aria-hidden="true"><PlayerFace className="bar-face" /><ThenArrow /><svg viewBox="0 0 26 26" width="34" height="34"><FlagGlyph /></svg></span>}
         title={<><b>El taller de juegos</b>{free ? `desafíos libres · ${freeCount(prog)} de ${FREE.length}` : `desafío ${n} de ${LAST_CORE}`}</>}
         pages={<Strip prog={prog} onFree={() => setFreeList(true)} />}
-        aside={<SeedPouch />}
+        aside={barExtra ? <>{barExtra}<SeedPouch /></> : <SeedPouch />}
         onSpeak={() => speak(focusC ? focusC.goal : 'Desafíos libres: elegí el que quieras.')}
         onHelp={onHelp}
       />

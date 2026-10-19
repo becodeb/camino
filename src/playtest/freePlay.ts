@@ -13,11 +13,14 @@
 
 import { sheetByN } from '../curriculum/primer';
 
-export type ActivityId = 'sheet' | 'recess' | 'guardas' | 'editor' | 'rule_game' | 'game_maker' | 'text_probe' | 'race' | 'workshop';
+export type ActivityId = 'sheet' | 'recess' | 'guardas' | 'editor' | 'rule_game' | 'game_maker' | 'text_probe' | 'race' | 'workshop' | 'wardrobe';
 export type ProbeId = Extract<ActivityId, 'game_maker' | 'text_probe' | 'workshop'>;
 
-/** How an activity is played: a sheet of 1ro's year (its pages move by the hash), the rule game's pages, a probe's component, or the race (T33). */
-export type ActivityKind = { sheet: number } | { rules: true } | { probe: ProbeId } | { race: true };
+/**
+ * How an activity is played: a sheet of 1ro's year (its pages move by the hash), the rule game's pages, a probe's component, or the race (T33).
+ * T39 (4to's Arcade): `step`, a flow step of its own (the Workshop, the wardrobe): the card moves the flow there.
+ */
+export type ActivityKind = { sheet: number } | { rules: true } | { probe: ProbeId } | { race: true } | { step: 'workshop' | 'wardrobe' };
 
 export interface Activity {
   id: ActivityId;
@@ -41,7 +44,9 @@ export const MENU: Record<number, readonly ActivityId[]> = {
   1: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   2: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   3: ['rule_game', 'sheet', 'recess', 'editor'],
-  4: ['workshop', 'rule_game', 'editor', 'recess', 'game_maker'],
+  // T39: 4to's free play is the Arcade (flow.ts): back to the Workshop, La carrera from tier 4, the wardrobe;
+  // T41 fills its slot here with the typing race and "Tu juego". No xylophone, no 1ro sheet, no rule game, no old game maker.
+  4: ['workshop', 'race', 'wardrobe'],
   5: ['workshop', 'rule_game', 'editor', 'recess', 'text_probe'],
 };
 
@@ -61,7 +66,11 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
     case 'game_maker': return { id, kind: { probe: id }, say: 'Hacé tu juego.', caption: 'Hacé tu juego' };
     case 'text_probe': return { id, kind: { probe: id }, say: 'Del bloque al texto.', caption: 'Bloques y texto' };
     case 'race': return { id, kind: { race: true }, say: 'La carrera: armá el camino con flechas y ganá la carrera.', caption: 'La carrera' };
-    case 'workshop': return { id, kind: { probe: id }, say: 'El taller de juegos: programá tu propio juego, como en Scratch.', caption: 'Taller de juegos' };
+    // T39: in 4to's Arcade the Workshop card goes back to the Workshop step
+    case 'workshop': return grade === 4
+      ? { id, kind: { step: 'workshop' }, say: 'El taller de juegos: volvé a tu juego.', caption: 'Taller de juegos' }
+      : { id, kind: { probe: id }, say: 'El taller de juegos: programá tu propio juego, como en Scratch.', caption: 'Taller de juegos' };
+    case 'wardrobe': return { id, kind: { step: 'wardrobe' }, say: 'El vestidor: cambiale la ropa a tu personaje.', caption: 'El vestidor' };
     default: return null;
   }
 }
@@ -87,6 +96,9 @@ export const MENU_LINES = {
   /** The time for free play is over: after the page the child was on. */
   over: '¡Ahora vamos a otro juego!',
 };
+
+/** T39: the race starts at this tier in a grade's free play (4to's Arcade: the turbo straights); 1 elsewhere. */
+export const RACE_START_TIER: Readonly<Record<number, number>> = { 4: 4 };
 
 // ------------------------------------------------------------------ the time
 

@@ -184,9 +184,9 @@ describe('times and words', () => {
 });
 
 describe('the probe on the menu', () => {
-  it('is registered: its card shows on 4to\'s menu (not on 5to\'s, where the adult can open it)', () => {
+  it('is registered; T39: no longer on 4to\'s menu (4to\'s free play is the Arcade), nor on 5to\'s (the adult can open it)', () => {
     expect(hasProbe('game_maker')).toBe(true);
-    expect(menuFor(4, hasProbe).map((a) => a.id)).toContain('game_maker');
+    expect(menuFor(4, hasProbe).map((a) => a.id)).not.toContain('game_maker');
     expect(menuFor(5, hasProbe).map((a) => a.id)).not.toContain('game_maker');
   });
 });

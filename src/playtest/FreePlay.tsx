@@ -40,8 +40,8 @@ import { ThenArrow } from '../ui/art';
 import { useMuted } from '../ui/mute';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { usePlaytest } from './context';
-import { activityFor, budgetFrom, budgetVerdict, menuFor, MENU_LINES, type Activity, type ProbeId } from './freePlay';
-import { wrapPending } from './flow';
+import { activityFor, budgetFrom, budgetVerdict, menuFor, MENU_LINES, RACE_START_TIER, type Activity, type ProbeId } from './freePlay';
+import { freePlayEndless, is4to, wrapPending } from './flow';
 import { provideDemoActions } from './demo';
 import { setHashConsumer } from './hashHold';
 import { Cheer, WalkOn } from './interlude';
@@ -151,6 +151,8 @@ export function FreePlay() {
     keep();
     stopSpeaking();
     log('choice', { activity: a.id, visit: n, ...(by ? { by } : {}) });
+    // T39 (4to's Arcade): the Workshop and the wardrobe are flow steps of their own
+    if ('step' in a.kind) { apiRef.current.arcade(a.kind.step); return; }
     apiRef.current.did(a.id);
     visit.current = { a, n, at: Date.now(), levels: 0, wins: 0, extras: 0 };
     const sheet = 'sheet' in a.kind ? sheetByN(a.kind.sheet) : null;
@@ -209,7 +211,8 @@ export function FreePlay() {
       if (finished.current) return;
       const f = apiRef.current.flow;
       const wrapping = wrapPending(f);
-      if (f.routeDone && !wrapping) return;
+      // T39: 4to's Arcade has no end either
+      if (freePlayEndless(f) && !wrapping) return;
       const cur = viewRef.current;
       // T33: the race, like a probe, is an activity of its own: "quedan 5 minutos" gives it the grace of a non-level page (its podium may already be told)
       const inProbe = cur.kind === 'activity' && ('probe' in cur.a.kind || 'race' in cur.a.kind);
@@ -291,7 +294,7 @@ export function FreePlay() {
     return <Cheer line={MENU_LINES.over} say={MENU_LINES.over} done={api.next} />;
   }
   if (view.kind === 'menu') {
-    return <Menu key={view.n} cards={menu} first={view.n === 0} onPick={pick} />;
+    return <Menu key={view.n} cards={menu} first={view.n === 0} onPick={pick} arcade={is4to(api.flow)} />;
   }
 
   const a = view.a;
@@ -311,8 +314,8 @@ export function FreePlay() {
     body = <RuleGame key={view.n} levelEnded={levelEnded} listen={counted} done={() => toMenu('done')} />;
   } else if ('race' in a.kind) {
     // T33: endless races; each one finished is a won "level" and the place where free play's time may end
-    body = <Race key={view.n} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} />;
-  } else {
+    body = <Race key={view.n} startTier={RACE_START_TIER[grade]} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} />;
+  } else if ('probe' in a.kind) {
     const Probe = PROBES[a.kind.probe];
     body = Probe ? <Probe key={view.n} activity={a.kind.probe} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} done={() => toMenu('done')} /> : null;
   }
@@ -373,7 +376,7 @@ function MenuTask() {
   );
 }
 
-function Menu({ cards, first, onPick }: { cards: Activity[]; first: boolean; onPick: (a: Activity) => void }) {
+function Menu({ cards, first, onPick, arcade }: { cards: Activity[]; first: boolean; onPick: (a: Activity) => void; arcade?: boolean }) {
   const rootRef = useRef<HTMLElement>(null);
   const ghost = useGhost(rootRef);
   const [lit, setLit] = useState<string | null>(null);
@@ -416,13 +419,15 @@ function Menu({ cards, first, onPick }: { cards: Activity[]; first: boolean; onP
     <main ref={rootRef} className="level mode-freeplay pp-menu" data-menu={cards.map((c) => c.id).join(' ')}>
       <Bar
         instruction={<MenuTask />}
-        title={<b>Juego libre</b>}
+        title={<b>{arcade ? 'Arcade' : 'Juego libre'}</b>}
         pages={null}
         aside={<SeedPouch />}
         onSpeak={() => speak(all)}
         onHelp={() => { ghost([{ do: 'point', at: ['.pp-fp-card'] }]); }}
       />
       <section className="pp-menu-stage" aria-label="Elegí un juego">
+        {/* T39: 4to's Arcade says what it is, large, inside the screen */}
+        {arcade && <h1 className="pp-arcade-h">Arcade</h1>}
         <div className={`sheet pp-menu-sheet n${cards.length}`}>
           <span className="tape tape-l" aria-hidden="true" />
           <span className="tape tape-r" aria-hidden="true" />

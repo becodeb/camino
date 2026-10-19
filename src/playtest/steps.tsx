@@ -37,6 +37,7 @@ import { Ladder } from './Ladder';
 import { ToolCheck } from './ToolCheck';
 import { TypingStep } from './TypingStep';
 import { WardrobeStep } from './WardrobeStep';
+import { WorkshopStep } from './WorkshopStep';
 import type { StartInput } from './telemetry';
 import { ClassEnd } from './classroom';
 import { useHold } from './AdultControls';
@@ -193,4 +194,5 @@ export const STEP_VIEWS: Record<StepId, ComponentType<StepViewProps>> = {
   survey: Survey,
   goodbye: Goodbye,
   class_end: ClassEnd,
+  workshop: WorkshopStep,
 };
