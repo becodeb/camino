@@ -19,6 +19,7 @@ import { Sprout } from './round2Art';
 import { Pencil } from '../ui/workshopArt';
 import type { Activity } from './freePlay';
 import { RaceCardArt } from './raceArt';
+import { WorkshopCardArt } from '../workshop/art';
 
 const INK = '#2b2622';
 const PEN = '#3d6ea5';
@@ -245,6 +246,7 @@ function CardArt({ a }: { a: Pick<Activity, 'id' | 'kind'> }) {
     case 'game_maker': return <GameMakerCard />;
     case 'text_probe': return <TextProbeCard />;
     case 'race': return <RaceCardArt />;
+    case 'workshop': return <WorkshopCardArt />;
   }
 }
 

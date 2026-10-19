@@ -106,7 +106,7 @@ export interface DemoActions {
   skip?: () => void;
   solve?: () => void;
   /** What the buttons name: "nivel" (a page), "ronda" (the typing game's round), "juego" (an activity), "paso" (a whole step), "carrera" (T33: the race on screen). */
-  noun?: 'nivel' | 'ronda' | 'juego' | 'paso' | 'carrera';
+  noun?: 'nivel' | 'ronda' | 'juego' | 'paso' | 'carrera' | 'desafío';
 }
 
 let entries: { a: DemoActions; n: number }[] = [];

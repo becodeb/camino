@@ -16,6 +16,7 @@ import type { ProbeId } from './freePlay';
 import type { LevelEnd } from './PlaytestLevel';
 import { GameMaker } from './GameMaker';
 import { TextProbe } from './TextProbe';
+import { WorkshopActivity } from '../workshop/Workshop';
 
 export interface ProbeProps {
   /** The activity id to log on the probe's pages (`game_maker`, `text_probe`). */
@@ -26,7 +27,8 @@ export interface ProbeProps {
   done(): void;
 }
 
-export const PROBES: Partial<Record<ProbeId, ComponentType<ProbeProps>>> = { game_maker: GameMaker, text_probe: TextProbe };
+// T40: the Game Workshop plays like a probe (its own screen; finishing its seven challenges is free play's "level" end)
+export const PROBES: Partial<Record<ProbeId, ComponentType<ProbeProps>>> = { game_maker: GameMaker, text_probe: TextProbe, workshop: WorkshopActivity };
 
 export const hasProbe = (id: ProbeId) => !!PROBES[id];
 

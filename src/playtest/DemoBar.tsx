@@ -30,7 +30,7 @@ export const DEMO_STEPS: { step: StepId; label: string }[] = [
   { step: 'survey', label: 'La encuesta' },
 ];
 
-const NOUN = { nivel: 'este nivel', ronda: 'esta ronda', juego: 'este juego', paso: 'este paso', carrera: 'esta carrera' } as const;
+const NOUN = { nivel: 'este nivel', ronda: 'esta ronda', juego: 'este juego', paso: 'este paso', carrera: 'esta carrera', 'desafío': 'este desafío' } as const;
 
 export function DemoBar() {
   const api = usePlaytest();

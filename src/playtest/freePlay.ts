@@ -7,12 +7,14 @@
 // (T7 "Hacé tu juego", T8 "Del bloque al texto") get a card only once their
 // component is in PROBES (probes.ts). T33: "La carrera" (Race.tsx), a kart
 // race against two critters built with arrow blocks, first on 1ro's and
-// 2do's menus.
+// 2do's menus. T40: "El taller de juegos" (src/workshop/), the Scratch-like
+// Game Workshop, first on 4to's and 5to's menus (T39 makes it 4to's
+// mandatory step).
 
 import { sheetByN } from '../curriculum/primer';
 
-export type ActivityId = 'sheet' | 'recess' | 'guardas' | 'editor' | 'rule_game' | 'game_maker' | 'text_probe' | 'race';
-export type ProbeId = Extract<ActivityId, 'game_maker' | 'text_probe'>;
+export type ActivityId = 'sheet' | 'recess' | 'guardas' | 'editor' | 'rule_game' | 'game_maker' | 'text_probe' | 'race' | 'workshop';
+export type ProbeId = Extract<ActivityId, 'game_maker' | 'text_probe' | 'workshop'>;
 
 /** How an activity is played: a sheet of 1ro's year (its pages move by the hash), the rule game's pages, a probe's component, or the race (T33). */
 export type ActivityKind = { sheet: number } | { rules: true } | { probe: ProbeId } | { race: true };
@@ -39,8 +41,8 @@ export const MENU: Record<number, readonly ActivityId[]> = {
   1: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   2: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   3: ['rule_game', 'sheet', 'recess', 'editor'],
-  4: ['rule_game', 'editor', 'recess', 'game_maker'],
-  5: ['rule_game', 'editor', 'recess', 'text_probe'],
+  4: ['workshop', 'rule_game', 'editor', 'recess', 'game_maker'],
+  5: ['workshop', 'rule_game', 'editor', 'recess', 'text_probe'],
 };
 
 const title = (n: number) => sheetByN(n)?.title ?? '';
@@ -59,6 +61,7 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
     case 'game_maker': return { id, kind: { probe: id }, say: 'Hacé tu juego.', caption: 'Hacé tu juego' };
     case 'text_probe': return { id, kind: { probe: id }, say: 'Del bloque al texto.', caption: 'Bloques y texto' };
     case 'race': return { id, kind: { race: true }, say: 'La carrera: armá el camino con flechas y ganá la carrera.', caption: 'La carrera' };
+    case 'workshop': return { id, kind: { probe: id }, say: 'El taller de juegos: programá tu propio juego, como en Scratch.', caption: 'Taller de juegos' };
     default: return null;
   }
 }

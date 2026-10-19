@@ -1,0 +1,273 @@
+/* The Game Workshop (T40): palette | workspace | stage and sprites, in the
+   notebook's paper, ink and cut-paper primitives (notebook.css, camino.css),
+   sized for 1366×768, 1280×800 and 1200×750 with touch or mouse. */
+
+.pp-page.ws-page {
+  --right: clamp(360px, 31vw, 450px);
+  height: 100dvh;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  place-items: stretch;
+  gap: 10px;
+  padding: 10px 14px 12px;
+  overflow: hidden;
+}
+.ws-page .level-bar { grid-area: auto; min-height: 66px; }
+.ws-main { display: grid; grid-template-columns: minmax(0, 1fr) var(--right); gap: 12px; min-height: 0; }
+.ws-left { position: relative; display: grid; min-height: 0; min-width: 0; }
+
+/* ------------------------------------------------ the editor: palette | workspace */
+.ws-editor { display: grid; grid-template-columns: 276px minmax(0, 1fr); gap: 10px; min-height: 0; min-width: 0; }
+.ws-editor.is-disabled { pointer-events: none; }
+.ws-pal {
+  position: relative;
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  min-height: 0;
+  background: var(--sheet);
+  border: 2.6px solid var(--ink);
+  border-radius: 12px 9px 13px 8px / 9px 13px 8px 12px;
+  overflow: hidden;
+}
+.ws-pal.is-deleting { background: #f6dcd6; }
+.ws-cats { display: flex; flex-direction: column; gap: 1px; padding: 6px 0; border-right: 2px solid rgba(43, 38, 34, 0.2); overflow-y: auto; scrollbar-width: none; }
+.ws-cat { display: grid; justify-items: center; gap: 2px; padding: 5px 1px; border: 0; background: none; color: var(--ink); cursor: pointer; font: 700 9.5px/1.05 var(--body); letter-spacing: -0.02em; }
+.ws-cat-dot { width: 22px; height: 22px; border-radius: 50%; background: var(--cat); border: 2px solid var(--ink); }
+.ws-cat.is-on { background: rgba(61, 110, 165, 0.12); }
+.ws-cat.is-on .ws-cat-dot { box-shadow: 0 0 0 3px var(--sheet), 0 0 0 5px var(--cat-dark); }
+.ws-cat.is-glow .ws-cat-dot { animation: ws-pulse 1.1s ease-in-out infinite; }
+.ws-cat-name { max-width: 59px; white-space: nowrap; text-align: center; }
+.ws-ico { flex: none; display: inline-block; vertical-align: -4px; overflow: visible; }
+.ws-tool, .ws-mini, .ws-opt { display: inline-flex; align-items: center; gap: 6px; }
+.ws-pal-list { position: relative; overflow-y: auto; overflow-x: hidden; padding: 4px 4px 40px; touch-action: pan-y; overscroll-behavior: contain; }
+.ws-pal-sec h3 { margin: 10px 4px 2px; font: 700 13px/1 var(--body); color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+.ws-pal-sec h3::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--cat); border: 1.6px solid var(--ink); }
+.ws-pal-item { width: fit-content; touch-action: none; cursor: grab; border-radius: 10px; }
+.ws-pal-item:active { cursor: grabbing; }
+.ws-pal-item.is-glow { animation: ws-glow 1.2s ease-in-out infinite; background: rgba(240, 210, 122, 0.45); }
+.ws-pal-svg { display: block; overflow: visible; }
+.ws-trash { position: sticky; bottom: 4px; margin: 10px 4px 0; padding: 10px; text-align: center; font: 700 16px/1.2 var(--body); color: #8e3a2f; background: #fbf7ee; border: 2.4px dashed #c9574a; border-radius: 10px; }
+
+.ws-col { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; min-height: 0; min-width: 0; }
+.ws-paper {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  border: 2.6px solid var(--ink);
+  border-radius: 9px 13px 8px 12px / 12px 8px 13px 9px;
+  background-color: #fbf7ee;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 23px, rgba(61, 110, 165, 0.13) 23px 24px),
+    repeating-linear-gradient(90deg, transparent 0 23px, rgba(61, 110, 165, 0.13) 23px 24px);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+.ws-paper:active { cursor: grabbing; }
+.ws-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+.ws-empty { position: absolute; left: 50%; top: 45%; translate: -50% -50%; margin: 0; font: 400 24px/1.2 var(--hand); color: var(--blue-ink); pointer-events: none; }
+.ws-tools { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
+.ws-tool { --fill: var(--sheet); font: 700 14px/1 var(--body); color: var(--ink); padding: 8px 12px; min-height: 40px; cursor: pointer; }
+
+.ws-txt { font: 700 14px/1 var(--body); fill: var(--ink); pointer-events: none; }
+.ws-blk { cursor: grab; }
+.ws-field { cursor: pointer; }
+.ws-blk.is-glow > .ws-shape { stroke: var(--blue-ink); stroke-width: 4; animation: ws-glow-stroke 1.1s ease-in-out infinite; }
+.ws-blk.is-dim { opacity: 0.45; }
+.ws-blk.is-shadow > .ws-shape { opacity: 0.75; }
+.ws-paper.is-investigate { cursor: pointer; }
+.ws-paper.is-investigate .ws-blk:hover > .ws-shape { stroke: var(--blue-ink); stroke-width: 3.6; }
+.ws-drag { position: fixed; left: 0; top: 0; z-index: 80; pointer-events: none; will-change: transform; }
+.ws-drag svg { rotate: 2deg; }
+.ws-drag.is-deleting { opacity: 0.45; }
+
+/* ------------------------------------------------ popovers: number pad, menus, text */
+.ws-pop-back { position: fixed; inset: 0; z-index: 90; }
+.ws-pop { position: absolute; --fill: var(--sheet); padding: 10px; }
+.ws-menu { display: grid; gap: 2px; max-height: 360px; overflow-y: auto; }
+.ws-opt { display: block; width: 100%; min-height: 48px; padding: 8px 14px; border: 0; border-radius: 8px; background: none; text-align: left; font: 700 19px/1.1 var(--body); color: var(--ink); cursor: pointer; }
+.ws-opt:hover, .ws-opt.is-on { background: rgba(61, 110, 165, 0.14); }
+.ws-num-show { display: block; min-height: 54px; padding: 8px 14px; border: 2.4px solid var(--ink); border-radius: 10px; background: #fffdf6; text-align: right; font: 700 32px/1.1 var(--body); color: var(--ink); }
+.ws-num-show.is-fresh { color: var(--ink-2); }
+.ws-num-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+.ws-key { --fill: #fbf7ee; min-height: 54px; font: 700 25px/1 var(--body); color: var(--ink); cursor: pointer; }
+.ws-key-del { --fill: #f3cfc9; }
+.ws-key-ok { --fill: var(--orange); grid-column: span 2; font-size: 21px; }
+.ws-textpad { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.ws-textpad input { min-width: 0; height: 54px; padding: 0 12px; border: 2.4px solid var(--ink); border-radius: 10px; background: #fffdf6; font: 700 22px/1 var(--body); color: var(--ink); }
+.ws-textpad .ws-key-ok { padding: 0 16px; min-height: 54px; }
+
+/* ------------------------------------------------ the goal, in the screen */
+.ws-note {
+  --fill: #fff4cf;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px 8px 12px;
+}
+.ws-note-n { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: var(--orange); border: 2.6px solid var(--ink); font: 700 22px/1 var(--body); color: var(--ink); }
+.ws-note-text { display: grid; gap: 2px; min-width: 0; }
+.ws-note-title { font: 700 15px/1.1 var(--body); color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.ws-note-goal { font: 700 19px/1.25 var(--body); color: var(--ink); }
+.ws-note-hint { font: 700 16px/1.25 var(--body); color: var(--blue-ink); }
+.ws-note-why { font: 700 17px/1.25 var(--body); color: #a93c2e; animation: ws-why 420ms ease-out both; }
+.ws-note.has-why { --fill: #fbe2d6; }
+.ws-note-acts { display: grid; grid-template-columns: auto auto; gap: 6px; }
+.ws-mini { --fill: var(--sheet); font: 700 14px/1 var(--body); color: var(--ink); padding: 6px 10px; min-height: 38px; white-space: nowrap; cursor: pointer; }
+.ws-skip { --fill: #e6dccb; color: var(--ink-2); }
+.ws-done { --fill: var(--green); }
+.ws-flag-inline { display: inline-block; vertical-align: -4px; }
+.ws-investigate { --fill: #dfe9f5; }
+.ws-investigate .ws-note-n { background: var(--blue); }
+
+/* ------------------------------------------------ the big cards (goal, predict, reveal, free) */
+.ws-card {
+  position: absolute;
+  inset: 4px;
+  z-index: 30;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 18px 24px 20px;
+  overflow-y: auto;
+  animation: ws-card-in 320ms cubic-bezier(.3, .6, .35, 1) both;
+}
+.ws-card-head { display: flex; align-items: center; gap: 16px; }
+.ws-card-head h2 { margin: 0; font: 700 32px/1.05 var(--body); color: var(--ink); }
+.ws-card-n { flex: none; width: 66px; height: 66px; display: grid; place-items: center; border-radius: 50%; background: var(--orange); border: 3px solid var(--ink); font: 700 34px/1 var(--body); color: var(--ink); rotate: -4deg; }
+.ws-card-goal { margin: 6px 0 0; font: 700 23px/1.3 var(--body); color: var(--ink); }
+.ws-card-hint { margin: 0; font: 700 19px/1.3 var(--body); color: var(--blue-ink); }
+.ws-card-body { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.ws-card-preview { margin: 0; display: grid; gap: 6px; }
+.ws-card-preview figcaption, .ws-predict-code figcaption { font: 400 21px/1 var(--hand); color: var(--blue-ink); }
+.ws-card-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; font: 400 19px/1.3 var(--body); color: var(--ink); }
+.ws-card-facts b { display: block; font: 700 15px/1.2 var(--body); color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.ws-card-go { justify-self: end; min-width: 220px; }
+.ws-predict { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: start; }
+.ws-predict-code { margin: 0; display: grid; gap: 6px; padding: 10px; background: #fbf7ee; border: 2px dashed rgba(43, 38, 34, 0.35); border-radius: 10px; }
+.ws-code-pic { display: block; overflow: visible; max-width: 100%; height: auto; }
+.ws-choices { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ws-choice { --fill: var(--sheet); width: 100%; display: grid; grid-template-columns: minmax(150px, 44%) minmax(0, 1fr); align-items: center; gap: 14px; padding: 8px 14px 8px 8px; font: 700 20px/1.25 var(--body); color: var(--ink); text-align: left; cursor: pointer; }
+.ws-choice:hover { --fill: #fff4cf; }
+.ws-choice .ws-stage-box, .ws-choice .ws-stage { pointer-events: none; }
+.ws-reveal { inset: auto 8% auto 8%; top: 12%; justify-items: center; text-align: center; }
+.ws-reveal-stamp { font: 400 64px/1 var(--hand); color: var(--blue-ink); rotate: -5deg; }
+.ws-reveal.is-no .ws-reveal-stamp { color: #c9574a; }
+.ws-reveal-text { margin: 0; font: 700 24px/1.3 var(--body); color: var(--ink); }
+.ws-reveal .ws-card-go { justify-self: center; }
+.ws-free-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ws-free-item { --fill: var(--sheet); width: 100%; min-height: 130px; display: grid; align-content: start; gap: 4px; padding: 12px 14px; text-align: left; color: var(--ink); cursor: pointer; }
+.ws-free-item b { font: 700 19px/1.15 var(--body); }
+.ws-free-item span { font: 400 16px/1.3 var(--body); }
+.ws-free-item .ws-free-star { line-height: 0; }
+.ws-free-item.is-done { --fill: #fff4cf; }
+.ws-free-item.is-focus { --fill: #dfe9f5; }
+.ws-free-acts { display: flex; justify-content: flex-end; gap: 12px; }
+.ws-example { position: absolute; right: 10px; bottom: 58px; z-index: 25; width: min(400px, 70%); max-height: 72%; overflow-y: auto; display: grid; gap: 6px; padding: 14px 16px; animation: ws-card-in 280ms ease-out both; }
+.ws-example p { margin: 0; font: 700 17px/1.3 var(--body); color: var(--ink); }
+.ws-example figure { margin: 0; display: grid; gap: 4px; }
+.ws-example figcaption { font: 400 19px/1 var(--hand); color: var(--blue-ink); }
+.ws-example-title { font: 700 14px/1.2 var(--body); color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.ws-x { position: absolute; top: 6px; right: 8px; width: 40px; height: 40px; border: 0; background: none; font: 700 30px/1 var(--body); color: var(--ink); cursor: pointer; }
+
+/* the celebration: a stamp and a star, short */
+.ws-party { position: absolute; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(251, 247, 238, 0.55); cursor: pointer; }
+.ws-party-card { display: grid; justify-items: center; gap: 8px; padding: 24px 40px; background: var(--sheet); border: 3px solid var(--ink); border-radius: 18px 12px 20px 14px / 12px 20px 14px 18px; rotate: -2deg; animation: ws-stamp 520ms cubic-bezier(.3, .6, .35, 1) both; }
+.ws-party-star { width: 110px; height: 110px; animation: ws-spin 900ms cubic-bezier(.3, .6, .35, 1) both; }
+.ws-party-star path { fill: var(--yellow); stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+.ws-party-title { font: 400 50px/1 var(--hand); color: var(--ink); }
+.ws-party-sub { font: 700 20px/1.2 var(--body); color: var(--ink-2); }
+.ws-party-arcade { margin-top: 6px; padding: 10px 18px; font: 700 24px/1.2 var(--body); color: var(--ink); background: #dfe9f5; border: 2.6px solid var(--ink); border-radius: 12px; animation: ws-why 500ms ease-out 500ms both; }
+
+/* ------------------------------------------------ the strip of stars (in the bar) */
+.ws-strip { display: inline-flex; align-items: center; gap: 0; flex: none; }
+.ws-star-slot { position: relative; width: 31px; height: 31px; display: grid; place-items: center; }
+.ws-star-slot svg { position: absolute; inset: 0; overflow: visible; }
+.ws-star-shape { fill: #f2ebde; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+.ws-star-slot b { position: relative; font: 700 11px/1 var(--body); color: var(--ink-2); margin-top: 2px; }
+.ws-star-slot.is-solved .ws-star-shape { fill: var(--yellow); }
+.ws-star-slot.is-solved b { color: var(--ink); }
+.ws-star-slot.is-skipped .ws-star-shape { fill: #e6dccb; stroke-dasharray: 2 2; }
+.ws-star-slot.is-here { animation: ws-here 1.6s ease-in-out infinite; }
+.ws-star-slot.is-here .ws-star-shape { fill: #fbf7ee; stroke: var(--blue-ink); stroke-width: 2.4; }
+.ws-free-pill { --fill: var(--sheet); margin-left: 6px; padding: 5px 9px; font: 700 14px/1 var(--body); color: var(--ink); cursor: pointer; }
+.ws-free-pill:disabled { opacity: 0.45; cursor: default; }
+
+/* ------------------------------------------------ the stage and the sprites */
+.ws-right { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; min-height: 0; }
+.ws-stage-box { display: grid; gap: 6px; min-width: 0; }
+.ws-stage-bar { display: flex; align-items: center; gap: 8px; }
+.ws-go, .ws-stop, .ws-bigger { --fill: var(--sheet); width: 58px; height: 48px; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.ws-go.is-on { --fill: #d4e8c4; }
+.ws-stop:disabled { opacity: 0.55; cursor: default; }
+.ws-bigger { margin-left: auto; font: 700 24px/1 var(--body); color: var(--ink); }
+.ws-stage { position: relative; aspect-ratio: 4 / 3; border: 3px solid var(--ink); border-radius: 8px; overflow: hidden; background: #f4ecdc; touch-action: manipulation; }
+.ws-stage-svg { display: block; width: 100%; height: 100%; }
+.ws-stage.is-shaking { animation: ws-shake 300ms linear both; }
+.ws-mini-stage .ws-stage, .ws-preview-stage .ws-stage { border-width: 2.4px; }
+.ws-mon-name { font: 700 13px/1 var(--body); fill: var(--ink); }
+.ws-mon-val { font: 700 14px/1 var(--body); fill: var(--ink); }
+.ws-say-text { font: 400 19px/1 var(--hand); fill: var(--ink); }
+.ws-plus { font: 700 18px/1 var(--body); fill: var(--ink); animation: ws-plus 700ms ease-out both; }
+.ws-spark { animation: ws-spark 600ms ease-out both; }
+.ws-burst.is-hit { transform-box: fill-box; transform-origin: center; animation: ws-hit 500ms ease-out both; }
+.ws-speed-line { animation: ws-speed 420ms linear infinite; }
+.ws-wing { transform-box: fill-box; transform-origin: 50% 100%; animation: ws-flap 260ms ease-in-out infinite alternate; }
+.ws-seed-ring { transform-box: fill-box; transform-origin: center; animation: ws-spin-slow 6s linear infinite; }
+.ws-end { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 6px; background: rgba(43, 38, 34, 0.55); animation: ws-card-in 260ms ease-out both; }
+.ws-end-title { font: 400 clamp(36px, 5vw, 64px)/1 var(--hand); color: var(--yellow); text-shadow: 3px 3px 0 var(--ink); rotate: -4deg; }
+.ws-end.is-lost .ws-end-title { color: #f3b0a3; }
+.ws-end-sub { font: 700 18px/1 var(--body); color: #fbf7ee; }
+.ws-end-again { --fill: var(--orange); padding: 10px 22px; font: 700 21px/1 var(--body); color: var(--ink); cursor: pointer; }
+.ws-big-back { position: fixed; inset: 0; z-index: 49; background: rgba(43, 38, 34, 0.5); }
+.ws-right.is-big .ws-main-stage { position: fixed; z-index: 50; left: 50%; top: 50%; translate: -50% -50%; width: min(92vw, calc((100dvh - 120px) * 4 / 3)); padding: 12px; background: var(--paper); border-radius: 14px; }
+
+.ws-sprites { min-height: 0; overflow-y: auto; display: grid; gap: 8px; align-content: start; padding: 2px 4px 4px 2px; }
+.ws-sprite-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ws-sprite { --fill: var(--sheet); position: relative; display: grid; justify-items: center; align-content: start; gap: 0; padding: 4px 4px 5px; min-height: 80px; cursor: pointer; color: var(--ink); }
+.ws-thumb { width: 46px; height: 46px; overflow: visible; }
+.ws-sprite-name { font: 700 14px/1.1 var(--body); }
+.ws-sprite-tag { font: 700 11px/1 var(--body); color: var(--ink-2); }
+.ws-sprite.is-hidden .ws-thumb { opacity: 0.38; }
+.ws-sprite.is-sel { --fill: #dfe9f5; }
+.ws-sprite.is-sel::before { border-color: var(--blue-ink); border-width: 3.4px; }
+.ws-sprite.is-drop { --fill: #fff4cf; }
+.ws-sprite.is-cue { animation: ws-cue 1.4s ease-in-out infinite; }
+.ws-dup { position: absolute; top: -6px; right: -6px; width: 36px; height: 36px; padding: 0; display: grid; place-items: center; border: 2px solid var(--ink); border-radius: 8px; background: #fbf7ee; font: 700 17px/1 var(--body); color: var(--ink); cursor: pointer; }
+.ws-dup:hover { background: #fff4cf; }
+
+/* ------------------------------------------------ motion */
+@keyframes ws-card-in { from { opacity: 0; translate: 0 18px; } to { opacity: 1; translate: 0 0; } }
+@keyframes ws-why { 0% { opacity: 0; translate: -8px 0; } 60% { opacity: 1; translate: 3px 0; } 100% { translate: 0 0; } }
+@keyframes ws-pulse { 0%, 100% { scale: 1; } 50% { scale: 1.25; } }
+@keyframes ws-glow { 0%, 100% { background: rgba(240, 210, 122, 0.25); } 50% { background: rgba(240, 210, 122, 0.75); } }
+@keyframes ws-glow-stroke { 0%, 100% { stroke-opacity: 0.55; } 50% { stroke-opacity: 1; } }
+@keyframes ws-here { 0%, 100% { translate: 0 0; } 50% { translate: 0 -3px; } }
+@keyframes ws-cue { 0%, 100% { --fill: var(--sheet); } 50% { --fill: #fff4cf; } }
+@keyframes ws-stamp { 0% { scale: 2.2; opacity: 0; rotate: -14deg; } 60% { scale: 0.94; opacity: 1; rotate: 1deg; } 100% { scale: 1; rotate: -2deg; } }
+@keyframes ws-spin { 0% { rotate: -200deg; scale: 0.2; } 100% { rotate: 0deg; scale: 1; } }
+@keyframes ws-spin-slow { to { rotate: 360deg; } }
+@keyframes ws-shake {
+  0% { translate: 0 0; } 15% { translate: -7px 3px; } 30% { translate: 6px -4px; } 45% { translate: -5px 2px; }
+  60% { translate: 4px 1px; } 80% { translate: -2px -1px; } 100% { translate: 0 0; }
+}
+@keyframes ws-plus { 0% { translate: 0 6px; opacity: 0; } 30% { opacity: 1; } 100% { translate: 0 -26px; opacity: 0; } }
+@keyframes ws-spark { 0% { translate: 0 0; opacity: 1; } 100% { translate: var(--dx) var(--dy); opacity: 0; scale: 0.4; } }
+@keyframes ws-hit { 0% { scale: 0.3; opacity: 1; } 60% { scale: 1.15; opacity: 1; } 100% { scale: 1.3; opacity: 0; } }
+@keyframes ws-speed { from { translate: 12px 0; opacity: 0; } 30% { opacity: 1; } to { translate: -22px 0; opacity: 0; } }
+@keyframes ws-flap { from { scale: 1 1; } to { scale: 1 -0.7; } }
+@media (prefers-reduced-motion: reduce) {
+  .ws-speed-line, .ws-wing, .ws-seed-ring, .ws-star-slot.is-here, .ws-sprite.is-cue { animation: none; }
+}
+
+/* ------------------------------------------------ "Tu juego" (the Arcade, T41) */
+.ws-player { display: grid; gap: 10px; justify-items: center; width: min(100%, calc((100dvh - 200px) * 4 / 3 + 40px)); margin: 0 auto; }
+.ws-player-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ws-player-head h2 { margin: 0; font: 700 28px/1.1 var(--body); color: var(--ink); }
+.ws-player-best { --fill: var(--sheet); padding: 8px 14px; font: 700 18px/1 var(--body); color: var(--ink); }
+.ws-player-best.is-record { --fill: var(--yellow); }
+.ws-player-stage { width: 100%; }
+.ws-player-tip { margin: 0; font: 700 16px/1.2 var(--body); color: var(--ink-2); }

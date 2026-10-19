@@ -47,7 +47,7 @@ interface Question { id: QuestionId; say: string; adult: string; options: Option
 const ACTIVITY_WORD: Record<string, string> = {
   character: 'Elegir personaje', ladder: 'Los caminos', tool_check: 'Probar las herramientas', typing: 'Las teclas',
   wardrobe: 'El vestidor', free_play: 'Jugar libre', sheet: 'Una hoja', recess: 'La música', guardas: 'Las guardas',
-  editor: 'Hacer un nivel', corkboard: 'La cartelera', rule_game: 'El juego de reglas', game_maker: 'Hacer tu juego', text_probe: 'Bloques y texto', race: 'La carrera',
+  editor: 'Hacer un nivel', corkboard: 'La cartelera', rule_game: 'El juego de reglas', game_maker: 'Hacer tu juego', text_probe: 'Bloques y texto', race: 'La carrera', workshop: 'El taller de juegos',
 };
 
 export function surveyQuestions(activities: readonly string[], grade = 1): Question[] {
