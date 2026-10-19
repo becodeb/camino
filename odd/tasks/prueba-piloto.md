@@ -114,6 +114,18 @@ The user: kids had class time left over, so more levels or different games are w
 - [x] T37 Measure motivation profiles in the pilot: the class report (T34) groups each child's free-play choices, voluntary replays, time per activity and quits into a simple profile (racer, collector, dresser, explorer, keyboard), and `/admin` gets a "Juegos para todos" class command that opens the games zone on every device (for the last minutes of class, so kids still on the core route also get to play; logged like the other class commands).
 - [x] T36 Verification and push; redeploy only on the user's explicit request.
 
+### 4to round (user request 2026-10-19, class on 2026-10-20)
+
+Brief: `docs/prompts/prueba-4to.md` (self-contained; read it first). The user wants a plan "así lo implementás o sino se lo mando a una nueva sesión": these tasks are written so either can execute them. Route per task: delegated direct, one writer at a time.
+
+- [ ] T38 The child's name for 4to (optional per link for other grades): first screen, `sessions.child_name` (migration), `/admin` live list by name with step, rung, workshop challenge and arcade state, export column, data dictionary privacy note; survey question text large inside the card for 3ro and up.
+- [ ] T40 The Game Workshop for 4to: a Scratch-like editor (free scrollable workspace, loose stacks, drag a stack by its top block, detach from the middle, snapping incl. C-blocks, per-sprite scripts, Scratch's Spanish wording and colours), a small cooperative VM (unit-tested), and the original game "Al revés" (flipping-gravity runner) built through 8+ PRIMM challenges with large in-screen goals, graded help, a challenge strip with stars and the child's game playable at any time; telemetry `workshop_challenge`, `workshop_edit`, `workshop_run`.
+- [ ] T39 4to route per grade (`flow.ts` grade-parameterised; other grades unchanged): name → character → short tool check → long ladder → Workshop (mandatory) → Arcade; no falling-leaves typing, no xylophone, wardrobe optional in the Arcade. The long ladder for 4to (~18 items / 15 min, ends at the ceiling), word-picture labels, two variants per rung from 7, new rungs 13–18 (predict an event script, fix a buggy rule, if/else, variables, broadcast, modify then make), a climbing-path progress view, `variant` and per-concept data.
+- [ ] T41 The Arcade: unlocks after Workshop challenges 1–5 or with "Juegos para todos"; "Carrera de teclas" (typing race on the T33 track, programming words and phrases, rubber-banded rivals, words per minute and accuracy), "Tu juego" (their own game with a best score), La carrera from tier 4, the wardrobe; the Workshop one tap away.
+- [ ] T42 Per-child 4to evaluation in `tools/analyze-playtest.mjs` (name, per-concept ladder, workshop understanding signal, typing, on-task vs hidden-tab time, help; class entry level for 5to and who is below it) and a full scripted 4to session end to end; push; redeploy on the user's request.
+
+Cut line (from the brief): T38 and T39 must ship; T40 with at least challenges 1–5; T41's typing race can wait; never deploy a half-working workshop (fallback: the current "Hacé tu juego" as 4to's mandatory step behind a flag).
+
 #### Recorded, not implemented (user feedback 2026-10-15)
 
 - The repeat is not discovered on its own: kids first try without it, run out of blocks and ask; once told, they use it. The progression does not introduce the repeat slowly, nor blocks before/after it (known: this is the pilot). Data: ladder ceiling at rung 1 in 19/39 (they pass `sequence`, fail `long_sequence`); only 3/42 reached the repeat item; 2.99 attempts per repeat level vs 1.47 without.
@@ -955,4 +967,4 @@ The user: kids had class time left over, so more levels or different games are w
 
 ## Next step
 
-The user wants to try the pilot with 4to: explain the 4to experience first; then a class, `node tools/export-playtest.mjs` and `node tools/analyze-playtest.mjs exports/<file>.json`.
+4to round: T38 → T40 → T39 → T41 → T42 (brief `docs/prompts/prueba-4to.md`).
