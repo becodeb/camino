@@ -50,7 +50,7 @@ One row per playtest session (one child, one sitting).
 | `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang, captions?, captions_set?, sound?, sound_source?, voice?}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language; since round 2 `captions` (on-screen text on now: set at the start and updated by every 💬 toggle, see `captions`) and `captions_set` (`'grade'`: the default, on from 3ro; `'setup'`: forced on or off at setup); since T18 `sound` (the effective sound setting now) and `sound_source` (`'admin'`\|`'url'`\|`'adult'`\|`'default'`: which layer decided it, see the `sound` event and the table `class_settings`); since T27 `voice` (this device's "Voz" switch now: `true` unless the adult turned it off here; independent of `sound` — off, speech is silenced but sfx/music keep playing — and, unlike the adult's `sound` override, persisted so it survives a new session on this computer). | 1 (device capability vs. tool failures), 3 (captions, sound, voice) |
 | `survey` | jsonb, nullable | See "survey_answer" below; the final answers, keyed by question. | 9 |
 | `adult_form` | jsonb, nullable | The adult's form: `{engagement: 'low'|'mid'|'high'|null, help_needed: 'none'|'some'|'a_lot'|null, comment?: string, step?: string}`. Round 1: a step after the goodbye, both answers required. Since round 2 it is optional, from the corner menu ("Comentario del adulto") at any time of the session; any answer may be left out (`null`), saving again replaces it, and `step` is the flow step it was saved on (see the `adult_form` event). Most round-2 sessions will have none. | 3, 5 |
-| `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, since T14 `'class_end'`, and since T38 `'name'` — only for a session whose name screen was on; round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. | 5 |
+| `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, since T14 `'class_end'`, and since T38 `'name'` — only for a session whose name screen was on; T39: `'workshop'` (4to's Game Workshop step); round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. T39: that view also reads, from the events already synced (no new column), the ladder's rung on screen (the last ladder `level_start`), the Workshop's core challenge (the last non-free `workshop_challenge`) and whether the Arcade opened (`arcade_open`): "escalera de niveles · escalón 13", "taller de juegos · desafío 4", "Arcade". | 5 |
 | `created_at` | timestamptz | First time this session row was written. | — |
 | `last_seen_at` | timestamptz | Updated on every sync; drives the admin page's "active now" indicator. Since T14 a device with a session open syncs at least every ~10 s, so this is also the class's "seen" time. | 5 |
 | `demo` | boolean, default false | T14: a session played in demo mode (the adult showing or trying the pilot; see "Demo mode" below). Stored like any other, but left out of `/api/export`, `/api/admin/*` lists and counts and every SQL view, and deleted 24 hours after it started. A later sync never turns it back to `false` (migration `008_class_control.sql`). | — |
@@ -399,11 +399,13 @@ logged when the item ends. **RQ 2, 3, 4.**
 ```
 {
   concept: string,          // the rung's concept (table below)
-  rung: number,             // 1–12, the item bank's order (easiest first)
-  item: string,             // the page played (level id)
-  format: 'solve' | 'complete' | 'fix' | 'predict',
+  rung: number,             // 1–12, the item bank's order (easiest first); T39: 13–18 for 4to
+  item: string,             // the page played (level id; T39: a second item ends in `b`, rungs 13–18 are Workshop-blocks items)
+  format: 'solve' | 'complete' | 'fix' | 'predict' | 'modify',
   check: 'climb' | 'floor', // floor: the one easier item tried after the first non-pass
   result: 'pass' | 'fail',
+  variant: 0 | 1,           // T39: 0 the rung's first item, 1 its second (4to's long ladder only plays a 1); from 2026-10-20
+  engine?: 'vm',            // T39: rungs 13–18, played on the Game Workshop's blocks and VM
   next: string | null,      // the next item's id, null when the ladder stops here
   time_ms: number,
   help_levels: number,      // automatic help steps shown (0–3)
@@ -503,6 +505,73 @@ concept, so a row means that concept's item was passed), and
 `v_session_summary.ladder_ceiling_rung` the max over the session: the same
 number as `ladder_end.ceiling_rung`.
 
+#### T39: 4to's long ladder (from 2026-10-20)
+
+For 4to only (every other grade keeps the rules above, unchanged): up to 18
+items or 15 minutes (an item open at 15 minutes ends by 16; per-item caps
+unchanged: 3 minutes, 90 s with no input), the top is rung 18, the entry
+still rung 7, and every block is labelled word first (`word-picture`, also
+on rungs 7–8, whose pages are picture-first for 1ro). **Second items**:
+from rung 7 every rung has two different items (the same concept and
+difficulty on another board or story). A rung is passed by its first item
+(`variant: 0`); a first item not passed gets the rung's second item
+(`variant: 1`, `check: 'climb'`) before the ladder steps down or stops; the
+second item's result is the rung's. So a child at rung r writes one or two
+rows for it; a pass by `variant: 1` means "got it the second time", a
+fail/fail pair means "not yet". The floor check and the ceiling are the
+same rules (the ceiling is still the highest rung passed, whichever item).
+`?caps=fast` for 4to: item 30 s, no input 12 s, ladder 150 s, hard 160 s.
+
+| Rung | Second item (`variant: 1`) | What changes |
+|---|---|---|
+| 7 | `pp-l7b` La escalera del bosque | a forest staircase going ↑← (5×5) instead of the river's ↑→ |
+| 8 | `pp-l8b` Bajar, la escalera y dos pasos más | the river, one step before a ↓→ staircase and two after (instead of two before, one after) |
+| 9 | `pp-l9b` Niebla en el sendero | a forest path 8×1 in fog, rocks at 3 and 6 |
+| 10 | `pp-l10b` Tres orillas, un programa | three river banks (5, 7, 6 cells) |
+| 11 | `pp-l11b` Un juego: las flechas del otro lado | R11 mirrored: the way needs ← and ↑ (the ghost makes ←) |
+| 12 | `pp-l12b` Un juego: semillas en el bosque | a forest 6×4, another rain of seeds |
+
+**Rungs 13–18** (PRIMM: predict, investigate/fix, modify, make), played on
+the Game Workshop's own blocks (Scratch 3's Spanish wording), editor, stage
+and VM (`src/playtest/ladderVm.ts`, `LadderVmItem.tsx`): the goal large
+inside the screen, a check that runs the child's project headless and reads
+what happened (positions, variables, contacts, messages, the end — any
+correct solution passes), a wordless first-time demo of the format only (a
+block dragged from the palette onto the paper, then ▶; or a hand pointing
+at the places to choose), none for 18. Help: 1 the goal again (said), 2 the
+palette glows on the category to look at (predict: a hint line), 3 one hint
+line that points at the place, never the answer; a fourth ✋ raises the
+hand. A ▶ on the project exactly as given is a look (`run.result: 'look'`),
+never a failed try; two real tries that do not pass end the item (`runs`).
+A predict item takes one tap: the game then runs with the keys pressed and
+the right place lights up; a wrong tap ends the item (`runs`) and the rung's
+second item comes.
+
+| Rung | Concept | Format | First item | Second item |
+|---|---|---|---|---|
+| 13 | `events_predict` | predict | `pp-l13`: two scripts on the character (→ moves 100, ↑ goes to the ceiling); "→ twice: where does it end?" (6 places) | `pp-l13b`: two scripts on the same key (space moves −100 and goes to the ceiling) |
+| 14 | `fix_rule` | fix | `pp-l14`: the seed's "si ¿tocando …? → +1 punto" points at the log, not the character | `pp-l14b`: the star's rule changes `vidas` instead of `puntos` |
+| 15 | `if_else` | complete | `pp-l15`: assemble "al presionar → : si ¿tocando Piedra? entonces saltar al techo si no avanzar" from loose blocks | `pp-l15b`: the mirror on the ceiling (←, drop to the floor at the log) |
+| 16 | `variables` | complete | `pp-l16`: the missing "cambiar puntos en 1" inside the seed's touch rule | `pp-l16b`: the missing "cambiar vidas en −1" in the log's |
+| 17 | `broadcast` | complete | `pp-l17`: the seed sends «punto»; make the receiving side (al recibir «punto» → +1 punto) | `pp-l17b`: the log sends «choque»; the character loses a life on receiving it |
+| 18 | `modify_make` | modify | `pp-l18`: a working game that never ends → it must be won at 5 points | `pp-l18b`: a bird flies by → the game must be lost when it touches the character |
+
+Their `level_start`/`run`/`level_end` carry `level_id` = the item id and
+`engine: 'vm'` (`level_start`); `run` has `result` (`win` | `fail` |
+`look`), `attempt`, `help_step`, `edits` (editor operations so far),
+`program` (every script as text, `sprite: op input…; …`, up to 2000
+characters) and, for predict, `guess`/`answer` (place indices); `level_end`
+adds `edits`.
+
+**Concepts for the per-child profile** (T42 prints one; the families group
+the rungs a child met): sequence (`sequence`, `long_sequence`), reading and
+fixing (`fix`, `predict`, `fix_rule`), repeat (`repeat`, `repeat_count`,
+`repeat_pattern`, `before_after_repeat`), conditions (`fog_si`,
+`three_worlds`, `if_else`), events (`events_rules`, `rules_score`,
+`events_predict`), variables (`variables`, `modify_make`), broadcast
+(`broadcast`). Per concept: passed by the first item, passed by the second,
+or not passed (both), from `ladder_step` (`concept`, `result`, `variant`).
+
 ### `ladder_end`
 The ladder stopped (once per session that reached it). **RQ 2.**
 ```
@@ -514,7 +583,7 @@ The ladder stopped (once per session that reached it). **RQ 2.**
   reason: 'top' | 'ceiling' | 'floor' | 'bottom' | 'max_items' | 'max_time' | 'wrap_up' | 'left'
 }
 ```
-`top`: rung 12 passed; `ceiling`: a fail right above a passed rung;
+`top`: rung 12 passed (T39, 4to: rung 18); `ceiling`: a fail right above a passed rung (4to: after the rung's second item too);
 `wrap_up` (T14): "quedan 5 minutos" arrived, the item on screen was the last;
 `floor`: after the floor check; `bottom`: rung 1 failed; `max_items`,
 `max_time`: the caps; `left`: the flow moved on mid-ladder (the adult ended
@@ -1240,7 +1309,7 @@ The session moved to another flow step (the same change also updates
 {
   from: string | null,          // the step left (null for the first one)
   to: string,                   // one of the current_step values above
-  reason: 'start' | 'next' | 'skip' | 'end_now' | 'adult' | 'class_end' | 'demo' | 'games_all',
+  reason: 'start' | 'next' | 'skip' | 'end_now' | 'adult' | 'class_end' | 'demo' | 'games_all' | 'arcade',
   time_ms?: number,             // time spent on `from`
   budget_ms?: number,           // `from`'s planned time (recorded, not enforced)
   over_budget?: boolean,
@@ -1280,6 +1349,24 @@ the step on screen ends after its item and the next steps are the wardrobe
 (if not visited), the survey (if not done), then free play (`wrap_up:
 true`).
 
+T39 (4to, from 2026-10-20): 4to's own route: `setup` → `name` →
+`character` → `tool_check` → `ladder` → `workshop` (the Game Workshop, a
+step of its own, mandatory) → `free_play` (for 4to, the Arcade: its menu
+is back to the Workshop, La carrera from tier 4 and the wardrobe). No
+`typing` step, no `wardrobe` step on the way. `workshop` → `free_play` only
+once the Arcade is open (the Workshop's challenges 1–5 done, or "Juegos
+para todos"); `arcade` is the child moving between `workshop`,
+`free_play` and the Arcade's `wardrobe` (the Workshop card and the
+wardrobe card of the Arcade's menu, the Arcade button in the Workshop's
+bar, "Ir al Arcade" on the announcement). `games_all` for 4to moves
+`tool_check`, `ladder` or `workshop` to `free_play` and opens the Arcade.
+Under "quedan 5 minutos" 4to goes from the item on screen to the survey
+(if not done), then to the Arcade (or the Workshop while it is closed); in
+the Workshop the challenge on screen is the last one (the step moves on
+when it is done, or after 90 s, or at once in the free challenges). The
+Arcade has no end. Planned times for 4to: tool check 1 min, ladder 15 min,
+Workshop 20 min, Arcade 10 min.
+
 ### `route_done`
 T14: the child finished the core route (tool check, ladder, free play,
 typing, wardrobe; a step the adult skipped counts as gone through). The
@@ -1290,7 +1377,23 @@ once, when the wardrobe is left. **RQ 5.**
 { time_ms: number, via: 'route' | 'wrap_up' | 'demo', survey_done: boolean }
 ```
 `time_ms`: since the session started; `via`: `wrap_up` when it happened
-under "quedan 5 minutos", `demo` from the demo bar.
+under "quedan 5 minutos", `demo` from the demo bar. T39 (4to): 4to's
+green flag is the Workshop's challenges 1–5 done (`via: 'workshop'`,
+logged in the Workshop, no step change); "Juegos para todos" never raises
+it.
+
+### `arcade_open`
+T39 (4to): the Arcade opened, once per session.
+```
+{ via: 'workshop' | 'games_all' | 'demo', step: string }
+```
+`workshop`: the Workshop's challenges 1–5 were done (also 4to's
+`route_done`); the child sees "¡Se abrió el Arcade!" large inside the
+screen, with "Ir al Arcade" and "Seguir en el taller", and from then on an
+Arcade button in the Workshop's bar. `games_all`: el docente's "Juegos
+para todos" (the notice reads "¡Se abrió el Arcade!" for 4to). `step`: the
+step the child was on. `/admin`'s live list shows "Arcade" next to the
+child's step from then on.
 
 ### `class_command`
 T14: a class command from `/admin` reached this device and was applied
