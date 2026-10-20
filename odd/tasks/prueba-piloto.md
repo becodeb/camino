@@ -1112,6 +1112,8 @@ Cut line (from the brief): T38 and T39 must ship; T40 with at least challenges 1
 
 - 2026-10-20: the user asked, in a hurry, for the typing race on 1ro's menu (1ro ran out of activities). Parent inline: `WORD_BANK_1RO` (letters, then two- to four-letter words; short races), `menuFor(1)` gains `typing_race` second, 1ro copy "apretá las letras". Checks: typecheck clean, `src/playtest/` 29 files / 366 passed, a quick browser look at 1366×768 (menu with the card, a letter race advancing, no page errors). Commit `a185510`. Redeployed on the user's "ok": Coolify `vdz4aijwlcufbxgevwmc2tfy` finished, `/api/health` 200, served `index-jZ0rRU6H.js` sha256 equals the local build.
 
+- 2026-10-20: user, mid-day: 1ro finished the first levels fast and reached the menu too soon. With 15 minutes to deploy, the parent shipped the smallest safe change inline: 1ro's first free-play visit opens the whole sheet (La escalera: pages, doors, boss) by itself, the menu after it (`FreePlay.tsx`, commit `0e6d4fd`). Checks: typecheck clean; a browser look at 1366×768 (the sheet opens, no page errors). Deployed (Coolify `tizvjxulpcsm9yvizbpbyzi2`, served `index-CzkDSdBY.js` sha256 equals the local build). Proposed but NOT built yet: practice variants at the child's ceiling for 1ro's ladder (rungs 1–6 have no second items), and 1ro's games unlocking after the sheet like 4to's Arcade. Also pending: holding the 🔊 should open the adult menu too (the user holds the speaker; T25 moved it out of the corner).
+
 ## Next step
 
 The 4to class (2026-10-20) with `https://camino-prueba.becode.com.ar/?grado=4`; afterwards `node tools/export-playtest.mjs` and `node tools/analyze-playtest.mjs exports/<file>.json --csv clase-4to.csv`.
