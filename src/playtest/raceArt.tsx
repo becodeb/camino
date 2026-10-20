@@ -538,3 +538,35 @@ function FlagGlyph() {
     </g>
   );
 }
+
+/** T41: the menu's card for "Carrera de teclas": the race's page (the road, the child's kart ahead of a critter's) and three keyboard keys spelling it. */
+export function TypingRaceCardArt() {
+  const road = 'M6,98 L60,98 L96,78 L148,78';
+  const key = (x: number, y: number, ch: string, i: number, lit = false) => (
+    <g key={i} transform={`translate(${x} ${y}) rotate(${[-4, 3, -2][i % 3]})`}>
+      <path d="M-20,-18 Q-20,-22 -16,-22 L16,-22 Q20,-22 20,-18 L21,18 Q21,22 17,22 L-17,22 Q-21,22 -21,18 Z" fill="#9f937f" stroke={INK} strokeWidth={2.4} strokeLinejoin="round" />
+      <path d="M-18,-20 Q-18,-22 -15,-22 L15,-22 Q18,-22 18,-20 L18,10 Q18,13 15,13 L-15,13 Q-18,13 -18,10 Z" fill={lit ? '#cfe3b4' : PAPER} stroke={INK} strokeWidth={2.4} strokeLinejoin="round" />
+      <text x={0} y={2} textAnchor="middle" fill={INK} style={{ font: '700 22px var(--body)' }}>{ch}</text>
+    </g>
+  );
+  return (
+    <svg className="pp-fp-art" viewBox="0 0 260 190" aria-hidden="true">
+      <g filter="url(#rough)" strokeLinejoin="round" strokeLinecap="round">
+        <g transform="translate(10 14) rotate(-2 80 60)">
+          <path d={wobblyPoly([[0, 0], [176, 0], [176, 118], [0, 118]], { wob: 0.7, bow: 1.1, seed: 35 })} transform="translate(5 6)" fill={SHADOW} />
+          <path d={wobblyPoly([[0, 0], [176, 0], [176, 118], [0, 118]], { wob: 0.7, bow: 1.1, seed: 35 })} fill={PAPER} stroke={INK} strokeWidth={2.6} />
+          <path d={`${road} L148,118 L6,118 Z`} fill="#d3dbab" />
+          <path d={road} fill="none" stroke={DIRT} strokeWidth={24} />
+          <path d={road} fill="none" stroke={INK} strokeWidth={2} transform="translate(0 12)" />
+          <path d={road} fill="none" stroke={INK} strokeWidth={2} transform="translate(0 -12)" />
+          <rect x={64} y={-9} width={48} height={16} rx={2} fill="rgba(222, 204, 158, 0.85)" transform="rotate(-6 88 -1)" />
+        </g>
+      </g>
+      <g transform="translate(64 104) scale(0.4)"><Kart tone="r0" seed={4} driver={<CritterDriver id="zorro" />} /></g>
+      <g transform="translate(118 92) scale(0.48)"><Flames /><Kart tone="me" seed={5} driver={<MeDriver w={64} />} /></g>
+      {key(176, 160, 't', 0, true)}
+      {key(214, 156, 'e', 1, true)}
+      {key(234, 112, 'c', 2)}
+    </svg>
+  );
+}

@@ -19,8 +19,8 @@ import { BossPageArt } from '../ui/forestArt';
 import { Sprout } from './round2Art';
 import { Pencil } from '../ui/workshopArt';
 import type { Activity } from './freePlay';
-import { RaceCardArt } from './raceArt';
-import { WorkshopCardArt } from '../workshop/art';
+import { RaceCardArt, TypingRaceCardArt } from './raceArt';
+import { OwnGameCardArt, WorkshopCardArt } from '../workshop/art';
 
 const INK = '#2b2622';
 const PEN = '#3d6ea5';
@@ -250,6 +250,9 @@ function CardArt({ a }: { a: Pick<Activity, 'id' | 'kind'> }) {
     case 'workshop': return <WorkshopCardArt />;
     // T39: 4to's Arcade offers the wardrobe as a card
     case 'wardrobe': return <span className="pp-fp-wardrobe"><WardrobeIcon open size={150} /></span>;
+    // T41: 4to's Arcade
+    case 'typing_race': return <TypingRaceCardArt />;
+    case 'own_game': return <OwnGameCardArt />;
   }
 }
 

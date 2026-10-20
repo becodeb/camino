@@ -9,18 +9,21 @@
 // race against two critters built with arrow blocks, first on 1ro's and
 // 2do's menus. T40: "El taller de juegos" (src/workshop/), the Scratch-like
 // Game Workshop, first on 4to's and 5to's menus (T39 makes it 4to's
-// mandatory step).
+// mandatory step). T41: 4to's Arcade adds "Carrera de teclas" (TypingRace.tsx,
+// the race driven by typing) and "Tu juego" (OwnGame.tsx, the child's own
+// Workshop game) in front.
 
 import { sheetByN } from '../curriculum/primer';
 
-export type ActivityId = 'sheet' | 'recess' | 'guardas' | 'editor' | 'rule_game' | 'game_maker' | 'text_probe' | 'race' | 'workshop' | 'wardrobe';
+export type ActivityId = 'sheet' | 'recess' | 'guardas' | 'editor' | 'rule_game' | 'game_maker' | 'text_probe' | 'race' | 'workshop' | 'wardrobe' | 'typing_race' | 'own_game';
 export type ProbeId = Extract<ActivityId, 'game_maker' | 'text_probe' | 'workshop'>;
 
 /**
  * How an activity is played: a sheet of 1ro's year (its pages move by the hash), the rule game's pages, a probe's component, or the race (T33).
  * T39 (4to's Arcade): `step`, a flow step of its own (the Workshop, the wardrobe): the card moves the flow there.
+ * T41 (4to's Arcade): `typing`, the typing race; `own`, the child's own Workshop game.
  */
-export type ActivityKind = { sheet: number } | { rules: true } | { probe: ProbeId } | { race: true } | { step: 'workshop' | 'wardrobe' };
+export type ActivityKind = { sheet: number } | { rules: true } | { probe: ProbeId } | { race: true } | { step: 'workshop' | 'wardrobe' } | { typing: true } | { own: true };
 
 export interface Activity {
   id: ActivityId;
@@ -44,9 +47,9 @@ export const MENU: Record<number, readonly ActivityId[]> = {
   1: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   2: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   3: ['rule_game', 'sheet', 'recess', 'editor'],
-  // T39: 4to's free play is the Arcade (flow.ts): back to the Workshop, La carrera from tier 4, the wardrobe;
-  // T41 fills its slot here with the typing race and "Tu juego". No xylophone, no 1ro sheet, no rule game, no old game maker.
-  4: ['workshop', 'race', 'wardrobe'],
+  // T39/T41: 4to's free play is the Arcade (flow.ts): the typing race, the child's own game, La carrera from tier 4,
+  // back to the Workshop, the wardrobe. No xylophone, no 1ro sheet, no rule game, no old game maker.
+  4: ['typing_race', 'own_game', 'race', 'workshop', 'wardrobe'],
   5: ['workshop', 'rule_game', 'editor', 'recess', 'text_probe'],
 };
 
@@ -71,6 +74,9 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
       ? { id, kind: { step: 'workshop' }, say: 'El taller de juegos: volvé a tu juego.', caption: 'Taller de juegos' }
       : { id, kind: { probe: id }, say: 'El taller de juegos: programá tu propio juego, como en Scratch.', caption: 'Taller de juegos' };
     case 'wardrobe': return { id, kind: { step: 'wardrobe' }, say: 'El vestidor: cambiale la ropa a tu personaje.', caption: 'El vestidor' };
+    // T41: 4to's Arcade
+    case 'typing_race': return { id, kind: { typing: true }, say: 'Carrera de teclas: escribí las palabras y ganá la carrera.', caption: 'Carrera de teclas' };
+    case 'own_game': return { id, kind: { own: true }, say: 'Tu juego: jugá el juego que hiciste en el taller.', caption: 'Tu juego' };
     default: return null;
   }
 }
@@ -95,6 +101,8 @@ export const MENU_LINES = {
   again: 'Elegí otro juego, o el mismo otra vez.',
   /** The time for free play is over: after the page the child was on. */
   over: '¡Ahora vamos a otro juego!',
+  /** T41: 4to's Arcade opens with its name. */
+  arcade: '¡El Arcade! Elegí un juego.',
 };
 
 /** T39: the race starts at this tier in a grade's free play (4to's Arcade: the turbo straights); 1 elsewhere. */

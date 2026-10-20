@@ -277,10 +277,24 @@
 }
 
 /* ------------------------------------------------ "Tu juego" (the Arcade, T41) */
-.ws-player { display: grid; gap: 10px; justify-items: center; width: min(100%, calc((100dvh - 200px) * 4 / 3 + 40px)); margin: 0 auto; }
-.ws-player-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.ws-player-head h2 { margin: 0; font: 700 28px/1.1 var(--body); color: var(--ink); }
-.ws-player-best { --fill: var(--sheet); padding: 8px 14px; font: 700 18px/1 var(--body); color: var(--ink); }
-.ws-player-best.is-record { --fill: var(--yellow); }
-.ws-player-stage { width: 100%; }
-.ws-player-tip { margin: 0; font: 700 16px/1.2 var(--body); color: var(--ink-2); }
+.ws-player {
+  display: grid;
+  grid-template-columns: minmax(0, calc((100dvh - 250px) * 4 / 3)) minmax(220px, 280px);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "title side" "stage side";
+  gap: 8px 26px;
+  justify-content: center;
+  align-items: start;
+  width: 100%;
+  min-height: 0;
+  margin: 0 auto;
+}
+.ws-player-title { grid-area: title; margin: 0; font: 700 34px/1.1 var(--body); color: var(--ink); }
+.ws-player-stage { grid-area: stage; width: 100%; }
+.ws-player-side { grid-area: side; align-self: center; display: grid; gap: 16px; }
+.ws-player-best { --fill: var(--sheet); margin: 0; padding: 12px 16px 14px; font: 700 26px/1.1 var(--body); color: var(--ink); text-align: center; }
+.ws-player-best b { display: block; font-size: 52px; line-height: 1; margin-top: 4px; }
+.ws-player-best.is-record { --fill: var(--yellow); animation: pop-in 360ms ease-out both; }
+button.ws-player-go { --fill: var(--orange); min-height: 76px; padding: 8px 18px; font: 700 27px/1.1 var(--body); color: var(--ink); }
+button.ws-player-improve { --fill: #dce6f0; min-height: 66px; padding: 8px 16px; font: 700 21px/1.15 var(--body); color: var(--ink); }
+.ws-player-tip { margin: 0; font: 700 17px/1.25 var(--body); color: var(--ink-2); text-align: center; }

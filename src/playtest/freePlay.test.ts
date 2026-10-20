@@ -12,8 +12,8 @@ describe('the free-play menu', () => {
     expect(menuFor(1, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(2, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(3, none).map((a) => a.id)).toEqual(['rule_game', 'sheet', 'recess', 'editor']);
-    // T39: 4to's free play is the Arcade: back to the Workshop (a flow step, no probe needed), La carrera, the wardrobe
-    expect(menuFor(4, none).map((a) => a.id)).toEqual(['workshop', 'race', 'wardrobe']);
+    // T39/T41: 4to's free play is the Arcade: the typing race, the child's own game, La carrera, back to the Workshop (a flow step, no probe needed), the wardrobe
+    expect(menuFor(4, none).map((a) => a.id)).toEqual(['typing_race', 'own_game', 'race', 'workshop', 'wardrobe']);
     expect(menuFor(5, none).map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess']);
   });
 
@@ -26,7 +26,7 @@ describe('the free-play menu', () => {
   });
 
   it('shows a probe\'s card once its component is registered, on its grade only', () => {
-    expect(menuFor(4, all).map((a) => a.id)).toEqual(['workshop', 'race', 'wardrobe']);
+    expect(menuFor(4, all).map((a) => a.id)).toEqual(['typing_race', 'own_game', 'race', 'workshop', 'wardrobe']);
     expect(menuFor(5, (id: ProbeId) => id === 'text_probe').map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess', 'text_probe']);
     expect(menuFor(5, all).map((a) => a.id)).toEqual(['workshop', 'rule_game', 'editor', 'recess', 'text_probe']);
     expect(menuFor(3, all).map((a) => a.id)).not.toContain('workshop');

@@ -51,6 +51,8 @@ import { ActivityArt, MenuBackArt } from './menuArt';
 import { InstrumentedPage, PlaytestLevel, type LevelEnd } from './PlaytestLevel';
 import { hasProbe, OPEN_PROBE_EVENT, PROBES } from './probes';
 import { Race } from './Race';
+import { TypingRace } from './TypingRace';
+import { OwnGame } from './OwnGame';
 import { rememberPart, resumedPart } from './resume';
 import { NextChoice } from './NextChoice';
 import { BarProgressContext, type BarProgress } from './barProgress';
@@ -215,7 +217,8 @@ export function FreePlay() {
       if (freePlayEndless(f) && !wrapping) return;
       const cur = viewRef.current;
       // T33: the race, like a probe, is an activity of its own: "quedan 5 minutos" gives it the grace of a non-level page (its podium may already be told)
-      const inProbe = cur.kind === 'activity' && ('probe' in cur.a.kind || 'race' in cur.a.kind);
+      // T41: the typing race and "Tu juego" too
+      const inProbe = cur.kind === 'activity' && ('probe' in cur.a.kind || 'race' in cur.a.kind || 'typing' in cur.a.kind || 'own' in cur.a.kind);
       const levelOpen = cur.kind === 'activity' && ('sheet' in cur.a.kind ? levelsOpen.current > 0 : !(wrapping && inProbe));
       // "¿Cómo seguís?" is a menu too: the time ends there at once
       const onMenu = cur.kind === 'menu' || (cur.kind === 'activity' && cur.page?.kind === 'doors');
@@ -315,6 +318,12 @@ export function FreePlay() {
   } else if ('race' in a.kind) {
     // T33: endless races; each one finished is a won "level" and the place where free play's time may end
     body = <Race key={view.n} startTier={RACE_START_TIER[grade]} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} />;
+  } else if ('typing' in a.kind) {
+    // T41: "Carrera de teclas", endless typing races; each one finished is a won "level"
+    body = <TypingRace key={view.n} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} />;
+  } else if ('own' in a.kind) {
+    // T41: "Tu juego"; "Mejorarlo en el taller" goes back to the Workshop step
+    body = <OwnGame key={view.n} improve={() => { leaving.current = 'done'; apiRef.current.arcade('workshop'); }} />;
   } else if ('probe' in a.kind) {
     const Probe = PROBES[a.kind.probe];
     body = Probe ? <Probe key={view.n} activity={a.kind.probe} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} done={() => toMenu('done')} /> : null;
@@ -381,7 +390,9 @@ function Menu({ cards, first, onPick, arcade }: { cards: Activity[]; first: bool
   const ghost = useGhost(rootRef);
   const [lit, setLit] = useState<string | null>(null);
   const held = useRef<{ id: string; t: number; fired: boolean } | null>(null);
-  const all = [first ? MENU_LINES.first : MENU_LINES.again, ...cards.map((c) => c.say)].join(' ');
+  // T41: 4to's Arcade opens with its name
+  const opener = arcade ? MENU_LINES.arcade : first ? MENU_LINES.first : MENU_LINES.again;
+  const all = [opener, ...cards.map((c) => c.say)].join(' ');
 
   // said when it opens: the question, then each card's name while it glows
   useEffect(() => {
@@ -390,7 +401,7 @@ function Menu({ cards, first, onPick, arcade }: { cards: Activity[]; first: bool
     const t = window.setTimeout(() => {
       off = speakWhenAllowed(all);
       // about 62 ms a letter, after the question
-      let at = (first ? MENU_LINES.first : MENU_LINES.again).length * 62;
+      let at = opener.length * 62;
       for (const c of cards) {
         timers.push(window.setTimeout(() => setLit(c.id), at));
         at += c.say.length * 62;

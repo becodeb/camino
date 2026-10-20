@@ -291,3 +291,36 @@ export function WorkshopCardArt() {
     </svg>
   );
 }
+
+/**
+ * T41, 4to's Arcade: the "Tu juego" card. The child's own "Al revés" as a
+ * game screen: the corridor, their character upside down on the ceiling
+ * with the flip's dashed arc, spikes on the floor, a seed; beside it a gold
+ * record ribbon (the best score to beat).
+ */
+export function OwnGameCardArt() {
+  return (
+    <svg className="pp-fp-art" viewBox="0 0 260 190" aria-hidden="true">
+      <g transform="translate(10 22)">
+        <rect x={6} y={8} width={176} height={140} rx={10} fill="rgba(84, 62, 38, 0.2)" />
+        <rect x={0} y={0} width={176} height={140} rx={10} fill="#f4ecdc" stroke={INK} strokeWidth={2.8} />
+        <rect x={1.5} y={1.5} width={173} height={22} rx={8} fill={BAND} />
+        <rect x={1.5} y={116} width={173} height={22.5} rx={8} fill={BAND} />
+        <path d="M2,24 L174,24 M2,116 L174,116" stroke={INK} strokeWidth={2.6} />
+        <g transform="translate(118 96) scale(0.62)"><ObstacleArt costume="pinches" /></g>
+        <g transform="translate(150 70) scale(0.7)"><SeedArt costume="semilla" /></g>
+        <path d="M44,96 C30,74 30,58 44,40" fill="none" stroke="#3d6ea5" strokeWidth={2.6} strokeDasharray="2 6" strokeLinecap="round" />
+        <path d="M37,48 L44,38 L50,48" fill="none" stroke="#3d6ea5" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+        <g transform="translate(66 52) rotate(180) scale(0.5)"><PlayerArt costume="normal" /></g>
+        <path d="M98,58 l-14,0 M100,68 l-20,0" stroke={INK} strokeWidth={2.2} strokeLinecap="round" opacity={0.35} />
+      </g>
+      <g transform="translate(222 118)" strokeLinejoin="round" strokeLinecap="round">
+        <path d="M-14,10 L-20,46 L-8,38 L-2,50 L4,14 Z" fill="#c9574a" stroke={INK} strokeWidth={2.4} />
+        <path d="M14,10 L20,46 L8,38 L2,50 L-4,14 Z" fill="#7298c1" stroke={INK} strokeWidth={2.4} />
+        <circle r={24} fill={GOLD} stroke={INK} strokeWidth={2.8} />
+        <circle r={16} fill="none" stroke={INK} strokeWidth={1.6} opacity={0.5} />
+        <path d="M0,-11 L3.4,-3.6 L11,-3.2 L5,2 L7,10 L0,5.6 L-7,10 L-5,2 L-11,-3.2 L-3.4,-3.6 Z" fill="#fbf7ee" stroke={INK} strokeWidth={1.8} />
+      </g>
+    </svg>
+  );
+}

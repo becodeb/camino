@@ -70,8 +70,8 @@ type Phase = 'intro' | 'input' | 'zoom' | 'finish' | 'podium';
 type Source = 'tap' | 'drag' | 'key';
 
 /** The critter pairs, one per race in turn (novelty for "¡Otra carrera!"): the bold one (middle lane) first. */
-const PAIRS: readonly [CritterId, CritterId][] = [['zorro', 'coati'], ['carpincho', 'rana'], ['lechuza', 'carpintero']];
-const NAME: Record<CritterId, string> = {
+export const PAIRS: readonly [CritterId, CritterId][] = [['zorro', 'coati'], ['carpincho', 'rana'], ['lechuza', 'carpintero']];
+export const NAME: Record<CritterId, string> = {
   zorro: 'el zorro', coati: 'el coatí', rana: 'la rana', carpincho: 'el carpincho', lechuza: 'la lechuza', carpintero: 'el carpintero',
 };
 const NOTES: Pitch[] = ['do', 're', 'mi', 'fa', 'sol'];
@@ -81,9 +81,9 @@ const BUMP_MS = 750;
 const IDLE_NUDGE_MS = 10_000;
 const IDLE_REPEAT_MS = 6000;
 /** The child crossed: the critters get this long to cross too (the margin), then the podium. */
-const MARGIN_WAIT_MS = 3500;
+export const MARGIN_WAIT_MS = 3500;
 /** The podium has been on screen this long: the race counts as ended for free play's time. */
-const PODIUM_END_MS = 4500;
+export const PODIUM_END_MS = 4500;
 
 const LINES = {
   first: '¡Una carrera! Armá el camino con flechas.',
@@ -802,7 +802,7 @@ function RaceRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
 
 // ------------------------------------------------------------------ the progress strip (where everyone is)
 
-function ProgressStrip({ w, course, pair, refs }: { w: number; course: ReturnType<typeof courseOf>; pair: readonly [CritterId, CritterId]; refs: RefObject<SVGGElement | null>[] }) {
+export function ProgressStrip({ w, course, pair, refs }: { w: number; course: ReturnType<typeof courseOf>; pair: readonly [CritterId, CritterId]; refs: RefObject<SVGGElement | null>[] }) {
   const x0 = 40, x1 = w - 80;
   const ticks = course.starts.slice(1).map((s) => x0 + ((s - START) / (course.finish - START)) * (x1 - x0));
   return (
@@ -834,7 +834,7 @@ function Marker({ tone, big, children }: { tone: keyof typeof KART; big?: boolea
 }
 
 /** The cups won this session, small, in the bar. */
-function CupRow({ n }: { n: number }) {
+export function CupRow({ n }: { n: number }) {
   if (!n) return <span className="pp-progress rc-cups" />;
   const shown = Math.min(n, 6);
   return (
@@ -1007,7 +1007,8 @@ function PodiumMe({ x, y }: { x: number; y: number }) {
   );
 }
 
-function Podium({ pair, order, cups, again }: { pair: readonly [CritterId, CritterId]; order: [0 | 1, 0 | 1]; cups: number; again(): void }) {
+/** T41: `extra`, drawn under the shelf (the typing race's own numbers). */
+export function Podium({ pair, order, cups, again, extra }: { pair: readonly [CritterId, CritterId]; order: [0 | 1, 0 | 1]; cups: number; again(): void; extra?: ReactNode }) {
   const [fresh, setFresh] = useState(false);
   useEffect(() => { const t = setTimeout(() => setFresh(true), REDUCED ? 0 : 1700); return () => clearTimeout(t); }, []);
   const second = pair[order[0]], third = pair[order[1]];
@@ -1027,6 +1028,7 @@ function Podium({ pair, order, cups, again }: { pair: readonly [CritterId, Critt
       </svg>
       <div className="rc-shelf-box">
         <Shelf cups={fresh ? cups : cups - 1} fresh={fresh} />
+        {extra}
       </div>
       <button type="button" className="cut rc-again" aria-label={LINES.again} onClick={() => { speak(LINES.again); again(); }}>
         <AgainArt />
