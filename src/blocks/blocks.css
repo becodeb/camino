@@ -60,6 +60,9 @@
 .blk-labeled { display: flex; align-items: center; gap: 5px; }
 .blk-labeled.is-picture-word { flex-direction: column; gap: 0; }
 .blk-labeled.is-picture-word .blk-word { font-size: 14px; margin-top: -3px; }
+/* T39 fix (4to): an arrow block's word on top, the arrow smaller under it */
+.blk-labeled.is-word-over { flex-direction: column; gap: 0; }
+.blk-labeled.is-word-over .blk-word { font-size: 16px; line-height: 1; }
 .blk-labeled.is-word-picture .blk-word { text-align: left; max-width: 96px; }
 .blk-labeled > svg { flex: none; overflow: visible; }
 .blk-arm.is-goal .blk-labeled.is-word-picture .blk-word { font-size: 14px; max-width: none; }

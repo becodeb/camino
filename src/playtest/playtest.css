@@ -152,8 +152,8 @@
 .pp-go-on:hover { transform: translateX(3px); }
 
 /* a bubble in the bar may take a third line: the board leaves it room */
-.piloto .level.mode-program:has(.level-bar > .pp-cap) { --board-h: calc((100dvh - 236px - (var(--n, 1) - 1) * 12px) / var(--n, 1) - 22px); }
-.piloto .level.mode-realtime:has(.level-bar > .pp-cap) { --board-h: calc(100dvh - 296px); }
+.piloto .level.mode-program:has(.level-bar > .pp-cap) { --board-h: calc((100dvh - 236px - var(--head-extra, 0px) - (var(--n, 1) - 1) * 12px) / var(--n, 1) - 22px); }
+.piloto .level.mode-realtime:has(.level-bar > .pp-cap) { --board-h: calc(100dvh - 296px - var(--head-extra, 0px)); }
 @media (prefers-reduced-motion: reduce) { .pp-cap { animation: none; } }
 
 /* ------------------------------------------------ the adult's sheets */
@@ -780,6 +780,9 @@ html.pp-demo .pad > .sheet { max-width: calc(100vw - var(--demo-w) - 36px - 2 * 
 .pp-climb-ring { animation: pp-climb-pulse 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes pp-climb-pulse { 50% { transform: scale(1.18); opacity: 0.6; } }
 .pp-climb-page { min-width: 0; }
+/* T41 review: 4to's rule-game rungs (11, 12) beside the path: the row of ▶, ↺ and the keys fits the narrower stage column (1280 px) */
+.pp-climb-page .mode-realtime .level-stage > .controls { width: 100%; gap: 10px; }
+.pp-climb-page .mode-realtime .btn-play { min-width: 132px; padding-inline: 14px; }
 @media (prefers-reduced-motion: reduce) { .pp-climb-ring { animation: none; } }
 
 /* ------------------------------------------------ T39: rungs 13–18 on the Workshop's blocks */

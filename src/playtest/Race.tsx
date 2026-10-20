@@ -32,7 +32,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
 import { progress, solve } from '../curriculum/progress';
 import type { CritterId } from '../curriculum/motivation';
-import { BlockArt, DIR_FILL, type BlockLook } from '../blocks/blocks';
+import { ArrowWordsContext, BlockArt, DIR_FILL, type BlockLook } from '../blocks/blocks';
 import { DIMS_KIDS } from '../blocks/BlockEditor';
 import { DIMS, type Dims } from '../game/editor';
 import type { BlockLabel } from '../game/levels';
@@ -117,7 +117,8 @@ let memory: { sid: string; saved: RaceSaved } | null = null;
  * starts the next number at the same tier); a win adds a cup and a tier.
  */
 export function Race({ levelEnded, startTier = 1 }: { levelEnded(end: LevelEnd): void; startTier?: number }) {
-  const sid = usePlaytest().session?.id ?? '';
+  const session = usePlaytest().session;
+  const sid = session?.id ?? '';
   const [saved, setSaved] = useState<RaceSaved>(() => {
     const s = withCups(memory?.sid === sid ? memory.saved : readSaved(resumedPart('race')), cupsIn(progress.get().solved));
     // T39: 4to's Arcade starts at the turbo straights
@@ -129,6 +130,8 @@ export function Race({ levelEnded, startTier = 1 }: { levelEnded(end: LevelEnd):
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => keep({ ...savedRef.current, raceNo: cur.no }), [cur.no]);
   return (
+    // T39 fix: 4to's arrow blocks carry their word ("derecha", "arriba", "abajo")
+    <ArrowWordsContext.Provider value={session?.grade === 4}>
     <RaceRun
       key={cur.no}
       no={cur.no}
@@ -140,6 +143,7 @@ export function Race({ levelEnded, startTier = 1 }: { levelEnded(end: LevelEnd):
       setTier={(tier) => { keep({ ...savedRef.current, tier }); setCur({ no: savedRef.current.raceNo + 1, tier, again: true }); }}
       levelEnded={levelEnded}
     />
+    </ArrowWordsContext.Provider>
   );
 }
 

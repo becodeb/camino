@@ -124,6 +124,9 @@
 @keyframes stamp-in { 0% { scale: 2.2; opacity: 0; } 60% { scale: 0.9; opacity: 1; } 100% { scale: 1; } }
 
 .sheet { padding: 10px 14px 12px; }
+/* T39 fix (4to's long ladder): the page's goal, large, under the bar (its height is --head-extra, measured) */
+.level-head { grid-area: bar; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.level-goal { --fill: #fff4cf; margin: 0; padding: 8px 18px 10px; font: 700 clamp(20px, 1.85vw, 25px)/1.25 var(--body); color: var(--ink); }
 .sheet .tape-r { right: -8px; }
 .board { display: block; }
 
@@ -133,7 +136,7 @@
      the board never moves); the board takes the rest. Its height is what is left under
      the bar and the controls: 10 top + 74 bar + 14 gap + 84 controls + 12 gap + 30 bottom,
      shared by --n stacked sheets (12 px apart, 22 px of padding each). */
-  --board-h: calc((100dvh - 224px - (var(--n, 1) - 1) * 12px) / var(--n, 1) - 22px);
+  --board-h: calc((100dvh - 224px - var(--head-extra, 0px) - (var(--n, 1) - 1) * 12px) / var(--n, 1) - 22px);
   --sheet-w: min(100%, calc(var(--board-h) * var(--aspect) + 28px));
   grid-template-columns: auto var(--notebook-w, 220px) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
@@ -178,7 +181,7 @@
 /* ------------------------------------------------ realtime mode (3ro): palette | rule cards | board, keys by ▶ */
 .level.mode-realtime {
   /* the controls row holds the keys (two rows of keycaps): 10 top + 74 bar + 14 gap + 122 controls + 12 gap + 30 bottom + 22 sheet padding */
-  --board-h: calc(100dvh - 284px);
+  --board-h: calc(100dvh - 284px - var(--head-extra, 0px));
   --sheet-w: min(100%, calc(var(--board-h) * var(--aspect) + 28px));
   grid-template-columns: auto var(--notebook-w, 460px) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);

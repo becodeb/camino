@@ -8,7 +8,7 @@
 // of 1ro's year (its pages, doors and boss, the seed, the next page of the
 // sheet). The level pages themselves do not know which.
 
-import { createContext, useCallback, useContext, useEffect, useRef, type ComponentType, type CSSProperties, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, type ComponentType, type CSSProperties, type ReactNode } from 'react';
 import { BoardView, aspectOf, frameOf, type Frame } from '../ui/board/BoardView';
 import { GUARDA_FRAME } from '../ui/board/GuardaView';
 import { MUSIC_FRAME } from '../ui/board/MusicView';
@@ -104,6 +104,8 @@ export interface LevelNav {
   className?: string;
   /** After the pages in the bar (the seed pouch). */
   aside?: ReactNode;
+  /** T39 fix (4to's long ladder): the page's goal, large inside the screen under the bar (absent: the page is as it was). */
+  banner?(level: LevelDef): ReactNode;
   // ---------------------------------------------------------------- instrumentation (the pilot playtest); absent: nothing changes
   /** Every ▶, with the program as run and what came of it (also an empty or incomplete notebook, which does not run). */
   onRunReport?(r: RunReport): void;
@@ -290,6 +292,14 @@ export interface ShellProps {
 export function Shell({ level, mode, rootRef, onSpeak, onHelp, busy, children, notebookW, noPalette }: ShellProps) {
   const nav = useLevelNav();
   useIdleNudge(rootRef);
+  const banner = nav.banner?.(level);
+  const bar = (
+    <LevelBar
+      level={level} title={nav.title(level)} pages={nav.pages(level)} aside={nav.aside}
+      onSpeak={nav.onSpeak ? () => { nav.onSpeak!(level); onSpeak(); } : onSpeak}
+      onHelp={nav.help ? () => nav.help!(level, onHelp) : onHelp}
+    />
+  );
   return (
     <main
       ref={rootRef}
@@ -303,15 +313,31 @@ export function Shell({ level, mode, rootRef, onSpeak, onHelp, busy, children, n
         '--notebook-w': `${notebookW ?? notebookWidth(notebookBlocks(level), level.blockLabel)}px`,
       } as CSSProperties}
     >
-      <LevelBar
-        level={level} title={nav.title(level)} pages={nav.pages(level)} aside={nav.aside}
-        onSpeak={nav.onSpeak ? () => { nav.onSpeak!(level); onSpeak(); } : onSpeak}
-        onHelp={nav.help ? () => nav.help!(level, onHelp) : onHelp}
-      />
+      {banner ? <div className="level-head">{bar}<LevelGoal>{banner}</LevelGoal></div> : bar}
       {children}
       <Quit href={nav.quit} />
     </main>
   );
+}
+
+/**
+ * T39 fix: a page's goal, large, under the bar (4to ignores the bar's
+ * caption). Its height is measured into the page's `--head-extra`, so the
+ * board's computed height (camino.css) leaves room for it.
+ */
+function LevelGoal({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const page = el?.closest<HTMLElement>('main.level');
+    if (!el || !page) return;
+    const fit = () => page.style.setProperty('--head-extra', `${Math.ceil(el.getBoundingClientRect().height) + 12}px`);
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => { ro.disconnect(); page.style.removeProperty('--head-extra'); };
+  }, []);
+  return <p ref={ref} className="level-goal sheet" data-goal="">{children}</p>;
 }
 
 // ------------------------------------------------------------------ test hooks

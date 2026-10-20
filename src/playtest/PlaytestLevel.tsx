@@ -99,6 +99,8 @@ export interface InstrumentProps {
   listen?(type: string, payload: Record<string, unknown>): void;
   /** Once solved, the page turns by itself after this long. */
   autoNextMs?: number;
+  /** T39 fix (4to's long ladder): the page's goal (its spoken line) large inside the screen, under the bar. */
+  goal?: boolean;
 }
 
 /** A level page of the playtest's own (the tool check, the ladder, the rule game), instrumented. */
@@ -118,7 +120,7 @@ export function InstrumentedPage(props: InstrumentProps & { children: ReactNode 
   return <Instrumented {...props} base={base} />;
 }
 
-function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs, base, children }: InstrumentProps & { base: LevelNav | null; children: ReactNode }) {
+function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs, goal, base, children }: InstrumentProps & { base: LevelNav | null; children: ReactNode }) {
   const api = usePlaytest();
   const apiRef = useRef(api);
   apiRef.current = api;
@@ -295,6 +297,7 @@ function Instrumented({ level, activity, extra, onEnd, watch, listen, autoNextMs
       check();
     },
     className: [base?.className, 'pp-level'].filter(Boolean).join(' '),
+    ...(goal ? { banner: (l: LevelDef) => withName(l.say, progress.get().character) } : {}),
   // one nav per level
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [level, base]);

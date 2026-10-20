@@ -8,7 +8,7 @@
 // in 1ro the new blocks add one word under the picture; in 2do the word
 // comes first. Arrows stay pictures everywhere.
 
-import { memo, type CSSProperties, type ReactNode } from 'react';
+import { createContext, memo, useContext, type CSSProperties, type ReactNode } from 'react';
 import { blob, penLoop, smoothOpen, wobblyLine } from '../ink/ink.js';
 import type { Dims } from '../game/editor';
 import type { BlockLabel } from '../game/levels';
@@ -30,6 +30,16 @@ export const WORDS: Record<string, string> = {
   ifrock: 'si hay piedra',
   jump: 'saltar',
 };
+
+/** T39 fix (4to, word-picture): the word an arrow block carries when ArrowWordsContext asks for it. */
+export const DIR_WORDS: Record<Dir, string> = { up: 'arriba', right: 'derecha', down: 'abajo', left: 'izquierda' };
+
+/**
+ * T39 fix: 4to reads, so its arrow blocks say their direction in a word,
+ * with the arrow smaller under it (only with the 'word-picture' label). Off
+ * by default: every other grade's arrows stay pictures, as before.
+ */
+export const ArrowWordsContext = createContext(false);
 
 /** Card colours per direction (docs/05 §2): ↑ blue, ↓ yellow, ← pink, → orange. */
 export const DIR_FILL: Record<Dir, string> = { up: '#a9c3de', down: '#f2d98c', left: '#eeb3ac', right: '#eeac7f' };
@@ -161,7 +171,19 @@ export function CommandArt({ cmd, seed = 1, size, label = 'picture' }: { cmd: st
   const { kind, dir } = parseCommand(cmd);
   if (kind === 'jump') return <Labeled word={WORDS.jump} label={label}><JumpGlyph dir={dir} size={label === 'picture' ? size : Math.round(size * 0.72)} /></Labeled>;
   if (kind === 'ifrock') return <Labeled word={WORDS.ifrock} label={label}><RockGlyph size={Math.round(size * 0.72)} /></Labeled>;
-  return <Arrow dir={dir} seed={seed} size={size} />;
+  return <ArrowFace dir={dir} seed={seed} size={size} label={label} />;
+}
+
+/** An arrow block's face: the arrow alone, or (4to, ArrowWordsContext) its word first and the arrow smaller under it. */
+function ArrowFace({ dir, seed, size, label }: { dir: Dir; seed: number; size: number; label: BlockLabel }) {
+  const words = useContext(ArrowWordsContext);
+  if (!words || label !== 'word-picture') return <Arrow dir={dir} seed={seed} size={size} />;
+  return (
+    <span className="blk-labeled is-word-over" data-word={DIR_WORDS[dir]}>
+      <Word text={DIR_WORDS[dir]} />
+      <Arrow dir={dir} seed={seed} size={Math.round(size * 0.56)} />
+    </span>
+  );
 }
 
 /** The card colour of a command: its direction's; the "si" block its own; a note the tint of its bar. */
@@ -450,7 +472,7 @@ export const ActionArt = memo(function ActionArt({ id, w, h, d, label, seed = 1 
   return (
     <>
       <Paper d={cardPath(w, h, d)} fill={DIR_FILL[id as Dir]} w={w} h={h} />
-      <span className="blk-face"><Arrow dir={id as Dir} seed={seed} size={Math.round(h * 0.7)} /></span>
+      <span className="blk-face"><ArrowFace dir={id as Dir} seed={seed} size={Math.round(h * 0.7)} label={label} /></span>
     </>
   );
 });

@@ -11,6 +11,9 @@
 // 13–18 on the Workshop's blocks (LadderVmItem.tsx), word-picture labels
 // from the first item (no picture-first blocks at 4to), and the climbing
 // path beside the page (ClimbPath.tsx) instead of the bar's dots.
+// T39 review fixes: the page's goal large inside the screen under the bar
+// (PlaytestLevel `goal`, as rungs 13–18 show theirs) and the arrow blocks
+// carry their word too (ArrowWordsContext: "arriba", "derecha"…).
 
 import { useEffect, useRef, useState } from 'react';
 import { formatOf } from '../game/formats';
@@ -23,6 +26,7 @@ import {
   type Check, type LadderState, type StopReason,
 } from './ladder';
 import { pilotLevel } from './levels';
+import { ArrowWordsContext } from '../blocks/blocks';
 import { vmItem } from './ladderVm';
 import { LadderVmItem } from './LadderVmItem';
 import { ClimbPath } from './ClimbPath';
@@ -177,6 +181,7 @@ export function Ladder() {
       watch={watch}
       autoNextMs={AUTO_NEXT_MS}
       onEnd={onEnd}
+      goal={long}
     />
   );
 
@@ -188,7 +193,7 @@ export function Ladder() {
       <BarProgressContext.Provider value={null}>
         <div className="pp-climb-wrap" data-rung={r.rung} data-variant={variant}>
           <aside className="pp-climb-col" aria-label="Tu escalera"><ClimbPath from={from} top={TOP_LONG} passed={passed} here={r.rung} /></aside>
-          <div className="pp-climb-page">{body}</div>
+          <div className="pp-climb-page"><ArrowWordsContext.Provider value>{body}</ArrowWordsContext.Provider></div>
         </div>
       </BarProgressContext.Provider>
     );

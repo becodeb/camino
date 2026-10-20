@@ -345,12 +345,14 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
     var now = Date.now();
     var rows = data.sessions.filter(function (s) { return s.in_class; }).map(function (s) {
       var active = !s.ended_at && (now - new Date(s.last_seen_at).getTime()) < data.active_window_minutes * 60000;
-      var where = s.ended_at ? ('terminada' + (s.end_reason === 'class_end' ? ' (fin de clase)' : '')) : ((STEP[s.current_step] || s.current_step || '—') + detail(s));
+      // T39 fix: 4to's free play is the Arcade
+      var inArcade = s.current_step === 'free_play' && String(s.grade) === '4';
+      var where = s.ended_at ? ('terminada' + (s.end_reason === 'class_end' ? ' (fin de clase)' : '')) : (inArcade ? 'Arcade' : (STEP[s.current_step] || s.current_step || '—') + detail(s));
       return '<tr class="' + (active ? 'active-row' : '') + '" data-id="' + escapeHtml(s.session_id) + '">' +
         '<td>' + escapeHtml(s.child_name || '—') + '</td>' +
         '<td>' + escapeHtml(s.code) + '</td>' +
         '<td>' + escapeHtml(s.grade) + '°</td>' +
-        '<td data-where="' + escapeHtml(s.current_step || '') + '">' + escapeHtml(where) + (s.arcade_open ? ' <span class="arcade" data-arcade="1">Arcade</span>' : '') + '</td>' +
+        '<td data-where="' + escapeHtml(s.current_step || '') + '">' + escapeHtml(where) + (s.arcade_open && !(inArcade && !s.ended_at) ? ' <span class="arcade" data-arcade="1">Arcade</span>' : '') + '</td>' +
         '<td class="' + (s.route_done ? 'yes' : 'no') + '" data-done="' + (s.route_done ? '1' : '0') + '">' + (s.route_done ? FLAG + ' ✓' : '—') + '</td>' +
         '<td class="' + (s.survey_done ? 'yes' : 'no') + '" data-survey="' + (s.survey_done ? '1' : '0') + '">' + (s.survey_done ? '✓' : '—') + '</td>' +
         '<td>' + fmtAgo(s.last_seen_at) + '</td>' +
