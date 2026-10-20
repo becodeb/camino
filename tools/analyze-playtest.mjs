@@ -8,23 +8,25 @@
 //
 // Usage: node tools/analyze-playtest.mjs <export.json> [--since YYYY-MM-DD] [--until YYYY-MM-DD]
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import {
-  analyze, childLabel, localTime,
+  analyze, childLabel, CONCEPT_FAMILIES, localTime, UNDERSTANDING_RULE,
 } from '../src/playtest/report.ts';
 
 function parseArgs(argv) {
   const [file, ...rest] = argv;
   if (!file) {
-    console.error('usage: node tools/analyze-playtest.mjs <export.json> [--since YYYY-MM-DD] [--until YYYY-MM-DD]');
+    console.error('usage: node tools/analyze-playtest.mjs <export.json> [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--csv <file>]');
     process.exit(2);
   }
   const opts = {};
+  let csv;
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === '--since') opts.since = rest[++i];
     else if (rest[i] === '--until') opts.until = rest[++i];
+    else if (rest[i] === '--csv') csv = rest[++i];
   }
-  return { file, opts };
+  return { file, opts, csv };
 }
 
 function fmtMs(ms) {
@@ -186,6 +188,121 @@ function reportArcade(r) {
   }
 }
 
+const UNDERSTANDING_LABEL = {
+  entiende: 'entiende',
+  a_medias: 'a medias',
+  copia_o_no_llego: 'copia o no llegó',
+};
+
+function conceptCell(r) {
+  if (r.status === 'not_reached') return 'no llegó';
+  if (r.status === 'failed') return `falló (escalón ${r.rung})`;
+  return `pasó (escalón ${r.rung}, ${r.via === 'variant' ? '2do intento' : '1er intento'})`;
+}
+
+function fmtPctOrDash(p) {
+  return p == null ? '—' : fmtPct(p);
+}
+
+function reportGradeChild(c) {
+  line(`  - ${c.code} (${c.grade}°):`);
+  line(`      Escalera: techo ${c.ladderCeiling ?? '—'}.`);
+  for (const fam of CONCEPT_FAMILIES) line(`      ${fam.label}: ${conceptCell(c.concepts[fam.key])}`);
+  const w = c.workshop;
+  if (w.reached) {
+    line(`      Taller: ${w.coreSolved}/${w.coreTotal} desafíos core + ${w.freeSolved} libres. Predecir ${w.predictCorrect == null ? '—' : (w.predictCorrect ? 'bien' : 'mal')}, investigar ${w.investigateCorrect == null ? '—' : (w.investigateCorrect ? 'bien' : 'mal')}. Resueltos sin ayuda: ${w.solvedWithoutHelp}. Señal: ${UNDERSTANDING_LABEL[w.understanding]}.`);
+  } else {
+    line('      Taller: no llegó.');
+  }
+  if (c.arcade) {
+    line(`      Carrera de teclas: mejor ${c.arcade.bestWpm ?? '—'} ppm, teclas justas ${fmtPctOrDash(c.arcade.accuracy)}.`);
+  } else {
+    line('      Carrera de teclas: —.');
+  }
+  const t = c.time;
+  const onTaskMin = Math.round(t.onTaskMs / 60_000);
+  const hiddenPctVal = fmtPctOrDash(t.totalMs > 0 ? (t.hiddenMs / t.totalMs) * 100 : null);
+  line(`      Tiempo: ${onTaskMin} min en tarea de ${Math.round(t.totalMs / 60_000)} min totales; pestaña oculta ${hiddenPctVal}; inactividad ${fmtMs(t.idleMs)}.`);
+  line(`      Ayuda: ✋ ${t.helpTouches} vez(ces), mano levantada ${t.callAdultCount} vez(ces).`);
+}
+
+function reportGrades(g) {
+  if (g.grade4.length === 0 && g.grade5.length === 0) return;
+  section('Evaluación de 4to (y 5to) para el año que viene (T42)');
+  line(`Regla del Taller — "entiende / a medias / copia o no llegó" (UNDERSTANDING_RULE en report.ts): "entiende" necesita predecir e investigar bien Y ≥${UNDERSTANDING_RULE.MIN_SOLVED_WITHOUT_HELP_FOR_ENTIENDE} desafíos core resueltos sin ayuda; "copia o no llegó" si predecir o investigar salió mal, o si resolvió ≤${UNDERSTANDING_RULE.MAX_CORE_SOLVED_FOR_COPIA} desafíos core (de ${UNDERSTANDING_RULE.CORE_CHALLENGES}); el resto queda "a medias".`);
+  if (g.grade4.length) {
+    line('');
+    line(`4to (${g.grade4.length} chico(s)):`);
+    for (const c of g.grade4) reportGradeChild(c);
+  }
+  if (g.grade5.length) {
+    line('');
+    line(`5to (${g.grade5.length} chico(s)):`);
+    for (const c of g.grade5) reportGradeChild(c);
+  }
+  const s = g.summary4to;
+  if (s) {
+    line('');
+    line('Resumen de la clase de 4to (lo que entra a 5to el año que viene):');
+    line(`  Chicos: ${s.childCount}. Techo mediano: ${s.medianCeiling ?? '—'}. Techo más común (moda): ${s.modeCeiling ?? '—'}.`);
+    const famLabel = (key) => CONCEPT_FAMILIES.find((f) => f.key === key)?.label ?? key;
+    line(`  Concepto que más chicos tienen: ${s.mostCommonConcept ? famLabel(s.mostCommonConcept) : '—'}.`);
+    line(`  Conceptos más débiles (de más a menos): ${s.weakestConcepts.length ? s.weakestConcepts.map(famLabel).join(', ') : '—'}.`);
+    if (s.belowEntry.length) {
+      line(`  Claramente por debajo del techo esperado (${s.belowEntry.length}):`);
+      for (const b of s.belowEntry) line(`    - ${b.code}: ${b.reason}`);
+    } else {
+      line('  Nadie claramente por debajo del techo esperado.');
+    }
+    line(`  Minutos medianos en tarea: ${s.medianOnTaskMinutes == null ? '—' : s.medianOnTaskMinutes.toFixed(1)}. Pestaña oculta (mediana): ${fmtPctOrDash(s.medianHiddenPct)}.`);
+    line(`  Siguieron en el Taller después de que se abrió el Arcade (voluntario): ${s.voluntaryWorkshopContinuation} de ${s.childCount}.`);
+    line(`  Carreras de teclas por chico (mediana): ${s.medianTypingRaces ?? '—'}.`);
+  }
+}
+
+function csvEscape(v) {
+  const s = v == null ? '' : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function writeGradeCsv(path, g) {
+  const children = [...g.grade4, ...g.grade5];
+  if (children.length === 0) {
+    line(`(--csv ${path}: no hay chicos de 4to/5to en este export, no se escribió el archivo)`);
+    return;
+  }
+  const famKeys = CONCEPT_FAMILIES.map((f) => f.key);
+  const header = [
+    'nombre', 'grado', 'techo_escalera',
+    ...famKeys,
+    'taller_llego', 'taller_core_resueltos', 'taller_core_total', 'taller_libres_resueltos',
+    'taller_predecir_bien', 'taller_investigar_bien', 'taller_resueltos_sin_ayuda', 'taller_senal',
+    'carrera_teclas_mejor_ppm', 'carrera_teclas_justas_pct',
+    'minutos_totales', 'minutos_en_tarea', 'pestana_oculta_pct', 'inactividad_ms',
+    'ayuda_mano_vezes', 'ayuda_adulto_vezes',
+  ];
+  const rows = children.map((c) => {
+    const w = c.workshop;
+    const famCells = famKeys.map((k) => conceptCell(c.concepts[k]));
+    const hiddenPctVal = c.time.totalMs > 0 ? (c.time.hiddenMs / c.time.totalMs) * 100 : '';
+    return [
+      c.code, c.grade, c.ladderCeiling ?? '',
+      ...famCells,
+      w.reached ? 'si' : 'no', w.coreSolved, w.coreTotal, w.freeSolved,
+      w.predictCorrect == null ? '' : (w.predictCorrect ? 'si' : 'no'),
+      w.investigateCorrect == null ? '' : (w.investigateCorrect ? 'si' : 'no'),
+      w.solvedWithoutHelp, UNDERSTANDING_LABEL[w.understanding],
+      c.arcade?.bestWpm ?? '', c.arcade?.accuracy ?? '',
+      Math.round(c.time.totalMs / 60_000), Math.round(c.time.onTaskMs / 60_000),
+      hiddenPctVal === '' ? '' : hiddenPctVal.toFixed(1), Math.round(c.time.idleMs),
+      c.time.helpTouches, c.time.callAdultCount,
+    ];
+  });
+  const text = [header, ...rows].map((r) => r.map(csvEscape).join(',')).join('\n') + '\n';
+  writeFileSync(path, text, 'utf8');
+  line(`Tabla por chico escrita en ${path} (${rows.length} fila(s)).`);
+}
+
 function reportProfiles(r) {
   section('Perfiles de motivación (T37, una heurística para aprender — no un diagnóstico)');
   if (!r.hasRaceData) {
@@ -200,7 +317,7 @@ function reportProfiles(r) {
 }
 
 async function main() {
-  const { file, opts } = parseArgs(process.argv.slice(2));
+  const { file, opts, csv } = parseArgs(process.argv.slice(2));
   const data = JSON.parse(readFileSync(file, 'utf8'));
   const a = analyze(data, opts);
 
@@ -220,6 +337,8 @@ async function main() {
   reportRace(a.race);
   reportArcade(a.arcade);
   reportProfiles(a.profiles);
+  reportGrades(a.grades);
+  if (csv) writeGradeCsv(csv, a.grades);
   line('');
 }
 

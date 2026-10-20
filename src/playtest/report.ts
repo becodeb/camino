@@ -105,7 +105,7 @@ export function dateOf(iso: string): string {
   return iso.slice(0, 10);
 }
 
-function durationMs(s: PtSession): number {
+export function durationMs(s: PtSession): number {
   const start = Date.parse(s.started_at);
   const end = Date.parse(s.ended_at ?? s.last_seen_at ?? s.started_at);
   return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0;
@@ -832,6 +832,336 @@ export function profileReport(sessions: PtSession[], events: PtEvent[]): Profile
   };
 }
 
+// ------------------------------------------------------------------ T42: 4to's (and 5to's) per-child evaluation
+//
+// `docs/prueba-piloto-datos.md`'s own "Concepts for the per-child profile"
+// (right after the long-ladder's rungs 13–18 table) is the contract this
+// module follows literally: seven families that partition every ladder
+// concept (round-1 and round-2's original 12, plus T39's 13–18), each
+// grouping the rungs a child met. A family's own status is read from the
+// DEEPEST concept of the family the child actually attempted this session
+// (ladder rungs only ever increase, so the deepest concept touched is both
+// the hardest and the last): `not_reached` with no row at all, else that
+// concept's own result — the rung's SECOND item's result when a second item
+// was played (`variant: 1`, "got it the second time"), its first item's
+// otherwise (T39's own documented rule: "the second item's result is the
+// rung's").
+
+export interface ConceptFamily {
+  key: string;
+  /** Spanish label, as the data dictionary itself names the family. */
+  label: string;
+  concepts: string[];
+}
+
+export const CONCEPT_FAMILIES: ConceptFamily[] = [
+  { key: 'sequence', label: 'secuencia', concepts: ['sequence', 'long_sequence'] },
+  { key: 'reading_fixing', label: 'leer y corregir', concepts: ['fix', 'predict', 'fix_rule'] },
+  { key: 'repeat', label: 'repetir', concepts: ['repeat', 'repeat_count', 'repeat_pattern', 'before_after_repeat'] },
+  { key: 'conditions', label: 'condiciones', concepts: ['fog_si', 'three_worlds', 'if_else'] },
+  { key: 'events', label: 'eventos', concepts: ['events_rules', 'rules_score', 'events_predict'] },
+  { key: 'variables', label: 'variables', concepts: ['variables', 'modify_make'] },
+  { key: 'broadcast', label: 'difusión (broadcast)', concepts: ['broadcast'] },
+];
+
+export type ConceptStatus = 'passed' | 'failed' | 'not_reached';
+
+export interface ConceptResult {
+  status: ConceptStatus;
+  /** Only set when `status === 'passed'`: the rung's first item, or its second (variant). */
+  via?: 'first' | 'variant';
+  /** The deepest rung of the family actually attempted (absent when `not_reached`). */
+  rung?: number;
+}
+
+/** `steps` must already be this one session's `ladder_step` rows. */
+export function familyResult(steps: PtEvent[], family: ConceptFamily): ConceptResult {
+  const rows = steps.filter((e) => family.concepts.includes(String(e.payload.concept)));
+  if (rows.length === 0) return { status: 'not_reached' };
+  const maxRung = Math.max(...rows.map((e) => Number(e.payload.rung) || 0));
+  const atMaxRung = rows.filter((e) => Number(e.payload.rung) === maxRung);
+  // The second item (variant 1), when it was played, carries the rung's final result.
+  const final = atMaxRung.find((e) => Number(e.payload.variant) === 1) ?? atMaxRung[0];
+  if (final.payload.result === 'pass') {
+    return { status: 'passed', via: Number(final.payload.variant) === 1 ? 'variant' : 'first', rung: maxRung };
+  }
+  return { status: 'failed', rung: maxRung };
+}
+
+// ------------------------------------------------------------------ T42: the Workshop's "understands vs copies" signal
+//
+// `docs/prueba-piloto-datos.md`'s own "Understands vs copies (T42)" note
+// (in the Game Workshop section) names the inputs: `predict_correct`
+// (challenge 1) and `investigate_correct` (challenge 2), both first answers
+// given before any help could show them; `help_level` and how many core
+// challenges were solved at help level 0 ("built alone"). The three-way
+// read below is this module's own rule — named constants, documented here,
+// printed in the report itself (the brief: "the rule... stated in the
+// output") — not a claim from the data dictionary.
+
+export type UnderstandingSignal = 'entiende' | 'a_medias' | 'copia_o_no_llego';
+
+export const UNDERSTANDING_RULE = {
+  /** Core challenges (1–7); 8–13 are the free, unscored ones. */
+  CORE_CHALLENGES: 7,
+  /** "entiende": both first answers right AND at least this many core challenges solved at help level 0. */
+  MIN_SOLVED_WITHOUT_HELP_FOR_ENTIENDE: 5,
+  /** "copia o no llegó": either first answer wrong, or at most this many core challenges solved at all (help or not). */
+  MAX_CORE_SOLVED_FOR_COPIA: 2,
+} as const;
+
+export interface WorkshopChildReport {
+  /** The Workshop was opened at all this session (any `workshop_challenge` row). */
+  reached: boolean;
+  coreSolved: number;
+  coreTotal: number;
+  freeSolved: number;
+  predictCorrect: boolean | null;
+  investigateCorrect: boolean | null;
+  helpLevelByChallenge: Record<number, number>;
+  solvedWithoutHelp: number;
+  understanding: UnderstandingSignal;
+}
+
+function emptyWorkshopChildReport(): WorkshopChildReport {
+  return {
+    reached: false, coreSolved: 0, coreTotal: UNDERSTANDING_RULE.CORE_CHALLENGES, freeSolved: 0,
+    predictCorrect: null, investigateCorrect: null, helpLevelByChallenge: {}, solvedWithoutHelp: 0,
+    understanding: 'copia_o_no_llego',
+  };
+}
+
+export function workshopChildReport(events: PtEvent[]): WorkshopChildReport {
+  const rows = events.filter((e) => e.type === 'workshop_challenge');
+  if (rows.length === 0) return emptyWorkshopChildReport();
+
+  // The final (last-recorded) row per challenge: `help_level`/`attempts` are already cumulative,
+  // and `phase` tells whether it ended solved, skipped, or never finished this session.
+  const sorted = [...rows].sort((a, b) => a.seq - b.seq);
+  const finalByN = new Map<number, PtEvent>();
+  for (const e of sorted) finalByN.set(Number(e.payload.n), e);
+
+  let coreSolved = 0;
+  let freeSolved = 0;
+  let solvedWithoutHelp = 0;
+  const helpLevelByChallenge: Record<number, number> = {};
+  for (const [n, e] of finalByN) {
+    const solved = e.payload.phase === 'solved';
+    const help = Number(e.payload.help_level ?? 0) || 0;
+    helpLevelByChallenge[n] = help;
+    if (n <= UNDERSTANDING_RULE.CORE_CHALLENGES) { if (solved) coreSolved++; } else if (solved) freeSolved++;
+    if (solved && help === 0) solvedWithoutHelp++;
+  }
+  const c1 = finalByN.get(1);
+  const c2 = finalByN.get(2);
+  const predictCorrect = typeof c1?.payload.predict_correct === 'boolean' ? c1.payload.predict_correct : null;
+  const investigateCorrect = typeof c2?.payload.investigate_correct === 'boolean' ? c2.payload.investigate_correct : null;
+
+  const r = UNDERSTANDING_RULE;
+  let understanding: UnderstandingSignal;
+  if (predictCorrect === false || investigateCorrect === false || coreSolved <= r.MAX_CORE_SOLVED_FOR_COPIA) {
+    understanding = 'copia_o_no_llego';
+  } else if (predictCorrect === true && investigateCorrect === true && solvedWithoutHelp >= r.MIN_SOLVED_WITHOUT_HELP_FOR_ENTIENDE) {
+    understanding = 'entiende';
+  } else {
+    understanding = 'a_medias';
+  }
+  return { reached: true, coreSolved, coreTotal: r.CORE_CHALLENGES, freeSolved, predictCorrect, investigateCorrect, helpLevelByChallenge, solvedWithoutHelp, understanding };
+}
+
+// ------------------------------------------------------------------ T42: on-task vs hidden-tab time, idle, help asked
+
+export interface ChildTimeReport {
+  totalMs: number;
+  /** Summed stretches between a `visibility` `hidden` and the next `visible` (or the session's own end, if it never came back). */
+  hiddenMs: number;
+  /** Summed `idle.duration_ms` (30s+ of no input; already excludes hidden-tab time per the data dictionary). */
+  idleMs: number;
+  onTaskMs: number;
+  helpTouches: number;
+  callAdultCount: number;
+}
+
+export function childTimeReport(s: PtSession, events: PtEvent[]): ChildTimeReport {
+  const totalMs = durationMs(s);
+  const vis = [...events.filter((e) => e.type === 'visibility')].sort((a, b) => a.seq - b.seq);
+  let hiddenMs = 0;
+  let hiddenSince: number | null = null;
+  for (const e of vis) {
+    const t = Date.parse(e.client_t ?? e.server_t ?? '');
+    if (!Number.isFinite(t)) continue;
+    if (e.payload.state === 'hidden') hiddenSince = t;
+    else if (e.payload.state === 'visible' && hiddenSince != null) { hiddenMs += Math.max(0, t - hiddenSince); hiddenSince = null; }
+  }
+  if (hiddenSince != null) {
+    const end = Date.parse(s.ended_at ?? s.last_seen_at ?? s.started_at);
+    if (Number.isFinite(end)) hiddenMs += Math.max(0, end - hiddenSince);
+  }
+  const idleMs = events.filter((e) => e.type === 'idle').reduce((n, e) => n + (Number(e.payload.duration_ms) || 0), 0);
+  return {
+    totalMs,
+    hiddenMs,
+    idleMs,
+    onTaskMs: Math.max(0, totalMs - hiddenMs - idleMs),
+    helpTouches: events.filter((e) => e.type === 'help').length,
+    callAdultCount: events.filter((e) => e.type === 'call_adult').length,
+  };
+}
+
+// ------------------------------------------------------------------ T42: the per-child 4to/5to table, and the class summary
+
+export interface GradeChildReport {
+  sessionId: string;
+  /** The child's name, or the anonymous session code (`childLabel`). */
+  code: string;
+  grade: number;
+  ladderCeiling: number | null;
+  /** Keyed by `ConceptFamily.key`. */
+  concepts: Record<string, ConceptResult>;
+  workshop: WorkshopChildReport;
+  /** From `arcadeReport` (T41); `null` for a session with no Arcade activity at all (every 5to, and a 4to who never reached it). */
+  arcade: ArcadeChild | null;
+  time: ChildTimeReport;
+}
+
+function gradeChildReport(s: PtSession, events: PtEvent[], arcadeBySession: Map<string, ArcadeChild>): GradeChildReport {
+  const steps = events.filter((e) => e.type === 'ladder_step');
+  const ladderEnd = events.find((e) => e.type === 'ladder_end');
+  const rawCeiling = ladderEnd?.payload.ceiling_rung;
+  const ladderCeiling = rawCeiling == null ? null : Number(rawCeiling);
+  const concepts: Record<string, ConceptResult> = {};
+  for (const fam of CONCEPT_FAMILIES) concepts[fam.key] = familyResult(steps, fam);
+  return {
+    sessionId: s.id,
+    code: childLabel(s),
+    grade: s.grade,
+    ladderCeiling: Number.isFinite(ladderCeiling) ? ladderCeiling : null,
+    concepts,
+    workshop: workshopChildReport(events),
+    arcade: arcadeBySession.get(s.id) ?? null,
+    time: childTimeReport(s, events),
+  };
+}
+
+export const BELOW_ENTRY_RULE = {
+  /** A child at least this many rungs below the class median ceiling counts as "clearly below". */
+  RUNGS_BELOW_MEDIAN: 2,
+  /** A ceiling at or under this rung counts as "clearly below" on its own (even close to the median): still near 4to's own entry rung (7). */
+  MAX_CEILING_STILL_BELOW: 9,
+} as const;
+
+export interface GradeClassSummary {
+  childCount: number;
+  medianCeiling: number | null;
+  modeCeiling: number | null;
+  /** The `ConceptFamily.key` most children passed — "the concept most children have". */
+  mostCommonConcept: string | null;
+  belowEntry: Array<{ code: string; reason: string }>;
+  /** `ConceptFamily.key`s with at least one attempt in the class, weakest (lowest pass rate) first. */
+  weakestConcepts: string[];
+  medianOnTaskMinutes: number | null;
+  medianHiddenPct: number | null;
+  /** Children who kept working in the Workshop (any `workshop_*` row) after `arcade_open`. */
+  voluntaryWorkshopContinuation: number;
+  medianTypingRaces: number | null;
+}
+
+function modeOf(nums: number[]): number | null {
+  if (nums.length === 0) return null;
+  const freq = new Map<number, number>();
+  for (const n of nums) freq.set(n, (freq.get(n) ?? 0) + 1);
+  let best: number | null = null;
+  let bestCount = -1;
+  for (const [n, c] of freq) if (c > bestCount) { best = n; bestCount = c; }
+  return best;
+}
+
+function gradeClassSummary(children: GradeChildReport[], eventsBySession: Map<string, PtEvent[]>): GradeClassSummary {
+  const ceilings = children.map((c) => c.ladderCeiling).filter((x): x is number => x != null);
+  const med = median(ceilings);
+  const mode = modeOf(ceilings);
+
+  const familyPassed: Record<string, number> = {};
+  const familyAttempted: Record<string, number> = {};
+  for (const c of children) {
+    for (const fam of CONCEPT_FAMILIES) {
+      const r = c.concepts[fam.key];
+      if (r.status === 'not_reached') continue;
+      familyAttempted[fam.key] = (familyAttempted[fam.key] ?? 0) + 1;
+      if (r.status === 'passed') familyPassed[fam.key] = (familyPassed[fam.key] ?? 0) + 1;
+    }
+  }
+  let mostCommonConcept: string | null = null;
+  let mostCount = -1;
+  for (const fam of CONCEPT_FAMILIES) {
+    const n = familyPassed[fam.key] ?? 0;
+    if (n > mostCount) { mostCount = n; mostCommonConcept = fam.key; }
+  }
+  const weakestConcepts = CONCEPT_FAMILIES
+    .filter((fam) => (familyAttempted[fam.key] ?? 0) > 0)
+    .sort((a, b) => (familyPassed[a.key] ?? 0) / familyAttempted[a.key] - (familyPassed[b.key] ?? 0) / familyAttempted[b.key])
+    .map((f) => f.key);
+
+  const belowEntry: Array<{ code: string; reason: string }> = [];
+  for (const c of children) {
+    if (c.ladderCeiling == null) { belowEntry.push({ code: c.code, reason: 'nunca llegó a un techo de escalera' }); continue; }
+    if (med != null && med - c.ladderCeiling >= BELOW_ENTRY_RULE.RUNGS_BELOW_MEDIAN) {
+      belowEntry.push({ code: c.code, reason: `techo ${c.ladderCeiling}, ${med - c.ladderCeiling} escalón(es) debajo de la mediana (${med})` });
+    } else if (c.ladderCeiling <= BELOW_ENTRY_RULE.MAX_CEILING_STILL_BELOW) {
+      belowEntry.push({ code: c.code, reason: `techo ${c.ladderCeiling} (≤ ${BELOW_ENTRY_RULE.MAX_CEILING_STILL_BELOW})` });
+    }
+  }
+
+  const onTaskMinutes = children.map((c) => c.time.onTaskMs / 60_000);
+  const hiddenPct = children.map((c) => pct(c.time.hiddenMs, c.time.totalMs)).filter((x): x is number => x != null);
+  let voluntaryWorkshopContinuation = 0;
+  for (const c of children) {
+    const rows = eventsBySession.get(c.sessionId) ?? [];
+    const open = rows.find((e) => e.type === 'arcade_open');
+    if (!open) continue;
+    const kept = rows.some((e) => e.type.startsWith('workshop_') && e.seq > open.seq);
+    if (kept) voluntaryWorkshopContinuation++;
+  }
+  const typingRaces = children.map((c) => c.arcade?.typingRaces ?? 0);
+
+  return {
+    childCount: children.length,
+    medianCeiling: med,
+    modeCeiling: mode,
+    mostCommonConcept,
+    belowEntry,
+    weakestConcepts,
+    medianOnTaskMinutes: median(onTaskMinutes),
+    medianHiddenPct: median(hiddenPct),
+    voluntaryWorkshopContinuation,
+    medianTypingRaces: median(typingRaces),
+  };
+}
+
+export interface GradeEvaluation {
+  grade4: GradeChildReport[];
+  grade5: GradeChildReport[];
+  /** Only computed over 4to (the group entering 5to next year); `null` when no 4to session is in this export. */
+  summary4to: GradeClassSummary | null;
+}
+
+/** T42: printed by the report only when a 4to or 5to session exists in this export. */
+export function gradeEvaluation(sessions: PtSession[], events: PtEvent[]): GradeEvaluation {
+  const eventsBySession = groupBy(events, (e) => e.session_id);
+  const arcade = arcadeReport(sessions, events);
+  const arcadeBySession = new Map(arcade.children.map((c) => [c.sessionId, c]));
+  const build = (grade: number) => sessions
+    .filter((s) => s.grade === grade)
+    .map((s) => gradeChildReport(s, eventsBySession.get(s.id) ?? [], arcadeBySession));
+  const grade4 = build(4);
+  const grade5 = build(5);
+  return {
+    grade4,
+    grade5,
+    summary4to: grade4.length ? gradeClassSummary(grade4, eventsBySession) : null,
+  };
+}
+
 // ------------------------------------------------------------------ putting a report together
 
 export interface Analysis {
@@ -851,6 +1181,7 @@ export interface Analysis {
   race: RaceReport;
   arcade: ArcadeReport;
   profiles: ProfileReport;
+  grades: GradeEvaluation;
 }
 
 export function analyze(data: PtExport, opts: FilterOptions = {}): Analysis {
@@ -874,5 +1205,6 @@ export function analyze(data: PtExport, opts: FilterOptions = {}): Analysis {
     race: raceReport(events),
     arcade: arcadeReport(kept, events),
     profiles: profileReport(kept, events),
+    grades: gradeEvaluation(kept, events),
   };
 }

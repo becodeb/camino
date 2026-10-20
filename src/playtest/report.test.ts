@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  arcadeReport, classifyChild, classCommandReport, clusterClasses, droppedAfterRepeat, filterNoise, freePlayReport,
-  helpReport, ladderReport, median, predictReport, PROFILE_RULES, profileReport, raceReport, repeatDropReport,
-  surveyReport, topLevelTokens, typingReport,
+  arcadeReport, childTimeReport, classifyChild, classCommandReport, clusterClasses, CONCEPT_FAMILIES, droppedAfterRepeat,
+  familyResult, filterNoise, freePlayReport, gradeEvaluation, helpReport, ladderReport, median, predictReport,
+  PROFILE_RULES, profileReport, raceReport, repeatDropReport, surveyReport, topLevelTokens, typingReport,
+  UNDERSTANDING_RULE, workshopChildReport,
   type PtEvent, type PtSession,
 } from './report';
 
@@ -409,5 +410,185 @@ describe('classifyChild and profileReport (T37)', () => {
     // 3 picks, 2 distinct, 1 repeat: collectorScore = 0 cups*2 + 1 repeat*1 = 1, racerScore = 1 start*1 = 1 — a tie under MIN_TOTAL_SCORE either way
     expect(r.children[0].profile).toBe('undecided');
     expect(r.children[0].evidence).toMatch(/3 picks \(2 distinct, 1 repeat\)/);
+  });
+});
+
+// ------------------------------------------------------------------ T42: per-child 4to/5to evaluation
+
+describe('familyResult', () => {
+  it('not_reached with no row at all', () => {
+    expect(familyResult([], CONCEPT_FAMILIES[0]).status).toBe('not_reached');
+  });
+
+  it('passed on the first item (no variant row)', () => {
+    const steps = [ev('a', 'ladder_step', { concept: 'repeat', rung: 5, variant: 0, result: 'pass' })];
+    const r = familyResult(steps, CONCEPT_FAMILIES.find((f) => f.key === 'repeat')!);
+    expect(r).toEqual({ status: 'passed', via: 'first', rung: 5 });
+  });
+
+  it('a failed first item then a passed second item (variant) reads as passed via the variant', () => {
+    const steps = [
+      ev('a', 'ladder_step', { concept: 'fog_si', rung: 9, variant: 0, result: 'fail' }),
+      ev('a', 'ladder_step', { concept: 'fog_si', rung: 9, variant: 1, result: 'pass' }, 1),
+    ];
+    const r = familyResult(steps, CONCEPT_FAMILIES.find((f) => f.key === 'conditions')!);
+    expect(r).toEqual({ status: 'passed', via: 'variant', rung: 9 });
+  });
+
+  it('both items failed reads as failed at that rung', () => {
+    const steps = [
+      ev('a', 'ladder_step', { concept: 'if_else', rung: 15, variant: 0, result: 'fail' }),
+      ev('a', 'ladder_step', { concept: 'if_else', rung: 15, variant: 1, result: 'fail' }, 1),
+    ];
+    const r = familyResult(steps, CONCEPT_FAMILIES.find((f) => f.key === 'conditions')!);
+    expect(r).toEqual({ status: 'failed', rung: 15 });
+  });
+
+  it('a family with two concepts uses the deepest one attempted', () => {
+    const steps = [
+      ev('a', 'ladder_step', { concept: 'sequence', rung: 1, variant: 0, result: 'pass' }),
+      ev('a', 'ladder_step', { concept: 'long_sequence', rung: 2, variant: 0, result: 'fail' }, 1),
+    ];
+    const r = familyResult(steps, CONCEPT_FAMILIES.find((f) => f.key === 'sequence')!);
+    expect(r).toEqual({ status: 'failed', rung: 2 });
+  });
+});
+
+describe('workshopChildReport', () => {
+  it('a strong child: both first answers right, core challenges solved without help → entiende', () => {
+    const events = [1, 2, 3, 4, 5].map((n, i) => ev('a', 'workshop_challenge', {
+      n, phase: 'solved', help_level: 0,
+      ...(n === 1 ? { predict_correct: true } : {}),
+      ...(n === 2 ? { investigate_correct: true } : {}),
+    }, i));
+    const r = workshopChildReport(events);
+    expect(r).toMatchObject({ reached: true, coreSolved: 5, predictCorrect: true, investigateCorrect: true, solvedWithoutHelp: 5, understanding: 'entiende' });
+  });
+
+  it('a copier who used max help on everything → copia_o_no_llego, even if eventually solved', () => {
+    const events = [1, 2, 3, 4, 5, 6, 7].map((n, i) => ev('a', 'workshop_challenge', {
+      n, phase: 'solved', help_level: 3,
+      ...(n === 1 ? { predict_correct: true } : {}),
+      ...(n === 2 ? { investigate_correct: true } : {}),
+    }, i));
+    const r = workshopChildReport(events);
+    expect(r.solvedWithoutHelp).toBe(0);
+    expect(r.understanding).toBe('a_medias'); // solved alright, but never alone — not a straight copy, not a clean "entiende" either
+  });
+
+  it('a child who got the predict wrong reads as copia_o_no_llego even with several solved', () => {
+    const events = [
+      ev('a', 'workshop_challenge', { n: 1, phase: 'solved', help_level: 0, predict_correct: false }, 0),
+      ev('a', 'workshop_challenge', { n: 2, phase: 'solved', help_level: 0, investigate_correct: true }, 1),
+      ev('a', 'workshop_challenge', { n: 3, phase: 'solved', help_level: 0 }, 2),
+    ];
+    expect(workshopChildReport(events).understanding).toBe('copia_o_no_llego');
+  });
+
+  it('a child who never reached the Workshop at all → copia_o_no_llego, reached false', () => {
+    const r = workshopChildReport([ev('a', 'ladder_step', { concept: 'sequence' })]);
+    expect(r).toEqual({
+      reached: false, coreSolved: 0, coreTotal: UNDERSTANDING_RULE.CORE_CHALLENGES, freeSolved: 0,
+      predictCorrect: null, investigateCorrect: null, helpLevelByChallenge: {}, solvedWithoutHelp: 0,
+      understanding: 'copia_o_no_llego',
+    });
+  });
+
+  it('only the final row per challenge counts (help_level and phase are cumulative)', () => {
+    const events = [
+      ev('a', 'workshop_challenge', { n: 1, phase: 'start', help_level: 0 }, 0),
+      ev('a', 'workshop_challenge', { n: 1, phase: 'predict', predict_correct: true, help_level: 1 }, 1),
+      ev('a', 'workshop_challenge', { n: 1, phase: 'solved', predict_correct: true, help_level: 1 }, 2),
+    ];
+    const r = workshopChildReport(events);
+    expect(r.coreSolved).toBe(1);
+    expect(r.helpLevelByChallenge[1]).toBe(1);
+    expect(r.solvedWithoutHelp).toBe(0); // help_level 1, not 0
+  });
+});
+
+describe('childTimeReport', () => {
+  const s = (over: Partial<PtSession> & { id: string }): PtSession => ({ grade: 4, started_at: '2026-10-20T12:00:00.000Z', ...over });
+
+  it('a child with lots of hidden-tab time: on-task excludes it', () => {
+    const sess = s({ id: 'a', started_at: '2026-10-20T12:00:00.000Z', ended_at: '2026-10-20T12:20:00.000Z' }); // 20 min
+    const events: PtEvent[] = [
+      { session_id: 'a', seq: 0, type: 'visibility', payload: { state: 'hidden' }, client_t: '2026-10-20T12:00:00.000Z' },
+      { session_id: 'a', seq: 1, type: 'visibility', payload: { state: 'visible' }, client_t: '2026-10-20T12:15:00.000Z' },
+    ];
+    const r = childTimeReport(sess, events);
+    expect(r.totalMs).toBe(20 * 60_000);
+    expect(r.hiddenMs).toBe(15 * 60_000);
+    expect(r.onTaskMs).toBe(5 * 60_000);
+  });
+
+  it('a hidden stretch left open at the end of the session counts to the session\'s own end', () => {
+    const sess = s({ id: 'a', started_at: '2026-10-20T12:00:00.000Z', ended_at: '2026-10-20T12:10:00.000Z' });
+    const events: PtEvent[] = [
+      { session_id: 'a', seq: 0, type: 'visibility', payload: { state: 'hidden' }, client_t: '2026-10-20T12:05:00.000Z' },
+    ];
+    const r = childTimeReport(sess, events);
+    expect(r.hiddenMs).toBe(5 * 60_000);
+  });
+
+  it('idle time is summed from idle.duration_ms and help/call_adult are counted', () => {
+    const sess = s({ id: 'a', started_at: '2026-10-20T12:00:00.000Z', ended_at: '2026-10-20T12:10:00.000Z' });
+    const events = [
+      ev('a', 'idle', { duration_ms: 30_000 }),
+      ev('a', 'idle', { duration_ms: 45_000 }),
+      ev('a', 'help', {}),
+      ev('a', 'help', {}),
+      ev('a', 'call_adult', {}),
+    ];
+    const r = childTimeReport(sess, events);
+    expect(r.idleMs).toBe(75_000);
+    expect(r.helpTouches).toBe(2);
+    expect(r.callAdultCount).toBe(1);
+    expect(r.onTaskMs).toBe(10 * 60_000 - 75_000);
+  });
+});
+
+describe('gradeEvaluation', () => {
+  const s4 = (over: Partial<PtSession> & { id: string }): PtSession => ({
+    grade: 4, started_at: '2026-10-20T12:00:00.000Z', ended_at: '2026-10-20T12:30:00.000Z', ...over,
+  });
+
+  it('is absent (summary4to null, empty rows) for an export with no 4to/5to session', () => {
+    const sessions: PtSession[] = [{ grade: 1, id: 'a', started_at: '2026-10-13T12:00:00Z' }];
+    const r = gradeEvaluation(sessions, []);
+    expect(r.grade4).toEqual([]);
+    expect(r.grade5).toEqual([]);
+    expect(r.summary4to).toBeNull();
+  });
+
+  it('computes a per-child row and a class summary over two 4to children', () => {
+    const sessions = [s4({ id: 'strong', code: 'Zorro 1' }), s4({ id: 'weak', code: 'Zorro 2' })];
+    const events = [
+      ev('strong', 'ladder_step', { concept: 'repeat_pattern', rung: 11, variant: 0, result: 'pass' }, 0),
+      ev('strong', 'ladder_end', { ceiling_rung: 11 }, 1),
+      ev('strong', 'arcade_open', { via: 'workshop', step: 'workshop' }, 2),
+      ev('strong', 'workshop_challenge', { n: 1, phase: 'solved', help_level: 0, predict_correct: true }, 3),
+
+      ev('weak', 'ladder_step', { concept: 'sequence', rung: 7, variant: 0, result: 'fail' }, 0),
+      ev('weak', 'ladder_step', { concept: 'sequence', rung: 7, variant: 1, result: 'fail' }, 1),
+      ev('weak', 'ladder_end', { ceiling_rung: 6 }, 2),
+    ];
+    const r = gradeEvaluation(sessions, events);
+    expect(r.grade4).toHaveLength(2);
+    expect(r.summary4to).not.toBeNull();
+    expect(r.summary4to!.childCount).toBe(2);
+    expect(r.summary4to!.medianCeiling).toBe(8.5); // (11 + 6) / 2
+    // weak is 5 rungs (>=2) below the median AND at/under 9: clearly below
+    expect(r.summary4to!.belowEntry.map((b) => b.code)).toEqual(['Zorro 2']);
+  });
+
+  it('a child who voluntarily kept working in the Workshop after the Arcade opened counts toward continuation', () => {
+    const sessions = [s4({ id: 'a' })];
+    const events = [
+      ev('a', 'arcade_open', { via: 'workshop', step: 'workshop' }, 0),
+      ev('a', 'workshop_run', { n: 8, result: 'won' }, 1),
+    ];
+    const r = gradeEvaluation(sessions, events);
+    expect(r.summary4to!.voluntaryWorkshopContinuation).toBe(1);
   });
 });
