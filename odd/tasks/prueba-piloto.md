@@ -1110,6 +1110,8 @@ Cut line (from the brief): T38 and T39 must ship; T40 with at least challenges 1
 
 - 2026-10-20: redeploy after the user's explicit "Ok": Coolify deployment `fukkpbbfcvfosob8klmrkxir` finished; live `/api/health` 200, `/admin` 200; the served `assets/index-D20pcTRl.js` has the same sha256 as the local `VITE_PLAYTEST=1` build of `cd06406` and contains the name screen, "Carrera de teclas" and "Al revés"; the live export carries `child_name` (migrations 014/015 applied). Production now runs T38–T42. No scripted checks against production.
 
+- 2026-10-20: the user asked, in a hurry, for the typing race on 1ro's menu (1ro ran out of activities). Parent inline: `WORD_BANK_1RO` (letters, then two- to four-letter words; short races), `menuFor(1)` gains `typing_race` second, 1ro copy "apretá las letras". Checks: typecheck clean, `src/playtest/` 29 files / 366 passed, a quick browser look at 1366×768 (menu with the card, a letter race advancing, no page errors). Commit `a185510`. Redeployed on the user's "ok": Coolify `vdz4aijwlcufbxgevwmc2tfy` finished, `/api/health` 200, served `index-jZ0rRU6H.js` sha256 equals the local build.
+
 ## Next step
 
 The 4to class (2026-10-20) with `https://camino-prueba.becode.com.ar/?grado=4`; afterwards `node tools/export-playtest.mjs` and `node tools/analyze-playtest.mjs exports/<file>.json --csv clase-4to.csv`.
