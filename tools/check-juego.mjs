@@ -1,8 +1,9 @@
 // Scripted check of the 4to probe "Hacé tu juego" built step by step (T15),
 // through the real UI, then its rows in Postgres. Two sessions:
 //
-// 4to — free play, the game maker's card (with `?caps=fast`: "seguir" after
-//   8 s, the free step's arrow after 4 s):
+// 4to — free play (the Arcade since T39/T41, with no game maker card), the
+//   adult's corner menu opens the game maker (with `?caps=fast`: "seguir"
+//   after 8 s, the free step's arrow after 4 s):
 //   1 move: no Scratch anywhere, four blocks in the palette, an empty
 //     notebook, the character alone; an arrow with no rule (the character
 //     stays); "cuando aprieto →" dragged into the notebook and "mover →"
@@ -119,8 +120,10 @@ const four = await page();
 let p = four.p;
 const s4 = await newSession(p, '4to');
 const menu = await p.locator('.pp-fp-card').evaluateAll((els) => els.map((e) => e.dataset.activity));
-ok(menu.join(',') === 'workshop,rule_game,editor,recess,game_maker', `4to menu (T40: the Workshop first): ${menu.join(',')}`);
-await p.locator('.pp-fp-card[data-activity="game_maker"]').click();
+// T39/T41: 4to's free play is the Arcade (no game maker card); "Hacé tu juego" is reachable for 4to only from the adult's corner menu
+ok(menu.join(',') === 'typing_race,own_game,race,workshop,wardrobe', `4to menu = the Arcade (T41): ${menu.join(',')}`);
+await p.mouse.move(12, 12); await p.mouse.down(); await p.waitForTimeout(1700); await p.mouse.up();
+await p.locator('[data-act="open-game-maker"]').click();
 
 // 1 move
 await phase(p, 'move');

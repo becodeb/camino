@@ -342,7 +342,7 @@ try {
   await k.locator('.level-bar [data-act="arcade"]').click();
   await k.waitForSelector('.piloto[data-step="free_play"] main.pp-menu', { timeout: 20_000 });
   const menu = await k.locator('main.pp-menu').getAttribute('data-menu');
-  ok(menu === 'workshop race wardrobe', `the Arcade's menu: ${menu}`);
+  ok(menu === 'typing_race own_game race workshop wardrobe', `the Arcade's menu: ${menu}`);
   ok(!/recess|editor|rule_game|game_maker|sheet/.test(menu), 'no xylophone, no sheet editor, no rule game, no old game maker');
   ok(await k.locator('.pp-arcade-h').isVisible(), 'the menu says "Arcade", large, inside the screen');
   await k.waitForTimeout(800);
@@ -362,7 +362,7 @@ try {
   await k.reload();
   await k.waitForSelector('.piloto[data-step="free_play"] main.pp-menu', { timeout: 30_000 });
   const fr = await flow(k);
-  ok(fr.route === '4to' && fr.arcadeOpen === true && fr.routeDone === true && await k.locator('main.pp-menu').getAttribute('data-menu') === 'workshop race wardrobe', 'a reload: back on the Arcade, 4to\'s route and the open Arcade kept');
+  ok(fr.route === '4to' && fr.arcadeOpen === true && fr.routeDone === true && await k.locator('main.pp-menu').getAttribute('data-menu') === 'typing_race own_game race workshop wardrobe', 'a reload: back on the Arcade, 4to\'s route and the open Arcade kept');
   await K.p.evaluate(() => window.__piloto.flush());
   await waitAdmin(a, K.sid, /Arcade/);
   ok(true, '/admin: K shows "Arcade"');
@@ -384,7 +384,7 @@ try {
   const fg = await flow(g);
   ok(fg.step === 'free_play' && fg.arcadeOpen === true && !fg.routeDone, 'G: in the Arcade, open, no green flag');
   await g.waitForSelector('main.pp-menu', { timeout: 20_000 });
-  ok(await g.locator('main.pp-menu').getAttribute('data-menu') === 'workshop race wardrobe', 'G: the Arcade\'s menu');
+  ok(await g.locator('main.pp-menu').getAttribute('data-menu') === 'typing_race own_game race workshop wardrobe', 'G: the Arcade\'s menu');
   ok((await flow(k)).step === 'free_play', 'K: already in the Arcade, nothing moved');
   await G.p.evaluate(() => window.__piloto.flush());
   await waitAdmin(a, G.sid, /Arcade/);
