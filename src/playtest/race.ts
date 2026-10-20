@@ -58,7 +58,7 @@ const RULES: readonly TierRule[] = [
 export const tierRule = (tier: number): TierRule => RULES[Math.min(RULES.length, Math.max(1, Math.floor(tier) || 1)) - 1];
 
 /** mulberry32: the same seed draws the same race. */
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let a = (seed >>> 0) || 1;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
