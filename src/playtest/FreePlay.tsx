@@ -282,6 +282,20 @@ export function FreePlay() {
     };
   });
 
+  // 2026-10-20 (user: 1ro got to the menu too fast and got bored): 1ro's first free-play visit opens the
+  // whole sheet (pages, doors, boss) by itself instead of the menu; the menu comes after it.
+  const autoSheet = useRef(false);
+  useEffect(() => {
+    if (autoSheet.current || grade !== 1 || view.kind !== 'menu' || view.n !== 0) return;
+    if (api.flow.activities.includes('sheet')) return;
+    const a = menu.find((x) => x.id === 'sheet');
+    if (!a) return;
+    autoSheet.current = true;
+    const t = window.setTimeout(() => { if (viewRef.current.kind === 'menu') pick(a); }, 300);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.kind, grade]);
+
   // the sheet's level pages, instrumented (one wrap per visit, so a page is never remounted by it)
   const pageRef = useRef<Record<string, unknown>>({});
   if (view.kind === 'activity' && 'sheet' in view.a.kind) pageRef.current = pageInfo(view.a.kind.sheet, view.page);
