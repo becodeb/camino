@@ -34,10 +34,11 @@ export const bankFor = (tier: number) => WORD_BANK[Math.min(4, Math.max(1, Math.
 
 /**
  * How many letters (spaces included) a race of each tier needs at least: a
- * race lasts about 60–90 s for a child typing a letter or so a second (the
+ * race lasts about 60–90 s for a child typing a letter or so a second (about
+ * 10 words per minute, a 9–10 year old looking for each key; the
  * pilot's `typing_race_end.ms` will tell).
  */
-export const RACE_CHARS: Readonly<Record<1 | 2 | 3 | 4, number>> = { 1: 45, 2: 55, 3: 60, 4: 65 };
+export const RACE_CHARS: Readonly<Record<1 | 2 | 3 | 4, number>> = { 1: 55, 2: 60, 3: 65, 4: 70 };
 /** Never fewer words than this (a race of three long phrases would feel like three stretches only). */
 export const MIN_WORDS = 4;
 

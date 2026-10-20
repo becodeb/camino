@@ -50,7 +50,7 @@ One row per playtest session (one child, one sitting).
 | `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang, captions?, captions_set?, sound?, sound_source?, voice?}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language; since round 2 `captions` (on-screen text on now: set at the start and updated by every 💬 toggle, see `captions`) and `captions_set` (`'grade'`: the default, on from 3ro; `'setup'`: forced on or off at setup); since T18 `sound` (the effective sound setting now) and `sound_source` (`'admin'`\|`'url'`\|`'adult'`\|`'default'`: which layer decided it, see the `sound` event and the table `class_settings`); since T27 `voice` (this device's "Voz" switch now: `true` unless the adult turned it off here; independent of `sound` — off, speech is silenced but sfx/music keep playing — and, unlike the adult's `sound` override, persisted so it survives a new session on this computer). | 1 (device capability vs. tool failures), 3 (captions, sound, voice) |
 | `survey` | jsonb, nullable | See "survey_answer" below; the final answers, keyed by question. | 9 |
 | `adult_form` | jsonb, nullable | The adult's form: `{engagement: 'low'|'mid'|'high'|null, help_needed: 'none'|'some'|'a_lot'|null, comment?: string, step?: string}`. Round 1: a step after the goodbye, both answers required. Since round 2 it is optional, from the corner menu ("Comentario del adulto") at any time of the session; any answer may be left out (`null`), saving again replaces it, and `step` is the flow step it was saved on (see the `adult_form` event). Most round-2 sessions will have none. | 3, 5 |
-| `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, since T14 `'class_end'`, and since T38 `'name'` — only for a session whose name screen was on; T39: `'workshop'` (4to's Game Workshop step); round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. T39: that view also reads, from the events already synced (no new column), the ladder's rung on screen (the last ladder `level_start`), the Workshop's core challenge (the last non-free `workshop_challenge`) and whether the Arcade opened (`arcade_open`): "escalera de niveles · escalón 13", "taller de juegos · desafío 4", "Arcade". | 5 |
+| `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, since T14 `'class_end'`, and since T38 `'name'` — only for a session whose name screen was on; T39: `'workshop'` (4to's Game Workshop step); round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. T39: that view also reads, from the events already synced (no new column), the ladder's rung on screen (the last ladder `level_start`), the Workshop's core challenge (the last non-free `workshop_challenge`) and whether the Arcade opened (`arcade_open`): "escalera de niveles · escalón 13", "taller de juegos · desafío 4", "Arcade". T41: a 4to session in `free_play` reads "Arcade" (its free play is the Arcade) instead of "juego libre". | 5 |
 | `created_at` | timestamptz | First time this session row was written. | — |
 | `last_seen_at` | timestamptz | Updated on every sync; drives the admin page's "active now" indicator. Since T14 a device with a session open syncs at least every ~10 s, so this is also the class's "seen" time. | 5 |
 | `demo` | boolean, default false | T14: a session played in demo mode (the adult showing or trying the pilot; see "Demo mode" below). Stored like any other, but left out of `/api/export`, `/api/admin/*` lists and counts and every SQL view, and deleted 24 hours after it started. A later sync never turns it back to `false` (migration `008_class_control.sql`). | — |
@@ -764,7 +764,7 @@ menu opens and when the card is held (a tap picks it). **RQ 5.**
 | 1ro | `race` (T33, "La carrera"; see below), `sheet` (sheet 6 "La escalera", its doors and boss), `recess` (sheet 9, the music recess; left off while muted), `guardas` (sheet 14), `editor` (sheet 7's workshop and corkboard) |
 | 2do | `race`, `sheet` (sheet 8 "Zigzag"), `recess`, `guardas`, `editor` (sheet 7) |
 | 3ro | `rule_game`, `sheet` (sheet 13 "Antes y después"), `recess`, `editor` (sheet 7) |
-| 4to | `rule_game`, `editor` (sheet 15, the workshop with few lines), `recess`, `game_maker` (T7's probe "Hacé tu juego"; see below) |
+| 4to | T39/T41: the Arcade (see "4to's Arcade" below): `typing_race` ("Carrera de teclas"), `own_game` ("Tu juego"), `race` (from tier 4), `workshop` (back to the Workshop step), `wardrobe` (the wardrobe step). Before T39: `rule_game`, `editor` (sheet 15), `recess`, `game_maker` (T7's probe "Hacé tu juego", now only from the adult's corner menu) |
 | 5to | `rule_game`, `editor` (sheet 15), `recess`, `text_probe` (the probe "Del bloque al texto", T8, rebuilt in T16; see below) |
 
 `rule_game` plays `3ro-1`, `3ro-2` (a page already solved is skipped) and
@@ -1252,6 +1252,116 @@ The Workshop closed (free play's menu, the flow moving on, the class ending). **
   ms: number                    // since the Workshop first opened in this session
 }
 ```
+
+### 4to's Arcade: "Carrera de teclas" and "Tu juego" (T41)
+
+4to's free play is the Arcade (T39: it opens after the Workshop's
+challenges 1–5, or for everyone with el docente's "Juegos para todos"). Its
+menu, in order: `typing_race`, `own_game`, `race` (La carrera from tier 4),
+`workshop` (back to the Workshop step), `wardrobe`. "Tu juego" is there for
+every child in the Arcade, also one who came with "Juegos para todos"
+before challenge 5 (it plays whatever the child has built). Free play logs
+the pick (`choice`) and the time in each (`activity_end`; each typing race
+finished counts as a won level). **RQ 5, 6** (what a 4to child chooses,
+voluntary replays) and, for the typing race, keyboard fluency for T42.
+
+**Carrera de teclas** (`src/playtest/TypingRace.tsx`, pure logic in
+`typingRace.ts`): T33's track, karts, critters, rubber band, podium and
+shelf of cups, driven by typing. Each stretch of road is a word or a
+phrase of Scratch's Spanish, shown LARGE under the track; the physical
+keyboard drives it (no on-screen keyboard; the keys are read on the
+window, so a click anywhere keeps typing working, and space never presses
+a focused button). Every right letter turns green and nudges the kart; a
+finished word boosts it to the next stretch; a wrong letter makes the kart
+wobble and the expected letter shake red (nothing lost, no backspace: the
+next right key carries on). Accents are optional ("raton" types "ratón"),
+case does not matter, the space between words is required; keys that type
+no letter (Shift, a dead accent key, Backspace) are ignored. Tiers by
+length (a win goes one up, endless; 4 and on play as 4): 1 short words
+(`mover`, `girar`, `tecla`…), 2 longer words (`repetir`, `variable`,
+`posición`…), 3 phrases (`por siempre`, `si tocando`, `enviar mensaje`,
+`al presionar tecla`…), 4 phrases with numbers (`mover 10 pasos`,
+`cambiar puntos en 1`…); at least 55/60/65/70 letters a race (about 60–90 s
+at a letter a second). Cups are solved as `typing-cup-<n>` in the session's
+progress (one seed each), apart from La carrera's. The podium shows the
+race's own numbers (words per minute, right keys of all keys), never
+compared with anyone. Its `help` and `speak` carry `level_id:
+'typing_race'` (✋: the task said again and the next letter glows; a fourth
+press raises the hand).
+
+#### `typing_race_start`
+```
+{
+  race_no: number,          // 1, 2, … in the session (kept across a reload)
+  tier: number,             // 1, 2, 3, 4… (4 and on play as 4)
+  seed: number,             // with `tier`, draws the words again (wordsFor)
+  words: string[],          // the race's words and phrases, in order
+  chars: number,            // their letters, spaces included
+  rivals: [string, string],
+  again?: true              // started from the podium's "¡Otra carrera!" (voluntary)
+}
+```
+
+#### `typing_race_word`
+One per word finished (4–11 a race).
+```
+{
+  race_no: number, word_no: number,  // 1-based
+  word: string,
+  ms: number,               // from the word on screen (the first word: from the first key) to its last letter
+  errors: number            // wrong keys while it was the word to type
+}
+```
+
+#### `typing_race_end`
+```
+{
+  race_no: number, tier: number, seed: number,
+  reason: 'finished' | 'left',
+  ms: number,               // from the race on screen to the finish line (or leaving): the 60–90 s target
+  play_ms: number,          // from the first key
+  words: number, words_done: number,
+  chars: number,            // letters of the words finished
+  right: number, wrong: number,     // keys
+  wpm: number | null,       // words per minute: right keys / 5 per minute of play_ms
+  accuracy: number | null,  // right keys / all keys, 0–100
+  again: boolean,           // this race came from "¡Otra carrera!"
+  margin_ms: number | null, margin_estimated?: true,   // as in race_end
+  help_levels: number, adult_helped: boolean,
+  cups: number              // typing-race cups after this race
+}
+```
+
+**Tu juego** (`src/playtest/OwnGame.tsx` around the Workshop's
+`WorkshopGamePlayer`): the child's own "Al revés" (the Workshop's device
+save for this session; a child who never edited it plays the starting
+project), played big, with "Tu récord: N" (the session's best; kept with
+the Workshop save, and in page memory for a child with no save), "Jugar
+otra vez" and "Mejorarlo en el taller" (back to the Workshop step, `step`
+reason `arcade`). `help`/`speak` carry `level_id: 'own_game'`.
+
+#### `own_game_run`
+Every run's end.
+```
+{
+  ms: number,               // the run's length
+  points: number | null,    // `puntos` at the end (null when left mid-run)
+  result: 'won' | 'lost' | 'stopped' | 'left',   // the game's own end, ■, or leaving mid-run
+  best: number,             // the session's best after this run
+  record?: boolean,         // this run beat it
+  frames?: number
+}
+```
+
+#### `own_game_improve`
+"Mejorarlo en el taller" pressed (`{}`); the `step` free_play → workshop follows.
+
+T42/T34 report (`tools/analyze-playtest.mjs`): an Arcade section with, per
+child, typing races (voluntary again, finished), best and median words per
+minute, right keys, and "Tu juego" runs and best; the motivation profiles
+count typing races for `racer` (like La carrera's) and a little more for
+`keyboard` (`TYPING_RACE_WEIGHT`), so a child who only types reads
+`keyboard`.
 
 ### `survey_answer`
 One spoken survey question answered with drawn faces/pictures. **RQ 9.**

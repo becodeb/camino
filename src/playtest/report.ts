@@ -555,6 +555,89 @@ export function raceReport(events: PtEvent[]): RaceReport {
   };
 }
 
+// ------------------------------------------------------------------ T41: 4to's Arcade ("Carrera de teclas", "Tu juego")
+
+export interface ArcadeChild {
+  sessionId: string;
+  /** The child's name, or the anonymous session code (`childLabel`). */
+  code: string;
+  typingRaces: number;
+  /** Voluntary "¡Otra carrera!" in the typing race. */
+  typingAgain: number;
+  typingFinished: number;
+  /** Words per minute: the best finished race, and the median over finished races. */
+  bestWpm: number | null;
+  medianWpm: number | null;
+  /** Right keys over all keys, every typing race (finished or left), 0–100. */
+  accuracy: number | null;
+  ownGameRuns: number;
+  /** The best score of "Tu juego" seen in its runs. */
+  ownGameBest: number | null;
+}
+
+export interface ArcadeReport {
+  sessionsWithTypingRace: number;
+  typingRaces: number;
+  typingAgain: number;
+  medianWpm: number | null;
+  medianAccuracy: number | null;
+  /** A finished typing race's duration on screen (mount → finish line), the 60–90 s target. */
+  medianRaceMs: number | null;
+  sessionsWithOwnGame: number;
+  ownGameRuns: number;
+  /** One row per child with any Arcade activity. */
+  children: ArcadeChild[];
+}
+
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
+
+export function arcadeReport(sessions: PtSession[], events: PtEvent[]): ArcadeReport {
+  const bySession = groupBy(events.filter((e) => e.type.startsWith('typing_race_') || e.type === 'own_game_run'), (e) => e.session_id);
+  const children: ArcadeChild[] = [];
+  const allWpm: number[] = [];
+  const allAcc: number[] = [];
+  const raceMs: number[] = [];
+  for (const s of sessions) {
+    const rows = bySession.get(s.id);
+    if (!rows?.length) continue;
+    const starts = rows.filter((e) => e.type === 'typing_race_start');
+    const ends = rows.filter((e) => e.type === 'typing_race_end');
+    const finished = ends.filter((e) => e.payload.reason === 'finished');
+    const wpms = finished.map((e) => num(e.payload.wpm)).filter((x): x is number => x != null);
+    const right = ends.reduce((n, e) => n + (num(e.payload.right) ?? 0), 0);
+    const wrong = ends.reduce((n, e) => n + (num(e.payload.wrong) ?? 0), 0);
+    const acc = pct(right, right + wrong);
+    const runs = rows.filter((e) => e.type === 'own_game_run');
+    const bests = runs.map((e) => num(e.payload.best)).filter((x): x is number => x != null);
+    allWpm.push(...wpms);
+    if (acc != null) allAcc.push(acc);
+    raceMs.push(...finished.map((e) => num(e.payload.ms)).filter((x): x is number => x != null));
+    children.push({
+      sessionId: s.id,
+      code: childLabel(s),
+      typingRaces: starts.length,
+      typingAgain: starts.filter((e) => e.payload.again === true).length,
+      typingFinished: finished.length,
+      bestWpm: wpms.length ? Math.max(...wpms) : null,
+      medianWpm: median(wpms),
+      accuracy: acc,
+      ownGameRuns: runs.length,
+      ownGameBest: bests.length ? Math.max(...bests) : null,
+    });
+  }
+  return {
+    sessionsWithTypingRace: children.filter((c) => c.typingRaces > 0).length,
+    typingRaces: children.reduce((n, c) => n + c.typingRaces, 0),
+    typingAgain: children.reduce((n, c) => n + c.typingAgain, 0),
+    medianWpm: median(allWpm),
+    medianAccuracy: median(allAcc),
+    medianRaceMs: median(raceMs),
+    sessionsWithOwnGame: children.filter((c) => c.ownGameRuns > 0).length,
+    ownGameRuns: children.reduce((n, c) => n + c.ownGameRuns, 0),
+    children,
+  };
+}
+
 // ------------------------------------------------------------------ T37: motivation profiles (a heuristic, not a measurement)
 //
 // Parent review (2026-10-17, on the real export): the first cut let the
@@ -579,6 +662,11 @@ export function raceReport(events: PtEvent[]): RaceReport {
 //   not voluntary either — but WHICH input the child reaches for (the real
 //   keyboard vs. the on-screen one, always offered alongside it) is a real
 //   choice, so physical keypresses are the signal, not keys overall.
+// T41 (4to's Arcade): the typing race is both a race and keyboard play,
+// and it is voluntary (an Arcade card): its races and its voluntary
+// "¡Otra carrera!" count for `racer` like T33's, and for `keyboard` a little
+// more (TYPING_RACE_WEIGHT per race), so a child who only types reads
+// `keyboard`. "Tu juego" runs are reported per child, not scored.
 // Character taps are not scored: no such event is logged yet (see
 // "Recorded, not implemented" in the feature document), so `explorer`
 // relies on free-play breadth alone. "Typing beyond what the route
@@ -613,6 +701,8 @@ export const PROFILE_RULES = {
   EXPLORER_WEIGHT_PER_ACTIVITY: 2,
   /** Every 5 physical keypresses in the typing game is one "keyboard" point (the choice of input, not the total). */
   KEYBOARD_KEYS_PER_POINT: 5,
+  /** T41: each typing race started (4to's Arcade, voluntary) is this many "keyboard" points (one more than a race's `racer` point). */
+  TYPING_RACE_WEIGHT: 2,
   /** The wardrobe (a mandatory step) only counts as a "dresser" signal once it clears this multiple of the class's own median wardrobe time. */
   DRESSER_MEDIAN_MULTIPLIER: 1.5,
   /** Fixed and deliberately small: just enough to clear `MIN_TOTAL_SCORE` alone, so it is read as weak and never outweighs a real voluntary signal elsewhere. */
@@ -631,6 +721,11 @@ interface ChildSignals {
   medianActivityMs: number | null;
   wardrobeMs: number;
   physicalTypingKeys: number;
+  /** T41: typing races started and voluntary "¡Otra carrera!" in them (absent: 0, data from before T41). */
+  typingRaces?: number;
+  typingAgain?: number;
+  /** T41: "Tu juego" runs (evidence only, not scored). */
+  ownGameRuns?: number;
 }
 
 function collectChildSignals(sessions: PtSession[], events: PtEvent[]): ChildSignals[] {
@@ -647,6 +742,7 @@ function collectChildSignals(sessions: PtSession[], events: PtEvent[]): ChildSig
     const wardrobeClose = rows.find((e) => e.type === 'wardrobe' && e.payload.action === 'close');
     const wardrobeMs = Number(wardrobeClose?.payload.duration_ms ?? 0) || 0;
     const physicalTypingKeys = rows.filter((e) => e.type === 'typing' && e.payload.input === 'physical').length;
+    const typingStarts = rows.filter((e) => e.type === 'typing_race_start');
     return {
       sessionId: s.id,
       code: childLabel(s),
@@ -659,6 +755,9 @@ function collectChildSignals(sessions: PtSession[], events: PtEvent[]): ChildSig
       medianActivityMs,
       wardrobeMs,
       physicalTypingKeys,
+      typingRaces: typingStarts.length,
+      typingAgain: typingStarts.filter((e) => e.payload.again === true).length,
+      ownGameRuns: rows.filter((e) => e.type === 'own_game_run').length,
     };
   });
 }
@@ -672,14 +771,16 @@ function collectChildSignals(sessions: PtSession[], events: PtEvent[]): ChildSig
  */
 export function classifyChild(sig: ChildSignals, classMedianWardrobeMs: number): ChildProfile {
   const r = PROFILE_RULES;
-  const racerScore = sig.racesStarted * r.RACE_START_WEIGHT + sig.racesAgain * r.RACE_AGAIN_WEIGHT;
+  const typingRaces = sig.typingRaces ?? 0;
+  const typingAgain = sig.typingAgain ?? 0;
+  const racerScore = (sig.racesStarted + typingRaces) * r.RACE_START_WEIGHT + (sig.racesAgain + typingAgain) * r.RACE_AGAIN_WEIGHT;
   const collectorScore = sig.cups * r.CUP_WEIGHT + sig.repeatPicks * r.REPEAT_PICK_WEIGHT;
   const wardrobeNotable = classMedianWardrobeMs > 0 && sig.wardrobeMs >= classMedianWardrobeMs * r.DRESSER_MEDIAN_MULTIPLIER;
   const dresserScore = wardrobeNotable ? r.DRESSER_WEAK_WARDROBE_SCORE : 0;
   const explorerScore = sig.distinctActivities >= r.EXPLORER_MIN_ACTIVITIES
     && sig.medianActivityMs != null && sig.medianActivityMs < r.EXPLORER_MAX_MEDIAN_MS
     ? sig.distinctActivities * r.EXPLORER_WEIGHT_PER_ACTIVITY : 0;
-  const keyboardScore = sig.physicalTypingKeys / r.KEYBOARD_KEYS_PER_POINT;
+  const keyboardScore = sig.physicalTypingKeys / r.KEYBOARD_KEYS_PER_POINT + typingRaces * r.TYPING_RACE_WEIGHT + typingAgain * r.RACE_AGAIN_WEIGHT;
 
   const scores: Array<[Profile, number]> = [
     ['racer', racerScore], ['collector', collectorScore], ['dresser', dresserScore],
@@ -692,7 +793,8 @@ export function classifyChild(sig: ChildSignals, classMedianWardrobeMs: number):
   // always the full, honest evidence line — even `undecided` says what little voluntary signal there was, not just that it was too little.
   const evidence = `races ${sig.racesStarted} (again ${sig.racesAgain}), cups ${sig.cups}`
     + `, free play ${sig.totalFreePlayPicks} picks (${sig.distinctActivities} distinct, ${sig.repeatPicks} repeat)`
-    + `, ${wardrobeNote}, physical typing keys ${sig.physicalTypingKeys}`;
+    + `, ${wardrobeNote}, physical typing keys ${sig.physicalTypingKeys}`
+    + (typingRaces || sig.ownGameRuns ? `, typing races ${typingRaces} (again ${typingAgain}), own game runs ${sig.ownGameRuns ?? 0}` : '');
   if (topScore < r.MIN_TOTAL_SCORE) {
     return { sessionId: sig.sessionId, code: sig.code, profile: 'undecided', evidence: `too little voluntary signal — ${evidence}` };
   }
@@ -747,6 +849,7 @@ export interface Analysis {
   classCommands: ClassCommandReport;
   survey: SurveyReport;
   race: RaceReport;
+  arcade: ArcadeReport;
   profiles: ProfileReport;
 }
 
@@ -769,6 +872,7 @@ export function analyze(data: PtExport, opts: FilterOptions = {}): Analysis {
     classCommands: classCommandReport(events),
     survey: surveyReport(events),
     race: raceReport(events),
+    arcade: arcadeReport(kept, events),
     profiles: profileReport(kept, events),
   };
 }

@@ -167,6 +167,25 @@ function reportRace(r) {
   line(`De dónde vinieron los bloques: tap ${r.inputSources.tap}, drag ${r.inputSources.drag}, teclado ${r.inputSources.key}.`);
 }
 
+function reportArcade(r) {
+  section('El Arcade de 4to: Carrera de teclas y Tu juego (T41)');
+  if (r.children.length === 0) {
+    line('Sin datos del Arcade en este export (de antes de T41, o nadie de 4to llegó).');
+    return;
+  }
+  line(`Carrera de teclas: ${r.sessionsWithTypingRace} chico(s), ${r.typingRaces} carrera(s), "¡Otra carrera!" voluntaria ${r.typingAgain} vez(ces).`);
+  line(`Palabras por minuto (mediana de las carreras terminadas): ${r.medianWpm ?? '—'}. Teclas justas (mediana por chico): ${fmtPct(r.medianAccuracy)}. Duración mediana de una carrera terminada: ${fmtMs(r.medianRaceMs)} (meta: 60–90 s).`);
+  line(`Tu juego: ${r.sessionsWithOwnGame} chico(s), ${r.ownGameRuns} partida(s).`);
+  line('Por chico:');
+  for (const c of r.children) {
+    const typing = c.typingRaces
+      ? `teclas: ${c.typingRaces} carrera(s) (otra ${c.typingAgain}, terminadas ${c.typingFinished}), ppm mejor ${c.bestWpm ?? '—'} / mediana ${c.medianWpm ?? '—'}, teclas justas ${fmtPct(c.accuracy)}`
+      : 'teclas: —';
+    const own = c.ownGameRuns ? `tu juego: ${c.ownGameRuns} partida(s), récord ${c.ownGameBest ?? '—'}` : 'tu juego: —';
+    line(`  - ${c.code}: ${typing}; ${own}`);
+  }
+}
+
 function reportProfiles(r) {
   section('Perfiles de motivación (T37, una heurística para aprender — no un diagnóstico)');
   if (!r.hasRaceData) {
@@ -199,6 +218,7 @@ async function main() {
   reportClassCommands(a.classCommands);
   reportSurvey(a.survey);
   reportRace(a.race);
+  reportArcade(a.arcade);
   reportProfiles(a.profiles);
   line('');
 }

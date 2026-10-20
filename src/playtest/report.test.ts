@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  classifyChild, classCommandReport, clusterClasses, droppedAfterRepeat, filterNoise, freePlayReport,
+  arcadeReport, classifyChild, classCommandReport, clusterClasses, droppedAfterRepeat, filterNoise, freePlayReport,
   helpReport, ladderReport, median, predictReport, PROFILE_RULES, profileReport, raceReport, repeatDropReport,
   surveyReport, topLevelTokens, typingReport,
   type PtEvent, type PtSession,
@@ -247,6 +247,54 @@ describe('raceReport', () => {
     expect(r.medianStretchMsByTier).toEqual({ '1': 4500, '2': 6000 });
     expect(r.wrongBlocksPerStretchMedian).toBe(1);
     expect(r.inputSources).toEqual({ tap: 2, drag: 1, key: 3 });
+  });
+});
+
+describe('arcadeReport (T41)', () => {
+  it('nothing in the Arcade: no rows', () => {
+    const r = arcadeReport([session({ id: 'a', grade: 4 })], [ev('a', 'race_start', { race_no: 1, tier: 4 })]);
+    expect(r.children).toEqual([]);
+    expect(r.medianWpm).toBeNull();
+  });
+
+  it('per child: typing races, voluntary again, words per minute, accuracy over every race, own game runs and best', () => {
+    const sessions = [session({ id: 'a', grade: 4, child_name: 'Lola' }), session({ id: 'b', grade: 4, code: 'Coatí 4' }), session({ id: 'c', grade: 4 })];
+    const events = [
+      ev('a', 'typing_race_start', { race_no: 1, tier: 1 }),
+      ev('a', 'typing_race_end', { race_no: 1, reason: 'finished', wpm: 20, right: 45, wrong: 5, ms: 70_000 }),
+      ev('a', 'typing_race_start', { race_no: 2, tier: 2, again: true }),
+      ev('a', 'typing_race_end', { race_no: 2, reason: 'finished', wpm: 24, right: 55, wrong: 5, ms: 80_000 }),
+      ev('a', 'typing_race_start', { race_no: 3, tier: 3, again: true }),
+      ev('a', 'typing_race_end', { race_no: 3, reason: 'left', wpm: 30, right: 10, wrong: 0, ms: 9000 }),
+      ev('b', 'own_game_run', { result: 'lost', points: 3, best: 3 }),
+      ev('b', 'own_game_run', { result: 'won', points: 20, best: 20 }),
+    ];
+    const r = arcadeReport(sessions, events);
+    expect(r.children.map((c) => c.code)).toEqual(['Lola', 'Coatí 4']);
+    const a = r.children[0];
+    expect(a).toMatchObject({ typingRaces: 3, typingAgain: 2, typingFinished: 2, bestWpm: 24, medianWpm: 22, ownGameRuns: 0, ownGameBest: null });
+    expect(a.accuracy).toBeCloseTo((110 / 120) * 100, 5);
+    expect(r.children[1]).toMatchObject({ typingRaces: 0, ownGameRuns: 2, ownGameBest: 20, bestWpm: null, accuracy: null });
+    expect(r.sessionsWithTypingRace).toBe(1);
+    expect(r.typingAgain).toBe(2);
+    expect(r.medianRaceMs).toBe(75_000);
+    expect(r.sessionsWithOwnGame).toBe(1);
+    expect(r.ownGameRuns).toBe(2);
+  });
+
+  it('the profiles read the typing race: a typist is "keyboard", the block race still "racer"', () => {
+    const sessions = [session({ id: 'typist', grade: 4 }), session({ id: 'driver', grade: 4 })];
+    const events = [
+      ev('typist', 'typing_race_start', { race_no: 1, tier: 1 }),
+      ev('typist', 'typing_race_start', { race_no: 2, tier: 2, again: true }),
+      ev('driver', 'race_start', { race_no: 1, tier: 4 }),
+      ev('driver', 'race_start', { race_no: 2, tier: 5, again: true }),
+    ];
+    const r = profileReport(sessions, events);
+    const by = Object.fromEntries(r.children.map((c) => [c.sessionId, c]));
+    expect(by.typist.profile).toBe('keyboard');
+    expect(by.typist.evidence).toMatch(/typing races 2 \(again 1\)/);
+    expect(by.driver.profile).toBe('racer');
   });
 });
 
