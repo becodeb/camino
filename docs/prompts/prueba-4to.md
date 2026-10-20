@@ -118,7 +118,7 @@ Cut line if time runs out before the class: T38 and T39 must ship; T40 ships wit
 
 **Lo que van a ver los chicos, en orden:**
 
-1. **"¿Cómo te llamás?"**: un campo grande para escribir el nombre (o un inicial si hay dos con el mismo nombre). Es obligatorio para 4to — así se puede leer el nivel de cada chico después de la clase.
+1. **"¿Cómo te llamás?"**: un campo grande para escribir el nombre (o una inicial si hay dos con el mismo nombre). Es obligatorio para 4to — así se puede leer el nivel de cada chico después de la clase.
 2. **El personaje**: elegir quién los representa.
 3. **Un chequeo cortito de la herramienta**: cinco gestos simples con el lápiz y el tablero (tocar, probar, arrastrar…), unos 30–70 segundos.
 4. **La escalera larga**: hasta 18 escalones o 15 minutos, empieza en el escalón 7. Se frena sola apenas el chico deja de poder subir (no los hace repetir fracasos).
@@ -133,7 +133,7 @@ Cut line if time runs out before the class: T38 and T39 must ship; T40 ships wit
 
 **El rincón del adulto**: mantené apretada la esquina superior izquierda de la pantalla unos 0,8 segundos para abrir el menú oculto (terminar la sesión, registrar una ayuda, saltar un paso). El mismo mantener apretado (~0,8 s) sobre el ✋ de la barra registra "¿en qué lo ayudaste?" cuando ayudás a un chico.
 
-**El switch de Voz**: en el menú del rincón, "Voz sí/no" apaga solo la voz hablada (el texto en pantalla sigue, y los sonidos y la música también); es por compu, así que si un chico molesta a los demás hablando fuerte podés bajarle la voz a esa sola máquina sin tocar el volumen general.
+**El switch de Voz**: en el menú del rincón, "Voz sí/no" apaga solo la voz hablada (el texto en pantalla sigue, y los sonidos y la música también); es por compu, así que si una compu habla y molesta podés callarla a esa sola sin bajar el volumen.
 
 **Después de la clase, cómo leer el informe:**
 
