@@ -44,7 +44,8 @@ export const GUARDAS_SHEET = 14;
 
 /** What each grade's menu shows, in order (a probe only when it is registered). T33: the race first for 1ro and 2do. */
 export const MENU: Record<number, readonly ActivityId[]> = {
-  1: ['race', 'sheet', 'recess', 'guardas', 'editor'],
+  // 2026-10-20: 1ro ran out of activities; the typing race (letters, Cokitos' moto race) joins its menu.
+  1: ['race', 'typing_race', 'sheet', 'recess', 'guardas', 'editor'],
   2: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   3: ['rule_game', 'sheet', 'recess', 'editor'],
   // T39/T41: 4to's free play is the Arcade (flow.ts): the typing race, the child's own game, La carrera from tier 4,
@@ -75,7 +76,7 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
       : { id, kind: { probe: id }, say: 'El taller de juegos: programá tu propio juego, como en Scratch.', caption: 'Taller de juegos' };
     case 'wardrobe': return { id, kind: { step: 'wardrobe' }, say: 'El vestidor: cambiale la ropa a tu personaje.', caption: 'El vestidor' };
     // T41: 4to's Arcade
-    case 'typing_race': return { id, kind: { typing: true }, say: 'Carrera de teclas: escribí las palabras y ganá la carrera.', caption: 'Carrera de teclas' };
+    case 'typing_race': return { id, kind: { typing: true }, say: grade === 1 ? 'Carrera de teclas: apretá las letras y ganá la carrera.' : 'Carrera de teclas: escribí las palabras y ganá la carrera.', caption: 'Carrera de teclas' };
     case 'own_game': return { id, kind: { own: true }, say: 'Tu juego: jugá el juego que hiciste en el taller.', caption: 'Tu juego' };
     default: return null;
   }

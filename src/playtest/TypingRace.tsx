@@ -120,7 +120,8 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
     const fixed = DEBUG ? Number((window as unknown as { __trSeed?: number }).__trSeed ?? /[?&]trseed=(\d+)/.exec(location.search)?.[1]) : NaN;
     return Number.isFinite(fixed) ? fixed + (no - 1) * 7919 : ((Date.now() % 99_991) + no * 7919) % 1_000_003 || 1;
   }, [no]);
-  const words = useMemo(() => wordsFor(tier, seed), [tier, seed]);
+  const grade = api.session?.grade;
+  const words = useMemo(() => wordsFor(tier, seed, grade), [tier, seed, grade]);
   const def = useMemo(() => typingRaceDef(words, tier, seed), [words, tier, seed]);
   const course = useMemo(() => courseOf(def), [def]);
   const n = words.length;

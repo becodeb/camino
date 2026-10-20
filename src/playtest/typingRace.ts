@@ -29,8 +29,23 @@ export const WORD_BANK: Readonly<Record<1 | 2 | 3 | 4, readonly string[]>> = {
   4: ['mover 10 pasos', 'repetir 10', 'esperar 1 segundos', 'cambiar puntos en 1', 'girar 15 grados', 'cambiar x en 10', 'fijar y a 100', 'fijar vidas a 3', 'esperar 2 segundos', 'cambiar velocidad en 2', 'repetir 5', 'decir hola por 2 segundos'],
 };
 
+/**
+ * 1ro (user request 2026-10-20): like Cokitos' moto race, single letters
+ * first, then two- and three-letter words; lower case, no accents, no ñ.
+ */
+export const WORD_BANK_1RO: Readonly<Record<1 | 2 | 3 | 4, readonly string[]>> = {
+  1: ['a', 'e', 'i', 'o', 'u', 'm', 's', 'p', 'l', 't', 'n', 'r'],
+  2: ['a', 'e', 'i', 'o', 'u', 'm', 's', 'p', 'l', 't', 'n', 'r', 'd', 'c', 'b', 'f'],
+  3: ['mi', 'tu', 'su', 'la', 'el', 'sol', 'mar', 'pan', 'oso', 'ala', 'uva', 'mesa', 'sapo', 'luna'],
+  4: ['sol', 'mar', 'pan', 'oso', 'uva', 'mesa', 'sapo', 'luna', 'casa', 'pato', 'gato', 'mama', 'papa', 'lupa'],
+};
+/** 1ro's races are short (a six-year-old looks for every key). */
+export const RACE_CHARS_1RO: Readonly<Record<1 | 2 | 3 | 4, number>> = { 1: 10, 2: 12, 3: 14, 4: 16 };
+
+const clampTier = (tier: number) => Math.min(4, Math.max(1, Math.floor(tier) || 1)) as 1 | 2 | 3 | 4;
+
 /** A tier's word list ("¡Otra carrera!" goes one up, endless; 4 and beyond stay as 4). */
-export const bankFor = (tier: number) => WORD_BANK[Math.min(4, Math.max(1, Math.floor(tier) || 1)) as 1 | 2 | 3 | 4];
+export const bankFor = (tier: number, grade?: number) => (grade === 1 ? WORD_BANK_1RO : WORD_BANK)[clampTier(tier)];
 
 /**
  * How many letters (spaces included) a race of each tier needs at least: a
@@ -43,15 +58,15 @@ export const RACE_CHARS: Readonly<Record<1 | 2 | 3 | 4, number>> = { 1: 55, 2: 6
 export const MIN_WORDS = 4;
 
 /** The words of a race, drawn from `seed` (deterministic): no word twice, at least RACE_CHARS letters. */
-export function wordsFor(tier: number, seed: number): string[] {
-  const bank = [...bankFor(tier)];
+export function wordsFor(tier: number, seed: number, grade?: number): string[] {
+  const bank = [...bankFor(tier, grade)];
   const r = rng(seed * 17 + Math.floor(tier) * 131 + 7);
   // Fisher–Yates with the seeded draw
   for (let i = bank.length - 1; i > 0; i--) {
     const j = Math.floor(r() * (i + 1));
     [bank[i], bank[j]] = [bank[j], bank[i]];
   }
-  const need = RACE_CHARS[Math.min(4, Math.max(1, Math.floor(tier) || 1)) as 1 | 2 | 3 | 4];
+  const need = (grade === 1 ? RACE_CHARS_1RO : RACE_CHARS)[clampTier(tier)];
   const out: string[] = [];
   let chars = 0;
   for (const w of bank) {

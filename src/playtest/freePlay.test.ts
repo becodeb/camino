@@ -9,7 +9,7 @@ const all = () => true;
 
 describe('the free-play menu', () => {
   it('offers each grade its activities, in order, without the probes nobody built', () => {
-    expect(menuFor(1, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
+    expect(menuFor(1, none).map((a) => a.id)).toEqual(['race', 'typing_race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(2, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(3, none).map((a) => a.id)).toEqual(['rule_game', 'sheet', 'recess', 'editor']);
     // T39/T41: 4to's free play is the Arcade: the typing race, the child's own game, La carrera, back to the Workshop (a flow step, no probe needed), the wardrobe
@@ -18,8 +18,8 @@ describe('the free-play menu', () => {
   });
 
   it('T20: muted, 1ro loses its recess (music) card; not muted, or another grade: unchanged', () => {
-    expect(menuFor(1, none, true).map((a) => a.id)).toEqual(['race', 'sheet', 'guardas', 'editor']);
-    expect(menuFor(1, none, false).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
+    expect(menuFor(1, none, true).map((a) => a.id)).toEqual(['race', 'typing_race', 'sheet', 'guardas', 'editor']);
+    expect(menuFor(1, none, false).map((a) => a.id)).toEqual(['race', 'typing_race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(1, none).map((a) => a.id)).toContain('recess'); // the default, unchanged
     expect(menuFor(2, none, true).map((a) => a.id)).toContain('recess');
     expect(menuFor(3, none, true).map((a) => a.id)).toContain('recess');
@@ -59,7 +59,7 @@ describe('the free-play menu', () => {
 
   it('names every card aloud (the child does not need to read)', () => {
     for (const g of [1, 2, 3, 4, 5]) for (const a of menuFor(g, all)) expect(a.say.length).toBeGreaterThan(8);
-    expect(menuFor(1, none)[1].say).toBe('La escalera: una hoja con caminos y un desafío.');
+    expect(menuFor(1, none)[2].say).toBe('La escalera: una hoja con caminos y un desafío.');
   });
 
   it('T33: the race is first on 1ro\'s and 2do\'s menus (muted too: it needs no sound), not on 3ro–5to\'s', () => {
