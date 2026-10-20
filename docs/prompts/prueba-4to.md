@@ -111,3 +111,40 @@ One writer at a time on the Raspberry Pi; each task closes with checks, screensh
 5. **T42** report per child + a full scripted 4to session end to end (setup with a name → ladder → workshop → arcade → survey) at 1366×768 and 1280×800; then redeploy on the user's request.
 
 Cut line if time runs out before the class: T38 and T39 must ship; T40 ships with at least challenges 1–5 working; T41's typing race can wait (then "Juegos para todos" opens La carrera and "Tu juego"). Never deploy a half-working workshop: if T40 is not solid, 4to's route falls back to the current "Hacé tu juego" as its mandatory step behind a flag.
+
+## Guía rápida para el docente — 4to
+
+**El link para abrir en cada compu:** `https://camino-prueba.becode.com.ar/?grado=4`
+
+**Lo que van a ver los chicos, en orden:**
+
+1. **"¿Cómo te llamás?"**: un campo grande para escribir el nombre (o un inicial si hay dos con el mismo nombre). Es obligatorio para 4to — así se puede leer el nivel de cada chico después de la clase.
+2. **El personaje**: elegir quién los representa.
+3. **Un chequeo cortito de la herramienta**: cinco gestos simples con el lápiz y el tablero (tocar, probar, arrastrar…), unos 30–70 segundos.
+4. **La escalera larga**: hasta 18 escalones o 15 minutos, empieza en el escalón 7. Se frena sola apenas el chico deja de poder subir (no los hace repetir fracasos).
+5. **El Taller de juegos** (lo más importante de la clase): arman su propio juego "Al revés" paso a paso, como en Scratch, con 7 desafíos centrales. Al resolver los primeros 5 se abre el Arcade.
+6. **El Arcade**: Carrera de teclas (escriben palabras de programación para ganarle a dos rivales que nunca los dejan perder), "Tu juego" (jugar lo que armaron en el Taller), La carrera (de autos), y el vestidor, opcional.
+7. **La encuesta** y listo.
+
+**`/admin`** (con la contraseña del docente) muestra, para cada chico: su nombre, en qué paso está, el escalón de la escalera o el desafío del Taller en el que está, y si ya tiene el Arcade abierto. Hay tres botones de clase:
+- **"Quedan 5 minutos"**: avisa y, cuando termina el ítem en pantalla, manda a cada chico a la encuesta y después al Arcade (o al Taller si todavía no lo abrió).
+- **"Juegos para todos"**: abre el Arcade en todas las compus ya, aunque el chico no haya terminado el Taller (no le pone la bandera verde: eso solo se gana resolviendo los primeros 5 desafíos).
+- **"Terminar la clase"**: avisa con una cuenta regresiva de 10 segundos (el chico puede seguir jugando esos 10 segundos) y después cierra la sesión.
+
+**El rincón del adulto**: mantené apretada la esquina superior izquierda de la pantalla unos 0,8 segundos para abrir el menú oculto (terminar la sesión, registrar una ayuda, saltar un paso). El mismo mantener apretado (~0,8 s) sobre el ✋ de la barra registra "¿en qué lo ayudaste?" cuando ayudás a un chico.
+
+**El switch de Voz**: en el menú del rincón, "Voz sí/no" apaga solo la voz hablada (el texto en pantalla sigue, y los sonidos y la música también); es por compu, así que si un chico molesta a los demás hablando fuerte podés bajarle la voz a esa sola máquina sin tocar el volumen general.
+
+**Después de la clase, cómo leer el informe:**
+
+```
+node tools/export-playtest.mjs
+node tools/analyze-playtest.mjs exports/<archivo>.json --csv clase-4to.csv
+```
+
+El primer comando baja los datos de la clase; el segundo imprime el informe completo (por chico y el resumen de la clase) y además escribe `clase-4to.csv`, una tabla con una fila por chico, para abrir en una planilla.
+
+**Qué mirar en la clase, en vivo:**
+- **Quién copia vs. quién entiende**: en el Taller, si un chico arrastra bloques sin mirar el tablero, prueba al azar, o te pide que le digas exactamente qué tocar, probablemente esté copiando más que entendiendo — el informe después lo confirma con la señal "entiende / a medias / copia o no llegó".
+- **Los teclados de las Chromebook**: la Carrera de teclas acepta las palabras sin tilde (escribir "leccion" cuenta como "lección"), pero la ñ no aparece en el banco de palabras porque un teclado en inglés de Chromebook no la tiene — no es un error si un chico no la encuentra.
+- **El cambio de pestaña**: si un chico cambia de pestaña o minimiza para hacer otra cosa, el informe lo mide (tiempo con la pestaña oculta); no hace falta anotarlo a mano, pero si ves que pasa mucho en una compu puede valer la pena mirar esa pantalla.
