@@ -1108,6 +1108,8 @@ Cut line (from the brief): T38 and T39 must ship; T40 with at least challenges 1
 
   Open: nothing tried with real children, a touch Chromebook or the classroom network (the class is today, 2026-10-20). Nothing pushed; redeploy waits for the user's explicit request.
 
+- 2026-10-20: redeploy after the user's explicit "Ok": Coolify deployment `fukkpbbfcvfosob8klmrkxir` finished; live `/api/health` 200, `/admin` 200; the served `assets/index-D20pcTRl.js` has the same sha256 as the local `VITE_PLAYTEST=1` build of `cd06406` and contains the name screen, "Carrera de teclas" and "Al revés"; the live export carries `child_name` (migrations 014/015 applied). Production now runs T38–T42. No scripted checks against production.
+
 ## Next step
 
-Redeploy on the user's explicit request (production currently runs through T37; T38–T42 are committed on `feat/prueba-piloto`, not pushed, not deployed), then the 4to class.
+The 4to class (2026-10-20) with `https://camino-prueba.becode.com.ar/?grado=4`; afterwards `node tools/export-playtest.mjs` and `node tools/analyze-playtest.mjs exports/<file>.json --csv clase-4to.csv`.
