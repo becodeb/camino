@@ -193,7 +193,8 @@ try {
   ok(!!sid, `session ${sid} (4to, named)`);
   await p.evaluate(() => window.__piloto.jump('free_play'));
   await p.waitForSelector('.pp-fp-card', { timeout: 20_000 });
-  ok(await p.locator('.pp-fp-card').first().getAttribute('data-activity') === 'workshop', '4to\'s free-play menu opens with the Workshop\'s card');
+  // T41: 4to's free play is the Arcade (typing race, Tu juego, La carrera, the Workshop, the wardrobe): the Workshop's card is on it
+  ok(await p.locator('.pp-fp-card[data-activity="workshop"]').count() === 1, '4to\'s free-play menu (the Arcade) has the Workshop\'s card');
   await p.locator('.pp-fp-card[data-activity="workshop"]').click();
   await p.waitForSelector('.ws-page', { timeout: 20_000 });
 

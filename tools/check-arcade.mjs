@@ -224,9 +224,10 @@ try {
 
   // ---------------------------------------------------------------- /admin
   await k.evaluate(() => window.__piloto.flush());
-  await waitAdmin(a, sid, /Arcade/);
+  // the "Está en" cell itself (not only the Arcade badge): the grade's ° then "Arcade"
+  await waitAdmin(a, sid, /°Arcade/);
   const row = await a.evaluate((id) => document.querySelector(`#class-rows tr[data-id="${id}"]`)?.textContent ?? '', sid);
-  ok(/Arcade/.test(row) && !/juego libre/.test(row), `/admin: K shows "Arcade", not "juego libre" (${row.replace(/\s+/g, ' ').slice(0, 80)})`);
+  ok(/°Arcade/.test(row) && !/juego libre/.test(row), `/admin: K shows "Arcade", not "juego libre" (${row.replace(/\s+/g, ' ').slice(0, 80)})`);
   await a.locator(`#class-rows tr[data-id="${sid}"]`).scrollIntoViewIfNeeded();
   await a.waitForTimeout(600);
   await shot(a, 'admin-arcade');
