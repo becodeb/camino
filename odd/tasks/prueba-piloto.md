@@ -138,6 +138,25 @@ Cut line (from the brief): T38 and T39 must ship; T40 with at least challenges 1
 - Survey: liked 22 yes / 5 no; difficulty 19 easy / 5 mid / 3 hard; play again 18 yes / 8 no.
 - Data noise: bathroom breaks, the teacher's projector computer, lids closed mid-session (class 1's `end_class` reached 5 devices 24–26 min late, at the start of class 2, which T22/T28 address).
 
+### 1ro fun round: "Los juegos del monstruo" (user request 2026-10-25)
+
+The user, after 1ro's pilot classes: the arrow kart race ("La carrera") was bad for 1ro: nobody understood the arrows, a repeat appeared every now and then and they ended up spamming. One or two classes per child are left this year; the focus is FUN, learning a little, and keeping the stats. Next year the real version starts, so this round tries ideas to see what amuses them most. Only 1ro for now; a second class only if this one goes well. Plan agreed in chat (2026-10-25): no symbols (every block is a drawing of what happens, no arrows or numbers); random tapping never pays (build first, then "¡Listo!"; very fast tapping makes the character dizzy and sit for a moment, funny, never a punishment); one game, one idea, 3–4 minutes; the menu becomes an arcade of short games, and what each child chooses and replays by themselves is the main data.
+
+Another agent works on 4to at the same time on `feat/copa-4to` (worktree `~/projects/camino-wt/copa-4to`). Every change in this round is limited to 1ro, or additive behind a grade switch: 2do–5to behave exactly as today. Local ports for this round: 8812 (app), 8813 (vite), 54341 (test Postgres), so they never collide with the 4to agent's 8810/8811/54340. The class date and length are not known yet (asked, not answered); the cut line below orders the work.
+
+Route per task: delegated direct, one writer at a time (each task touches 2+ non-trivial files).
+
+- [ ] T43 1ro route and the arcade shell: with `grado=1`, character choice → a guided first pass through the new games (each once, in a fixed order, short) → the free arcade (the new games plus the favourites the data already showed: character confetti, wardrobe, typing letters). La carrera (arrow karts) and the ladder leave 1ro's route and menu (code kept; reachable from the adult corner menu). Shared pieces for every new game: picture blocks (no arrows, no numbers, no words needed), build then "¡Listo!", the dizzy character on very fast tapping (`rapid_taps` event), a wordless ghost demo per game, a juicy win (confetti, the monster's reaction) and "¡Otra vez!" that gets a little harder. Telemetry per game: `game_start`, `game_round` (correct, attempts, ms), `game_end` (finished / quit), voluntary replays.
+- [ ] T44 "La receta del monstruo" (sequence: the order matters): the monster shows the sandwich it wants as a drawing; the child stacks ingredients in order and serves it; the monster eats it happily or makes a disgusted face and spits it out (the wrong layer visible); rounds grow from 2 to 5 layers, later two monsters. Measures: order errors, whether they look at the order before building.
+- [ ] T45 "Copiá el baile" (sequence and memory, Simon says, silent): the monster dances 3–4 poses, the child repeats them by tapping pose drawings; each round adds one pose; a miss is a funny tumble and the same length again, never "game over". Measures: longest sequence, replays.
+- [ ] T46 "¿Qué salió mal?" (finding the error, debugging): a short animation of an everyday routine (getting dressed: shoes before socks; going out into the cold in a swimsuit; brushing teeth without toothpaste); the child taps the wrong step and swaps it for the right one; the routine plays again correctly. Measures: error found, at which try.
+- [ ] T47 "Tocá y pasa" (events, cause and effect, free play): a scene with animals; the child picks "when I tap the frog → it jumps / changes colour / throws confetti / hides" with picture cards, then plays with the scene; a few rules per animal. Measures: rules made, time playing with what they made.
+- [ ] T48 Reserve, "El collar" (patterns, the way to the repeat): continue a bead pattern, then "this little piece, 3 times" as the first repeat they discover themselves. Built only if T43–T47 are done and verified before the class.
+- [ ] T49 Data and closing: the class report (`tools/analyze-playtest.mjs`) gets a 1ro arcade section (per game: children who played it, rounds, voluntary replays, finished vs quit, rapid-tap episodes, the per-game skill measure; the "favourite" per child = most voluntary replays); the survey asks the liking faces per game with the game's drawing; `/admin` names the games; `docs/prueba-piloto-datos.md` documents the events; a teacher's quick guide for 1ro with the unplugged warm-up ("el docente es el robot": picture cards to put a jacket on, done literally and wrong so they laugh).
+- [ ] T50 Verification (typecheck, tests, builds, a scripted 1ro check through the guided pass and the arcade, regressions for 2do–5to, screenshots at 1366×768 and 1280×800 reviewed) and push; redeploy only on the user's explicit request, outside class hours.
+
+Cut line: T43 plus at least two games (T44, T45) must ship together; T46, T47 follow in order; T48 is a reserve. Never deploy a half-working game: an unfinished game stays out of the menu.
+
 ## Progress
 
 - 2026-09-30: worktree and branch created from `feat/primer-grado` (fe6a277); code mapped; this document created before the first source write.
@@ -1116,4 +1135,6 @@ Cut line (from the brief): T38 and T39 must ship; T40 with at least challenges 1
 
 ## Next step
 
-The 4to class (2026-10-20) with `https://camino-prueba.becode.com.ar/?grado=4`; afterwards `node tools/export-playtest.mjs` and `node tools/analyze-playtest.mjs exports/<file>.json --csv clase-4to.csv`.
+1ro fun round: T43 (route and arcade shell) and T44, then T45 onward.
+
+Earlier: the 4to class (2026-10-20) with `https://camino-prueba.becode.com.ar/?grado=4`; afterwards `node tools/export-playtest.mjs` and `node tools/analyze-playtest.mjs exports/<file>.json --csv clase-4to.csv`.
