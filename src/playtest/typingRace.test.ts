@@ -80,6 +80,11 @@ describe('judging a key', () => {
     for (const k of ['Shift', 'Dead', 'Backspace', 'Enter', 'ArrowLeft', 'CapsLock', 'Tab']) expect(judgeKey('a', k)).toBe('ignore');
   });
 
+  it('a key with no letter left to type (the word is already complete) is ignored, never thrown (the 2026-10-20 class crash: "word[s.typed]" past its end)', () => {
+    expect(judgeKey(undefined, 'a')).toBe('ignore');
+    expect(judgeKey('word'[4], 'x')).toBe('ignore');
+  });
+
   it('typing a whole accented word without its accent, with one slip, ends right', () => {
     const word = 'posición';
     let i = 0;

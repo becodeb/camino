@@ -89,12 +89,15 @@ export function fold(ch: string): string {
 
 /**
  * A key against the letter expected next: `right`, `wrong`, or `ignore` (a
- * key that types no letter: Shift, a dead accent key, Backspace, Enter…).
+ * key that types no letter: Shift, a dead accent key, Backspace, Enter…, or
+ * no letter left to type — the word is already complete and the kart is
+ * mid-boost: seen in class as a crash when a child kept typing past the
+ * last letter of the race's last word, before the kart reached the line).
  * Accents are optional ("raton" types "ratón"), case does not matter, and
  * the space between words must be typed.
  */
-export function judgeKey(expected: string, key: string): 'right' | 'wrong' | 'ignore' {
-  if ([...key].length !== 1) return 'ignore';
+export function judgeKey(expected: string | undefined, key: string): 'right' | 'wrong' | 'ignore' {
+  if (expected == null || [...key].length !== 1) return 'ignore';
   return fold(key) === fold(expected) ? 'right' : 'wrong';
 }
 

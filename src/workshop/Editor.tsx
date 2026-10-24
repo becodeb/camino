@@ -113,9 +113,11 @@ export function Editor(props: EditorProps) {
 
   // ---------------------------------------------------------------- geometry
 
+  // A pointer-capture gesture can still deliver a trailing event after the editor unmounts
+  // (e.g. a step change mid-drag): fall back to a zero rect instead of crashing on a null ref.
   const wsPoint = (cx: number, cy: number) => {
-    const r = wsRef.current!.getBoundingClientRect();
-    return { x: cx - r.left + scrollRef.current.x, y: cy - r.top + scrollRef.current.y };
+    const r = wsRef.current?.getBoundingClientRect();
+    return { x: cx - (r?.left ?? 0) + scrollRef.current.x, y: cy - (r?.top ?? 0) + scrollRef.current.y };
   };
   const inRect = (el: Element | null, x: number, y: number) => {
     if (!el) return false;
@@ -375,7 +377,8 @@ export function Editor(props: EditorProps) {
     if (!DEBUG) return;
     (window as unknown as { __wsEditor?: unknown }).__wsEditor = {
       blocks: () => {
-        const r = wsRef.current!.getBoundingClientRect();
+        const r = wsRef.current?.getBoundingClientRect();
+        if (!r) return [];
         const s = scrollRef.current;
         const X = (x: number) => x - s.x + r.left, Y = (y: number) => y - s.y + r.top;
         return layouts.flatMap((sl) => [...allLayouts(sl.items)].map((l) => ({
@@ -385,7 +388,7 @@ export function Editor(props: EditorProps) {
         })));
       },
       scroll: () => scrollRef.current,
-      paper: () => wsRef.current!.getBoundingClientRect().toJSON(),
+      paper: () => wsRef.current?.getBoundingClientRect().toJSON() ?? null,
     };
   });
 
