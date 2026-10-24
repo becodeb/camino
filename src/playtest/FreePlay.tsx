@@ -40,7 +40,7 @@ import { ThenArrow } from '../ui/art';
 import { useMuted } from '../ui/mute';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { usePlaytest } from './context';
-import { activityFor, budgetFrom, budgetVerdict, menuFor, MENU_LINES, RACE_START_TIER, type Activity, type ProbeId } from './freePlay';
+import { activityFor, budgetFrom, budgetVerdict, menuFor, MENU_LINES, RACE_START_TIER, raceRivalsFor, type Activity, type ProbeId } from './freePlay';
 import { freePlayEndless, is4to, wrapPending } from './flow';
 import { provideDemoActions } from './demo';
 import { setHashConsumer } from './hashHold';
@@ -334,7 +334,8 @@ export function FreePlay() {
     body = <Race key={view.n} startTier={RACE_START_TIER[grade]} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} />;
   } else if ('typing' in a.kind) {
     // T41: "Carrera de teclas", endless typing races; each one finished is a won "level"
-    body = <TypingRace key={view.n} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} />;
+    // C02: 4to's rivals are honest (fixed pace, can really lose); every other grade keeps the band unchanged (raceRivalsFor's own test).
+    body = <TypingRace key={view.n} rivals={raceRivalsFor(grade)} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} />;
   } else if ('own' in a.kind) {
     // T41: "Tu juego"; "Mejorarlo en el taller" goes back to the Workshop step
     body = <OwnGame key={view.n} improve={() => { leaving.current = 'done'; apiRef.current.arcade('workshop'); }} />;

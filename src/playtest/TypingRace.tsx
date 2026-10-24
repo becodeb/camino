@@ -45,7 +45,12 @@ import {
   Backdrop, BumpBush, Clouds, CritterDriver, Dust, Flames, FlagIcon, Kart, LANES, MeDriver, SEG, STEP, TRACK_H, TrackRoad, surfaceY,
 } from './raceArt';
 import { accuracy, judgeKey, TYPING_CUP_PREFIX, typedSpot, typingRaceDef, wordsFor, wpm } from './typingRace';
+import { honestRanking, honestResult, rivalTiersFor, typingFinishMs, typingPosition, type HonestResult as HonestResultData, type RivalTier } from './honestRace';
+import { HonestResultScreen } from './HonestResult';
 import './race.css';
+
+/** C02 (4to only): the honest rivals' fixed pace, instead of the band's "the child always wins". Defaults to the band for every other grade. */
+export type RivalMode = 'band' | 'honest';
 
 const LEVEL_ID = 'typing_race';
 if (DEBUG && typeof window !== 'undefined') (window as unknown as { __typingWords: typeof wordsFor }).__typingWords = wordsFor;
@@ -57,6 +62,8 @@ const IDLE_NUDGE_MS = 10_000;
 const IDLE_REPEAT_MS = 6000;
 /** A wrong key: the expected letter shakes red this long. */
 const BAD_MS = 520;
+/** C02: a gap this long between two keys counts towards the honest result's `slow_idle` reason. */
+const IDLE_GAP_MS = 1500;
 
 const LINES = {
   first: '¡Carrera de teclas! Escribí las palabras con el teclado. Cada letra justa te hace ir más rápido.',
@@ -78,24 +85,32 @@ let memory: { sid: string; saved: RaceSaved } | null = null;
  * between races (cups, the race count, the next tier), in memory, in the
  * resume state and as cups in the session's progress (TYPING_CUP_PREFIX).
  */
-export function TypingRace({ levelEnded }: { levelEnded(end: LevelEnd): void }) {
+export function TypingRace({ levelEnded, rivals = 'band' }: { levelEnded(end: LevelEnd): void; rivals?: RivalMode }) {
   const sid = usePlaytest().session?.id ?? '';
   const [saved, setSaved] = useState<RaceSaved>(() => withCups(memory?.sid === sid ? memory.saved : readSaved(resumedPart('typing_race')), typingCups(progress.get().solved)));
   const savedRef = useRef(saved);
-  const [cur, setCur] = useState(() => ({ no: saved.raceNo + 1, tier: saved.tier, again: false }));
+  const [cur, setCur] = useState<{ no: number; tier: number; again: boolean; seed?: number; revancha?: boolean }>(() => ({ no: saved.raceNo + 1, tier: saved.tier, again: false }));
+  const [run, setRun] = useState(0);
+  /** C02: the last race's own seed, for "¡Revancha!" (honest mode only: the band never loses, so it never needs one). */
+  const lastSeedRef = useRef<number | undefined>(undefined);
   const keep = (s: RaceSaved) => { savedRef.current = s; memory = { sid, saved: s }; setSaved(s); rememberPart('typing_race', s); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => keep({ ...savedRef.current, raceNo: cur.no }), [cur.no]);
   return (
     <TypingRun
-      key={cur.no}
+      key={`${cur.no}-${run}`}
       no={cur.no}
       tier={cur.tier}
       again={cur.again}
+      revanchaRun={!!cur.revancha}
       cups={saved.cups}
+      rivals={rivals}
+      seedOverride={cur.seed}
+      reportSeed={(s) => { lastSeedRef.current = s; }}
       won={() => keep({ ...savedRef.current, raceNo: cur.no, cups: savedRef.current.cups + 1, tier: savedRef.current.tier + 1 })}
-      next={() => setCur({ no: savedRef.current.raceNo + 1, tier: savedRef.current.tier, again: true })}
-      setTier={(tier) => { keep({ ...savedRef.current, tier }); setCur({ no: savedRef.current.raceNo + 1, tier, again: true }); }}
+      next={() => { setCur({ no: savedRef.current.raceNo + 1, tier: savedRef.current.tier, again: true, seed: undefined, revancha: false }); setRun((r) => r + 1); }}
+      revancha={() => { setCur((c) => ({ ...c, again: true, seed: lastSeedRef.current, revancha: true })); setRun((r) => r + 1); }}
+      setTier={(tier) => { keep({ ...savedRef.current, tier }); setCur({ no: savedRef.current.raceNo + 1, tier, again: true, seed: undefined, revancha: false }); setRun((r) => r + 1); }}
       levelEnded={levelEnded}
     />
   );
@@ -109,17 +124,22 @@ const inTextField = (t: EventTarget | null) => {
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 };
 
-function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
-  no: number; tier: number; again: boolean; cups: number; won(): void; next(): void; setTier(t: number): void; levelEnded(end: LevelEnd): void;
+function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', seedOverride, reportSeed, won, next, revancha, setTier, levelEnded }: {
+  no: number; tier: number; again: boolean; revanchaRun?: boolean; cups: number; rivals?: RivalMode; seedOverride?: number; reportSeed?(seed: number): void;
+  won(): void; next(): void; revancha?(): void; setTier(t: number): void; levelEnded(end: LevelEnd): void;
 }) {
   const api = usePlaytest();
   const apiRef = useRef(api);
   apiRef.current = api;
   // `?trseed=N` or `window.__trSeed` (?debug only): the checks pick a seed whose words they know (`window.__typingWords` = wordsFor)
+  // C02: `seedOverride` ("¡Revancha!") takes precedence, so the replay is the exact same race, not just the same tier.
   const seed = useMemo(() => {
+    if (seedOverride != null) return seedOverride;
     const fixed = DEBUG ? Number((window as unknown as { __trSeed?: number }).__trSeed ?? /[?&]trseed=(\d+)/.exec(location.search)?.[1]) : NaN;
     return Number.isFinite(fixed) ? fixed + (no - 1) * 7919 : ((Date.now() % 99_991) + no * 7919) % 1_000_003 || 1;
-  }, [no]);
+  }, [no, seedOverride]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => reportSeed?.(seed), [seed]);
   const grade = api.session?.grade;
   const words = useMemo(() => wordsFor(tier, seed, grade), [tier, seed, grade]);
   const def = useMemo(() => typingRaceDef(words, tier, seed), [words, tier, seed]);
@@ -128,6 +148,12 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
   const pair = PAIRS[(no - 1) % PAIRS.length];
   const [firstEver] = useState(() => no === 1);
   const [cups0] = useState(cups);
+  /** C02: the two tiers racing today (null in band mode: `rivals` still steps the rubber band exactly as before). */
+  const honestTiers = useMemo<[RivalTier, RivalTier] | null>(() => (rivals === 'honest' ? rivalTiersFor(no) : null), [rivals, no]);
+  const honestFinish = useMemo<[number, number] | null>(
+    () => (honestTiers ? [typingFinishMs(honestTiers[0], words), typingFinishMs(honestTiers[1], words)] : null),
+    [honestTiers, words],
+  );
 
   const [phase, setPhase] = useState<Phase>('input');
   const [k, setK] = useState(0);
@@ -175,6 +201,12 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
     fxId: 1,
     badId: 0,
     timers: new Set<number>(),
+    /** C02: a gap of IDLE_GAP_MS or more between two right keys counts as idle time (the honest result's `slow_idle` reason). */
+    lastKeyAt: 0,
+    idleMsTotal: 0,
+    /** C02 (honest mode only): the place/margin/reason computed once the child crosses the line. */
+    honestResult: null as HonestResultData | null,
+    honestRanking: null as Array<'me' | 0 | 1> | null,
   });
 
   const rootRef = useRef<HTMLElement>(null);
@@ -203,14 +235,19 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
     const crossed = s.rivalAt.filter((t) => t > 0);
     const lv = apiRef.current.level.current;
     const playMs = s.firstKeyAt ? end - s.firstKeyAt : 0;
+    // C02: honest mode only wins (and so only earns a cup) on 1st place; band mode is unchanged (always a win).
+    const isWin = !s.honestResult || s.honestResult.place === 1;
     log('typing_race_end', {
       race_no: no, tier, seed, reason, ms: end - s.mountAt, play_ms: playMs,
       words: n, words_done: s.wordsDone, chars: s.chars, right: s.right, wrong: s.wrong,
       wpm: wpm(s.right, playMs), accuracy: accuracy(s.right, s.wrong), again,
-      margin_ms: reason !== 'finished' ? null : crossed.length ? Math.min(...crossed) - s.crossedAt
-        : Math.round(Date.now() - s.crossedAt + ((course.finish - Math.max(...s.rivals)) / BAND.afterSpeed) * 1000),
-      ...(reason === 'finished' && !crossed.length ? { margin_estimated: true } : {}),
-      help_levels: s.helpStep, adult_helped: !!lv?.adultHelped, cups: reason === 'finished' ? cups0 + 1 : cups0,
+      margin_ms: s.honestResult ? (reason === 'finished' ? s.honestResult.marginMs : null)
+        : reason !== 'finished' ? null : crossed.length ? Math.min(...crossed) - s.crossedAt
+          : Math.round(Date.now() - s.crossedAt + ((course.finish - Math.max(...s.rivals)) / BAND.afterSpeed) * 1000),
+      ...(!s.honestResult && reason === 'finished' && !crossed.length ? { margin_estimated: true } : {}),
+      help_levels: s.helpStep, adult_helped: !!lv?.adultHelped, cups: reason === 'finished' && isWin ? cups0 + 1 : cups0,
+      rival_mode: rivals,
+      ...(s.honestResult ? { place: s.honestResult.place, reason: s.honestResult.reason } : {}),
     });
   }
 
@@ -224,6 +261,9 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
     const v = judgeKey(word[s.typed], k0);
     if (v === 'ignore') return;
     const now = Date.now();
+    // C02: a long gap since the last key counts towards the honest result's `slow_idle` reason (own idea, not race.ts's idle-nudge timing).
+    if (s.lastKeyAt) { const gap = now - s.lastKeyAt; if (gap > IDLE_GAP_MS) s.idleMsTotal += gap; }
+    s.lastKeyAt = now;
     s.lastInput = now;
     if (call) setCall(false);
     if (!s.started) { s.started = true; s.firstKeyAt = now; s.wordAt = now; }
@@ -278,10 +318,22 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
     s.crossedAt = Date.now();
     s.phase = 'finish';
     setPhase('finish');
-    won();
-    progress.update((q) => solve(q, `${TYPING_CUP_PREFIX}${cups0 + 1}`));
-    speak(LINES.won);
-    chime(['do', 'mi', 'sol', 'mi', 'sol', 'sol'], 130);
+    // C02: honest mode computes the real place now (the child's own finish time against the two fixed-pace rivals);
+    // band mode is unchanged (the child always wins by construction, so there is nothing to compute).
+    if (honestFinish) {
+      const playMs = s.firstKeyAt ? s.crossedAt - s.firstKeyAt : 0;
+      s.honestResult = honestResult({ meMs: playMs, rivalsMs: honestFinish, wrongTotal: s.wrong, idleMs: s.idleMsTotal });
+      s.honestRanking = honestRanking(playMs, honestFinish);
+    }
+    const isWin = !s.honestResult || s.honestResult.place === 1;
+    if (isWin) {
+      won();
+      progress.update((q) => solve(q, `${TYPING_CUP_PREFIX}${cups0 + 1}`));
+      speak(LINES.won);
+      chime(['do', 'mi', 'sol', 'mi', 'sol', 'sol'], 130);
+    } else {
+      chime(['sol', 'mi'], 160);
+    }
     apiRef.current.lowerHand('moved_on', LEVEL_ID);
   }
 
@@ -293,18 +345,19 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
     setOrder([first, first === 0 ? 1 : 0]);
     s.phase = 'podium';
     setPhase('podium');
-    later(() => speak(LINES.cup), 1900);
+    if (!s.honestResult || s.honestResult.place === 1) later(() => speak(LINES.cup), 1900);
     later(reportWin, PODIUM_END_MS);
   }
 
-  /** The won race, told to free play once (after the podium had its moment, or as the child moves on from it). */
+  /** The finished race, told to free play once (after the podium had its moment, or as the child moves on from it): a win or, in honest mode, a real loss. */
   function reportWin() {
     const s = g.current;
     if (s.reported || !s.crossedAt) return;
     s.reported = true;
     const lv = apiRef.current.level.current;
+    const isWin = !s.honestResult || s.honestResult.place === 1;
     levelEnded({
-      level_id: LEVEL_ID, activity: 'typing_race', outcome: 'win', time_ms: s.crossedAt - s.mountAt, attempts: s.right + s.wrong,
+      level_id: LEVEL_ID, activity: 'typing_race', outcome: isWin ? 'win' : 'fail', time_ms: s.crossedAt - s.mountAt, attempts: s.right + s.wrong,
       help_levels: s.helpStep, blocks_optimal: words.join('').length, adult_helped: !!lv?.adultHelped,
       race_no: no, tier,
     });
@@ -359,6 +412,9 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
         if (s.crossedAt) {
           const park = course.finish + PARK - 0.8 - role * 0.9;
           nx = Math.min(park, pos + Math.min(BAND.afterSpeed, Math.max(0.3, (park - pos) * 1.6)) * dt);
+        } else if (honestTiers) {
+          // C02: a fixed pace, completely independent of `inp`/the child's own position or idleness.
+          nx = typingPosition(honestTiers[role], now - s.firstKeyAt, words, course);
         } else nx = stepRival(pos, dt, inp, role);
         if (!s.rivalAt[role] && s.crossedAt && nx >= course.finish) s.rivalAt[role] = now;
         s.rivals[role] = nx;
@@ -418,7 +474,10 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
   useEffect(() => {
     const s = g.current;
     apiRef.current.level.current = { id: LEVEL_ID, helpStep: 0, adultHelped: false };
-    log('typing_race_start', { race_no: no, tier, seed, words: [...words], chars: words.join('').length, rivals: [...pair], ...(again ? { again: true } : {}) });
+    log('typing_race_start', {
+      race_no: no, tier, seed, words: [...words], chars: words.join('').length, rivals: [...pair], rival_mode: rivals,
+      ...(again ? { again: true } : {}), ...(revanchaRun ? { revancha: true } : {}),
+    });
     const off = speakWhenAllowed(firstEver ? LINES.first : LINES.go);
     let raf = requestAnimationFrame(function loop(t) { raf = requestAnimationFrame(loop); frameRef.current(t); });
     const onKey = (e: KeyboardEvent) => {
@@ -531,6 +590,7 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
         return {
           phase: s.phase, raceNo: no, tier, seed, words: [...words], k: s.k + 1, word: words[s.k], typed: s.typed, right: s.right, wrong: s.wrong,
           me: s.me, rivals: [...s.rivals], finish: course.finish, crossed: s.crossedAt > 0, cups: cups0, ended: s.ended, rivalsNames: [...pair],
+          wordsDone: s.wordsDone, words_n: n, boostTo: s.boostTo, started: s.started, honestResult: s.honestResult, rivalMode: rivals,
         };
       },
       key: (ch: string) => keyRef.current(ch),
@@ -539,6 +599,8 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
       pose: (me: number, r0: number, r1: number) => { const s = g.current; s.me = me; s.meTarget = me; s.boostTo = me; s.rivals = [r0, r1]; s.started = true; },
       tier: (t: number) => setTier(t),
       idle: (ms: number) => { g.current.lastInput = Date.now() - ms; },
+      /** Checks/screenshots only (honest mode): backdates the race's own start, so a fast scripted typist can still be judged a real loss. */
+      backdate: (ms: number) => { const s = g.current; s.started = true; s.firstKeyAt = Date.now() - ms; s.wordAt ||= Date.now(); },
     };
     return () => { delete (window as unknown as { __typingRace?: unknown }).__typingRace; };
   });
@@ -562,7 +624,7 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
         </span>
       )}
       title={<><b>Carrera de teclas</b>{`carrera ${no} · nivel ${tier} · ${phase === 'podium' ? 'llegada' : `palabra ${k + 1} de ${n}`}`}</>}
-      pages={<CupRow n={cups0 + (phase === 'finish' || phase === 'podium' ? 1 : 0)} />}
+      pages={<CupRow n={cups0 + ((phase === 'finish' || phase === 'podium') && (!g.current.honestResult || g.current.honestResult.place === 1) ? 1 : 0)} />}
       aside={<SeedPouch />}
       onSpeak={onSpeak}
       onHelp={onHelp}
@@ -570,10 +632,20 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
   );
 
   if (phase === 'podium') {
+    const hr = g.current.honestResult;
+    const ranking = g.current.honestRanking;
     return (
       <main ref={rootRef} className="pp-page pp-race pp-trace is-podium" data-phase={phase} data-race={no} data-tier={tier}>
         {bar}
-        <Podium pair={pair} order={order} cups={cups0 + 1} again={next} extra={<RaceNumbers s={g.current} />} />
+        {hr && ranking ? (
+          <HonestResultScreen
+            pair={pair} ranking={ranking} result={hr} cups={cups0 + (hr.place === 1 ? 1 : 0)} won={hr.place === 1}
+            onAgain={next} onRevancha={() => revancha?.()}
+            extra={<RaceNumbers s={g.current} />}
+          />
+        ) : (
+          <Podium pair={pair} order={order} cups={cups0 + 1} again={next} extra={<RaceNumbers s={g.current} />} />
+        )}
       </main>
     );
   }

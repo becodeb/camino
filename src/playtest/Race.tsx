@@ -991,7 +991,8 @@ function Tape({ road, tape, label, wrong, turbo, active, onTap }: {
 
 // ------------------------------------------------------------------ the podium
 
-function PodiumMe({ x, y }: { x: number; y: number }) {
+/** T41/C02: exported so an honest-mode result screen (real places, not always first) can draw "me" in whichever pedestal was earned. */
+export function PodiumMe({ x, y }: { x: number; y: number }) {
   const player = usePlayer();
   const { ref, view } = useStage(player, { x: -80, y: -150, w: 160, h: 164 }, { shadow: true });
   useEffect(() => {

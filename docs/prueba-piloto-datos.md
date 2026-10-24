@@ -1298,7 +1298,9 @@ press raises the hand).
   words: string[],          // the race's words and phrases, in order
   chars: number,            // their letters, spaces included
   rivals: [string, string],
-  again?: true              // started from the podium's "¡Otra carrera!" (voluntary)
+  rival_mode: 'band' | 'honest',  // C02: 'honest' for 4to only; every other grade is 'band' (unchanged)
+  again?: true,             // started from the result screen's "¡Otra carrera!" (voluntary, a new race)
+  revancha?: true           // C02: started from the result screen's "¡Revancha!" (voluntary, the exact same race again)
 }
 ```
 
@@ -1326,11 +1328,24 @@ One per word finished (4–11 a race).
   wpm: number | null,       // words per minute: right keys / 5 per minute of play_ms
   accuracy: number | null,  // right keys / all keys, 0–100
   again: boolean,           // this race came from "¡Otra carrera!"
-  margin_ms: number | null, margin_estimated?: true,   // as in race_end
+  margin_ms: number | null, margin_estimated?: true,   // as in race_end (band mode); in honest mode, the honest result's own margin
   help_levels: number, adult_helped: boolean,
-  cups: number              // typing-race cups after this race
+  cups: number,             // typing-race cups after this race (honest mode: unchanged on a loss — only 1st place earns one)
+  rival_mode: 'band' | 'honest',  // C02
+  place?: 1 | 2 | 3,        // C02 (honest mode only): where the child actually finished
+  reason?: 'no_turbo' | 'crashes' | 'slow_idle' | 'fast_and_clean'  // C02 (honest mode only): why, from the race's own facts
 }
 ```
+
+**C02 (4to only), honest rivals:** the typing race's two animals drive at a
+fixed words-per-minute pace (6/10/15, cycling bronze+silver / silver+gold /
+bronze+gold by `race_no`, `honestRace.ts`'s `rivalTiersFor`), independent of
+the child — unlike every other grade's rubber band (`BAND`, `race.ts`),
+which always lets the child win. `place`/`margin_ms`/`reason` come from
+`honestResult()`; a loss does not add a typing-race cup, and the next
+race's tier does not escalate (the result screen's "¡Revancha!" replays the
+exact same race — same seed, same words, same two rivals — instead of a new
+one).
 
 **Tu juego** (`src/playtest/OwnGame.tsx` around the Workshop's
 `WorkshopGamePlayer`): the child's own "Al revés" (the Workshop's device

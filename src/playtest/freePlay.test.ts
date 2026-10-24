@@ -134,3 +134,11 @@ describe('T39: 4to\'s Arcade', () => {
     expect(RACE_START_TIER[1]).toBeUndefined();
   });
 });
+
+describe('C02: honest rivals are 4to only', () => {
+  it('raceRivalsFor is "honest" for 4to and "band" (the rubber band, unchanged) for every other grade', async () => {
+    const { raceRivalsFor } = await import('./freePlay');
+    expect(raceRivalsFor(4)).toBe('honest');
+    for (const grade of [1, 2, 3, 5, 6]) expect(raceRivalsFor(grade)).toBe('band');
+  });
+});
