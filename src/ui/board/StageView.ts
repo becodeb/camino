@@ -44,6 +44,20 @@ export class StageView extends BoardView {
   }
 
   /**
+   * C02/C03 fix: a loss on the honest result screen never gets the win pose
+   * (no confetti, no celebrate animation) — the character just settles into
+   * a neutral, determined look instead, so a 2nd/3rd place does not read as
+   * a hidden win.
+   */
+  async stayFocused() {
+    const a = this.actor;
+    if (!a) return;
+    this.lastInput = performance.now();
+    a.sleeping = false;
+    await a.act(async () => { await a.settle(160); a.rig.eyes = 'open'; a.rig.mouth = 'o'; });
+  }
+
+  /**
    * Walks along its line to `x`, one step of its own gait per `stride` (the
    * pilot playtest's walk to the next page). Nothing else in the app calls it.
    */

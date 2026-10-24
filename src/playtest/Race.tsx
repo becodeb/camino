@@ -991,19 +991,26 @@ function Tape({ road, tape, label, wrong, turbo, active, onTap }: {
 
 // ------------------------------------------------------------------ the podium
 
-/** T41/C02: exported so an honest-mode result screen (real places, not always first) can draw "me" in whichever pedestal was earned. */
-export function PodiumMe({ x, y }: { x: number; y: number }) {
+/**
+ * T41/C02: exported so an honest-mode result screen (real places, not always
+ * first) can draw "me" in whichever pedestal was earned. `win` defaults to
+ * true (the band mode's own Podium is always a win); the honest result
+ * screen passes `win={result.place === 1}` so a loss gets a neutral,
+ * determined pose instead of the cheer/confetti (C02's cosmetic open item).
+ */
+export function PodiumMe({ x, y, win = true }: { x: number; y: number; win?: boolean }) {
   const player = usePlayer();
   const { ref, view } = useStage(player, { x: -80, y: -150, w: 160, h: 164 }, { shadow: true });
   useEffect(() => {
+    if (!win) { const t = setTimeout(() => void view.current?.stayFocused(), 500); return () => clearTimeout(t); }
     const t1 = setTimeout(() => void view.current?.cheer(true), 500);
     const t2 = setTimeout(() => void view.current?.cheer(true), 2600);
     return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [view]);
+  }, [view, win]);
   return (
     <svg
       ref={ref} className="rc-podium-me" x={x - 80} y={y - 150} width={160} height={164} overflow="visible"
-      onPointerDown={() => void view.current?.cheer(true)} data-player={player.def.id}
+      onPointerDown={() => void (win ? view.current?.cheer(true) : view.current?.stayFocused())} data-player={player.def.id}
     />
   );
 }

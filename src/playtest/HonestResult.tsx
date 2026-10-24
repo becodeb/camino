@@ -63,7 +63,7 @@ export function HonestResultScreen({ pair, ranking, result, cups, won, onAgain, 
             </g>
           );
         })}
-        {(() => { const { x, y } = SLOT[placeOf('me')]; return <PodiumMe x={x} y={y} />; })()}
+        {(() => { const { x, y } = SLOT[placeOf('me')]; return <PodiumMe x={x} y={y} win={result.place === 1} />; })()}
         <g transform="translate(478 140)" className="rc-podium-cup"><Cup seed={2} /></g>
       </svg>
       <p className="rc-honest-line">{line}</p>
