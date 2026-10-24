@@ -51,7 +51,7 @@ Forecast: about 1200–1600 authored lines. Strategy: feature branch with work-u
 
 Route: delegated direct (one writer at a time; each task touches 2+ non-trivial files).
 
-- [ ] C01 Fix the class JS errors (`toLowerCase` of undefined, `getBoundingClientRect` of null) from the 2026-10-20 bundle `index-D20pcTRl.js`.
+- [x] C01 Fix the class JS errors (`toLowerCase` of undefined, `getBoundingClientRect` of null) from the 2026-10-20 bundle `index-D20pcTRl.js`.
 - [ ] C02 Honest rivals: a fixed-pace rival mode in `race.ts` (bronze/silver/gold), a result screen with place, margin, reason and ¡Revancha!, and honest typing race rivals (6/10/15 wpm). 4to only, with the rubber band unchanged for other grades.
 - [ ] C03 Copa de 4to: 5 circuits with the concept blocks (`repetir` turbo, `si charco / si no`, event `al aparecer tronco → saltar`, variable `vueltas`), one empty slot each, plus events for the data.
 - [ ] C04 4to route: short ladder (cap 8 min), Copa replaces the Workshop, Arcade unlock (circuit 2 or minute 20), old Workshop as an optional Arcade card, best times in the Arcade, 2-question survey at about minute 25.
@@ -60,3 +60,6 @@ Route: delegated direct (one writer at a time; each task touches 2+ non-trivial 
 ## Progress
 
 - 2026-10-25: feature document created, worktree and branch set up.
+- 2026-10-25: C01 done (route: delegated direct, one writer). Root causes found by source reading, not by rebuilding the exact `index-D20pcTRl.js` hash (the lineage had already moved to `e9b6fbf`, so a byte match was not attempted): `judgeKey` (`src/playtest/typingRace.ts`) read `word[s.typed]` with no bounds check — after the race's last word is fully typed the kart keeps boosting to the finish line while `phase` is still `'input'`, so an extra keystroke in that window called `fold(undefined)` → `toLowerCase()` on `undefined` (7 logs / 6 sessions); fixed by having `judgeKey` return `'ignore'` for a missing expected letter, same as a key that types no letter. `Editor.wsPoint` (`src/workshop/Editor.tsx`, 4to's Workshop only) forced `wsRef.current!.getBoundingClientRect()`; a pointer-capture drag can deliver a trailing event after the editor unmounts mid-drag (a step change), so the ref was null once in class; fixed with an optional read and a zero-rect fallback (the two debug-only drag hooks get the same guard, bailing out instead). Commit `4582bce` on `feat/copa-4to`.
+  - Verification: `npm run typecheck` clean. `npm test` → 59 files / 1367 passed (new test: a key with no letter left to type is ignored, not thrown). `npm run build` → built in 837ms, no errors (pre-existing unrelated warnings: the vite.config native-loader notice and the >500kB chunk size notice).
+  - Open: the `getBoundingClientRect` fix addresses the only null-unsafe `wsRef.current!` site reachable from a live gesture; not reproduced locally with a real detach-mid-drag repro (no browser harness exists for the Workshop editor yet), so it is a defensive fix from reading the crash signature and the code, not a confirmed-by-repro one.
