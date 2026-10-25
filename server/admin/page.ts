@@ -258,12 +258,13 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
   var STEP = {
     setup: 'preparación', character: 'personaje', tool_check: 'probar los botones', ladder: 'escalera de niveles',
     free_play: 'juego libre', typing: 'Teclas del bosque', wardrobe: 'vestidor', survey: 'encuesta', goodbye: 'despedida',
-    class_end: 'actividad terminada', name: 'nombre', workshop: 'taller de juegos'
+    class_end: 'actividad terminada', name: 'nombre', workshop: 'taller de juegos', copa: 'Copa de 4to'
   };
-  // T39: 4to's live detail: the ladder's rung, the Workshop's challenge, the Arcade
+  // T39/C04: 4to's live detail: the ladder's rung, the Copa's circuit and golds, the (optional) Workshop's challenge
   function detail(s) {
     var d = '';
     if (s.current_step === 'ladder' && s.ladder_rung) d = ' · escalón ' + s.ladder_rung;
+    else if (s.current_step === 'copa' && s.copa_circuit) d = ' · circuito ' + s.copa_circuit + (s.copa_golds > 0 ? ' · ' + s.copa_golds + ' oro' : '');
     else if (s.current_step === 'workshop' && s.workshop_challenge) d = ' · desafío ' + s.workshop_challenge;
     return d;
   }

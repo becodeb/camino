@@ -50,7 +50,7 @@ One row per playtest session (one child, one sitting).
 | `device` | jsonb | `{ua, w, h, vw, vh, dpr, touch, lang, captions?, captions_set?, sound?, sound_source?, voice?}` as reported by the client: user agent, screen and viewport size in CSS pixels, device pixel ratio, touch capability, browser language; since round 2 `captions` (on-screen text on now: set at the start and updated by every 💬 toggle, see `captions`) and `captions_set` (`'grade'`: the default, on from 3ro; `'setup'`: forced on or off at setup); since T18 `sound` (the effective sound setting now) and `sound_source` (`'admin'`\|`'url'`\|`'adult'`\|`'default'`: which layer decided it, see the `sound` event and the table `class_settings`); since T27 `voice` (this device's "Voz" switch now: `true` unless the adult turned it off here; independent of `sound` — off, speech is silenced but sfx/music keep playing — and, unlike the adult's `sound` override, persisted so it survives a new session on this computer). | 1 (device capability vs. tool failures), 3 (captions, sound, voice) |
 | `survey` | jsonb, nullable | See "survey_answer" below; the final answers, keyed by question. | 9 |
 | `adult_form` | jsonb, nullable | The adult's form: `{engagement: 'low'|'mid'|'high'|null, help_needed: 'none'|'some'|'a_lot'|null, comment?: string, step?: string}`. Round 1: a step after the goodbye, both answers required. Since round 2 it is optional, from the corner menu ("Comentario del adulto") at any time of the session; any answer may be left out (`null`), saving again replaces it, and `step` is the flow step it was saved on (see the `adult_form` event). Most round-2 sessions will have none. | 3, 5 |
-| `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, since T14 `'class_end'`, and since T38 `'name'` — only for a session whose name screen was on; T39: `'workshop'` (4to's Game Workshop step); round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. T39: that view also reads, from the events already synced (no new column), the ladder's rung on screen (the last ladder `level_start`), the Workshop's core challenge (the last non-free `workshop_challenge`) and whether the Arcade opened (`arcade_open`): "escalera de niveles · escalón 13", "taller de juegos · desafío 4", "Arcade". T41: a 4to session in `free_play` reads "Arcade" (its free play is the Arcade) instead of "juego libre". | 5 |
+| `current_step` | text, nullable | Last known flow step (`'character'`, `'tool_check'`, `'ladder'`, `'free_play'`, `'typing'`, `'wardrobe'`, `'survey'`, `'goodbye'`, since T14 `'class_end'`, and since T38 `'name'` — only for a session whose name screen was on; T39: `'workshop'` (4to's Game Workshop step, now an optional Arcade card); C04: `'copa'` (4to's Copa de 4to step, mandatory); round-1 sessions may also hold `'code'` and `'adult_form'`, steps removed in round 2), for the admin page's live "where is each child" view. T39/C04: that view also reads, from the events already synced (no new column), the ladder's rung on screen (the last ladder `level_start`), the Copa's own circuit and golds (the last `copa_start`, and distinct circuits with a `copa_end` `place: 1`), the (optional) Workshop's core challenge (the last non-free `workshop_challenge`) and whether the Arcade opened (`arcade_open`): "escalera de niveles · escalón 13", "Copa de 4to · circuito 3 · 1 oro", "taller de juegos · desafío 4", "Arcade". T41: a 4to session in `free_play` reads "Arcade" (its free play is the Arcade) instead of "juego libre". | 5 |
 | `created_at` | timestamptz | First time this session row was written. | — |
 | `last_seen_at` | timestamptz | Updated on every sync; drives the admin page's "active now" indicator. Since T14 a device with a session open syncs at least every ~10 s, so this is also the class's "seen" time. | 5 |
 | `demo` | boolean, default false | T14: a session played in demo mode (the adult showing or trying the pilot; see "Demo mode" below). Stored like any other, but left out of `/api/export`, `/api/admin/*` lists and counts and every SQL view, and deleted 24 hours after it started. A later sync never turns it back to `false` (migration `008_class_control.sql`). | — |
@@ -1396,7 +1396,9 @@ A circuit began (on screen).
 ```
 {
   circuit: 1 | 2 | 3 | 4 | 5,
-  variant: number           // with `circuit`, draws the circuit again (generateCircuit); 0 unless a future variant cycle is wired in
+  variant: number           // with `circuit`, draws the circuit again (generateCircuit); C04: 0 the first time a circuit is
+                             // played, then +1 every time it is started again already medalled (a revancha, or looping back
+                             // from the Arcade once it is already medalled), so a repeat never looks identical
 }
 ```
 
@@ -1417,7 +1419,7 @@ A circuit's result (the child always finishes: never blocked by losing).
 ```
 
 #### `copa_revancha`
-"¡Revancha!" pressed: the same circuit (same seed) plays again.
+"¡Revancha!" pressed: the same circuit plays again (`copa_start`'s own `variant` on the row that follows carries how much it was varied).
 ```
 { circuit: 1 | 2 | 3 | 4 | 5 }
 ```
@@ -1525,22 +1527,23 @@ the step on screen ends after its item and the next steps are the wardrobe
 (if not visited), the survey (if not done), then free play (`wrap_up:
 true`).
 
-T39 (4to, from 2026-10-20): 4to's own route: `setup` → `name` →
-`character` → `tool_check` → `ladder` → `workshop` (the Game Workshop, a
-step of its own, mandatory) → `free_play` (for 4to, the Arcade: its menu
-is back to the Workshop, La carrera from tier 4 and the wardrobe). No
-`typing` step, no `wardrobe` step on the way. `workshop` → `free_play` only
-once the Arcade is open (the Workshop's challenges 1–5 done, or "Juegos
-para todos"); `arcade` is the child moving between `workshop`,
-`free_play` and the Arcade's `wardrobe` (the Workshop card and the
-wardrobe card of the Arcade's menu, the Arcade button in the Workshop's
-bar, "Ir al Arcade" on the announcement). `games_all` for 4to moves
-`tool_check`, `ladder` or `workshop` to `free_play` and opens the Arcade.
-Under "quedan 5 minutos" 4to goes from the item on screen to the survey
-(if not done), then to the Arcade (or the Workshop while it is closed); in
-the Workshop the challenge on screen is the last one (the step moves on
-when it is done, or after 90 s, or at once in the free challenges). The
-Arcade has no end. Planned times for 4to: tool check 1 min, ladder 15 min,
+T39 (4to, from 2026-10-20), C04 (from 2026-10-25): 4to's own route: `setup`
+→ `name` → `character` → `tool_check` → `ladder` → `copa` (the Copa de
+4to, 5 circuits, mandatory) → `free_play` (for 4to, the Arcade: its menu is
+the typing race, "Tu mejor tiempo" back to the Copa, the wardrobe, and the
+optional Workshop). No `typing` step, no `wardrobe` step on the way. `copa`
+→ `free_play` only once the Arcade is open (the Copa's circuit 2 done, 20
+minutes since the route started, or "Juegos para todos"); `arcade` is the
+child moving between `copa`, the optional `workshop`, `free_play` and the
+Arcade's `wardrobe`. `games_all` for 4to moves `tool_check`, `ladder`,
+`copa` or `workshop` to `free_play` and opens the Arcade. Under "quedan 5
+minutos" 4to goes from the item on screen to the survey (if not done),
+then to the Arcade (or the Copa while it is closed) — never mid-circuit
+(CopaStep.tsx waits for the circuit's own intro or result screen). A
+second, automatic survey trigger (CopaStep.tsx, C04) opens it at circuit 3
+or 20 minutes since the route started, whichever first, with the same
+mid-race guard. The Arcade has no end. Planned times for 4to: tool check 1
+min, ladder 8 min (same as every other grade since C04), the Copa 20 min,
 Workshop 20 min, Arcade 10 min.
 
 ### `route_done`
@@ -1553,23 +1556,25 @@ once, when the wardrobe is left. **RQ 5.**
 { time_ms: number, via: 'route' | 'wrap_up' | 'demo', survey_done: boolean }
 ```
 `time_ms`: since the session started; `via`: `wrap_up` when it happened
-under "quedan 5 minutos", `demo` from the demo bar. T39 (4to): 4to's
-green flag is the Workshop's challenges 1–5 done (`via: 'workshop'`,
-logged in the Workshop, no step change); "Juegos para todos" never raises
-it.
+under "quedan 5 minutos", `demo` from the demo bar. T39/C04 (4to): 4to's
+green flag is the Arcade opening (`via: 'copa'` — the Copa's circuit 2, or
+the 20-minute timer — or `via: 'workshop'` only from the demo/adult's
+default), logged with no step change; "Juegos para todos" never raises it.
 
 ### `arcade_open`
-T39 (4to): the Arcade opened, once per session.
+T39/C04 (4to): the Arcade opened, once per session.
 ```
-{ via: 'workshop' | 'games_all' | 'demo', step: string }
+{ via: 'copa' | 'workshop' | 'games_all' | 'demo', step: string }
 ```
-`workshop`: the Workshop's challenges 1–5 were done (also 4to's
-`route_done`); the child sees "¡Se abrió el Arcade!" large inside the
-screen, with "Ir al Arcade" and "Seguir en el taller", and from then on an
-Arcade button in the Workshop's bar. `games_all`: el docente's "Juegos
-para todos" (the notice reads "¡Se abrió el Arcade!" for 4to). `step`: the
-step the child was on. `/admin`'s live list shows "Arcade" next to the
-child's step from then on.
+`copa`: the Copa's circuit 2 was finished, or 20 minutes passed since the
+route started (also 4to's `route_done`); the child sees "¡Se abrió el
+Arcade!" large inside the screen, with "Ir al Arcade" and "Seguir en la
+Copa", and from then on an Arcade button in the Copa's bar. `workshop`:
+only from the demo/adult's default path (the Workshop is now an optional
+Arcade card, not a gate). `games_all`: el docente's "Juegos para todos"
+(the notice reads "¡Se abrió el Arcade!" for 4to). `step`: the step the
+child was on. `/admin`'s live list shows "Arcade" next to the child's step
+from then on.
 
 ### `class_command`
 T14: a class command from `/admin` reached this device and was applied

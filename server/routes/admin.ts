@@ -108,13 +108,19 @@ export function adminRoute(pool: pg.Pool, opts: AdminOptions | string | undefine
          EXTRACT(EPOCH FROM (COALESCE(s.ended_at, s.last_seen_at) - s.started_at)) AS duration_seconds,
          (SELECT count(*) FROM events e WHERE e.session_id = s.id) AS event_count,
          EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.type = 'route_done') AS route_done,
-         -- T39: where 4to's child is: the ladder's rung on screen, the Workshop's challenge, the Arcade opened
+         -- T39/C04: where 4to's child is: the ladder's rung on screen, the Copa's circuit (and golds), the
+         -- (optional) Workshop's challenge, the Arcade opened
          (SELECT e.payload->>'rung' FROM events e
             WHERE e.session_id = s.id AND e.type = 'level_start' AND e.payload->>'activity' = 'ladder'
             ORDER BY e.seq DESC LIMIT 1) AS ladder_rung,
          (SELECT e.payload->>'n' FROM events e
             WHERE e.session_id = s.id AND e.type = 'workshop_challenge' AND NOT (e.payload ? 'free')
             ORDER BY e.seq DESC LIMIT 1) AS workshop_challenge,
+         (SELECT e.payload->>'circuit' FROM events e
+            WHERE e.session_id = s.id AND e.type = 'copa_start'
+            ORDER BY e.seq DESC LIMIT 1) AS copa_circuit,
+         (SELECT count(DISTINCT e.payload->>'circuit') FROM events e
+            WHERE e.session_id = s.id AND e.type = 'copa_end' AND (e.payload->>'place')::int = 1) AS copa_golds,
          EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.type = 'arcade_open') AS arcade_open,
          (s.survey IS NOT NULL) AS survey_done,
          (s.last_seen_at > now() - ($1 || ' minutes')::interval) AS in_class
