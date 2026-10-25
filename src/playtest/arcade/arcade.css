@@ -376,7 +376,7 @@
 .tp-mode.is-on .tp-mode-word { color: var(--ink); }
 .tp-mode.is-ready { --fill: var(--orange); animation: ga-ring 1.4s ease-in-out infinite; }
 .tp-mode.is-ready .tp-mode-word { color: var(--ink); }
-.ga-game.is-dizzy .tp-cards { filter: saturate(0.6); opacity: 0.75; }
+.ga-game.is-dizzy .tp-cards:not(.is-off) { filter: saturate(0.6); opacity: 0.75; }
 
 @media (prefers-reduced-motion: reduce) {
   .tp-do-jump, .tp-do-spin, .tp-do-colour, .tp-do-confetti, .tp-do-hide, .tp-bush-pop, .tp-burst rect, .tp-bob-hand, .tp-pick, .tp-mode.is-ready, .tp-actor.is-no { animation: none !important; }

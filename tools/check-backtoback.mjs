@@ -87,7 +87,9 @@ try {
   ok(true, '/admin: logged in');
 
   // ---------------------------------------------------------------- the bookmark: straight to the character choice
-  await p.goto(`${base}?debug&nointro&grado=1&sonido=no#/piloto`);
+  // T43 moved 1ro to its own route (the monster games, no tool check or ladder); this check is about the class
+  // end and the next child, so it keeps device A on the route it always walked with `ruta=clasica`
+  await p.goto(`${base}?debug&nointro&grado=1&sonido=no&ruta=clasica#/piloto`);
   await p.waitForSelector('.piloto[data-step="character"]', { timeout: 30_000 });
   ok(true, 'A: ?grado=1&sonido=no landed on the character choice directly (no grade cards)');
 
@@ -105,8 +107,11 @@ try {
   await openCorner(p); await p.click('[data-act="skip"]');
   await p.waitForSelector('.piloto[data-step="free_play"]', { timeout: 20_000 });
   // one real free-play pick (a second activity, so the survey later offers a favourite)
-  await p.waitForSelector('.pp-fp-card', { timeout: 20_000 });
-  await p.locator('.pp-fp-card').first().click();
+  // (since 2026-10-20 a 1ro child's first free-play visit opens the sheet by itself, 0e6d4fd: that is the activity;
+  // a menu still on screen gets a real pick)
+  await p.waitForSelector('.pp-fp-card, .piloto[data-step="free_play"] .level', { timeout: 20_000 });
+  await p.waitForTimeout(1500);
+  if (await p.locator('.pp-menu .pp-fp-card').count()) await p.locator('.pp-menu .pp-fp-card').first().click();
   await p.waitForTimeout(400);
   await openCorner(p); await p.click('[data-act="skip"]');
   await p.waitForSelector('.piloto[data-step="typing"]', { timeout: 20_000 });
@@ -251,6 +256,7 @@ try {
   if (PSQL) sql('DELETE FROM class_commands;');
 } catch (e) {
   ok(false, `stopped: ${String(e.message ?? e).split('\n')[0]}`);
+  await shot(p, 'stopped').catch(() => {});
 } finally {
   await browser.close();
 }
