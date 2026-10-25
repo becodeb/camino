@@ -296,3 +296,96 @@
 @media (prefers-reduced-motion: reduce) {
   .oo-actor, .oo-flake, .oo-drip path, .oo-frame, .oo-options > li { animation: none !important; }
 }
+
+/* ------------------------------------------------ T47 "Tocá y pasa" */
+.tp-task-art { flex: none; }
+.tp-scene-sheet { position: relative; min-height: 0; display: grid; padding: 6px; }
+.tp-scene { display: block; width: 100%; height: 100%; min-height: 0; overflow: hidden; border-radius: 4px; }
+/* positions live in CSS transforms only (never also a transform attribute on the same element) */
+.tp-animal, .tp-sign { transition: transform 900ms cubic-bezier(.3, .6, .35, 1); }
+.tp-actor { transform-box: fill-box; transform-origin: 50% 100%; }
+.tp-animal-hit { cursor: pointer; }
+.tp-pick { animation: rx-slot 1.6s ease-in-out infinite; }
+
+/* the rule signs: up while building, folded away while playing */
+.tp-signs { transition: opacity 260ms ease-out; }
+.tp-game.is-play .tp-signs { opacity: 0; pointer-events: none; }
+.tp-sign-trigger, .tp-slot { cursor: pointer; }
+.tp-slot { transform-box: fill-box; transform-origin: 50% 50%; animation: pop-in 280ms ease-out both; }
+.tp-slot:hover rect { stroke: #c24a3c; }
+.tp-sign.is-arriving, .tp-animal.is-arriving > * { animation: tp-arrive 1600ms cubic-bezier(.3, .6, .35, 1) both; }
+@keyframes tp-arrive { from { translate: 520px 0; } to { translate: 0 0; } }
+.tp-empty-sign { animation: pop-in 260ms ease-out both; }
+
+/* what an animal does when tapped */
+.tp-do-jump { animation: tp-jump 700ms cubic-bezier(.3, .6, .35, 1) both; }
+@keyframes tp-jump { 0%, 100% { translate: 0 0; scale: 1 1; } 15% { scale: 1.12 0.86; } 50% { translate: 0 -130px; scale: 0.94 1.08; } 85% { translate: 0 0; scale: 1.1 0.9; } }
+.tp-do-spin { transform-origin: 50% 60%; animation: tp-spin 750ms ease-in-out both; }
+@keyframes tp-spin { from { rotate: 0deg; } to { rotate: 360deg; } }
+.tp-do-colour { animation: tp-pop 600ms ease-out both; }
+.tp-do-confetti { animation: tp-pop 900ms ease-out both; }
+@keyframes tp-pop { 0%, 100% { scale: 1 1; } 30% { scale: 1.16 1.16; } 60% { scale: 0.96 0.96; } }
+.tp-burst rect { animation: tp-burst 900ms cubic-bezier(.2, .7, .4, 1) both; }
+@keyframes tp-burst { 0% { translate: 0 0; rotate: 0deg; opacity: 1; } 70% { opacity: 1; } 100% { translate: var(--dx) var(--dy); rotate: var(--rot); opacity: 0; } }
+.tp-do-hide { animation: tp-hide 1500ms ease-in-out both; }
+@keyframes tp-hide { 0%, 100% { scale: 1 1; } 18%, 78% { scale: 1.06 0.62; } }
+.tp-bush-pop { transform-box: fill-box; transform-origin: 50% 100%; animation: tp-bush 1500ms ease-in-out both; }
+@keyframes tp-bush { 0% { scale: 0 0; } 14%, 84% { scale: 1 1; } 100% { scale: 0 0; } }
+.tp-actor.is-no { animation: tp-no 460ms ease-in-out both; }
+@keyframes tp-no { 0%, 100% { translate: 0 0; } 20% { translate: -12px 0; } 40% { translate: 10px 0; } 60% { translate: -7px 0; } 80% { translate: 5px 0; } }
+.tp-bob-hand { animation: tp-bob 1.1s ease-in-out infinite; }
+@keyframes tp-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -12px; } }
+
+/* the panel: the child's character, the effect cards (building), the two modes */
+.tp-panel { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 0; height: clamp(110px, 17vh, 136px); }
+.tp-buddy { width: 150px; height: 100%; overflow: visible; }
+.tp-cards { display: flex; justify-content: center; gap: 14px; margin: 0; padding: 0; list-style: none; transition: opacity 240ms ease-out, translate 240ms ease-out; }
+.tp-cards > li { transform: rotate(var(--tilt, 0deg)); }
+.tp-cards.is-off { opacity: 0; translate: 0 40px; pointer-events: none; }
+.tp-cards.is-new > li { animation: oo-opt-in 420ms cubic-bezier(.3, .6, .35, 1.3) calc(var(--i, 0) * 90ms) both; }
+.tp-card {
+  --fill: #fdfaf2;
+  display: grid;
+  place-items: center;
+  width: clamp(104px, 9vw, 128px);
+  height: clamp(92px, 13vh, 110px);
+  padding: 4px 6px;
+  cursor: pointer;
+  touch-action: none;
+}
+.tp-card:active:not(:disabled) { transform: translate(2px, 3px); }
+.tp-card-art { width: 100%; height: 100%; min-height: 0; overflow: visible; pointer-events: none; }
+.tp-drag { position: fixed; z-index: 40; width: 120px; height: 100px; translate: -50% -60%; pointer-events: none; filter: drop-shadow(3px 4px 0 rgba(84, 62, 38, 0.25)); }
+.tp-modes { display: flex; gap: 10px; }
+.tp-mode {
+  --fill: #e6dccb;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
+  gap: 0;
+  width: 132px;
+  height: clamp(104px, 15vh, 124px);
+  padding: 6px 8px 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.tp-mode .tp-mode-art { width: 84px; height: 100%; min-height: 0; pointer-events: none; }
+.tp-mode-word { font: 400 28px/1 var(--hand); color: var(--ink-2); white-space: nowrap; }
+.tp-mode.is-on { --fill: #fff4cf; transform: translateY(-4px); }
+.tp-mode.is-on::before { border-color: var(--blue-ink); border-width: 4px; }
+.tp-mode.is-on .tp-mode-word { color: var(--ink); }
+.tp-mode.is-ready { --fill: var(--orange); animation: ga-ring 1.4s ease-in-out infinite; }
+.tp-mode.is-ready .tp-mode-word { color: var(--ink); }
+.ga-game.is-dizzy .tp-cards { filter: saturate(0.6); opacity: 0.75; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tp-do-jump, .tp-do-spin, .tp-do-colour, .tp-do-confetti, .tp-do-hide, .tp-bush-pop, .tp-burst rect, .tp-bob-hand, .tp-pick, .tp-mode.is-ready, .tp-actor.is-no { animation: none !important; }
+  .tp-do-hide { scale: 1.06 0.62; }
+}
+/* playing looks different at a glance: a warm sky, an orange frame round the meadow */
+.tp-sky { fill: #e9f0ef; transition: fill 400ms ease-out; }
+.tp-game.is-play .tp-sky { fill: #fbe9bf; }
+.tp-scene-sheet { outline: 10px solid transparent; outline-offset: -18px; transition: outline-color 300ms ease-out; }
+.tp-game.is-play .tp-scene-sheet { outline-color: var(--orange); }
+/* ?debug screenshots only: an effect held still at a moment (Tap.tsx __monster.freeze) */
+.tp-game[data-freeze] .tp-actor, .tp-game[data-freeze] .tp-bush-pop, .tp-game[data-freeze] .tp-burst rect { animation-play-state: paused !important; animation-delay: var(--freeze) !important; }

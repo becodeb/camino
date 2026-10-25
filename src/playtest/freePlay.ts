@@ -55,8 +55,8 @@ export const MENU: Record<number, readonly ActivityId[]> = {
   // 2026-10-20: 1ro ran out of activities; the typing race (letters, Cokitos' moto race) joins its menu.
   // T43 (2026-10-25): 1ro's arcade: the monster games first, then the favourites (the character, the wardrobe, the
   // typing letters). La carrera (arrow karts) left it: nobody understood the arrows (it opens from the adult menu).
-  // T45/T46: "Copiá el baile" and "¿Qué salió mal?" after the recipe.
-  1: ['recipe', 'dance', 'oops', 'buddy', 'wardrobe', 'typing_race'],
+  // T45/T46: "Copiá el baile" and "¿Qué salió mal?" after the recipe; T47: "Tocá y pasa" last of the monster games.
+  1: ['recipe', 'dance', 'oops', 'tap', 'buddy', 'wardrobe', 'typing_race'],
   2: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   3: ['rule_game', 'sheet', 'recess', 'editor'],
   // T39/T41: 4to's free play is the Arcade (flow.ts): the typing race, the child's own game, La carrera from tier 4,
@@ -96,6 +96,7 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
     case 'recipe': return { id, kind: { game: 'recipe' }, say: 'La receta del monstruo: armale el sándwich que quiere.', caption: 'La receta' };
     case 'dance': return { id, kind: { game: 'dance' }, say: 'Copiá el baile: mirá cómo baila el monstruo y bailá igual.', caption: 'El baile' };
     case 'oops': return { id, kind: { game: 'oops' }, say: '¿Qué salió mal? Mirá lo que hace el monstruo y arreglá lo que está mal.', caption: '¿Qué salió mal?' };
+    case 'tap': return { id, kind: { game: 'tap' }, say: 'Tocá y pasa: decile a cada animal qué hace cuando lo tocás, y jugá.', caption: 'Tocá y pasa' };
     case 'buddy': return { id, kind: { buddy: true }, say: 'Tu personaje: tocalo y festeja.', caption: 'Tu personaje' };
     default: return null;
   }

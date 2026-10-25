@@ -24,6 +24,7 @@ import { OwnGameCardArt, WorkshopCardArt } from '../workshop/art';
 import { RecipeCardArt } from './arcade/monsterArt';
 import { DanceCardArt } from './arcade/puppetArt';
 import { OopsCardArt } from './arcade/oopsArt';
+import { TapCardArt } from './arcade/tapArt';
 import { PlayerFace } from '../screens/player';
 
 const INK = '#2b2622';
@@ -261,6 +262,7 @@ function CardArt({ a }: { a: Pick<Activity, 'id' | 'kind'> }) {
     case 'recipe': return <RecipeCardArt />;
     case 'dance': return <DanceCardArt />;
     case 'oops': return <OopsCardArt />;
+    case 'tap': return <TapCardArt />;
     case 'buddy': return <BuddyCardArt />;
   }
 }
