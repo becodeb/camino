@@ -10,7 +10,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import {
-  analyze, childLabel, CONCEPT_FAMILIES, localTime, UNDERSTANDING_RULE,
+  analyze, childLabel, CONCEPT_FAMILIES, COPA_UNDERSTANDING_RULE, localTime, UNDERSTANDING_RULE,
 } from '../src/playtest/report.ts';
 
 function parseArgs(argv) {
@@ -169,6 +169,39 @@ function reportRace(r) {
   line(`De dónde vinieron los bloques: tap ${r.inputSources.tap}, drag ${r.inputSources.drag}, teclado ${r.inputSources.key}.`);
 }
 
+const COPA_CIRCUIT_LABEL = { 1: 'secuencia', 2: 'repetir (turbo)', 3: 'si hay charco / si no', 4: 'al aparecer el tronco → saltar', 5: 'variable vueltas' };
+
+function copaCircuitCell(c) {
+  if (!c.reached) return 'no llegó';
+  const place = (p) => (p == null ? '—' : `${p}°`);
+  return `mejor ${place(c.bestPlace)} (1er intento ${place(c.firstPlace)}), margen ${fmtMs(c.marginMs)}, motivo(s): ${c.reasons.join(', ') || '—'}, revanchas ${c.revanchas}, concepto bien al 1er intento: ${c.conceptOkFirstTry ? 'sí' : 'no'}, ayuda máxima ${c.helpLevelMax}.`;
+}
+
+function reportCopaChild(copa) {
+  line('      Copa de 4to:');
+  for (const id of [1, 2, 3, 4, 5]) line(`        circuito ${id} (${COPA_CIRCUIT_LABEL[id]}): ${copaCircuitCell(copa.circuits[id])}`);
+}
+
+function reportCopa(r) {
+  section('Copa de 4to (C05)');
+  if (r.children.length === 0) {
+    line('Sin datos de la Copa en este export (de antes de C04, o nadie de 4to llegó).');
+    return;
+  }
+  line('Cuántos llegaron a cada circuito, y cuántos tuvieron el concepto bien al primer intento:');
+  for (const id of [1, 2, 3, 4, 5]) {
+    line(`  - circuito ${id} (${COPA_CIRCUIT_LABEL[id]}): llegaron ${r.reachedByCircuit[id]}, concepto bien al 1er intento ${fmtPctOrDash(r.conceptOkFirstTryShareByCircuit[id])}.`);
+  }
+  line(`Revanchas voluntarias en la Copa: ${r.revanchasTotal}. "¡Otra carrera!" voluntaria en la Carrera de teclas honesta: ${r.typingAgainHonestTotal}.`);
+  line(`Cómo se abrió el Arcade: circuito 2 → ${r.arcadeUnlockVia.circuit_2}, temporizador de 20 min → ${r.arcadeUnlockVia.timer}, "Juegos para todos" → ${r.arcadeUnlockVia.admin}, otro → ${r.arcadeUnlockVia.other}.`);
+  line(`Siguieron jugando la Copa después de que se abrió el Arcade (señal de interés voluntario): ${r.keptPlayingAfterArcade} de ${r.children.length}.`);
+  line(`Carrera de teclas honesta — lugares reales de los chicos: ${fmtDist(r.typingPlaceDistHonest)}.`);
+  line('Por chico:');
+  for (const c of r.children) {
+    line(`  - ${c.code}: llegó a ${c.circuitsReached}/5 circuitos, revanchas ${c.revanchasTotal}, señal de esta sección: ${UNDERSTANDING_LABEL[c.understanding]}.`);
+  }
+}
+
 function reportArcade(r) {
   section('El Arcade de 4to: Carrera de teclas y Tu juego (T41)');
   if (r.children.length === 0) {
@@ -194,6 +227,8 @@ const UNDERSTANDING_LABEL = {
   copia_o_no_llego: 'copia o no llegó',
 };
 
+const SOURCE_LABEL = { workshop: 'Taller', copa: 'Copa', none: 'sin datos' };
+
 function conceptCell(r) {
   if (r.status === 'not_reached') return 'no llegó';
   if (r.status === 'failed') return `falló (escalón ${r.rung})`;
@@ -210,10 +245,12 @@ function reportGradeChild(c) {
   for (const fam of CONCEPT_FAMILIES) line(`      ${fam.label}: ${conceptCell(c.concepts[fam.key])}`);
   const w = c.workshop;
   if (w.reached) {
-    line(`      Taller: ${w.coreSolved}/${w.coreTotal} desafíos core + ${w.freeSolved} libres. Predecir ${w.predictCorrect == null ? '—' : (w.predictCorrect ? 'bien' : 'mal')}, investigar ${w.investigateCorrect == null ? '—' : (w.investigateCorrect ? 'bien' : 'mal')}. Resueltos sin ayuda: ${w.solvedWithoutHelp}. Señal: ${UNDERSTANDING_LABEL[w.understanding]}.`);
+    line(`      Taller: ${w.coreSolved}/${w.coreTotal} desafíos core + ${w.freeSolved} libres. Predecir ${w.predictCorrect == null ? '—' : (w.predictCorrect ? 'bien' : 'mal')}, investigar ${w.investigateCorrect == null ? '—' : (w.investigateCorrect ? 'bien' : 'mal')}. Resueltos sin ayuda: ${w.solvedWithoutHelp}.`);
   } else {
     line('      Taller: no llegó.');
   }
+  if (c.copa) reportCopaChild(c.copa); else line('      Copa de 4to: no llegó.');
+  line(`      Señal de comprensión (${SOURCE_LABEL[c.understandingSource]}): ${UNDERSTANDING_LABEL[c.understanding]}.`);
   if (c.arcade) {
     line(`      Carrera de teclas: mejor ${c.arcade.bestWpm ?? '—'} ppm, teclas justas ${fmtPctOrDash(c.arcade.accuracy)}.`);
   } else {
@@ -229,7 +266,7 @@ function reportGradeChild(c) {
 function reportGrades(g) {
   if (g.grade4.length === 0 && g.grade5.length === 0) return;
   section('Evaluación de 4to (y 5to) para el año que viene (T42)');
-  line(`Regla del Taller — "entiende / a medias / copia o no llegó" (UNDERSTANDING_RULE en report.ts): "entiende" necesita predecir e investigar bien Y ≥${UNDERSTANDING_RULE.MIN_SOLVED_WITHOUT_HELP_FOR_ENTIENDE} desafíos core resueltos sin ayuda; "copia o no llegó" si predecir o investigar salió mal, o si resolvió ≤${UNDERSTANDING_RULE.MAX_CORE_SOLVED_FOR_COPIA} desafíos core (de ${UNDERSTANDING_RULE.CORE_CHALLENGES}); el resto queda "a medias".`);
+  line(`Regla del Taller — "entiende / a medias / copia o no llegó" (UNDERSTANDING_RULE en report.ts): "entiende" necesita predecir e investigar bien Y ≥${UNDERSTANDING_RULE.MIN_SOLVED_WITHOUT_HELP_FOR_ENTIENDE} desafíos core resueltos sin ayuda; "copia o no llegó" si predecir o investigar salió mal, o si resolvió ≤${UNDERSTANDING_RULE.MAX_CORE_SOLVED_FOR_COPIA} desafíos core (de ${UNDERSTANDING_RULE.CORE_CHALLENGES}); el resto queda "a medias". Para un chico que nunca llegó al Taller pero sí a la Copa (C05, la ruta de 4to desde C04), la señal viene de la Copa en cambio (COPA_UNDERSTANDING_RULE): "entiende" con el concepto bien al primer intento en ≥${COPA_UNDERSTANDING_RULE.MIN_FIRST_TRY_OK_FOR_ENTIENDE} de los 5 circuitos y sin necesitar nunca el nivel de ayuda 2 (la ranura resaltada); "copia o no llegó" con ≤${COPA_UNDERSTANDING_RULE.MAX_FIRST_TRY_OK_FOR_COPIA} circuito(s) bien al primer intento, o con menos de ${COPA_UNDERSTANDING_RULE.MIN_CIRCUITS_REACHED} circuitos alcanzados; el resto, "a medias". Cada chico de esta tabla indica cuál de las dos fuentes usó ("Señal de comprensión").`);
   if (g.grade4.length) {
     line('');
     line(`4to (${g.grade4.length} chico(s)):`);
@@ -276,13 +313,16 @@ function writeGradeCsv(path, g) {
     'nombre', 'grado', 'techo_escalera',
     ...famKeys,
     'taller_llego', 'taller_core_resueltos', 'taller_core_total', 'taller_libres_resueltos',
-    'taller_predecir_bien', 'taller_investigar_bien', 'taller_resueltos_sin_ayuda', 'taller_senal',
+    'taller_predecir_bien', 'taller_investigar_bien', 'taller_resueltos_sin_ayuda',
+    'copa_llego', 'copa_circuitos_llegados', 'copa_revanchas',
+    'senal_comprension', 'fuente_senal',
     'carrera_teclas_mejor_ppm', 'carrera_teclas_justas_pct',
     'minutos_totales', 'minutos_en_tarea', 'pestana_oculta_pct', 'inactividad_ms',
     'ayuda_mano_vezes', 'ayuda_adulto_vezes',
   ];
   const rows = children.map((c) => {
     const w = c.workshop;
+    const copa = c.copa;
     const famCells = famKeys.map((k) => conceptCell(c.concepts[k]));
     const hiddenPctVal = c.time.totalMs > 0 ? (c.time.hiddenMs / c.time.totalMs) * 100 : '';
     return [
@@ -291,7 +331,9 @@ function writeGradeCsv(path, g) {
       w.reached ? 'si' : 'no', w.coreSolved, w.coreTotal, w.freeSolved,
       w.predictCorrect == null ? '' : (w.predictCorrect ? 'si' : 'no'),
       w.investigateCorrect == null ? '' : (w.investigateCorrect ? 'si' : 'no'),
-      w.solvedWithoutHelp, UNDERSTANDING_LABEL[w.understanding],
+      w.solvedWithoutHelp,
+      copa ? 'si' : 'no', copa?.circuitsReached ?? 0, copa?.revanchasTotal ?? 0,
+      UNDERSTANDING_LABEL[c.understanding], SOURCE_LABEL[c.understandingSource],
       c.arcade?.bestWpm ?? '', c.arcade?.accuracy ?? '',
       Math.round(c.time.totalMs / 60_000), Math.round(c.time.onTaskMs / 60_000),
       hiddenPctVal === '' ? '' : hiddenPctVal.toFixed(1), Math.round(c.time.idleMs),
@@ -336,6 +378,7 @@ async function main() {
   reportSurvey(a.survey);
   reportRace(a.race);
   reportArcade(a.arcade);
+  reportCopa(a.copa);
   reportProfiles(a.profiles);
   reportGrades(a.grades);
   if (csv) writeGradeCsv(csv, a.grades);

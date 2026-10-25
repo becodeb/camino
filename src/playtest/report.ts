@@ -638,6 +638,207 @@ export function arcadeReport(sessions: PtSession[], events: PtEvent[]): ArcadeRe
   };
 }
 
+// ------------------------------------------------------------------ C05: Copa de 4to (5 honest circuits, replaces the Workshop as the main route)
+//
+// `docs/prueba-piloto-datos.md`'s "Copa de 4to" section (C03/C04) is the
+// contract: `copa_start`/`copa_end`/`copa_revancha`, one concept family per
+// circuit (1 sequence, 2 repeat/turbo, 3 conditions/puddle, 4 events/log,
+// 5 variables/laps — the same `CONCEPT_FAMILIES` keys the ladder already
+// uses). Unlike the Workshop, the Copa is 4to's MANDATORY route since C04,
+// so "reached" is expected to be true for every post-C04 4to session; it
+// still reads `false` for older exports (no `copa_*` rows at all), which is
+// how `gradeChildReport` below knows to keep using the Workshop's own
+// understanding signal for them.
+
+export type CopaCircuitId = 1 | 2 | 3 | 4 | 5;
+export const COPA_CIRCUIT_IDS: readonly CopaCircuitId[] = [1, 2, 3, 4, 5];
+/** Each circuit's one concept, the same family keys as `CONCEPT_FAMILIES` (sequence/repeat/conditions/events/variables). */
+export const COPA_CIRCUIT_FAMILY: Record<CopaCircuitId, string> = {
+  1: 'sequence', 2: 'repeat', 3: 'conditions', 4: 'events', 5: 'variables',
+};
+
+export interface CopaCircuitChild {
+  /** Any `copa_end` row for this circuit this session (a struggling child still always finishes — never "stuck"). */
+  reached: boolean;
+  /** `copa_end` rows for this circuit (the first try plus every revancha). */
+  attempts: number;
+  firstPlace: 1 | 2 | 3 | null;
+  /** The best (lowest) place over every attempt, including revanchas. */
+  bestPlace: 1 | 2 | 3 | null;
+  /** The best attempt's own margin (how far from the next place up). */
+  marginMs: number | null;
+  /** Distinct reason codes seen, in first-seen order (a clean 1st still carries one — see the data dictionary). */
+  reasons: string[];
+  revanchas: number;
+  /** The concept slot ended up right (not the adult's reveal) in ANY attempt. */
+  conceptOk: boolean;
+  /** The concept slot was right on the FIRST attempt — no revancha needed to get it. */
+  conceptOkFirstTry: boolean;
+  /** The highest help level shown across every attempt (0 none, 1 spoken hint, 2 the slot highlighted). */
+  helpLevelMax: number;
+}
+
+function emptyCopaCircuitChild(): CopaCircuitChild {
+  return {
+    reached: false, attempts: 0, firstPlace: null, bestPlace: null, marginMs: null,
+    reasons: [], revanchas: 0, conceptOk: false, conceptOkFirstTry: false, helpLevelMax: 0,
+  };
+}
+
+export interface CopaChildReport {
+  /** Any `copa_*` row at all this session. */
+  reached: boolean;
+  circuits: Record<CopaCircuitId, CopaCircuitChild>;
+  /** Distinct circuits with at least one `copa_end` row. */
+  circuitsReached: number;
+  revanchasTotal: number;
+  understanding: UnderstandingSignal;
+}
+
+export const COPA_UNDERSTANDING_RULE = {
+  /** The Copa has no free/optional circuits like the Workshop's 8+: all 5 are "core". */
+  TOTAL_CIRCUITS: 5,
+  /** Fewer circuits reached than this (an interrupted session) is never enough to call it "entiende" or "a medias". */
+  MIN_CIRCUITS_REACHED: 3,
+  /** "entiende": the concept right on the FIRST try in at least this many circuits reached, with no circuit needing help level 2 (the slot highlighted). */
+  MIN_FIRST_TRY_OK_FOR_ENTIENDE: 4,
+  MAX_HELP_LEVEL_FOR_ENTIENDE: 1,
+  /** "copia o no llegó": the concept right on the first try in at most this many circuits (the rest needed a revancha or the slot highlighted to get there), or too few circuits reached at all. */
+  MAX_FIRST_TRY_OK_FOR_COPIA: 1,
+} as const;
+
+/** This module's own rule (printed in the report, not a claim from the data dictionary) — the Copa's analogue of `UNDERSTANDING_RULE` for the Workshop. */
+export function copaUnderstanding(c: Pick<CopaChildReport, 'circuitsReached' | 'circuits'>): UnderstandingSignal {
+  const r = COPA_UNDERSTANDING_RULE;
+  const reachedCircuits = COPA_CIRCUIT_IDS.map((id) => c.circuits[id]).filter((x) => x.reached);
+  const firstTryOk = reachedCircuits.filter((x) => x.conceptOkFirstTry).length;
+  const maxHelp = reachedCircuits.length ? Math.max(...reachedCircuits.map((x) => x.helpLevelMax)) : 0;
+  if (c.circuitsReached < r.MIN_CIRCUITS_REACHED || firstTryOk <= r.MAX_FIRST_TRY_OK_FOR_COPIA) return 'copia_o_no_llego';
+  if (firstTryOk >= r.MIN_FIRST_TRY_OK_FOR_ENTIENDE && maxHelp <= r.MAX_HELP_LEVEL_FOR_ENTIENDE) return 'entiende';
+  return 'a_medias';
+}
+
+/** `rows` must already be this one session's `copa_*` rows (any order; sorted here). */
+export function copaChildReport(rows: PtEvent[]): CopaChildReport {
+  const ends = [...rows.filter((e) => e.type === 'copa_end')].sort((a, b) => a.seq - b.seq);
+  const revanchas = rows.filter((e) => e.type === 'copa_revancha');
+  const circuits: Record<CopaCircuitId, CopaCircuitChild> = {
+    1: emptyCopaCircuitChild(), 2: emptyCopaCircuitChild(), 3: emptyCopaCircuitChild(), 4: emptyCopaCircuitChild(), 5: emptyCopaCircuitChild(),
+  };
+  for (const e of ends) {
+    const id = Number(e.payload.circuit) as CopaCircuitId;
+    const c = circuits[id];
+    if (!c) continue;
+    const place = Number(e.payload.place) as 1 | 2 | 3;
+    const validPlace = ([1, 2, 3] as const).includes(place) ? place : null;
+    const margin = Number(e.payload.margin_ms);
+    const reason = String(e.payload.reason ?? '—');
+    const conceptOk = e.payload.concept_ok === true;
+    const help = Number(e.payload.help_level ?? 0) || 0;
+    if (!c.reached) { c.reached = true; c.firstPlace = validPlace; c.conceptOkFirstTry = conceptOk; }
+    c.attempts++;
+    if (validPlace != null && (c.bestPlace == null || validPlace < c.bestPlace)) {
+      c.bestPlace = validPlace;
+      c.marginMs = Number.isFinite(margin) ? margin : null;
+    }
+    if (!c.reasons.includes(reason)) c.reasons.push(reason);
+    if (conceptOk) c.conceptOk = true;
+    c.helpLevelMax = Math.max(c.helpLevelMax, help);
+  }
+  for (const e of revanchas) {
+    const id = Number(e.payload.circuit) as CopaCircuitId;
+    if (circuits[id]) circuits[id].revanchas++;
+  }
+  const circuitsReached = COPA_CIRCUIT_IDS.filter((id) => circuits[id].reached).length;
+  const reached = circuitsReached > 0;
+  const base = { reached, circuits, circuitsReached, revanchasTotal: revanchas.length };
+  return { ...base, understanding: reached ? copaUnderstanding(base) : 'copia_o_no_llego' };
+}
+
+export interface CopaChild extends CopaChildReport {
+  sessionId: string;
+  code: string;
+}
+
+export interface CopaReport {
+  /** One row per child with any Copa activity (every post-C04 4to session; none for an older export). */
+  children: CopaChild[];
+  reachedByCircuit: Record<CopaCircuitId, number>;
+  /** Of the children who reached each circuit, the share (%) who got the concept right on the first try. */
+  conceptOkFirstTryShareByCircuit: Record<CopaCircuitId, number | null>;
+  revanchasTotal: number;
+  /** "¡Otra carrera!" voluntary restarts in the honest-rival typing race (C02, 4to only) among these children. */
+  typingAgainHonestTotal: number;
+  /** How the Arcade unlocked for each child who unlocked it: finishing circuit 2, the 20-minute timer, the admin's "Juegos para todos", or something else (the demo/adult default). `circuit_2` vs `timer` is inferred from elapsed time since the session's first event (no direct field says which fired first — see the comment on `ARCADE_UNLOCK_TIMER_MS`), so it is a close heuristic, not an exact read. */
+  arcadeUnlockVia: { circuit_2: number; timer: number; admin: number; other: number };
+  /** Kept doing Copa circuits (any `copa_*` row) after `arcade_open` — the same voluntary-engagement idea as the Workshop's own `voluntaryWorkshopContinuation`. */
+  keptPlayingAfterArcade: number;
+  /** Honest typing-race places (1/2/3), over every finished race among these children. */
+  typingPlaceDistHonest: Record<string, number>;
+}
+
+/** Mirrors `CopaStep.tsx`'s own `ARCADE_TIME_MS` (the Arcade's 20-minute fallback timer) — duplicated here because this module stays dependency-free from the UI layer; a drift between the two only ever softens the `circuit_2`/`timer` split below, never the report's other numbers. */
+const ARCADE_UNLOCK_TIMER_MS = 20 * 60_000;
+
+export function copaReport(sessions: PtSession[], events: PtEvent[]): CopaReport {
+  const eventsBySession = groupBy(events, (e) => e.session_id);
+  const children: CopaChild[] = [];
+  for (const s of sessions) {
+    const rows = eventsBySession.get(s.id) ?? [];
+    const copaRows = rows.filter((e) => e.type.startsWith('copa_'));
+    if (copaRows.length === 0) continue;
+    children.push({ sessionId: s.id, code: childLabel(s), ...copaChildReport(copaRows) });
+  }
+
+  const reachedByCircuit: Record<CopaCircuitId, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const firstTryOkByCircuit: Record<CopaCircuitId, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const c of children) {
+    for (const id of COPA_CIRCUIT_IDS) {
+      if (!c.circuits[id].reached) continue;
+      reachedByCircuit[id]++;
+      if (c.circuits[id].conceptOkFirstTry) firstTryOkByCircuit[id]++;
+    }
+  }
+  const conceptOkFirstTryShareByCircuit: Record<CopaCircuitId, number | null> = { 1: null, 2: null, 3: null, 4: null, 5: null };
+  for (const id of COPA_CIRCUIT_IDS) conceptOkFirstTryShareByCircuit[id] = pct(firstTryOkByCircuit[id], reachedByCircuit[id]);
+
+  const sessionIds = new Set(children.map((c) => c.sessionId));
+  const typingStarts = events.filter((e) => sessionIds.has(e.session_id) && e.type === 'typing_race_start' && e.payload.rival_mode === 'honest');
+  const typingEnds = events.filter((e) => sessionIds.has(e.session_id) && e.type === 'typing_race_end' && e.payload.rival_mode === 'honest');
+  const typingAgainHonestTotal = typingStarts.filter((e) => e.payload.again === true).length;
+  const typingPlaceDistHonest = count(typingEnds.filter((e) => e.payload.place != null), (e) => String(e.payload.place));
+
+  const arcadeUnlockVia = { circuit_2: 0, timer: 0, admin: 0, other: 0 };
+  let keptPlayingAfterArcade = 0;
+  for (const sid of sessionIds) {
+    const rows = [...(eventsBySession.get(sid) ?? [])].sort((a, b) => a.seq - b.seq);
+    const open = rows.find((e) => e.type === 'arcade_open');
+    if (!open) continue;
+    const via = String(open.payload.via ?? '—');
+    if (via === 'games_all') arcadeUnlockVia.admin++;
+    else if (via === 'copa') {
+      const first = rows[0];
+      const firstT = Date.parse(first?.client_t ?? first?.server_t ?? '');
+      const openT = Date.parse(open.client_t ?? open.server_t ?? '');
+      const elapsed = Number.isFinite(firstT) && Number.isFinite(openT) ? openT - firstT : null;
+      if (elapsed != null && elapsed < ARCADE_UNLOCK_TIMER_MS) arcadeUnlockVia.circuit_2++;
+      else arcadeUnlockVia.timer++;
+    } else arcadeUnlockVia.other++;
+    if (rows.some((e) => e.type.startsWith('copa_') && e.seq > open.seq)) keptPlayingAfterArcade++;
+  }
+
+  return {
+    children,
+    reachedByCircuit,
+    conceptOkFirstTryShareByCircuit,
+    revanchasTotal: children.reduce((n, c) => n + c.revanchasTotal, 0),
+    typingAgainHonestTotal,
+    arcadeUnlockVia,
+    keptPlayingAfterArcade,
+    typingPlaceDistHonest,
+  };
+}
+
 // ------------------------------------------------------------------ T37: motivation profiles (a heuristic, not a measurement)
 //
 // Parent review (2026-10-17, on the real export): the first cut let the
@@ -1019,6 +1220,18 @@ export interface GradeChildReport {
   /** Keyed by `ConceptFamily.key`. */
   concepts: Record<string, ConceptResult>;
   workshop: WorkshopChildReport;
+  /** C05: Copa de 4to (C04's own route, replacing the Workshop's position); `null` for a session with no Copa activity at all (every pre-C04 export, and every non-4to grade). */
+  copa: CopaChildReport | null;
+  /**
+   * The final "entiende / a medias / copia o no llegó" signal for this child
+   * — the Workshop's own `workshop.understanding` when the Workshop was
+   * reached (unchanged, so old sessions keep reading exactly as before),
+   * else the Copa's `copa.understanding` when the Copa was reached (C04's
+   * own mandatory route), else the old Workshop-not-reached default
+   * ('copia o no llegó') when neither was.
+   */
+  understanding: UnderstandingSignal;
+  understandingSource: 'workshop' | 'copa' | 'none';
   /** From `arcadeReport` (T41); `null` for a session with no Arcade activity at all (every 5to, and a 4to who never reached it). */
   arcade: ArcadeChild | null;
   time: ChildTimeReport;
@@ -1031,13 +1244,21 @@ function gradeChildReport(s: PtSession, events: PtEvent[], arcadeBySession: Map<
   const ladderCeiling = rawCeiling == null ? null : Number(rawCeiling);
   const concepts: Record<string, ConceptResult> = {};
   for (const fam of CONCEPT_FAMILIES) concepts[fam.key] = familyResult(steps, fam);
+  const workshop = workshopChildReport(events);
+  const copaRows = events.filter((e) => e.type.startsWith('copa_'));
+  const copa = copaRows.length ? copaChildReport(copaRows) : null;
+  const understandingSource: 'workshop' | 'copa' | 'none' = workshop.reached ? 'workshop' : copa ? 'copa' : 'none';
+  const understanding = workshop.reached ? workshop.understanding : copa ? copa.understanding : workshop.understanding;
   return {
     sessionId: s.id,
     code: childLabel(s),
     grade: s.grade,
     ladderCeiling: Number.isFinite(ladderCeiling) ? ladderCeiling : null,
     concepts,
-    workshop: workshopChildReport(events),
+    workshop,
+    copa,
+    understanding,
+    understandingSource,
     arcade: arcadeBySession.get(s.id) ?? null,
     time: childTimeReport(s, events),
   };
@@ -1180,6 +1401,7 @@ export interface Analysis {
   survey: SurveyReport;
   race: RaceReport;
   arcade: ArcadeReport;
+  copa: CopaReport;
   profiles: ProfileReport;
   grades: GradeEvaluation;
 }
@@ -1196,6 +1418,7 @@ export function analyze(data: PtExport, opts: FilterOptions = {}): Analysis {
     ladder: ladderReport(events),
     freePlay: freePlayReport(kept, events),
     repeatDrop: repeatDropReport(events),
+    copa: copaReport(kept, events),
     predict: predictReport(events),
     typing: typingReport(events),
     help: helpReport(events),

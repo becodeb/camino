@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  arcadeReport, childTimeReport, classifyChild, classCommandReport, clusterClasses, CONCEPT_FAMILIES, droppedAfterRepeat,
+  arcadeReport, childTimeReport, classifyChild, classCommandReport, clusterClasses, CONCEPT_FAMILIES,
+  copaChildReport, COPA_UNDERSTANDING_RULE, copaReport, copaUnderstanding, droppedAfterRepeat,
   familyResult, filterNoise, freePlayReport, gradeEvaluation, helpReport, ladderReport, median, predictReport,
   PROFILE_RULES, profileReport, raceReport, repeatDropReport, surveyReport, topLevelTokens, typingReport,
   UNDERSTANDING_RULE, workshopChildReport,
@@ -507,6 +508,121 @@ describe('workshopChildReport', () => {
   });
 });
 
+describe('copaChildReport', () => {
+  const copaEnd = (circuit: number, over: Record<string, unknown> = {}, seq = 0) => ev('a', 'copa_end', {
+    circuit, variant: 0, place: 1, margin_ms: 500, reason: 'fast_and_clean', time_ms: 8000, errors: 0, help_level: 0, concept_ok: true, ...over,
+  }, seq);
+
+  it('a child with no Copa rows at all → reached false, every circuit empty, copia_o_no_llego', () => {
+    const r = copaChildReport([ev('a', 'ladder_step', { concept: 'sequence' })]);
+    expect(r.reached).toBe(false);
+    expect(r.circuitsReached).toBe(0);
+    expect(r.understanding).toBe('copia_o_no_llego');
+    expect(r.circuits[1]).toEqual({
+      reached: false, attempts: 0, firstPlace: null, bestPlace: null, marginMs: null,
+      reasons: [], revanchas: 0, conceptOk: false, conceptOkFirstTry: false, helpLevelMax: 0,
+    });
+  });
+
+  it('a clean run — all 5 circuits right on the first try, 1st place, no help → entiende', () => {
+    const events = [1, 2, 3, 4, 5].map((circuit, i) => copaEnd(circuit, {}, i));
+    const r = copaChildReport(events);
+    expect(r.circuitsReached).toBe(5);
+    expect(r.circuits[2]).toMatchObject({ reached: true, firstPlace: 1, bestPlace: 1, conceptOk: true, conceptOkFirstTry: true, helpLevelMax: 0 });
+    expect(r.understanding).toBe('entiende');
+  });
+
+  it('too few circuits reached (an interrupted session) never reads entiende or a medias', () => {
+    const events = [copaEnd(1), copaEnd(2)];
+    expect(copaChildReport(events).understanding).toBe('copia_o_no_llego');
+  });
+
+  it('a revancha: wrong on the first try, right on the second → conceptOkFirstTry stays false, bestPlace/conceptOk reflect the better attempt', () => {
+    const events = [
+      copaEnd(3, { place: 3, reason: 'skid', concept_ok: false }, 0),
+      ev('a', 'copa_revancha', { circuit: 3 }, 1),
+      copaEnd(3, { variant: 1, place: 1, reason: 'fast_and_clean', concept_ok: true }, 2),
+    ];
+    const r = copaChildReport(events);
+    expect(r.circuits[3]).toMatchObject({
+      reached: true, attempts: 2, firstPlace: 3, bestPlace: 1, conceptOk: true, conceptOkFirstTry: false, revanchas: 1,
+    });
+    expect(r.circuits[3].reasons).toEqual(['skid', 'fast_and_clean']);
+  });
+
+  it('needing the slot highlighted (help level 2) even once keeps it out of entiende', () => {
+    const events = [1, 2, 3, 4, 5].map((circuit, i) => copaEnd(circuit, { help_level: circuit === 4 ? 2 : 0 }, i));
+    const r = copaChildReport(events);
+    expect(r.understanding).toBe('a_medias');
+  });
+
+  it('copaUnderstanding is the same rule applied directly', () => {
+    const base = copaChildReport([1, 2, 3, 4].map((circuit, i) => copaEnd(circuit, {}, i)));
+    expect(copaUnderstanding(base)).toBe(base.understanding);
+    expect(COPA_UNDERSTANDING_RULE.MIN_CIRCUITS_REACHED).toBeLessThanOrEqual(COPA_UNDERSTANDING_RULE.TOTAL_CIRCUITS);
+  });
+});
+
+describe('copaReport', () => {
+  const s4 = (id: string, over: Partial<PtSession> = {}): PtSession => ({
+    grade: 4, id, started_at: '2026-10-25T12:00:00.000Z', ended_at: '2026-10-25T12:30:00.000Z', ...over,
+  });
+
+  it('an export with no Copa rows at all → empty children, zero counts', () => {
+    const r = copaReport([s4('a')], [ev('a', 'ladder_step', { concept: 'sequence' })]);
+    expect(r.children).toEqual([]);
+    expect(r.reachedByCircuit[1]).toBe(0);
+    expect(r.revanchasTotal).toBe(0);
+  });
+
+  it('counts how many reached each circuit and the first-try concept_ok share', () => {
+    const sessions = [s4('a'), s4('b')];
+    const events = [
+      ev('a', 'copa_end', { circuit: 1, place: 1, margin_ms: 100, reason: 'fast_and_clean', help_level: 0, concept_ok: true }, 0),
+      ev('b', 'copa_end', { circuit: 1, place: 3, margin_ms: 400, reason: 'crashes', help_level: 1, concept_ok: false }, 0),
+    ];
+    const r = copaReport(sessions, events);
+    expect(r.reachedByCircuit[1]).toBe(2);
+    expect(r.conceptOkFirstTryShareByCircuit[1]).toBe(50);
+    expect(r.conceptOkFirstTryShareByCircuit[2]).toBeNull(); // nobody reached circuit 2
+  });
+
+  it('tells circuit-2 unlock from the 20-minute timer by elapsed time since the session\'s first event', () => {
+    const sessions = [s4('fast'), s4('slow'), s4('admin')];
+    const events = [
+      { session_id: 'fast', seq: 0, type: 'character', payload: {}, client_t: '2026-10-25T12:00:00.000Z' } as PtEvent,
+      { session_id: 'fast', seq: 1, type: 'arcade_open', payload: { via: 'copa', step: 'copa' }, client_t: '2026-10-25T12:03:00.000Z' } as PtEvent,
+      ev('fast', 'copa_end', { circuit: 1, place: 1, margin_ms: 0, reason: 'fast_and_clean', help_level: 0, concept_ok: true }, 2),
+
+      { session_id: 'slow', seq: 0, type: 'character', payload: {}, client_t: '2026-10-25T12:00:00.000Z' } as PtEvent,
+      { session_id: 'slow', seq: 1, type: 'arcade_open', payload: { via: 'copa', step: 'copa' }, client_t: '2026-10-25T12:25:00.000Z' } as PtEvent,
+      ev('slow', 'copa_end', { circuit: 1, place: 1, margin_ms: 0, reason: 'fast_and_clean', help_level: 0, concept_ok: true }, 2),
+
+      { session_id: 'admin', seq: 0, type: 'character', payload: {}, client_t: '2026-10-25T12:00:00.000Z' } as PtEvent,
+      { session_id: 'admin', seq: 1, type: 'arcade_open', payload: { via: 'games_all', step: 'copa' }, client_t: '2026-10-25T12:05:00.000Z' } as PtEvent,
+      ev('admin', 'copa_end', { circuit: 1, place: 1, margin_ms: 0, reason: 'fast_and_clean', help_level: 0, concept_ok: true }, 2),
+    ];
+    const r = copaReport(sessions, events);
+    expect(r.arcadeUnlockVia).toEqual({ circuit_2: 1, timer: 1, admin: 1, other: 0 });
+  });
+
+  it('counts voluntary continuation after the Arcade opened, revanchas, and the honest typing-race places/again', () => {
+    const sessions = [s4('a')];
+    const events = [
+      ev('a', 'arcade_open', { via: 'copa', step: 'copa' }, 0),
+      ev('a', 'copa_end', { circuit: 1, place: 1, margin_ms: 0, reason: 'fast_and_clean', help_level: 0, concept_ok: true }, 1),
+      ev('a', 'copa_revancha', { circuit: 1 }, 2),
+      ev('a', 'typing_race_start', { rival_mode: 'honest', again: true }, 3),
+      ev('a', 'typing_race_end', { rival_mode: 'honest', place: 2 }, 4),
+    ];
+    const r = copaReport(sessions, events);
+    expect(r.keptPlayingAfterArcade).toBe(1);
+    expect(r.revanchasTotal).toBe(1);
+    expect(r.typingAgainHonestTotal).toBe(1);
+    expect(r.typingPlaceDistHonest).toEqual({ 2: 1 });
+  });
+});
+
 describe('childTimeReport', () => {
   const s = (over: Partial<PtSession> & { id: string }): PtSession => ({ grade: 4, started_at: '2026-10-20T12:00:00.000Z', ...over });
 
@@ -590,5 +706,42 @@ describe('gradeEvaluation', () => {
     ];
     const r = gradeEvaluation(sessions, events);
     expect(r.summary4to!.voluntaryWorkshopContinuation).toBe(1);
+  });
+
+  it('C05: a child who never reached the Workshop but did reach the Copa reads its understanding from the Copa', () => {
+    const sessions = [s4({ id: 'a' })];
+    const circuit = (n: number, i: number) => ev('a', 'copa_end', {
+      circuit: n, variant: 0, place: 1, margin_ms: 0, reason: 'fast_and_clean', time_ms: 8000, errors: 0, help_level: 0, concept_ok: true,
+    }, i);
+    const events = [1, 2, 3, 4, 5].map((n, i) => circuit(n, i));
+    const r = gradeEvaluation(sessions, events);
+    const child = r.grade4[0];
+    expect(child.workshop.reached).toBe(false);
+    expect(child.copa?.reached).toBe(true);
+    expect(child.understandingSource).toBe('copa');
+    expect(child.understanding).toBe('entiende');
+  });
+
+  it('C05: the Workshop still wins when both were reached, so old sessions keep reading exactly as before', () => {
+    const sessions = [s4({ id: 'a' })];
+    const events = [
+      ...[1, 2, 3, 4, 5].map((n, i) => ev('a', 'workshop_challenge', {
+        n, phase: 'solved', help_level: 0, ...(n === 1 ? { predict_correct: true } : {}), ...(n === 2 ? { investigate_correct: true } : {}),
+      }, i)),
+      // the Copa, reached but weak on its own — must not override the Workshop's own signal.
+      ev('a', 'copa_end', { circuit: 1, variant: 0, place: 3, margin_ms: 500, reason: 'crashes', time_ms: 9000, errors: 3, help_level: 2, concept_ok: false }, 10),
+    ];
+    const r = gradeEvaluation(sessions, events);
+    const child = r.grade4[0];
+    expect(child.understandingSource).toBe('workshop');
+    expect(child.understanding).toBe('entiende');
+  });
+
+  it('neither Workshop nor Copa reached → the old default, copia_o_no_llego, source none', () => {
+    const sessions = [s4({ id: 'a' })];
+    const r = gradeEvaluation(sessions, [ev('a', 'character', {})]);
+    const child = r.grade4[0];
+    expect(child.understandingSource).toBe('none');
+    expect(child.understanding).toBe('copia_o_no_llego');
   });
 });
