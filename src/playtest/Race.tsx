@@ -864,7 +864,7 @@ function RepeatArt({ count, d, label }: { count: number; d: Dims; label: BlockLa
 
 interface DragState { block: Block; x: number; y: number; ox: number; oy: number }
 
-function Palette({ label, repeat, reserve, disabled, onPlace }: {
+export function Palette({ label, repeat, reserve, disabled, onPlace }: {
   label: BlockLabel; repeat: Block | null; reserve: boolean; disabled: boolean; onPlace(b: Block, src: Source): void;
 }) {
   const d = DIMS_KIDS;
@@ -942,7 +942,7 @@ function Palette({ label, repeat, reserve, disabled, onPlace }: {
 
 // ------------------------------------------------------------------ the tape (the slots under the stretch's pieces)
 
-function Tape({ road, tape, label, wrong, turbo, active, onTap }: {
+export function Tape({ road, tape, label, wrong, turbo, active, onTap }: {
   road: readonly RoadDir[]; tape: Program; label: BlockLabel; wrong: boolean; turbo: boolean; active: boolean; onTap(slot: number): void;
 }) {
   const d = DIMS_KIDS;
