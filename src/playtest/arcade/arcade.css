@@ -1,0 +1,172 @@
+/* T43/T44: 1ro's monster games. A page like La carrera's: the bar, a taped
+   sheet with the scene (one SVG), and the panel below (the tray of picture
+   cards, the bell). Fits 1366×768 and 1280×800 with no scrolling. */
+
+.pp-page.ga-game {
+  height: 100dvh;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  place-items: stretch;
+  gap: 10px;
+  padding: 10px 18px 12px;
+  overflow: hidden;
+}
+.ga-game .level-bar { grid-area: auto; }
+.rx-task-sandwich { flex: none; overflow: visible; }
+
+/* the bar's round marks */
+.ga-dots { display: inline-flex; gap: 7px; align-items: center; }
+.ga-dots > span { width: 16px; height: 16px; border-radius: 50% 45% 52% 48%; border: 2.4px solid var(--ink); background: var(--sheet); }
+.ga-dots > span.is-done { background: var(--green); animation: pop-in 300ms ease-out both; }
+
+/* ------------------------------------------------ the scene */
+.rx-scene-sheet { position: relative; min-height: 0; display: grid; padding: 6px; }
+.rx-scene { display: block; width: 100%; height: 100%; min-height: 0; overflow: hidden; border-radius: 4px; }
+
+.rx-layer { transform-box: fill-box; transform-origin: 50% 100%; }
+.rx-layer.ga-target { cursor: pointer; }
+.rx-layer.is-new { animation: rx-drop 300ms cubic-bezier(.3, .6, .35, 1.2) both; }
+@keyframes rx-drop { 0% { translate: 0 -70px; opacity: 0.3; } 70% { translate: 0 4px; opacity: 1; } 100% { translate: 0 0; } }
+.rx-layer.is-wrong { animation: rx-wrong 520ms ease-in-out 3; }
+@keyframes rx-wrong { 0%, 100% { rotate: 0deg; } 25% { rotate: -4deg; } 75% { rotate: 4deg; } }
+.rx-wrong-ring { animation: pop-in 260ms ease-out both; }
+.rx-slot { animation: rx-slot 1.6s ease-in-out infinite; }
+@keyframes rx-slot { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+
+/* the sandwich flies to the monster's mouth, and comes back spat out */
+.rx-fly { transform-box: view-box; }
+.rx-fly.is-eat { animation: rx-eat 900ms cubic-bezier(.5, -0.2, .7, 1) both; }
+@keyframes rx-eat {
+  0% { translate: 0 0; scale: 1; opacity: 1; }
+  25% { translate: 0 -30px; scale: 1.05; }
+  100% { translate: var(--dx) var(--dy); scale: 0.3; opacity: 0; }
+}
+.rx-fly.is-spat { animation: rx-spat 620ms cubic-bezier(.25, .7, .35, 1.25) both; }
+@keyframes rx-spat {
+  0% { translate: var(--dx) var(--dy); scale: 0.3; opacity: 0; rotate: -30deg; }
+  60% { opacity: 1; }
+  100% { translate: 0 0; scale: 1; opacity: 1; rotate: 0deg; }
+}
+
+/* the monster's moods */
+.mx-body-in { transform-box: fill-box; transform-origin: 50% 100%; }
+.mx-monster.is-want .mx-body-in, .mx-monster.is-wait .mx-body-in { animation: mx-breathe 2.4s ease-in-out infinite; }
+@keyframes mx-breathe { 0%, 100% { scale: 1 1; } 50% { scale: 1.02 0.985; } }
+.mx-monster.is-wait { opacity: 0.88; }
+.mx-tongue { transform-box: fill-box; transform-origin: 0% 0%; animation: mx-lick 1.6s ease-in-out infinite; }
+@keyframes mx-lick { 0%, 100% { rotate: 0deg; } 50% { rotate: 14deg; } }
+.mx-monster.is-chew .mx-body-in { animation: mx-chew 240ms ease-in-out infinite alternate; }
+@keyframes mx-chew { from { scale: 1.04 0.95; } to { scale: 0.97 1.04; } }
+.mx-monster.is-yum .mx-body-in { animation: mx-hop 520ms cubic-bezier(.3, .6, .35, 1.3) 2; }
+@keyframes mx-hop { 0%, 100% { translate: 0 0; scale: 1 1; } 30% { scale: 1.08 0.9; } 60% { translate: 0 -26px; scale: 0.95 1.06; } }
+.mx-heart { transform-box: fill-box; transform-origin: center; animation: mx-heart 1.6s ease-out both; }
+.mx-heart.h1 { animation-delay: 160ms; }
+.mx-heart.h2 { animation-delay: 320ms; }
+@keyframes mx-heart { 0% { translate: 0 30px; scale: 0.2; opacity: 0; } 30% { opacity: 1; scale: 1.15; } 100% { translate: 0 -30px; scale: 1; opacity: 0.9; } }
+.mx-monster.is-yuck .mx-body-in { animation: mx-shudder 140ms linear 5; }
+@keyframes mx-shudder { 0%, 100% { translate: 0 0; } 25% { translate: -5px 0; } 75% { translate: 5px 0; } }
+.mx-green { animation: mx-fade 400ms ease-out both; }
+@keyframes mx-fade { from { opacity: 0; } to { opacity: 1; } }
+.mx-stink path { animation: mx-stink 900ms ease-in-out infinite alternate; }
+@keyframes mx-stink { from { translate: 0 0; opacity: 0.4; } to { translate: 0 -8px; opacity: 1; } }
+.mx-monster.is-spit .mx-body-in { animation: mx-spit 420ms ease-out both; }
+@keyframes mx-spit { 0% { scale: 1.06 0.94; } 40% { scale: 0.94 1.06; translate: 8px 0; } 100% { scale: 1 1; translate: 0 0; } }
+.mx-spit circle { animation: mx-drop 600ms ease-out both; }
+@keyframes mx-drop { from { translate: -20px 0; opacity: 0; } to { translate: 26px 10px; opacity: 1; } }
+.rx-monster-spot.is-served .mx-monster { opacity: 1; }
+.mx-bubble { transform-box: fill-box; transform-origin: 50% 100%; animation: pop-in 360ms ease-out both; }
+.mx-bubble.is-here { animation: pop-in 360ms ease-out both, mx-think 2.6s ease-in-out 400ms infinite; }
+@keyframes mx-think { 0%, 100% { translate: 0 0; } 50% { translate: 0 -4px; } }
+
+/* the child's character, dizzy */
+.ga-dizzy-stars .ga-orbit { transform-box: view-box; animation: ga-orbit 900ms linear infinite; }
+@keyframes ga-orbit { to { rotate: 360deg; } }
+.ga-game.is-dizzy .rx-tray, .ga-game.is-dizzy .ga-ready { filter: saturate(0.6); opacity: 0.75; }
+
+/* ------------------------------------------------ the panel: the tray and the bell */
+.rx-panel { display: flex; align-items: center; justify-content: center; gap: 18px; min-height: 0; }
+.rx-tray { display: flex; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.rx-tray > li { transform: rotate(var(--tilt, 0deg)); }
+.rx-card {
+  --fill: var(--sheet);
+  display: grid;
+  place-items: center;
+  width: clamp(104px, 9.4vw, 136px);
+  height: clamp(92px, 13vh, 112px);
+  padding: 4px 6px;
+  touch-action: none;
+  cursor: pointer;
+}
+.rx-card:active:not(:disabled) { transform: translate(2px, 3px); }
+.rx-card:disabled { cursor: default; opacity: 0.75; }
+.rx-card { grid-template-rows: minmax(0, 1fr) auto; gap: 0; }
+.rx-card-art { width: 100%; height: 100%; min-height: 0; overflow: visible; pointer-events: none; }
+.rx-card-art * { vector-effect: non-scaling-stroke; }
+.rx-card-word { font: 700 15px/1 var(--body); color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.04em; pointer-events: none; }
+.rx-drag { position: fixed; z-index: 40; width: 130px; height: 90px; translate: -50% -60%; pointer-events: none; filter: drop-shadow(3px 4px 0 rgba(84, 62, 38, 0.25)); }
+
+.ga-ready {
+  --fill: #e6dccb;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 96px;
+  min-width: 190px;
+  padding: 6px 22px 6px 12px;
+  touch-action: manipulation;
+}
+.ga-ready-word { font: 400 34px/1 var(--hand); color: var(--ink-2); }
+.ga-ready.is-ready { --fill: var(--orange); animation: ga-ring 1.4s ease-in-out infinite; }
+.ga-ready.is-ready .ga-ready-word { color: var(--ink); }
+.ga-ready:not(.is-ready) .rx-bell-ding { display: none; }
+.ga-ready.is-ready .rx-bell-ding { animation: ga-ding 700ms ease-in-out infinite alternate; }
+@keyframes ga-ring { 0%, 100% { rotate: 0deg; } 8% { rotate: -3deg; } 16% { rotate: 3deg; } 24% { rotate: 0deg; } }
+@keyframes ga-ding { from { opacity: 0.3; } to { opacity: 1; } }
+.ga-ready.is-nudge { animation: rx-wrong 260ms ease-in-out 2; }
+.rx-bell-art { overflow: visible; }
+
+.ga-again {
+  --fill: var(--orange);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 96px;
+  padding: 6px 26px 6px 14px;
+  animation: pop-in 360ms ease-out 900ms both;
+  touch-action: manipulation;
+}
+.ga-again:active { transform: translate(2px, 3px); }
+.ga-again-word { font: 400 34px/1 var(--hand); color: var(--ink); }
+
+/* ------------------------------------------------ the juicy win */
+.ga-confetti { position: fixed; inset: 0; z-index: 30; pointer-events: none; overflow: hidden; }
+.ga-confetti > span {
+  position: absolute;
+  top: -20px;
+  width: 14px;
+  height: 9px;
+  border: 1.6px solid var(--ink);
+  border-radius: 2px;
+  animation-name: ga-fall;
+  animation-timing-function: cubic-bezier(.3, .2, .5, 1);
+  animation-fill-mode: both;
+}
+.ga-confetti > span.is-dot { width: 11px; height: 11px; border-radius: 50%; }
+@keyframes ga-fall {
+  0% { translate: 0 0; rotate: var(--rot); opacity: 1; }
+  100% { translate: var(--dx) 105vh; rotate: calc(var(--rot) + 540deg); opacity: 0.9; }
+}
+
+/* the adult corner menu: 1ro's list (La carrera, the ladder) can run past 768 px: it scrolls inside the veil */
+.piloto[data-route="1ro"] .pp-adult-veil { overflow-y: auto; align-items: safe center; }
+
+/* ------------------------------------------------ the arcade menu's cards */
+.pp-fp-buddy { position: relative; display: grid; place-items: center; height: var(--art-h); aspect-ratio: 260 / 190; max-width: calc((100vw - 190px) / 3); }
+.pp-fp-buddy .pp-fp-art { position: absolute; inset: 0; height: 100%; width: 100%; max-width: none; }
+.pp-fp-buddy-face { position: relative; width: 58%; height: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rx-fly.is-eat, .rx-fly.is-spat, .mx-body-in, .mx-heart, .ga-ready.is-ready, .ga-dizzy-stars .ga-orbit { animation: none !important; }
+  .rx-fly.is-eat { opacity: 0; }
+}
