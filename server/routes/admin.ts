@@ -116,6 +116,10 @@ export function adminRoute(pool: pg.Pool, opts: AdminOptions | string | undefine
             WHERE e.session_id = s.id AND e.type = 'workshop_challenge' AND NOT (e.payload ? 'free')
             ORDER BY e.seq DESC LIMIT 1) AS workshop_challenge,
          EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.type = 'arcade_open') AS arcade_open,
+         -- T49: the 1ro monster game on screen (the last game_start not yet followed by its game_end)
+         (SELECT CASE WHEN e.type = 'game_start' THEN e.payload->>'game' END FROM events e
+            WHERE e.session_id = s.id AND e.type IN ('game_start', 'game_end')
+            ORDER BY e.seq DESC LIMIT 1) AS monster_game,
          (s.survey IS NOT NULL) AS survey_done,
          (s.last_seen_at > now() - ($1 || ' minutes')::interval) AS in_class
        FROM sessions s

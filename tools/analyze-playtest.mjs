@@ -12,6 +12,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import {
   analyze, childLabel, CONCEPT_FAMILIES, localTime, UNDERSTANDING_RULE,
 } from '../src/playtest/report.ts';
+// T49: the 1ro arcade section (its own module, so 1ro's and 4to's report work never touch the same lines)
+import { MONSTER_GAME_NAME, MONSTER_GAMES, monsterReport } from '../src/playtest/reportMonster.ts';
 
 function parseArgs(argv) {
   const [file, ...rest] = argv;
@@ -188,6 +190,34 @@ function reportArcade(r) {
   }
 }
 
+const SKILL_LINE = {
+  recipe: (k) => `bien al primer intento ${fmtPct(k.firstTryPct)} de las rondas; errores de orden por ronda (mediana) ${k.medianOrderErrors ?? '—'}; hasta el primer toque (mediana) ${fmtMs(k.medianFirstInputMs)}`,
+  dance: (k) => `el baile más largo copiado (mediana por chico): ${k.medianLongest ?? '—'} pasos`,
+  oops: (k) => `encontró el error al primer toque ${fmtPct(k.foundFirstPct)}; el primer arreglo fue el justo ${fmtPct(k.fixFirstPct)}; hasta el primer toque (mediana) ${fmtMs(k.medianFirstInputMs)}`,
+  tap: (k) => `reglas hechas por chico (mediana) ${k.medianRulesMade ?? '—'}; tiempo jugando con lo que armó (mediana) ${fmtMs(k.medianPlayMs)}; toques jugando (mediana) ${k.medianPlayTaps ?? '—'}; efectos elegidos: ${fmtDist(k.effectsChosen ?? {})}`,
+};
+
+function reportMonster(r) {
+  section('Los juegos del monstruo (1ro, T43–T47)');
+  if (r.sessions === 0) {
+    line('Sin datos de los juegos del monstruo en este export (de antes del 2026-10-25, o ningún chico de 1ro los jugó).');
+    return;
+  }
+  line(`Chicos de 1ro que jugaron: ${r.sessions}. Pasada guiada completa (los ${MONSTER_GAMES.length} juegos terminados): ${r.guidedAll}. Salieron de la pasada guiada (bandera verde): ${r.guidedDone}.`);
+  line('"Repetir voluntario" = elegirlo otra vez en el Arcade (ya jugado) o "¡Otra vez!".');
+  for (const g of r.games) {
+    line(`- ${MONSTER_GAME_NAME[g.game]} (${g.game}): ${g.children} chico(s), ${g.plays} partida(s) (${g.arcadePicks} elegidas en el Arcade), ${g.rounds} ronda(s) ganada(s), repetir voluntario ${g.voluntaryReplays}, terminadas ${g.finished} / abandonadas ${g.quit}, mareos (toques muy rápidos) ${g.rapidTaps}.`);
+    line(`    ${SKILL_LINE[g.game](g.skill)}.`);
+    line(`    Encuesta "¿Te gustó?": ${fmtDist(g.liked)}`);
+  }
+  line(`Favorito (más repeticiones voluntarias; un empate cuenta para cada uno): ${fmtDist(r.favourites)}`);
+  line('Por chico:');
+  for (const c of r.children) {
+    const per = MONSTER_GAMES.map((g) => `${g} ${c.plays[g] ?? 0}${c.voluntary[g] ? ` (+${c.voluntary[g]} vol.)` : ''}`).join(', ');
+    line(`  - ${c.code}: ${per}; favorito ${c.favourite.length ? c.favourite.join('/') : '—'}; pasada guiada ${c.guidedFinished.length}/${MONSTER_GAMES.length}${c.guidedDone ? ' (bandera verde)' : ''}.`);
+  }
+}
+
 const UNDERSTANDING_LABEL = {
   entiende: 'entiende',
   a_medias: 'a medias',
@@ -336,6 +366,10 @@ async function main() {
   reportSurvey(a.survey);
   reportRace(a.race);
   reportArcade(a.arcade);
+  {
+    const keptIds = new Set(a.kept.map((s) => s.id));
+    reportMonster(monsterReport(a.kept, data.events.filter((e) => keptIds.has(e.session_id))));
+  }
   reportProfiles(a.profiles);
   reportGrades(a.grades);
   if (csv) writeGradeCsv(csv, a.grades);

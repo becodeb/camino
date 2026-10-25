@@ -34,14 +34,17 @@ import { usePlaytest } from './context';
 import { postPreviousAdultForm } from './runtime';
 import type { AdultFormValue, PreviousChild } from './previousChild';
 import { submitPreviousAdultForm } from './previousChild';
-import { ActivityPicture, DifficultyArt, DifficultyHeaderArt, Face, LikedHeaderArt, YesNo } from './surveyArt';
+import { ActivityPicture, DifficultyArt, DifficultyHeaderArt, Face, GameLikedHeaderArt, LikedHeaderArt, YesNo } from './surveyArt';
+import { GAME_IDS, type GameId } from './arcade/kit';
+import { is1ro } from './flow';
 import type { StepViewProps } from './steps';
 import { PlayAgainArt } from './round2Art';
 import { SessionGarden } from './SessionGarden';
 
-type QuestionId = 'liked' | 'difficulty' | 'favorite_activity' | 'play_again';
+// T49: 1ro's route also asks the liking faces per monster game (`liked_<game>`)
+type QuestionId = 'liked' | 'difficulty' | 'favorite_activity' | 'play_again' | `liked_${GameId}`;
 interface Option { value: string; word: string; art: React.ReactNode }
-interface Question { id: QuestionId; say: string; adult: string; options: Option[]; header?: React.ReactNode }
+interface Question { id: QuestionId; say: string; adult: string; options: Option[]; header?: React.ReactNode; game?: GameId }
 
 /** How each activity is named aloud when its picture is tapped. */
 const ACTIVITY_WORD: Record<string, string> = {
@@ -53,7 +56,24 @@ const ACTIVITY_WORD: Record<string, string> = {
   recipe: 'La receta del monstruo', dance: 'Copiá el baile', oops: '¿Qué salió mal?', tap: 'Tocá y pasa', buddy: 'Tu personaje', games: 'Los juegos del monstruo',
 };
 
-export function surveyQuestions(activities: readonly string[], grade = 1): Question[] {
+/** T49: how each monster game is named in its own question. */
+const GAME_SAY: Record<GameId, string> = {
+  recipe: 'la receta del monstruo', dance: 'copiar el baile', oops: '«¿Qué salió mal?»', tap: '«Tocá y pasa»',
+};
+
+const likedFaces = (): Option[] => [
+  { value: 'yes', word: '¡Mucho!', art: <Face mood="happy" seed={1} /> },
+  { value: 'mid', word: 'Más o menos.', art: <Face mood="mid" seed={2} /> },
+  { value: 'no', word: 'No.', art: <Face mood="sad" seed={3} /> },
+];
+
+/**
+ * The survey's questions. T49: on 1ro's route (`games1ro`) the liking faces
+ * are also asked once per monster game the child played, right after
+ * "¿Te gustó jugar?", each with that game's drawing; other grades and 1ro's
+ * classic route are unchanged.
+ */
+export function surveyQuestions(activities: readonly string[], grade = 1, games1ro = false): Question[] {
   const qs: Question[] = [
     {
       id: 'liked',
@@ -66,6 +86,14 @@ export function surveyQuestions(activities: readonly string[], grade = 1): Quest
         { value: 'no', word: 'No.', art: <Face mood="sad" seed={3} /> },
       ],
     },
+    ...(games1ro ? GAME_IDS.filter((g) => activities.includes(g)).map((g): Question => ({
+      id: `liked_${g}`,
+      game: g,
+      say: `¿Te gustó ${GAME_SAY[g]}? Tocá una carita.`,
+      adult: `¿Te gustó «${ACTIVITY_WORD[g]}»?`,
+      header: <GameLikedHeaderArt game={g} />,
+      options: likedFaces(),
+    })) : []),
     {
       id: 'difficulty',
       say: '¿Fue fácil o difícil? Tocá un camino: fácil, más o menos, o difícil.',
@@ -102,7 +130,7 @@ export function surveyQuestions(activities: readonly string[], grade = 1): Quest
 export function Survey() {
   const api = usePlaytest();
   const grade = api.session?.grade ?? 1;
-  const [questions] = useState(() => surveyQuestions(api.flow.activities, grade));
+  const [questions] = useState(() => surveyQuestions(api.flow.activities, grade, is1ro(api.flow)));
   const [i, setI] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const answers = useRef<Record<string, string>>({});
@@ -119,7 +147,7 @@ export function Survey() {
     if (picked) return;
     setPicked(o.value);
     if (o.word) speak(o.word);
-    api.log('survey_answer', { question: q.id, answer: o.value });
+    api.log('survey_answer', { question: q.id, answer: o.value, ...(q.game ? { game: q.game } : {}) });
     answers.current = { ...answers.current, [q.id]: o.value };
     setTimeout(() => {
       if (i + 1 < questions.length) {

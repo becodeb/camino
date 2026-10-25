@@ -824,3 +824,7 @@ html.pp-demo .pad > .sheet { max-width: calc(100vw - var(--demo-w) - 36px - 2 * 
 .pp-vm-script-who .ws-thumb { width: 34px; height: 34px; }
 .pp-vm-head { display: grid; gap: 4px; }
 .pp-vm.is-predict .ws-main { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+/* T49 (1ro's route): "¿Te gustó este juego?": the game's own menu drawing, big, and the heart */
+.pp-q-game { gap: 18px; }
+.pp-q-game-card { --fill: #fdfaf2; display: block; padding: 6px 10px; }
+.pp-q-game-card .pp-fp-art, .pp-q-game-card .pp-fp-buddy { height: clamp(120px, 22dvh, 170px); max-width: none; }
