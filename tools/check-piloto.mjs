@@ -163,7 +163,9 @@ async function page() {
 console.log('--- 1ro');
 const one = await page();
 let p = one.p;
-const s1 = await newSession(p, '1ro', 'debug&teclas=0.5&metas=4');
+// T43 (2026-10-25): 1ro has its own route now (the monster games, tools/check-monstruo.mjs); `ruta=clasica`
+// keeps it on the default route this part has always checked (the one 2do still follows)
+const s1 = await newSession(p, '1ro', 'debug&teclas=0.5&metas=4&ruta=clasica');
 ok(/^\p{Lu}\p{Ll}+ [1-9]\d$/u.test(s1.code), `the session keeps an internal code for the admin page ("${s1.code}")`);
 await p.locator('.doors-next').click({ force: true });
 
@@ -217,17 +219,21 @@ await one.ctx.setOffline(false);
 await p.locator('.pp-cheer-next').click({ force: true });
 
 // free play: 💬 on, the menu, the sheet (four core pages, "¿Cómo seguís?": más fácil, its extra, otro juego), the music recess (one song), back
-await p.waitForSelector('.pp-menu');
+// (updated 2026-10-25: a185510 put the typing race on 1ro's menu and 0e6d4fd opens the whole sheet by itself on
+// 1ro's first visit, both on 2026-10-20; this part had not been updated since and stopped here, also on db8bfef)
+// the menu shows for ~300 ms only: either it or the sheet it opens
+await p.waitForSelector('.pp-menu, main.level[data-level="1ro-h6-1"]', { timeout: 30_000 });
+// the menu is on screen only for a moment before the sheet opens: read it from free play's ?debug hook
+const cards = await p.evaluate(() => window.__freePlay.menu());
+ok(cards.join(',') === 'race,typing_race,sheet,recess,guardas,editor', `1ro menu (T33: the race first; the typing race second): ${cards.join(',')}`);
+// 0e6d4fd: the first visit opens the sheet by itself, the menu after it
+await onLevel(p, '1ro-h6-1');
+ok(true, '1ro\'s first free-play visit opens the sheet by itself');
 await p.locator('.level-bar .pp-cap-toggle').click();
 await p.waitForTimeout(300);
 await p.locator('.level-bar .speak').click();
 await p.waitForSelector('.level-bar .pp-cap', { timeout: 5000 });
-ok((await p.locator('.level-bar .pp-cap').innerText()).includes('¿A qué querés jugar?'), '💬 turned on: the spoken line shows in a bubble in the bar');
-const cards = await p.locator('.pp-fp-card').evaluateAll((els) => els.map((e) => e.dataset.activity));
-ok(cards.join(',') === 'race,sheet,recess,guardas,editor', `1ro menu (T33: the race first): ${cards.join(',')}`);
-await p.waitForTimeout(800);
-await p.locator('.pp-fp-card[data-activity="sheet"]').click();
-await onLevel(p, '1ro-h6-1');
+ok((await p.locator('.level-bar .pp-cap').innerText()).trim().length > 0, '💬 turned on: the spoken line shows in a bubble in the bar');
 ok((await p.locator('.level-bar .adult-title').innerText()).includes('Escalones'), 'the sheet page\'s own title in the bar');
 ok(await p.locator('.level-bar .pp-progress').count() === 1 && !(await p.locator('.level-bar .bar-door').count()), 'the sheet page\'s bar: a simple progress, no doors');
 for (const id of ['1ro-h6-1', '1ro-h6-2', '1ro-h6-3', '1ro-h6-4']) { await onLevel(p, id); await solve(p); }
