@@ -116,19 +116,25 @@ Cut line if time runs out before the class: T38 and T39 must ship; T40 ships wit
 
 **El link para abrir en cada compu:** `https://camino-prueba.becode.com.ar/?grado=4`
 
-**Lo que van a ver los chicos, en orden:**
+Esta guía describe la ruta nueva de 4to (la "Copa de 4to"), rehecha después de que la primera mitad de 4to (clase del 2026-10-20) rechazara el Taller de juegos: lo encontraron aburrido y difícil de manejar, y nadie llegó a jugar el Arcade. Lo que sí les gustó, y pidieron repetir sin que nadie se lo pidiera, fue la carrera de autos y la de escribir. La Copa construye sobre eso.
+
+**Lo que van a hacer los chicos, minuto a minuto:**
 
 1. **"¿Cómo te llamás?"**: un campo grande para escribir el nombre (o una inicial si hay dos con el mismo nombre). Es obligatorio para 4to — así se puede leer el nivel de cada chico después de la clase.
 2. **El personaje**: elegir quién los representa.
-3. **Un chequeo cortito de la herramienta**: cinco gestos simples con el lápiz y el tablero (tocar, probar, arrastrar…), unos 30–70 segundos.
-4. **La escalera larga**: hasta 18 escalones o 15 minutos, empieza en el escalón 7. Se frena sola apenas el chico deja de poder subir (no los hace repetir fracasos).
-5. **El Taller de juegos** (lo más importante de la clase): arman su propio juego "Al revés" paso a paso, como en Scratch, con 7 desafíos centrales. Al resolver los primeros 5 se abre el Arcade.
-6. **El Arcade**: Carrera de teclas (escriben palabras de programación para ganarle a dos rivales que nunca los dejan perder), "Tu juego" (jugar lo que armaron en el Taller), La carrera (de autos), y el vestidor, opcional.
-7. **La encuesta** y listo.
+3. **La escalera corta** (hasta unos 8 minutos): empieza en el escalón 7, como antes, pero ya no es la actividad principal de la clase — mide el nivel de entrada y se frena sola en cuanto el chico deja de poder subir.
+4. **La Copa de 4to** (el centro de la clase, obligatoria): cinco circuitos de karts, uno por concepto — secuencia, `repetir` (el turbo), `si hay charco / si no`, el evento "al aparecer un tronco → saltar", y la variable `vueltas`. Cada circuito corre contra dos animales con un ritmo fijo y honesto: no dejan ganar a nadie, así que un programa flojo sale 2do o 3ro de verdad. Al terminar, la pantalla muestra el lugar real, cuánto faltó y por qué ("te faltaron 3 s — el zorro usó turbo en la recta"), con "¡Revancha!" para repetir el mismo circuito.
+5. **El Arcade se abre solo**, en lo que ocurra primero: cuando el chico termina el circuito 2, o a los 20 minutos de clase. Desde ahí tiene, además de la Copa, la Carrera de teclas (también con rivales honestos: 6/10/15 palabras por minuto), el vestidor, y el viejo Taller de juegos como una carta más, ya no obligatoria.
+6. **La encuesta corta** (dos preguntas, no cuatro) aparece sola en lo que ocurra primero: al terminar el circuito 3, o a los 25 minutos.
+7. Después de la encuesta, el chico sigue jugando la Copa y el Arcade hasta que termina la clase.
 
-**`/admin`** (con la contraseña del docente) muestra, para cada chico: su nombre, en qué paso está, el escalón de la escalera o el desafío del Taller en el que está, y si ya tiene el Arcade abierto. Hay tres botones de clase:
-- **"Quedan 5 minutos"**: avisa y, cuando termina el ítem en pantalla, manda a cada chico a la encuesta y después al Arcade (o al Taller si todavía no lo abrió).
-- **"Juegos para todos"**: abre el Arcade en todas las compus ya, aunque el chico no haya terminado el Taller (no le pone la bandera verde: eso solo se gana resolviendo los primeros 5 desafíos).
+**Los rivales son honestos — se puede perder, y es a propósito.** A diferencia de las otras actividades de Camino (donde el rival siempre deja ganar), en la Copa y en la Carrera de teclas de 4to el chico puede salir 2do o 3ro si el programa no anduvo bien. Es intencional: en la clase del 2026-10-20 los chicos notaron que siempre ganaban y eso les vació de sentido el ganar. Los rivales son siempre animales (el zorro, el coatí…), nunca compañeros, y no hay ranking entre chicos — nadie ve el resultado de otro.
+
+**Si un chico pierde varias veces seguidas:** mostrale la línea de motivo en la pantalla de resultado (dice exactamente qué le faltó: el turbo, frenar en el charco, saltar el tronco…) y ofrecele "¡Revancha!" para repetir ese mismo circuito ya con esa pista. Perder no traba el avance — el chico siempre termina el circuito y sigue a la Copa entera, pierda o gane.
+
+**`/admin`** (con la contraseña del docente) muestra, para cada chico: su nombre, en qué paso está, y ahora también en qué circuito de la Copa está y cuántos oros ya tiene ("Copa de 4to · circuito 3 · 1 oro"), o el escalón de la escalera, o el desafío del Taller si volvió ahí, y si ya tiene el Arcade abierto. Hay tres botones de clase:
+- **"Quedan 5 minutos"**: avisa y, cuando termina el ítem en pantalla, manda a cada chico a la encuesta y después al Arcade (o sigue en la Copa si todavía no la abrió).
+- **"Juegos para todos"**: abre el Arcade en todas las compus ya, aunque el chico no haya llegado al circuito 2.
 - **"Terminar la clase"**: avisa con una cuenta regresiva de 10 segundos (el chico puede seguir jugando esos 10 segundos) y después cierra la sesión.
 
 **El rincón del adulto**: mantené apretada la esquina superior izquierda de la pantalla unos 0,8 segundos para abrir el menú oculto (terminar la sesión, registrar una ayuda, saltar un paso). El mismo mantener apretado (~0,8 s) sobre el ✋ de la barra registra "¿en qué lo ayudaste?" cuando ayudás a un chico.
@@ -142,9 +148,24 @@ node tools/export-playtest.mjs
 node tools/analyze-playtest.mjs exports/<archivo>.json --csv clase-4to.csv
 ```
 
-El primer comando baja los datos de la clase; el segundo imprime el informe completo (por chico y el resumen de la clase) y además escribe `clase-4to.csv`, una tabla con una fila por chico, para abrir en una planilla.
+El primer comando baja los datos de la clase; el segundo imprime el informe completo (por chico y el resumen de la clase, con una sección propia "Copa de 4to": quién llegó a cada circuito, quién tuvo el concepto bien al primer intento, revanchas, cómo se abrió el Arcade, y los lugares reales de la Carrera de teclas) y además escribe `clase-4to.csv`, una tabla con una fila por chico, para abrir en una planilla.
 
 **Qué mirar en la clase, en vivo:**
-- **Quién copia vs. quién entiende**: en el Taller, si un chico arrastra bloques sin mirar el tablero, prueba al azar, o te pide que le digas exactamente qué tocar, probablemente esté copiando más que entendiendo — el informe después lo confirma con la señal "entiende / a medias / copia o no llegó".
+- **Quién copia vs. quién entiende**: en la Copa, si un chico elige el turbo o el "si/si no" al azar sin mirar la pista, o te pide que le digas exactamente qué tocar, probablemente esté copiando más que entendiendo — el informe después lo confirma con la señal "entiende / a medias / copia o no llegó", que ahora viene de la Copa para quien nunca llegó al Taller.
 - **Los teclados de las Chromebook**: la Carrera de teclas acepta las palabras sin tilde (escribir "leccion" cuenta como "lección"), pero la ñ no aparece en el banco de palabras porque un teclado en inglés de Chromebook no la tiene — no es un error si un chico no la encuentra.
 - **El cambio de pestaña**: si un chico cambia de pestaña o minimiza para hacer otra cosa, el informe lo mide (tiempo con la pestaña oculta); no hace falta anotarlo a mano, pero si ves que pasa mucho en una compu puede valer la pena mirar esa pantalla.
+- **Alguien que pierde seguido y se frustra**: es más probable con el turbo (circuito 2) y el tronco (circuito 4), que son los que más ayuda pidieron en las pruebas. Ofrecele la Revancha y, si hace falta, usá la ayuda graduada (🔊 pista hablada, después la ranura resaltada) antes de decirle la respuesta.
+
+## English: the C01–C04 redesign (why)
+
+4to's route changed after the 2026-10-20 class (25 children, data from the first half of the grade) rejected the Scratch-like Game Workshop: it was impossible for most of them to drive (characters could not be deleted, too many things asked at once), and the children are already tired of Scratch at school. A median of 6 minutes went into the Workshop's first challenge, only 7 children ever solved challenge 3, nobody reached challenge 5, nobody earned the Arcade, and the survey never ran because the class ended first. The ladder's median ceiling was rung 8, with every struggling child walled at `repetir`/conditions. The two things the children replayed on their own, without being asked, were the typing race (92 voluntary "¡Otra carrera!") and 1ro's block race — both honest-feeling, fast-feedback activities, unlike the Workshop. They also noticed that every rival always let them win (the rubber band), which made winning feel hollow.
+
+The redesign (`feat/copa-4to`, tasks C01–C05) keeps the measurement goal — a usable read of each child's level for planning 5to — but moves it into an activity the data says this group will actually play:
+
+- **C01** fixed the two JS crashes seen live in class (`toLowerCase` of `undefined` in the typing race's key judge; a null `getBoundingClientRect` in the Workshop editor on a mid-drag unmount).
+- **C02** gave 4to (only) honest, fixed-pace rivals instead of the rubber band, in both the typing race and a new reusable `honestRace.ts`, with a real result screen (place, margin, reason, "¡Revancha!").
+- **C03** built the Copa de 4to itself: five kart circuits, each with one concept and one empty slot, racing live against the honest rivals on the same track view as 1ro's own race (not a bare quiz — an early pass that looked like one was reworked after review).
+- **C04** wired the Copa into 4to's route as the mandatory step (replacing the Workshop's position; the Workshop stays reachable as an optional Arcade card), with the Arcade unlocking at circuit 2 or 20 minutes, and a shortened 2-question survey around minute 25.
+- **C05** (this change) taught the class report to read the Copa's data and folded its concept results into the per-child evaluation for children who never reach the Workshop, and rewrote this guide for the new route.
+
+This is a pilot hypothesis, not a settled design: whether honest, losable rivals actually keep this age group engaged (rather than discouraging the weaker half of the class) is exactly what the next class's data — revanchas, voluntary continuation after the Arcade opens, and whether a child who loses keeps playing — is meant to check. See `docs/next-iteration.md` §7 for the exception this carves out of Camino's general "nobody loses" rule, and for where it is marked as something to verify, not an established finding.

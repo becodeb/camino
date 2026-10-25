@@ -132,6 +132,14 @@ Evidence from the first 1ro classes (2026-10-13, no sound): kids finished the co
 
 **What the pilot measures to judge it.** Voluntary replays ("¡Otra carrera!" without an adult), whether `repetir` is chosen when it is optional and pays (turbo use by tier), time per stretch and wrong blocks per tier (the difficulty curve), free-play choice patterns per child grouped into simple profiles (racer, collector, dresser, explorer, keyboard), and whether kids still on the core route engage once "Juegos para todos" opens the zone. `tools/analyze-playtest.mjs` prints all of it per class.
 
+### Exception for 4to: honest rivals you can lose against (2026-10, a pilot hypothesis)
+
+Principle 3's "no losing" and Principle 4's dynamic-difficulty rivals, above, are the rule for 1ro–3ro, which keeps the rubber band unchanged. **For 4to (9–10 years old) only**, the Copa de 4to (`feat/copa-4to`, C02–C04) departs from that rule on purpose: its two kart-race rivals and the Arcade's typing-race rivals drive at a fixed, honest pace, independent of the child, so a slow or concept-wrong program can really finish 2nd or 3rd — the result screen shows the real place, the margin, and why ("te faltaron 3 s — el zorro usó turbo en la recta"), with "¡Revancha!" to try again. The rivals are always animals (a fox, a coati…), never a classmate, and there is still no ranking anyone else can see — only the no-losing part of Principle 3 is relaxed for this one grade, not the no-rankings part.
+
+**Why.** The first half of 4to (2026-10-20, 25 children) explicitly noticed that every rival always let them win, and said this emptied winning of meaning for them — at 9–10, with a year of Scratch and "everybody wins" games behind them, the usual dynamic-difficulty rubber band read as hollow rather than encouraging. The same children kept voluntarily replaying the one activity that was NOT rubber-banded in the same obvious way (the typing race, 92 unprompted "¡Otra carrera!"), which suggested a real result might be the more motivating choice for this specific age, not less.
+
+**Status: a pilot hypothesis, not an established finding.** Whether honest, losable rivals genuinely help this age group's engagement — rather than discouraging the weaker half of the class, who now lose more often — is exactly what the next 4to class's data should check before this exception is treated as settled or extended to another grade: voluntary revanchas and "¡Otra carrera!" counts (wanting to try again vs. giving up), and whether a child who loses a circuit keeps playing the Copa afterward rather than disengaging. `tools/analyze-playtest.mjs`'s "Copa de 4to" section reports all three per class.
+
 ## 8. Showcase (muestra) and its rehearsal
 
 - The current sheet 17 (favorites, family mode, garden tour, poster) is a good base but needs work.
