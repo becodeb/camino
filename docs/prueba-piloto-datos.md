@@ -1371,6 +1371,57 @@ Every run's end.
 #### `own_game_improve`
 "Mejorarlo en el taller" pressed (`{}`); the `step` free_play → workshop follows.
 
+### Copa de 4to (C03, not yet on the 4to route — C04 wires it in)
+
+Five kart circuits (`src/playtest/copa.ts` pure logic, `Copa.tsx` the
+screen), each one concept with a single empty slot pre-filled around it
+(never a blank tape): **1** sequence (the stretch's last arrow piece, a
+wrong guess bumps a bush), **2** `repetir` as the turbo (one long straight;
+single arrows work but are slower), **3** `si hay charco: despacio / si no:
+acelerá` (the one puddle piece left for the child), **4** `al aparecer un
+tronco → saltar` (the one log piece left), **5** the variable `vueltas` (a
+3-lap circuit; the slot is the number). Honest rivals only, like C02's
+block race and typing race: two fixed-pace animals (silver, gold — the fox
+is always gold), never the rubber band, so a concept-wrong program loses.
+Each circuit opens with its goal LARGE on screen and a short wordless
+ghost hint (the slot's shape, never the answer); graded help is two steps
+(a spoken hint, then the slot highlighted). The result podium shows the
+real place, the margin and a reason, with "¡Revancha!" (the exact same
+circuit) and "¡Siguiente circuito!"; a circuit counts as passed once
+finished, any place — a strip of the five shows the best medal earned on
+each so far.
+
+#### `copa_start`
+A circuit began (on screen).
+```
+{
+  circuit: 1 | 2 | 3 | 4 | 5,
+  variant: number           // with `circuit`, draws the circuit again (generateCircuit); 0 unless a future variant cycle is wired in
+}
+```
+
+#### `copa_end`
+A circuit's result (the child always finishes: never blocked by losing).
+```
+{
+  circuit: 1 | 2 | 3 | 4 | 5, variant: number,
+  place: 1 | 2 | 3,
+  margin_ms: number,
+  reason: 'no_turbo' | 'crashes' | 'skid' | 'log_hit' | 'wrong_laps' | 'slow_idle',  // circuit 1: crashes; 2: no_turbo; 3: skid; 4: log_hit; 5: wrong_laps; a slow but concept-right run: slow_idle; a clean 1st: the field still carries the reason the UI shows nothing for (place 1 reads as a plain win)
+  time_ms: number,          // the child's own finish time (no rubber band)
+  errors: number,           // wrong tries at the circuit's one slot before it was right (or the adult's reveal)
+  help_level: number,       // highest help level shown (0-2: hint, highlighted slot)
+  used_turbo?: boolean,     // circuit 2 only: the repeat block was used (vs single arrows)
+  concept_ok: boolean       // the slot ended up right, and not by the adult's skip
+}
+```
+
+#### `copa_revancha`
+"¡Revancha!" pressed: the same circuit (same seed) plays again.
+```
+{ circuit: 1 | 2 | 3 | 4 | 5 }
+```
+
 T42/T34 report (`tools/analyze-playtest.mjs`): an Arcade section with, per
 child, typing races (voluntary again, finished), best and median words per
 minute, right keys, and "Tu juego" runs and best; the motivation profiles
