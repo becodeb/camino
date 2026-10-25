@@ -148,7 +148,8 @@ export function generateCircuit(id: CircuitId, seed: number, variant = 0): Circu
   switch (id) {
     case 1: {
       const def = generateRace(1, s);
-      const road = def.stretches[def.stretches.length - 1].road;
+      // the longest stretch, so the slot is never the circuit's whole road (never a blank tape)
+      const road = def.stretches.reduce((best, st) => (st.road.length > best.road.length ? st : best), def.stretches[0]).road;
       return { kind: 'sequence', road, emptySlot: road.length - 1 };
     }
     case 2: {

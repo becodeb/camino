@@ -18,10 +18,14 @@ import { PreviewHost } from './screens/PreviewCard';
 import { levelById } from './game/levels';
 import { parseRoute, type Route } from './curriculum/route';
 import { PlaytestScreen } from './playtest/PlaytestScreen';
+import { Copa } from './playtest/Copa';
 import { PLAYTEST_BUILD, routeFor } from './playtest/mode';
 import { holdingHash } from './playtest/hashHold';
 import { DEBUG } from './screens/levelKit';
 import './ui/runtime';
+
+/** C03 dev-only entry, not on the real 4to route yet (C04): `?debug#/copa-dev` for screenshots. */
+const COPA_DEV_HASH = '#/copa-dev';
 
 function useHash() {
   const [hash, setHash] = useState(() => location.hash || '#/');
@@ -52,6 +56,7 @@ export function App() {
   // the playtest on screen holds the hash (its activities move by it): it stays on screen
   const route: Route = holdingHash() ? { screen: 'piloto' } : routeFor(hash, parseRoute);
   useEffect(() => { window.scrollTo(0, 0); }, [hash]);
+  if (DEBUG && hash.startsWith(COPA_DEV_HASH)) return <><InkDefs /><YearPlayer><Copa /></YearPlayer></>;
   return (
     <>
       <InkDefs />

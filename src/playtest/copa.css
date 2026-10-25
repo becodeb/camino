@@ -1,0 +1,49 @@
+/* Copa de 4to (C03): styling for the circuit intro, the hazard/laps
+   choices, the medal strip and the ghost-format hint. Everything else
+   (.sheet, .cut, .pp-page, .rc-podium…) is race.ts/race.css/playtest.css's
+   own, reused as-is. */
+
+.copa-page { gap: 10px; }
+.copa-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 18px; }
+.copa-bar-title { font-size: 1.1rem; }
+.copa-bar-actions { display: flex; gap: 8px; }
+
+.copa-intro { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 40px 20px; min-height: 55vh; }
+.copa-goal { font-size: clamp(2rem, 5vw, 3.2rem); text-align: center; margin: 0; line-height: 1.15; }
+.copa-start-btn { font-size: 1.4rem; padding: 14px 32px; }
+
+.copa-ghost { display: flex; gap: 14px; opacity: 0.55; }
+.copa-ghost-slot { width: 64px; height: 48px; border: 3px dashed #8a8475; border-radius: 10px; }
+.copa-ghost-q { font-size: 2.4rem; color: #8a8475; }
+.copa-ghost-nums { gap: 10px; }
+.copa-ghost-num { width: 44px; height: 44px; display: grid; place-items: center; border: 3px dashed #8a8475; border-radius: 50%; font-size: 1.3rem; color: #8a8475; }
+.copa-ghost-two { gap: 20px; }
+.copa-ghost-choice { width: 90px; height: 44px; border: 3px dashed #8a8475; border-radius: 22px; }
+
+.copa-circuit { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 34px; padding: 18px; min-height: 60vh; }
+.copa-road { width: min(900px, 94%); display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px; }
+
+.copa-pieces { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+.copa-piece { position: relative; width: 110px; height: 88px; display: grid; place-items: center; border: 4px solid #2b2622; border-radius: 16px; background: #f4efe2; }
+.copa-piece.is-slot { border-color: #cc4125; box-shadow: 0 0 0 6px rgba(204, 65, 37, 0.25); }
+.copa-piece.is-shake { animation: copa-shake 0.5s; }
+.copa-piece-ok { position: absolute; bottom: 4px; right: 8px; color: #3a7d3a; font-weight: bold; font-size: 1.3rem; }
+.copa-piece-slot-mark { position: absolute; top: -22px; font-size: 2.1rem; color: #cc4125; font-weight: bold; }
+@keyframes copa-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+
+.copa-choices { display: flex; gap: 22px; }
+.copa-choice-btn { font-size: 1.7rem; padding: 18px 36px; min-width: 170px; }
+.copa-laps-btn { font-size: 2rem; min-width: 90px; }
+.copa-lap-label { font-size: 1.6rem; margin: 6px 0 0; }
+.copa-lap-blank { display: inline-block; min-width: 1.4em; text-align: center; color: #cc4125; }
+
+.copa-highlight { font-size: 1.3rem; color: #cc4125; font-weight: bold; }
+
+.copa-strip { display: flex; gap: 10px; margin-top: 10px; }
+.copa-strip-dot { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; border: 3px solid #8a8475; background: #f4efe2; font-weight: bold; color: #8a8475; }
+.copa-strip-dot.is-current { border-color: #2b2622; }
+.copa-strip-dot.is-medal-1 { background: #f0d27a; border-color: #b8860b; color: #2b2622; }
+.copa-strip-dot.is-medal-2 { background: #d8d8e0; border-color: #8a8a99; color: #2b2622; }
+.copa-strip-dot.is-medal-3 { background: #e0b088; border-color: #a06030; color: #2b2622; }
+
+.copa-result .rc-honest-line { font-size: clamp(1.4rem, 3vw, 2rem); }
