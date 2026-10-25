@@ -50,7 +50,7 @@ const ACTIVITY_WORD: Record<string, string> = {
   editor: 'Hacer un nivel', corkboard: 'La cartelera', rule_game: 'El juego de reglas', game_maker: 'Hacer tu juego', text_probe: 'Bloques y texto', race: 'La carrera', workshop: 'El taller de juegos',
   typing_race: 'La carrera de teclas', own_game: 'Tu juego',
   // T43: 1ro's arcade
-  recipe: 'La receta del monstruo', dance: 'Copiá el baile', buddy: 'Tu personaje', games: 'Los juegos del monstruo',
+  recipe: 'La receta del monstruo', dance: 'Copiá el baile', oops: '¿Qué salió mal?', buddy: 'Tu personaje', games: 'Los juegos del monstruo',
 };
 
 export function surveyQuestions(activities: readonly string[], grade = 1): Question[] {

@@ -117,11 +117,12 @@ function Limb({ d, fill, w = 18 }: { d: string; fill: string; w?: number }) {
  * The posable monster, feet at (0, 0). `face` its expression; `look` where
  * its eyes go (x, y in −1…1); `hand` something it holds in its right hand
  * (drawn at the hand, upright); `wear` drawn over the body (clothes, in
- * body coordinates, before the arms); `feet` drawn over each foot (socks,
+ * body coordinates, before the arms); `over` drawn on top of the body and
+ * the face, unclipped (a hat, a scarf, sunglasses); `feet` drawn over each foot (socks,
  * shoes), `(side) => node` at the foot's centre.
  */
-export function Puppet({ p, face = 'watch', look = [0, 0], hand, handL, wear, feet, className }: {
-  p: PoseParams; face?: Face; look?: [number, number]; hand?: ReactNode; handL?: ReactNode; wear?: ReactNode; feet?: (side: -1 | 1) => ReactNode; className?: string;
+export function Puppet({ p, face = 'watch', look = [0, 0], hand, handL, wear, over, feet, className }: {
+  p: PoseParams; face?: Face; look?: [number, number]; hand?: ReactNode; handL?: ReactNode; wear?: ReactNode; over?: ReactNode; feet?: (side: -1 | 1) => ReactNode; className?: string;
 }) {
   const uid = useId().replace(/:/g, '');
   const c = TONE;
@@ -155,8 +156,6 @@ export function Puppet({ p, face = 'watch', look = [0, 0], hand, handL, wear, fe
           <path d={blob(p.lf[0] - 4, p.lf[1] - 6, 28, 13, { seed: 3, wob: 0.06 })} fill={c.foot} stroke={INK} strokeWidth={SW} />
           <path d={blob(p.rf[0] + 4, p.rf[1] - 6, 28, 13, { seed: 4, wob: 0.06 })} fill={c.foot} stroke={INK} strokeWidth={SW} />
         </g>
-        {feet && <g transform={`translate(${p.lf[0] - 4} ${p.lf[1] - 6})`}>{feet(-1)}</g>}
-        {feet && <g transform={`translate(${p.rf[0] + 4} ${p.rf[1] - 6})`}>{feet(1)}</g>}
         <g transform={`translate(0 ${(-p.hip).toFixed(1)}) rotate(${p.lean.toFixed(1)} 0 -90)`}>
           <g transform={`scale(${p.sx.toFixed(3)} ${p.sy.toFixed(3)})`}>
             <g filter="url(#rough)" strokeLinejoin="round" strokeLinecap="round">
@@ -174,6 +173,7 @@ export function Puppet({ p, face = 'watch', look = [0, 0], hand, handL, wear, fe
               {(face === 'yay' || face === 'dance') && <ellipse cx={56} cy={-98} rx={13} ry={8} fill="#e7a3a0" opacity={0.75} />}
             </g>
             <FaceArt face={face} look={look} />
+            {over}
           </g>
           <g filter="url(#rough)">
             <Limb d={L.d} fill={c.body} />
@@ -184,6 +184,9 @@ export function Puppet({ p, face = 'watch', look = [0, 0], hand, handL, wear, fe
           {handL && <g transform={`translate(${L.x.toFixed(1)} ${L.y.toFixed(1)})`}>{handL}</g>}
           {hand && <g transform={`translate(${R.x.toFixed(1)} ${R.y.toFixed(1)})`}>{hand}</g>}
         </g>
+        {/* socks and shoes over the legs (a sock's cuff goes up the leg) */}
+        {feet && <g transform={`translate(${p.lf[0] - 4} ${p.lf[1] - 6})`}>{feet(-1)}</g>}
+        {feet && <g transform={`translate(${p.rf[0] + 4} ${p.rf[1] - 6})`}>{feet(1)}</g>}
       </g>
     </g>
   );

@@ -9,14 +9,14 @@
 // the registry there; nothing else changes.
 
 /** Every monster game. */
-export const GAME_IDS = ['recipe', 'dance'] as const;
+export const GAME_IDS = ['recipe', 'dance', 'oops'] as const;
 export type GameId = typeof GAME_IDS[number];
 
 /**
  * The guided first pass, in order: every game once, short. T45 ("Copiá el
  * baile"), T46 ("¿Qué salió mal?") and T47 ("Tocá y pasa") slot in here.
  */
-export const GUIDED: readonly GameId[] = ['recipe', 'dance'];
+export const GUIDED: readonly GameId[] = ['recipe', 'dance', 'oops'];
 
 /** Rounds of each game in the guided pass (the arcade's games are endless). */
 export const GUIDED_ROUNDS = 3;

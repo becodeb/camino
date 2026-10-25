@@ -177,7 +177,8 @@ export function DanceGame({ mode, startTier, rounds, done, roundWon, stopAfterRo
     move(REST, 'watch');
     glog.roundStart(n, t);
     reached?.(t);
-    later(() => show(r.seq), 700);
+    // in the show's own bag: skipping the show (checks, the demo bar) cancels it too
+    later(() => show(r.seq), 700, s.show);
   }
 
   useEffect(() => {

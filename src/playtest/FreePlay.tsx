@@ -38,6 +38,7 @@ import { SheetScreen } from '../screens/SheetScreen';
 import { SeedPouch } from '../screens/yearKit';
 import { ThenArrow } from '../ui/art';
 import { useMuted } from '../ui/mute';
+import { isVoiceOff } from '../ui/voice';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { usePlaytest } from './context';
 import { activityFor, budgetFrom, budgetVerdict, menuFor, MENU_LINES, RACE_START_TIER, type Activity, type ActivityId } from './freePlay';
@@ -317,7 +318,7 @@ export function FreePlay() {
     return <Cheer line={MENU_LINES.over} say={MENU_LINES.over} done={api.next} />;
   }
   if (view.kind === 'menu') {
-    return <Menu key={view.n} cards={menu} first={view.n === 0} onPick={pick} arcade={is4to(api.flow)} />;
+    return <Menu key={view.n} cards={menu} first={view.n === 0} onPick={pick} arcade={is4to(api.flow)} short={is1ro(api.flow)} />;
   }
 
   const a = view.a;
@@ -410,14 +411,17 @@ function MenuTask() {
   );
 }
 
-function Menu({ cards, first, onPick, arcade }: { cards: Activity[]; first: boolean; onPick: (a: Activity) => void; arcade?: boolean }) {
+function Menu({ cards, first, onPick, arcade, short }: { cards: Activity[]; first: boolean; onPick: (a: Activity) => void; arcade?: boolean; short?: boolean }) {
   const rootRef = useRef<HTMLElement>(null);
   const ghost = useGhost(rootRef);
   const [lit, setLit] = useState<string | null>(null);
   const held = useRef<{ id: string; t: number; fired: boolean } | null>(null);
   // T41: 4to's Arcade opens with its name
   const opener = arcade ? MENU_LINES.arcade : first ? MENU_LINES.first : MENU_LINES.again;
-  const all = [opener, ...cards.map((c) => c.say)].join(' ');
+  // T45/T46: 1ro's arcade has six cards; with nothing to hear (muted, or the voice off) the line on screen is just
+  // the question (every card's name in capitals would not fit the bar); holding a card still says its name
+  const silent = useMuted() || isVoiceOff();
+  const all = short && silent ? opener : [opener, ...cards.map((c) => c.say)].join(' ');
 
   // said when it opens: the question, then each card's name while it glows
   useEffect(() => {

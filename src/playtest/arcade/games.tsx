@@ -13,6 +13,8 @@ import { RecipeGame } from './Recipe';
 import { RECIPE_MAX_TIER } from './recipe';
 import { DanceGame } from './Dance';
 import { DANCE_MAX_TIER } from './dance';
+import { OopsGame } from './Oops';
+import { OOPS_MAX_TIER } from './oops';
 
 export interface GameEntry {
   Component: ComponentType<GameProps>;
@@ -22,6 +24,7 @@ export interface GameEntry {
 export const GAMES: Record<GameId, GameEntry> = {
   recipe: { Component: RecipeGame, maxTier: RECIPE_MAX_TIER },
   dance: { Component: DanceGame, maxTier: DANCE_MAX_TIER },
+  oops: { Component: OopsGame, maxTier: OOPS_MAX_TIER },
 };
 
 let memory: { sid: string; plays: Partial<Record<GameId, number>>; reached: Partial<Record<GameId, number>> } | null = null;
