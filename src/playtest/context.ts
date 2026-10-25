@@ -68,6 +68,8 @@ export interface PlaytestApi {
   arcade(to: 'workshop' | 'free_play' | 'wardrobe'): void;
   /** T39 (4to): the Workshop's challenges 1–5 are done: the Arcade opens (and the green flag). */
   openArcade(): void;
+  /** T43 (1ro): the adult corner menu opens the ladder (it left 1ro's route), or goes back to the arcade. */
+  adultGoto(to: import('./flow').AdultGotoTarget): void;
 }
 
 export const PlaytestContext = createContext<PlaytestApi | null>(null);

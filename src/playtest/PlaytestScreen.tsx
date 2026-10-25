@@ -45,7 +45,7 @@ import { nameParamFromUrl, nameScreenOn } from './childName';
 import { holdHash } from './hashHold';
 import { AdultControls } from './AdultControls';
 import { PlaytestContext, type AdultHelpKind, type AdultHelpVia, type HandState, type LevelTrack, type PlaytestApi } from './context';
-import { initialFlow, is4to, isLiveStep, reduce, routeOf, visited, wrapPending, type FlowAction, type FlowState, type StepId, type Transition } from './flow';
+import { classicRouteFromUrl, initialFlow, is4to, isLiveStep, reduce, routeOf, visited, wrapPending, type FlowAction, type FlowState, type StepId, type Transition } from './flow';
 import { savePreviousChild } from './previousChild';
 import { ClassEndBanner, FiveMinBanner, GamesAllBanner, RouteFlag, isLateEndClass } from './classroom';
 import { DemoBar } from './DemoBar';
@@ -193,8 +193,8 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     setSession(tel.startSession(input));
     // T38: decided once, right as the session starts (the grade is known, nothing else is yet)
     const nameOn = nameScreenOn(input.grade, nameParamFromUrl(typeof location !== 'undefined' ? location.search : ''));
-    // T39: the grade picks the route (4to's own), once
-    apply({ type: 'next', nameOn, grade: input.grade });
+    // T39: the grade picks the route (4to's own; T43: 1ro's own, unless the link says `ruta=clasica`), once
+    apply({ type: 'next', nameOn, grade: input.grade, classic: classicRouteFromUrl(typeof location !== 'undefined' ? location.search : '') });
   }, [tel, apply]);
 
   const newSession = useCallback(() => {
@@ -284,6 +284,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     demoRouteDone: () => { apply({ type: 'route_done' }); },
     arcade: (to) => { apply({ type: 'arcade', to }); },
     openArcade: () => { apply({ type: 'arcade_open', via: 'workshop' }); },
+    adultGoto: (to) => { apply({ type: 'adult_goto', to }); },
     demoEnd: () => { apply({ type: 'goto', to: 'goodbye' }); },
   }), [session, flow, apply, log, hand, raiseHand, lowerHand, adultHelp, toggleCaptions, tel, endSession]);
 
@@ -413,7 +414,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
   return (
     <PlaytestContext.Provider value={api}>
       <PlayerContext.Provider value={useYearPlayer()}>
-        <div className={`piloto step-${flow.step}${flagOn ? ' route-done' : ''}${session?.demo ? ' is-demo' : ''}`} data-step={flow.step}>
+        <div className={`piloto step-${flow.step}${flagOn ? ' route-done' : ''}${session?.demo ? ' is-demo' : ''}`} data-step={flow.step} data-route={flow.route}>
           <View key={flow.visits.length} start={start} newSession={newSession} />
           {session && flow.step !== 'class_end' && <Captions step={flow.step} />}
           {flagOn && <RouteFlag />}

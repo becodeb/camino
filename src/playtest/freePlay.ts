@@ -11,11 +11,17 @@
 // Game Workshop, first on 4to's and 5to's menus (T39 makes it 4to's
 // mandatory step). T41: 4to's Arcade adds "Carrera de teclas" (TypingRace.tsx,
 // the race driven by typing) and "Tu juego" (OwnGame.tsx, the child's own
-// Workshop game) in front.
+// Workshop game) in front. T43: 1ro's free play is its arcade of short
+// monster games (src/playtest/arcade/), with the favourites the data showed
+// (the character and its confetti, the wardrobe, the typing letters); La
+// carrera and the sheet left 1ro's menu (the race opens from the adult menu).
 
 import { sheetByN } from '../curriculum/primer';
+import type { GameId } from './arcade/kit';
 
-export type ActivityId = 'sheet' | 'recess' | 'guardas' | 'editor' | 'rule_game' | 'game_maker' | 'text_probe' | 'race' | 'workshop' | 'wardrobe' | 'typing_race' | 'own_game';
+export type ActivityId = 'sheet' | 'recess' | 'guardas' | 'editor' | 'rule_game' | 'game_maker' | 'text_probe' | 'race' | 'workshop' | 'wardrobe' | 'typing_race' | 'own_game'
+  // T43: 1ro's arcade: the monster games (their ids are the games'), and the character with its confetti
+  | GameId | 'buddy';
 export type ProbeId = Extract<ActivityId, 'game_maker' | 'text_probe' | 'workshop'>;
 
 /**
@@ -23,7 +29,9 @@ export type ProbeId = Extract<ActivityId, 'game_maker' | 'text_probe' | 'worksho
  * T39 (4to's Arcade): `step`, a flow step of its own (the Workshop, the wardrobe): the card moves the flow there.
  * T41 (4to's Arcade): `typing`, the typing race; `own`, the child's own Workshop game.
  */
-export type ActivityKind = { sheet: number } | { rules: true } | { probe: ProbeId } | { race: true } | { step: 'workshop' | 'wardrobe' } | { typing: true } | { own: true };
+export type ActivityKind = { sheet: number } | { rules: true } | { probe: ProbeId } | { race: true } | { step: 'workshop' | 'wardrobe' } | { typing: true } | { own: true }
+  /** T43: a monster game of 1ro's arcade; the character choice again (tap it: confetti). */
+  | { game: GameId } | { buddy: true };
 
 export interface Activity {
   id: ActivityId;
@@ -45,7 +53,9 @@ export const GUARDAS_SHEET = 14;
 /** What each grade's menu shows, in order (a probe only when it is registered). T33: the race first for 1ro and 2do. */
 export const MENU: Record<number, readonly ActivityId[]> = {
   // 2026-10-20: 1ro ran out of activities; the typing race (letters, Cokitos' moto race) joins its menu.
-  1: ['race', 'typing_race', 'sheet', 'recess', 'guardas', 'editor'],
+  // T43 (2026-10-25): 1ro's arcade: the monster games first, then the favourites (the character, the wardrobe, the
+  // typing letters). La carrera (arrow karts) left it: nobody understood the arrows (it opens from the adult menu).
+  1: ['recipe', 'buddy', 'wardrobe', 'typing_race'],
   2: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   3: ['rule_game', 'sheet', 'recess', 'editor'],
   // T39/T41: 4to's free play is the Arcade (flow.ts): the typing race, the child's own game, La carrera from tier 4,
@@ -53,6 +63,9 @@ export const MENU: Record<number, readonly ActivityId[]> = {
   4: ['typing_race', 'own_game', 'race', 'workshop', 'wardrobe'],
   5: ['workshop', 'rule_game', 'editor', 'recess', 'text_probe'],
 };
+
+/** T43: 1ro's menu on the classic route (`?ruta=clasica`, flow.ts): the one it had on 2026-10-20. */
+export const MENU_1RO_CLASSIC: readonly ActivityId[] = ['race', 'typing_race', 'sheet', 'recess', 'guardas', 'editor'];
 
 const title = (n: number) => sheetByN(n)?.title ?? '';
 
@@ -78,6 +91,9 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
     // T41: 4to's Arcade
     case 'typing_race': return { id, kind: { typing: true }, say: grade === 1 ? 'Carrera de teclas: apretá las letras y ganá la carrera.' : 'Carrera de teclas: escribí las palabras y ganá la carrera.', caption: 'Carrera de teclas' };
     case 'own_game': return { id, kind: { own: true }, say: 'Tu juego: jugá el juego que hiciste en el taller.', caption: 'Tu juego' };
+    // T43: 1ro's arcade
+    case 'recipe': return { id, kind: { game: 'recipe' }, say: 'La receta del monstruo: armale el sándwich que quiere.', caption: 'La receta' };
+    case 'buddy': return { id, kind: { buddy: true }, say: 'Tu personaje: tocalo y festeja.', caption: 'Tu personaje' };
     default: return null;
   }
 }
@@ -89,8 +105,8 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
  * it is left off 1ro's menu while muted rather than built out as a visual
  * activity (the smaller change, and 1ro has three other cards already).
  */
-export function menuFor(grade: number, hasProbe: (id: ProbeId) => boolean, muted = false): Activity[] {
-  return (MENU[grade] ?? MENU[1])
+export function menuFor(grade: number, hasProbe: (id: ProbeId) => boolean, muted = false, classic1ro = false): Activity[] {
+  return (grade === 1 && classic1ro ? MENU_1RO_CLASSIC : MENU[grade] ?? MENU[1])
     .map((id) => activityFor(id, grade))
     .filter((a): a is Activity => !!a && (!('probe' in a.kind) || hasProbe(a.kind.probe)))
     .filter((a) => !(muted && grade === 1 && a.id === 'recess'));

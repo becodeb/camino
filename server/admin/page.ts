@@ -258,7 +258,7 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
   var STEP = {
     setup: 'preparación', character: 'personaje', tool_check: 'probar los botones', ladder: 'escalera de niveles',
     free_play: 'juego libre', typing: 'Teclas del bosque', wardrobe: 'vestidor', survey: 'encuesta', goodbye: 'despedida',
-    class_end: 'actividad terminada', name: 'nombre', workshop: 'taller de juegos'
+    class_end: 'actividad terminada', name: 'nombre', workshop: 'taller de juegos', games: 'juegos del monstruo'
   };
   // T39: 4to's live detail: the ladder's rung, the Workshop's challenge, the Arcade
   function detail(s) {

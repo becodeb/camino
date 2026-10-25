@@ -43,7 +43,8 @@ import { createHold } from './hold';
 import { useSyncStatus } from './runtime';
 import { STEP_NAME } from './labels';
 import { RaisedHand } from './RaisedHand';
-import { openProbe } from './probes';
+import { openActivity, openProbe } from './probes';
+import { is1ro } from './flow';
 import { getPreviousChild, type PreviousChild } from './previousChild';
 import { setAdultOverride } from './soundSetting';
 import { setDeviceVoice } from './voiceSetting';
@@ -289,8 +290,12 @@ function AdultMenu({ onClose }: { onClose: () => void }) {
           {prev && <button type="button" className="pp-adult-btn cut" data-act="previous-form" onClick={() => setPrevForm(true)}>Comentario del chico anterior{prevSaved ? ' ✓' : ''}</button>}
           <SoundToggle />
           <VoiceToggle />
-          {step === 'free_play' && <button type="button" className="pp-adult-btn cut" data-act="open-game-maker" onClick={() => { openProbe('game_maker'); onClose(); }}>Abrir «Hacé tu juego»</button>}
-          {step === 'free_play' && <button type="button" className="pp-adult-btn cut" data-act="open-text-probe" onClick={() => { openProbe('text_probe'); onClose(); }}>Abrir «Del bloque al texto»</button>}
+          {/* T43: La carrera and the ladder left 1ro's route and menu; the adult can still open them (and the 4to/5to probes leave 1ro's list, so it still fits 768 px) */}
+          {step === 'free_play' && is1ro(api.flow) && <button type="button" className="pp-adult-btn cut" data-act="open-race" onClick={() => { openActivity('race'); onClose(); }}>Abrir «La carrera»</button>}
+          {(step === 'free_play' || step === 'games') && is1ro(api.flow) && <button type="button" className="pp-adult-btn cut" data-act="open-ladder" onClick={() => { api.adultGoto('ladder'); onClose(); }}>Ir a la escalera de niveles</button>}
+          {step === 'ladder' && is1ro(api.flow) && <button type="button" className="pp-adult-btn cut" data-act="back-arcade" onClick={() => { api.adultGoto('free_play'); onClose(); }}>Volver a los juegos</button>}
+          {step === 'free_play' && !is1ro(api.flow) && <button type="button" className="pp-adult-btn cut" data-act="open-game-maker" onClick={() => { openProbe('game_maker'); onClose(); }}>Abrir «Hacé tu juego»</button>}
+          {step === 'free_play' && !is1ro(api.flow) && <button type="button" className="pp-adult-btn cut" data-act="open-text-probe" onClick={() => { openProbe('text_probe'); onClose(); }}>Abrir «Del bloque al texto»</button>}
           {canSkip(step) && <button type="button" className="pp-adult-btn cut" data-act="skip" onClick={() => { api.skip(); onClose(); }}>Saltar este paso</button>}
           {canEndNow(step) && (
             confirmEnd

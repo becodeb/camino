@@ -49,6 +49,8 @@ const ACTIVITY_WORD: Record<string, string> = {
   wardrobe: 'El vestidor', free_play: 'Jugar libre', sheet: 'Una hoja', recess: 'La música', guardas: 'Las guardas',
   editor: 'Hacer un nivel', corkboard: 'La cartelera', rule_game: 'El juego de reglas', game_maker: 'Hacer tu juego', text_probe: 'Bloques y texto', race: 'La carrera', workshop: 'El taller de juegos',
   typing_race: 'La carrera de teclas', own_game: 'Tu juego',
+  // T43: 1ro's arcade
+  recipe: 'La receta del monstruo', buddy: 'Tu personaje', games: 'Los juegos del monstruo',
 };
 
 export function surveyQuestions(activities: readonly string[], grade = 1): Question[] {
