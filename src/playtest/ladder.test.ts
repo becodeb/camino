@@ -142,11 +142,11 @@ describe('where the ladder goes', () => {
 });
 
 describe('T39: 4to\'s long ladder', () => {
-  it('only 4to gets it: up to 18 items, 15 minutes (16 for an item open then), rung 18 on top', () => {
+  it('only 4to gets it: up to 18 items, 8 minutes (9 for an item open then, C04: same as every other grade), rung 18 on top', () => {
     expect([1, 2, 3, 5].map((g) => !!startLadder(g, T0).long)).toEqual([false, false, false, false]);
     expect(startLadder(4, T0).long).toBe(true);
     expect(MAX_ITEMS_LONG).toBe(18);
-    expect(CAPS_LONG).toEqual({ itemMs: ITEM_MS, idleMs: IDLE_MS, ladderMs: 15 * 60_000, hardMs: 16 * 60_000 });
+    expect(CAPS_LONG).toEqual({ itemMs: ITEM_MS, idleMs: IDLE_MS, ladderMs: MAX_MS, hardMs: HARD_MS });
     expect(capsFrom('', true)).toBe(CAPS_LONG);
     expect(capsFrom('?caps=fast', true)).toBe(FAST_CAPS_LONG);
     expect(capsFrom('', false)).toBe(CAPS);
@@ -183,15 +183,15 @@ describe('T39: 4to\'s long ladder', () => {
     expect(rungOf(5).variant).toBeUndefined();
   });
 
-  it('stops at 18 items or 15 minutes, not before', () => {
+  it('stops at 18 items or 8 minutes, not before', () => {
     let s = startLadder(4, T0);
     // a slow climber: every rung needs its second item
     for (let r = 7; r <= 15; r++) s = play(s, fail(r), { rung: r, check: 'climb', result: 'pass', variant: 1 });
     expect(s.items).toHaveLength(18);
     expect(decide(s, T0, CAPS_LONG)).toEqual({ stop: 'max_items' });
     const t = play(startLadder(4, T0), pass(7), pass(8));
-    expect(decide(t, T0 + 15 * 60_000 - 1, CAPS_LONG)).toEqual({ rung: 9, check: 'climb' });
-    expect(decide(t, T0 + 15 * 60_000, CAPS_LONG)).toEqual({ stop: 'max_time' });
+    expect(decide(t, T0 + MAX_MS - 1, CAPS_LONG)).toEqual({ rung: 9, check: 'climb' });
+    expect(decide(t, T0 + MAX_MS, CAPS_LONG)).toEqual({ stop: 'max_time' });
   });
 });
 

@@ -15,15 +15,16 @@
 
 import { sheetByN } from '../curriculum/primer';
 
-export type ActivityId = 'sheet' | 'recess' | 'guardas' | 'editor' | 'rule_game' | 'game_maker' | 'text_probe' | 'race' | 'workshop' | 'wardrobe' | 'typing_race' | 'own_game';
+export type ActivityId = 'sheet' | 'recess' | 'guardas' | 'editor' | 'rule_game' | 'game_maker' | 'text_probe' | 'race' | 'workshop' | 'wardrobe' | 'typing_race' | 'own_game' | 'copa';
 export type ProbeId = Extract<ActivityId, 'game_maker' | 'text_probe' | 'workshop'>;
 
 /**
  * How an activity is played: a sheet of 1ro's year (its pages move by the hash), the rule game's pages, a probe's component, or the race (T33).
  * T39 (4to's Arcade): `step`, a flow step of its own (the Workshop, the wardrobe): the card moves the flow there.
  * T41 (4to's Arcade): `typing`, the typing race; `own`, the child's own Workshop game.
+ * C04 (4to's Arcade): `step: 'copa'`, "Tu mejor tiempo" — back to the Copa's remaining circuits.
  */
-export type ActivityKind = { sheet: number } | { rules: true } | { probe: ProbeId } | { race: true } | { step: 'workshop' | 'wardrobe' } | { typing: true } | { own: true };
+export type ActivityKind = { sheet: number } | { rules: true } | { probe: ProbeId } | { race: true } | { step: 'workshop' | 'wardrobe' | 'copa' } | { typing: true } | { own: true };
 
 export interface Activity {
   id: ActivityId;
@@ -48,9 +49,10 @@ export const MENU: Record<number, readonly ActivityId[]> = {
   1: ['race', 'typing_race', 'sheet', 'recess', 'guardas', 'editor'],
   2: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   3: ['rule_game', 'sheet', 'recess', 'editor'],
-  // T39/T41: 4to's free play is the Arcade (flow.ts): the typing race, the child's own game, La carrera from tier 4,
-  // back to the Workshop, the wardrobe. No xylophone, no 1ro sheet, no rule game, no old game maker.
-  4: ['typing_race', 'own_game', 'race', 'workshop', 'wardrobe'],
+  // C04: 4to's Arcade (flow.ts) is the typing race, "Tu mejor tiempo" (back to the Copa's remaining circuits),
+  // the wardrobe, and the old Workshop as an optional card. No xylophone, no 1ro sheet, no rule game, no old game
+  // maker, no La carrera (the Copa is the kart race now) and no "Tu juego" (the Workshop it depends on is optional).
+  4: ['typing_race', 'copa', 'wardrobe', 'workshop'],
   5: ['workshop', 'rule_game', 'editor', 'recess', 'text_probe'],
 };
 
@@ -78,6 +80,8 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
     // T41: 4to's Arcade
     case 'typing_race': return { id, kind: { typing: true }, say: grade === 1 ? 'Carrera de teclas: apretá las letras y ganá la carrera.' : 'Carrera de teclas: escribí las palabras y ganá la carrera.', caption: 'Carrera de teclas' };
     case 'own_game': return { id, kind: { own: true }, say: 'Tu juego: jugá el juego que hiciste en el taller.', caption: 'Tu juego' };
+    // C04: back to the Copa's remaining circuits; its own medal strip (Copa.tsx) shows the "best time" per circuit
+    case 'copa': return { id, kind: { step: 'copa' }, say: 'Tu mejor tiempo: volvé a la Copa y segui corriendo los circuitos.', caption: 'Tu mejor tiempo' };
     default: return null;
   }
 }

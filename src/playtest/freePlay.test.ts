@@ -12,8 +12,8 @@ describe('the free-play menu', () => {
     expect(menuFor(1, none).map((a) => a.id)).toEqual(['race', 'typing_race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(2, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(3, none).map((a) => a.id)).toEqual(['rule_game', 'sheet', 'recess', 'editor']);
-    // T39/T41: 4to's free play is the Arcade: the typing race, the child's own game, La carrera, back to the Workshop (a flow step, no probe needed), the wardrobe
-    expect(menuFor(4, none).map((a) => a.id)).toEqual(['typing_race', 'own_game', 'race', 'workshop', 'wardrobe']);
+    // C04: 4to's free play is the Arcade: the typing race, "Tu mejor tiempo" (back to the Copa), the wardrobe, the optional Workshop (all flow steps, no probe needed)
+    expect(menuFor(4, none).map((a) => a.id)).toEqual(['typing_race', 'copa', 'wardrobe', 'workshop']);
     expect(menuFor(5, none).map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess']);
   });
 
@@ -26,7 +26,7 @@ describe('the free-play menu', () => {
   });
 
   it('shows a probe\'s card once its component is registered, on its grade only', () => {
-    expect(menuFor(4, all).map((a) => a.id)).toEqual(['typing_race', 'own_game', 'race', 'workshop', 'wardrobe']);
+    expect(menuFor(4, all).map((a) => a.id)).toEqual(['typing_race', 'copa', 'wardrobe', 'workshop']);
     expect(menuFor(5, (id: ProbeId) => id === 'text_probe').map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess', 'text_probe']);
     expect(menuFor(5, all).map((a) => a.id)).toEqual(['workshop', 'rule_game', 'editor', 'recess', 'text_probe']);
     expect(menuFor(3, all).map((a) => a.id)).not.toContain('workshop');
@@ -121,15 +121,17 @@ describe('the free-play time', () => {
   });
 });
 
-describe('T39: 4to\'s Arcade', () => {
-  it('no xylophone, no 1ro sheet editor, no rule game, no old game maker; the Workshop and the wardrobe are steps; the race from tier 4', async () => {
+describe('T39/C04: 4to\'s Arcade', () => {
+  it('no xylophone, no 1ro sheet editor, no rule game, no old game maker, no La carrera, no "Tu juego"; the Copa, the Workshop and the wardrobe are steps', async () => {
     const { activityFor, menuFor, RACE_START_TIER } = await import('./freePlay');
     const ids = menuFor(4, () => true).map((a) => a.id);
-    for (const gone of ['recess', 'editor', 'rule_game', 'game_maker', 'sheet']) expect(ids).not.toContain(gone);
+    for (const gone of ['recess', 'editor', 'rule_game', 'game_maker', 'sheet', 'race', 'own_game']) expect(ids).not.toContain(gone);
+    expect(activityFor('copa', 4)!.kind).toEqual({ step: 'copa' });
     expect(activityFor('workshop', 4)!.kind).toEqual({ step: 'workshop' });
     expect(activityFor('wardrobe', 4)!.kind).toEqual({ step: 'wardrobe' });
     // 5to keeps the Workshop as its free-play card
     expect(activityFor('workshop', 5)!.kind).toEqual({ probe: 'workshop' });
+    // T33: La carrera's own tier-4 start still works for whoever reaches it (no longer 4to's menu, but not removed)
     expect(RACE_START_TIER[4]).toBe(4);
     expect(RACE_START_TIER[1]).toBeUndefined();
   });

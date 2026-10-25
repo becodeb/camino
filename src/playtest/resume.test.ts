@@ -34,15 +34,15 @@ describe('resume after a reload', () => {
     expect(resumedPart('ladder')).toEqual({ items: [1] });
   });
 
-  it('T39: keeps 4to\'s own route and its open Arcade (the Workshop or the Arcade step resumes as such)', () => {
+  it('C04: keeps 4to\'s own route and its open Arcade (the Copa or the Arcade step resumes as such)', () => {
     let f = reduce(initialFlow(1000), { type: 'next', grade: 4, nameOn: true }, 2000).state;
     for (let i = 0; i < 4; i++) f = reduce(f, { type: 'next' }, 3000 + i * 1000).state;
-    f = reduce(f, { type: 'arcade_open', via: 'workshop' }, 9000).state;
-    expect(f).toMatchObject({ step: 'workshop', route: '4to', arcadeOpen: true, routeDone: true });
+    f = reduce(f, { type: 'arcade_open', via: 'copa' }, 9000).state;
+    expect(f).toMatchObject({ step: 'copa', route: '4to', arcadeOpen: true, routeDone: true });
     rememberFlow('s4', f, 10_000);
     resetResumeForTests(st);
     const r = takeResume('s4', 20_000)!;
-    expect(r.flow).toMatchObject({ step: 'workshop', route: '4to', arcadeOpen: true, routeDone: true });
+    expect(r.flow).toMatchObject({ step: 'copa', route: '4to', arcadeOpen: true, routeDone: true });
     // another grade's flow never gains a route
     rememberFlow('s5', walked(3), 21_000);
     resetResumeForTests(st);

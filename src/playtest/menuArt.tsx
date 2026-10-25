@@ -19,7 +19,7 @@ import { BossPageArt } from '../ui/forestArt';
 import { Sprout } from './round2Art';
 import { Pencil } from '../ui/workshopArt';
 import type { Activity } from './freePlay';
-import { RaceCardArt, TypingRaceCardArt } from './raceArt';
+import { CupIcon, RaceCardArt, TypingRaceCardArt } from './raceArt';
 import { OwnGameCardArt, WorkshopCardArt } from '../workshop/art';
 
 const INK = '#2b2622';
@@ -253,6 +253,8 @@ function CardArt({ a }: { a: Pick<Activity, 'id' | 'kind'> }) {
     // T41: 4to's Arcade
     case 'typing_race': return <TypingRaceCardArt />;
     case 'own_game': return <OwnGameCardArt />;
+    // C04: "Tu mejor tiempo" — the cup it's racing for
+    case 'copa': return <span className="pp-fp-copa"><CupIcon size={120} /></span>;
   }
 }
 

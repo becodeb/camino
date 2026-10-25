@@ -780,6 +780,9 @@ html.pp-demo .pad > .sheet { max-width: calc(100vw - var(--demo-w) - 36px - 2 * 
 .pp-own-task .pp-fp-art { width: 100%; height: 100%; max-width: none; }
 .pp-fp-wardrobe { display: grid; place-items: center; width: auto; height: var(--art-h); aspect-ratio: 260 / 190; max-width: calc((100vw - 190px) / 3); }
 .pp-fp-wardrobe svg { height: 82%; width: auto; }
+/* C04: "Tu mejor tiempo", the cup it's racing for */
+.pp-fp-copa { display: grid; place-items: center; width: auto; height: var(--art-h); aspect-ratio: 260 / 190; max-width: calc((100vw - 190px) / 3); }
+.pp-fp-copa svg { height: 82%; width: auto; }
 
 /* ------------------------------------------------ T39: 4to's long ladder: the climbing path beside the page */
 .pp-climb-wrap { display: grid; grid-template-columns: 112px minmax(0, 1fr); min-height: 100dvh; }

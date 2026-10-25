@@ -36,6 +36,7 @@ import { forgetRealtimeIntros } from '../screens/RealtimeLevel';
 import { forgetWorkshopGuides } from '../screens/WorkshopScreen';
 import { setUnlocks } from '../curriculum/rewards';
 import { forgetSilentDemos } from '../ui/silentDemo';
+import { resetCopaMemory } from './Copa';
 import { setSpeechFilter } from '../ui/speech';
 import { clearCaption, installCaptions, setCaptions } from './captions';
 import { Captions } from './Captions';
@@ -147,15 +148,15 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     setFlow(t.state);
     rememberFlow(tel.session?.id, t.state, now);
     const c = t.change;
-    // T39 (4to): the Arcade opened (the Workshop's challenges 1–5, "Juegos para todos", the demo)
+    // C04 (4to): the Arcade opened (the Copa's circuit 2, the Workshop's challenges 1–5, "Juegos para todos", the demo, the 20-minute timer)
     if (t.state.arcadeOpen && !prev.arcadeOpen) {
-      tel.log('arcade_open', { via: action.type === 'games_all' ? 'games_all' : action.type === 'route_done' ? 'demo' : 'workshop', step: prev.step });
+      tel.log('arcade_open', { via: action.type === 'games_all' ? 'games_all' : action.type === 'route_done' ? 'demo' : action.type === 'arcade_open' ? action.via : 'workshop', step: prev.step });
     }
     if (!c) {
-      // T39: 4to's green flag rises in the Workshop, with no step change
+      // C04: 4to's green flag rises in the Copa (or the Workshop), with no step change
       if (t.routeDoneNow) {
         const started = tel.session?.started_at ? Date.parse(tel.session.started_at) : now;
-        tel.log('route_done', { time_ms: now - started, via: 'workshop', survey_done: !!t.state.surveyDone });
+        tel.log('route_done', { time_ms: now - started, via: action.type === 'arcade_open' ? action.via : 'workshop', survey_done: !!t.state.surveyDone });
       }
       return t;
     }
@@ -188,6 +189,8 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     forgetRealtimeIntros();
     forgetWorkshopGuides();
     forgetSilentDemos();
+    // C04: a new child starts the Copa fresh too (its own module-cache, resume.ts's own parts are cleared by `start`'s session change)
+    resetCopaMemory();
     setHand(null);
     level.current = null;
     setSession(tel.startSession(input));
@@ -203,6 +206,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     setPageHooks(false);
     setBanner(null);
     setGamesAll(null);
+    resetCopaMemory();
     setHand(null);
     setCaptions(false);
     clearCaption();
@@ -283,7 +287,7 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
     demoGoto: (to) => { apply({ type: 'goto', to }); },
     demoRouteDone: () => { apply({ type: 'route_done' }); },
     arcade: (to) => { apply({ type: 'arcade', to }); },
-    openArcade: () => { apply({ type: 'arcade_open', via: 'workshop' }); },
+    openArcade: (via = 'workshop') => { apply({ type: 'arcade_open', via }); },
     demoEnd: () => { apply({ type: 'goto', to: 'goodbye' }); },
   }), [session, flow, apply, log, hand, raiseHand, lowerHand, adultHelp, toggleCaptions, tel, endSession]);
 
@@ -398,9 +402,9 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
       /** Straight to a step (screenshots, checks). */
       jump: (to: StepId) => { apply({ type: 'goto', to }); },
       routeDone: () => { apply({ type: 'route_done' }); },
-      /** T39 (4to): the Arcade opened as by the Workshop, and the moves between the Workshop and the Arcade. */
-      openArcade: () => { apply({ type: 'arcade_open', via: 'workshop' }); },
-      arcade: (to: 'workshop' | 'free_play' | 'wardrobe') => { apply({ type: 'arcade', to }); },
+      /** C04 (4to): the Arcade opened as by the Copa (or the Workshop), and the moves between them and the Arcade. */
+      openArcade: (via: 'workshop' | 'copa' = 'copa') => { apply({ type: 'arcade_open', via }); },
+      arcade: (to: 'workshop' | 'copa' | 'free_play' | 'wardrobe') => { apply({ type: 'arcade', to }); },
       /** Checks: the hand raised as after the third help step (the child's hold no longer raises it). */
       raiseHand: () => raiseHand('help_step_3'),
       start,

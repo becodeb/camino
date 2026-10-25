@@ -64,10 +64,10 @@ export interface PlaytestApi {
   demoGoto(step: import('./flow').StepId): void;
   demoRouteDone(): void;
   demoEnd(): void;
-  /** T39 (4to): the child moves between the Workshop, the Arcade and the Arcade's wardrobe. */
-  arcade(to: 'workshop' | 'free_play' | 'wardrobe'): void;
-  /** T39 (4to): the Workshop's challenges 1–5 are done: the Arcade opens (and the green flag). */
-  openArcade(): void;
+  /** C04 (4to): the child moves between the Copa, the (optional) Workshop, the Arcade and the Arcade's wardrobe. */
+  arcade(to: 'workshop' | 'copa' | 'free_play' | 'wardrobe'): void;
+  /** C04 (4to): the Copa's circuit 2 is done (or the Workshop's challenges 1–5, or the 20-minute timer): the Arcade opens (and the green flag). */
+  openArcade(via?: 'workshop' | 'copa'): void;
 }
 
 export const PlaytestContext = createContext<PlaytestApi | null>(null);

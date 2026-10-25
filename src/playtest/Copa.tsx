@@ -18,6 +18,22 @@
 //
 // Logged by the caller's `logger` prop: `copa_start`, `copa_end`,
 // `copa_revancha` (docs/prueba-piloto-datos.md).
+//
+// C04: the medal strip, best time per circuit and the replay variant (drawn
+// from the same seed plus `variant * 7919`, generateCircuit) survive both a
+// reload AND an ordinary trip to the Arcade and back (no reload). resume.ts's
+// own `parts` mechanism (rememberPart/resumedPart) is scoped to one step by
+// design — "emptied when the step changes" — so it cannot carry the Copa's
+// progress through the Arcade and back; a dedicated localStorage key
+// (COPA_KEY, below), looked up by session id and kept independent of
+// whatever step the reload happens to land on, plus an in-memory module
+// cache for a same-tab remount with no reload at all, does the real job.
+// The variant cycles by itself: whenever a circuit is started again
+// (¡Revancha!, or looping back to an already-medalled circuit from the
+// Arcade) rather than played for the first time, so a repeat never looks
+// identical to the last attempt. `onPhase` (optional) lets the caller
+// (CopaStep.tsx) know when it is safe to interrupt with the mid-class
+// survey: never while `'play'`.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { CritterId } from '../curriculum/motivation';
@@ -50,6 +66,73 @@ export interface CopaProps {
   logger?(type: string, payload: Record<string, unknown>): void;
   onCircuitDone?(circuit: CircuitId, result: CopaResult, medal: Medal): void;
   onExit?(): void;
+  /** C04: told every time the screen's own phase changes (a safe-to-interrupt moment is anything but `'play'`). */
+  onPhase?(phase: 'intro' | 'play' | 'result'): void;
+  /** C04: an extra button in the bar (CopaStep.tsx's "Ir al Arcade", once it is open), same spot as Workshop.tsx's own `barExtra`. */
+  barExtra?: ReactNode;
+  /** C04: the session id — the medals/best-times/variants store's own key, so a new child never inherits the last one's progress. */
+  sessionId?: string;
+}
+
+type Medals = Record<CircuitId, Medal>;
+type BestMs = Partial<Record<CircuitId, number>>;
+type Variants = Record<CircuitId, number>;
+interface CopaKept { id: CircuitId; medals: Medals; bestMs: BestMs; variants: Variants }
+const BLANK_MEDALS: Medals = { 1: undefined, 2: undefined, 3: undefined, 4: undefined, 5: undefined };
+const BLANK_VARIANTS: Variants = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+/**
+ * `resumedPart`/`rememberPart` (resume.ts) only restore a real page reload
+ * — by design, every other step's own "kept" state (free play's clock,
+ * the ladder's items) works the same way. But the Copa's screen unmounts
+ * and remounts every time the child leaves it for the Arcade and comes
+ * back (CopaStep.tsx is a flow step, and PlaytestScreen keys every step
+ * view by `visits.length`), with no reload in between — so a plain
+ * in-memory module cache carries the medals, best times and variants
+ * across those remounts too. PlaytestScreen.tsx clears it on a new session
+ * (`resetCopaMemory`), the same way it resets every other per-session
+ * module state (`forgetRealtimeIntros`, `setUnlocks(null)`, …).
+ */
+const COPA_KEY = 'camino.piloto.copa.v1';
+interface CopaStore { sid: string; at: number; kept: CopaKept }
+
+/** try/catch like every storage access in this app (resume.ts): a private window or blocked/full storage just loses the Copa's cross-reload memory, never throws. */
+function loadCopaStore(sid: string | undefined): CopaKept | null {
+  if (!sid) return null;
+  try {
+    const raw = localStorage.getItem(COPA_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw) as CopaStore;
+    return o && o.sid === sid && o.kept ? o.kept : null;
+  } catch { return null; }
+}
+function saveCopaStore(sid: string | undefined, kept: CopaKept): void {
+  if (!sid) return;
+  try { localStorage.setItem(COPA_KEY, JSON.stringify({ sid, at: Date.now(), kept } satisfies CopaStore)); } catch { /* lost on this reload only */ }
+}
+
+let copaMemory: CopaKept | null = null;
+/** A new session (or a plain `newSession`): never inherit the last child's progress. */
+export const resetCopaMemory = (): void => {
+  copaMemory = null;
+  try { localStorage.removeItem(COPA_KEY); } catch { /* nothing to clear */ }
+};
+
+/**
+ * The in-memory cache (same tab, no reload in between) always wins once set
+ * — it is strictly fresher than anything in storage. Only the very first
+ * read of a mount (or a mount right after a reload) falls back to the
+ * session-scoped store.
+ */
+function readKept(sessionId: string | undefined): CopaKept | null {
+  if (copaMemory == null) copaMemory = loadCopaStore(sessionId);
+  return copaMemory;
+}
+
+/** CopaStep.tsx: how many circuits already have a medal, across every Copa mount so far (a remount- and reload-safe `circuitsDone`, for the circuit-3 survey trigger). */
+export function copaCircuitsDone(sessionId: string | undefined): number {
+  const kept = readKept(sessionId);
+  return kept ? (Object.values(kept.medals) as Medal[]).filter((m) => m != null).length : 0;
 }
 
 const CIRCUIT_PAIR: readonly [CritterId, CritterId] = ['coati', 'zorro']; // [silver, gold] — the fox is always gold
@@ -77,25 +160,37 @@ interface Facts { wrongAttempts: number; idleMs: number; usedReveal: boolean }
 const newFacts = (): Facts => ({ wrongAttempts: 0, idleMs: 0, usedReveal: false });
 
 /** The Copa activity: one circuit on screen, the result between them. Pure UI; all scoring lives in copa.ts. */
-export function Copa({ initial = 1, logger, onCircuitDone, onExit }: CopaProps) {
-  const [id, setId] = useState<CircuitId>(initial);
+export function Copa({ initial = 1, logger, onCircuitDone, onExit, onPhase, barExtra, sessionId }: CopaProps) {
+  const [kept] = useState(() => readKept(sessionId));
+  const [id, setId] = useState<CircuitId>(kept?.id ?? initial);
   const [phase, setPhase] = useState<Phase>('intro');
-  const [medals, setMedals] = useState<Record<CircuitId, Medal>>({ 1: undefined, 2: undefined, 3: undefined, 4: undefined, 5: undefined });
+  const [medals, setMedals] = useState<Medals>(kept?.medals ?? BLANK_MEDALS);
+  const [bestMs, setBestMs] = useState<BestMs>(kept?.bestMs ?? {});
+  const variantsRef = useRef<Variants>(kept?.variants ?? { ...BLANK_VARIANTS });
+  const [variant, setVariant] = useState(variantsRef.current[kept?.id ?? initial]);
   const [result, setResult] = useState<CopaResult | null>(null);
   const [ranking, setRanking] = useState<readonly Racer[]>(['me', 0, 1]);
   const [lastConceptOk, setLastConceptOk] = useState(true);
   const factsRef = useRef(newFacts());
   const startedAt = useRef(Date.now());
   const log = (type: string, payload: Record<string, unknown>) => logger?.(type, payload);
+  const keep = (next: CopaKept) => { copaMemory = next; saveCopaStore(sessionId, next); };
 
-  const def = useMemo(() => generateCircuit(id, SEED_OF[id], 0), [id]);
+  const def = useMemo(() => generateCircuit(id, SEED_OF[id], variant), [id, variant]);
 
-  function startCircuit(next: CircuitId) {
+  useEffect(() => { onPhase?.(phase); }, [phase, onPhase]);
+
+  function startCircuit(next: CircuitId, nextMedals: Medals = medals) {
+    // a circuit already medalled (a revancha, or looping back from the Arcade) gets a different variant each time
+    const v = nextMedals[next] != null ? variantsRef.current[next] + 1 : 0;
+    variantsRef.current = { ...variantsRef.current, [next]: v };
     setId(next);
+    setVariant(v);
     factsRef.current = newFacts();
     startedAt.current = Date.now();
     setPhase('play');
-    log('copa_start', { circuit: next, variant: 0 });
+    log('copa_start', { circuit: next, variant: v });
+    keep({ id: next, medals: nextMedals, bestMs, variants: variantsRef.current });
   }
 
   function finish(conceptOk: boolean, usedTurbo?: boolean) {
@@ -106,16 +201,21 @@ export function Copa({ initial = 1, logger, onCircuitDone, onExit }: CopaProps) 
     const { place, marginMs } = copaPlacement(meMs, rivalsMs);
     const reason = copaReason(id, { conceptOk, wrongAttempts: f.wrongAttempts, idleMs: f.idleMs }, place);
     const r: CopaResult = { place, marginMs, timeMs: meMs, reason };
+    const prevMedal = medals[id];
+    const nextMedals: Medals = { ...medals, [id]: prevMedal == null || place < prevMedal ? place : prevMedal };
+    const nextBestMs: BestMs = { ...bestMs, [id]: bestMs[id] == null || meMs < bestMs[id]! ? meMs : bestMs[id] };
     setResult(r);
     setRanking(honestRanking(meMs, rivalsMs));
     setLastConceptOk(conceptOk);
-    setMedals((m) => ({ ...m, [id]: m[id] == null || place < m[id]! ? place : m[id] }));
+    setMedals(nextMedals);
+    setBestMs(nextBestMs);
     setPhase('result');
     log('copa_end', {
-      circuit: id, variant: 0, place, margin_ms: marginMs, reason, time_ms: meMs, errors: f.wrongAttempts,
+      circuit: id, variant, place, margin_ms: marginMs, reason, time_ms: meMs, errors: f.wrongAttempts,
       help_level: helpLevel, ...(usedTurbo != null ? { used_turbo: usedTurbo } : {}), concept_ok: conceptOk,
     });
-    onCircuitDone?.(id, r, place < (medals[id] ?? 4) ? place : medals[id]);
+    keep({ id, medals: nextMedals, bestMs: nextBestMs, variants: variantsRef.current });
+    onCircuitDone?.(id, r, nextMedals[id]);
   }
 
   const [helpLevel, setHelpLevel] = useState(0);
@@ -126,26 +226,28 @@ export function Copa({ initial = 1, logger, onCircuitDone, onExit }: CopaProps) 
 
   // ---------------------------------------------------------------- the five bodies
 
-  const goNext = () => { setHelpLevel(0); startCircuit(id === 5 ? 1 : ((id + 1) as CircuitId)); };
-  const goRevancha = () => { log('copa_revancha', { circuit: id }); setHelpLevel(0); startCircuit(id); };
+  const goNext = () => { setHelpLevel(0); startCircuit(id === 5 ? 1 : ((id + 1) as CircuitId), medals); };
+  const goRevancha = () => { log('copa_revancha', { circuit: id }); setHelpLevel(0); startCircuit(id, medals); };
 
   let body: ReactNode;
   if (phase === 'intro') {
+    const played = (Object.values(medals) as Medal[]).some((m) => m != null);
     body = (
       <section className="copa-intro sheet" aria-label="Siguiente circuito">
         <h2 className="copa-goal">{CIRCUIT_GOAL[id]}</h2>
         <GhostHint def={def} />
+        {played && <MedalStrip medals={medals} bestMs={bestMs} current={id} />}
         <button type="button" className="cut copa-start-btn" onClick={() => startCircuit(id)}>¡Arrancamos!</button>
       </section>
     );
   } else if (phase === 'play') {
-    body = <CircuitPlay def={def} factsRef={factsRef} helpLevel={helpLevel} onFinish={finish} />;
+    body = <CircuitPlay def={def} goal={CIRCUIT_GOAL[id]} factsRef={factsRef} helpLevel={helpLevel} onFinish={finish} />;
   } else if (result) {
     body = (
       <CopaResultScreen
         pair={CIRCUIT_PAIR} ranking={ranking} result={result} won={result.place === 1 && lastConceptOk} cups={0}
         onRevancha={goRevancha} onNext={goNext}
-        extra={<MedalStrip medals={medals} current={id} />}
+        extra={<MedalStrip medals={medals} bestMs={bestMs} current={id} />}
       />
     );
   }
@@ -160,10 +262,12 @@ export function Copa({ initial = 1, logger, onCircuitDone, onExit }: CopaProps) 
 
   return (
     <main className={`pp-page pp-race copa-page${phase === 'result' ? ' is-podium' : ''}`} data-circuit={id} data-phase={phase}>
+      {/* C04: 4to ignores the top bar — the goal lives large inside the play area instead (CircuitPlay's own PlayGoal) */}
       <Bar
         instruction={instruction}
         title={<><b>Copa de 4to</b>{` circuito ${id} de 5`}</>}
-        pages={phase === 'play' ? <p className="copa-reminder">{CIRCUIT_GOAL[id]}</p> : null}
+        pages={null}
+        aside={barExtra}
         onSpeak={onHint}
         onHelp={onHint}
       />
@@ -205,15 +309,15 @@ function GhostHint({ def }: { def: CircuitDef }) {
 
 const LABEL = 'word-picture' as const;
 
-function CircuitPlay({ def, factsRef, helpLevel, onFinish }: {
-  def: CircuitDef; factsRef: { current: Facts }; helpLevel: number;
+function CircuitPlay({ def, goal, factsRef, helpLevel, onFinish }: {
+  def: CircuitDef; goal: string; factsRef: { current: Facts }; helpLevel: number;
   onFinish(conceptOk: boolean, usedTurbo?: boolean): void;
 }) {
   if (def.kind === 'sequence') {
     const stretch: Stretch = { road: [...def.road], turbo: false };
     return (
       <OneStretchRace
-        stretch={stretch} prefilledCount={def.emptySlot} allowTurbo={false} factsRef={factsRef} helpLevel={helpLevel}
+        stretch={stretch} prefilledCount={def.emptySlot} allowTurbo={false} goal={goal} factsRef={factsRef} helpLevel={helpLevel}
         conceptOkFor={() => true} onFinish={onFinish}
       />
     );
@@ -222,20 +326,25 @@ function CircuitPlay({ def, factsRef, helpLevel, onFinish }: {
     const stretch: Stretch = { road: [...def.lead, ...Array<RoadDir>(def.turboLen).fill('right')], turbo: true };
     return (
       <OneStretchRace
-        stretch={stretch} prefilledCount={def.lead.length} allowTurbo factsRef={factsRef} helpLevel={helpLevel}
+        stretch={stretch} prefilledCount={def.lead.length} allowTurbo goal={goal} factsRef={factsRef} helpLevel={helpLevel}
         conceptOkFor={(usedTurbo) => checkSlotChoice(def, usedTurbo ? 'turbo' : 'single')} onFinish={onFinish}
       />
     );
   }
-  if (def.kind === 'puddle') return <HazardRun kind="puddle" pieces={def.pieces} helpLevel={helpLevel} onFinish={onFinish} />;
-  if (def.kind === 'event') return <HazardRun kind="event" pieces={def.pieces} helpLevel={helpLevel} onFinish={onFinish} />;
-  return <LapsRun def={def} helpLevel={helpLevel} onFinish={onFinish} />;
+  if (def.kind === 'puddle') return <HazardRun kind="puddle" pieces={def.pieces} goal={goal} helpLevel={helpLevel} onFinish={onFinish} />;
+  if (def.kind === 'event') return <HazardRun kind="event" pieces={def.pieces} goal={goal} helpLevel={helpLevel} onFinish={onFinish} />;
+  return <LapsRun def={def} goal={goal} helpLevel={helpLevel} onFinish={onFinish} />;
+}
+
+/** C04: the circuit's goal, large inside the play area (4to ignores the top bar) — big while there's nothing else yet, a persistent but still large caption once the build panel/choices are showing. */
+function PlayGoal({ goal, big }: { goal: string; big?: boolean }) {
+  return <p className={`copa-goal-persist${big ? ' is-big' : ''}`}>{goal}</p>;
 }
 
 // ------------------------------------------------------------------ circuits 1 & 2: live, block-by-block (exactly like La carrera)
 
-function OneStretchRace({ stretch, prefilledCount, allowTurbo, factsRef, helpLevel, conceptOkFor, onFinish }: {
-  stretch: Stretch; prefilledCount: number; allowTurbo: boolean; factsRef: { current: Facts }; helpLevel: number;
+function OneStretchRace({ stretch, prefilledCount, allowTurbo, goal, factsRef, helpLevel, conceptOkFor, onFinish }: {
+  stretch: Stretch; prefilledCount: number; allowTurbo: boolean; goal: string; factsRef: { current: Facts }; helpLevel: number;
   conceptOkFor(usedTurbo: boolean): boolean; onFinish(conceptOk: boolean, usedTurbo?: boolean): void;
 }) {
   const course = useMemo(() => buildCourse([stretch]), [stretch]);
@@ -306,6 +415,7 @@ function OneStretchRace({ stretch, prefilledCount, allowTurbo, factsRef, helpLev
         <Palette label={LABEL} repeat={repeat} reserve={allowTurbo} disabled={wrong} onPlace={(b) => place(b)} />
         <Tape road={stretch.road} tape={tapeV} label={LABEL} wrong={wrong} turbo={stretch.turbo} active={!wrong} onTap={() => {}} />
       </div>
+      <PlayGoal goal={goal} />
       {helpLevel >= 2 && <p className="copa-highlight" role="status">¡Ahí! Completá esa flecha.</p>}
     </section>
   );
@@ -325,8 +435,8 @@ const CRUISE_BAD = 0.9;
 const SPEED_SLOW = 0.5;
 const SKID_PAUSE_MS = 650;
 
-function HazardRun({ kind, pieces, helpLevel, onFinish }: {
-  kind: 'puddle' | 'event'; pieces: readonly string[]; helpLevel: number; onFinish(conceptOk: boolean): void;
+function HazardRun({ kind, pieces, goal, helpLevel, onFinish }: {
+  kind: 'puddle' | 'event'; pieces: readonly string[]; goal: string; helpLevel: number; onFinish(conceptOk: boolean): void;
 }) {
   const hazard = kind === 'puddle' ? 'puddle' : 'log';
   const stretch: Stretch = useMemo(() => ({ road: pieces.map(() => 'right' as const), turbo: false }), [pieces]);
@@ -395,6 +505,7 @@ function HazardRun({ kind, pieces, helpLevel, onFinish }: {
       {!running && picked && (
         <button type="button" className="cut copa-run-btn" onClick={() => setRunning(true)}>¡Correr!</button>
       )}
+      <PlayGoal goal={goal} big={!running} />
       {helpLevel >= 2 && !running && <p className="copa-highlight" role="status">{kind === 'puddle' ? 'Si hay charco, hay que ir despacio.' : 'Cuando aparece el tronco, hay que saltar.'}</p>}
     </section>
   );
@@ -402,8 +513,8 @@ function HazardRun({ kind, pieces, helpLevel, onFinish }: {
 
 // ------------------------------------------------------------------ circuit 5: laps
 
-function LapsRun({ def, helpLevel, onFinish }: {
-  def: Extract<CircuitDef, { kind: 'laps' }>; helpLevel: number; onFinish(conceptOk: boolean): void;
+function LapsRun({ def, goal, helpLevel, onFinish }: {
+  def: Extract<CircuitDef, { kind: 'laps' }>; goal: string; helpLevel: number; onFinish(conceptOk: boolean): void;
 }) {
   const stretches = useMemo(() => Array.from({ length: def.correctLaps }, () => ({ road: [...def.lapRoad], turbo: false }) as Stretch), [def]);
   const course = useMemo(() => buildCourse(stretches), [stretches]);
@@ -452,6 +563,7 @@ function LapsRun({ def, helpLevel, onFinish }: {
           {picked != null && <button type="button" className="cut copa-run-btn" onClick={() => setRunning(true)}>¡Correr!</button>}
         </>
       )}
+      <PlayGoal goal={goal} big={!running} />
       {helpLevel >= 2 && !running && <p className="copa-highlight" role="status">Contá: 1, 2, 3 vueltas.</p>}
     </section>
   );
@@ -537,14 +649,18 @@ function resultLineFor(r: CopaResult): string {
 
 // ------------------------------------------------------------------ the medal strip
 
-function MedalStrip({ medals, current }: { medals: Record<CircuitId, Medal>; current: CircuitId }) {
+/** "Tus medallas de la Copa" — C04: also "Tu mejor tiempo" (the Arcade card's own promise) when a circuit has a best time. */
+function MedalStrip({ medals, bestMs, current }: { medals: Medals; bestMs?: BestMs; current: CircuitId }) {
   return (
     <div className="copa-strip" role="img" aria-label="Tus medallas de la Copa">
       {([1, 2, 3, 4, 5] as const).map((cid) => {
         const m = medals[cid];
+        const ms = bestMs?.[cid];
+        const title = `${m ? medalLabel[m] : 'sin jugar'}${ms != null ? ` — ${(ms / 1000).toFixed(1)} s` : ''}`;
         return (
-          <span key={cid} className={`copa-strip-dot${cid === current ? ' is-current' : ''}${m ? ` is-medal-${m}` : ''}`} title={m ? medalLabel[m] : 'sin jugar'}>
+          <span key={cid} className={`copa-strip-dot${cid === current ? ' is-current' : ''}${m ? ` is-medal-${m}` : ''}`} title={title}>
             {cid}
+            {ms != null && <small className="copa-strip-ms">{(ms / 1000).toFixed(1)}s</small>}
           </span>
         );
       })}

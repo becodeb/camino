@@ -38,6 +38,7 @@ import { ToolCheck } from './ToolCheck';
 import { TypingStep } from './TypingStep';
 import { WardrobeStep } from './WardrobeStep';
 import { WorkshopStep } from './WorkshopStep';
+import { CopaStep } from './CopaStep';
 import type { StartInput } from './telemetry';
 import { ClassEnd } from './classroom';
 import { useHold } from './AdultControls';
@@ -195,4 +196,5 @@ export const STEP_VIEWS: Record<StepId, ComponentType<StepViewProps>> = {
   goodbye: Goodbye,
   class_end: ClassEnd,
   workshop: WorkshopStep,
+  copa: CopaStep,
 };

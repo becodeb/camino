@@ -222,11 +222,11 @@ describe('the playtest flow', () => {
       expect(routeOf(initialFlow(0))).toBe(ROUTE);
     });
 
-    it('name → character → tool check → ladder → the Workshop, which does not end until the Arcade opens', () => {
+    it('name → character → tool check → ladder → the Copa, which does not end until the Arcade opens', () => {
       let s = start4();
       const seen = [s.step];
       for (let i = 0; i < 4; i++) { s = to(s, { type: 'next' }, 2000 + i * 1000).state; seen.push(s.step); }
-      expect(seen).toEqual(['name', 'character', 'tool_check', 'ladder', 'workshop']);
+      expect(seen).toEqual(['name', 'character', 'tool_check', 'ladder', 'copa']);
       expect(to(s, { type: 'next' }).change).toBeNull();
       expect(s.routeDone).toBeFalsy();
       // no typing, no wardrobe on the way
@@ -234,20 +234,20 @@ describe('the playtest flow', () => {
       expect(seen).not.toContain('wardrobe');
     });
 
-    it('the Arcade opens with challenges 1–5 (the green flag), the step stays; then back and forth', () => {
+    it('C04: the Arcade opens (the Copa\'s circuit 2, or 20 minutes), the step stays; then back and forth', () => {
       let s = walk(start4(), 4, 1000);
-      expect(s.step).toBe('workshop');
+      expect(s.step).toBe('copa');
       // the Arcade is closed: the child cannot go there yet
       expect(to(s, { type: 'arcade', to: 'free_play' }).change).toBeNull();
-      const open = to(s, { type: 'arcade_open', via: 'workshop' });
+      const open = to(s, { type: 'arcade_open', via: 'copa' });
       expect(open.routeDoneNow).toBe(true);
       expect(open.change).toBeNull();
       s = open.state;
-      expect(s).toMatchObject({ step: 'workshop', arcadeOpen: true, routeDone: true });
+      expect(s).toMatchObject({ step: 'copa', arcadeOpen: true, routeDone: true });
       // once only
-      expect(to(s, { type: 'arcade_open', via: 'workshop' }).state).toBe(s);
+      expect(to(s, { type: 'arcade_open', via: 'copa' }).state).toBe(s);
       const a = to(s, { type: 'arcade', to: 'free_play' });
-      expect(a.change).toMatchObject({ from: 'workshop', to: 'free_play', reason: 'arcade' });
+      expect(a.change).toMatchObject({ from: 'copa', to: 'free_play', reason: 'arcade' });
       s = a.state;
       expect(freePlayEndless(s)).toBe(true);
       expect(to(s, { type: 'next' }).change).toBeNull();
@@ -255,13 +255,19 @@ describe('the playtest flow', () => {
       expect(s.step).toBe('wardrobe');
       s = to(s, { type: 'next' }).state;
       expect(s.step).toBe('free_play');
+      // back to the Copa's remaining circuits
+      s = to(s, { type: 'arcade', to: 'copa' }).state;
+      expect(s.step).toBe('copa');
+      // "Terminé" (all 5 circuits) goes to the open Arcade
+      expect(to(s, { type: 'next' }).state.step).toBe('free_play');
+      // the optional Workshop (now an Arcade card, reached from the Arcade like the Copa) is reachable too, and "Terminé" there also goes back
+      s = to(s, { type: 'next' }).state; // to free_play
       s = to(s, { type: 'arcade', to: 'workshop' }).state;
       expect(s.step).toBe('workshop');
-      // "Terminé" in the Workshop goes to the open Arcade
       expect(to(s, { type: 'next' }).state.step).toBe('free_play');
     });
 
-    it('"Juegos para todos" opens the Arcade from the tool check, the ladder or the Workshop, never marking the route done', () => {
+    it('"Juegos para todos" opens the Arcade from the tool check, the ladder or the Copa, never marking the route done; a no-op once already open (the Workshop included)', () => {
       const ladder = walk(start4(), 3, 1000);
       expect(ladder.step).toBe('ladder');
       const t = to(ladder, { type: 'games_all' });
@@ -269,17 +275,21 @@ describe('the playtest flow', () => {
       expect(t.state.arcadeOpen).toBe(true);
       expect(t.state.routeDone).toBeFalsy();
       expect(t.routeDoneNow).toBeFalsy();
-      const ws = walk(start4(), 4, 1000);
-      expect(to(ws, { type: 'games_all' }).state).toMatchObject({ step: 'free_play', arcadeOpen: true });
+      const cp = walk(start4(), 4, 1000);
+      expect(to(cp, { type: 'games_all' }).state).toMatchObject({ step: 'free_play', arcadeOpen: true });
       // the character screen ignores it; so does the Arcade itself
       expect(to(start4(false), { type: 'games_all' }).change).toBeNull();
       expect(to(t.state, { type: 'games_all' }).state).toBe(t.state);
-      // the Workshop's challenges 1–5 later still raise the green flag
-      const back = to(t.state, { type: 'arcade', to: 'workshop' }).state;
-      expect(to(back, { type: 'arcade_open', via: 'workshop' }).routeDoneNow).toBe(true);
+      // finishing the Copa's circuit 2 later still raises the green flag
+      const back = to(t.state, { type: 'arcade', to: 'copa' }).state;
+      expect(to(back, { type: 'arcade_open', via: 'copa' }).routeDoneNow).toBe(true);
+      // the Workshop, reached as an optional Arcade card (from the open Arcade, like the Copa), is also a valid "games_all" step (it is already open by then)
+      const ws = to(t.state, { type: 'arcade', to: 'workshop' }).state;
+      expect(ws.step).toBe('workshop');
+      expect(to(ws, { type: 'games_all' }).state).toBe(ws);
     });
 
-    it('"quedan 5 minutos": the item on screen, then the survey, then the Arcade (or the Workshop while closed)', () => {
+    it('"quedan 5 minutos": the item on screen, then the survey, then the Arcade (or the Copa while closed)', () => {
       let s = walk(start4(), 3, 1000); // ladder
       s = to(s, { type: 'wrap_up', on: true }).state;
       expect(wrapTarget(s)).toBe('survey');
@@ -287,10 +297,10 @@ describe('the playtest flow', () => {
       s = to(s, { type: 'next' }).state;
       expect(s.step).toBe('survey');
       s = to(s, { type: 'next' }, 9000).state;
-      expect(s).toMatchObject({ step: 'workshop', surveyDone: true });
+      expect(s).toMatchObject({ step: 'copa', surveyDone: true });
       expect(wrapPending(s)).toBe(false);
       // with the Arcade open the survey goes back to it
-      let o = to(walk(start4(), 4, 1000), { type: 'arcade_open', via: 'workshop' }).state;
+      let o = to(walk(start4(), 4, 1000), { type: 'arcade_open', via: 'copa' }).state;
       o = to(o, { type: 'wrap_up', on: true }).state;
       expect(wrapPending(o)).toBe(true);
       o = to(to(o, { type: 'next' }).state, { type: 'next' }, 9000).state;
@@ -298,12 +308,13 @@ describe('the playtest flow', () => {
       expect(wrapPending(o)).toBe(false);
     });
 
-    it('4to\'s budgets: a short tool check, the long ladder, the Workshop', () => {
-      expect(BUDGET_4TO_MS.ladder).toBe(15 * 60_000);
+    it('4to\'s budgets: a short tool check, the ladder (C04: 8 minutes, same as every other grade), the Copa, the Workshop', () => {
+      expect(BUDGET_4TO_MS.ladder).toBe(8 * 60_000);
       expect(BUDGET_4TO_MS.tool_check).toBe(60_000);
+      expect(BUDGET_4TO_MS.copa).toBe(20 * 60_000);
       expect(BUDGET_4TO_MS.workshop).toBe(20 * 60_000);
       const s = walk(start4(), 3, 1000);
-      expect(to(s, { type: 'next' }, 20 * 60_000).change).toMatchObject({ from: 'ladder', budget_ms: 15 * 60_000 });
+      expect(to(s, { type: 'next' }, 20 * 60_000).change).toMatchObject({ from: 'ladder', budget_ms: 8 * 60_000 });
       // other grades keep theirs
       expect(BUDGET_MS.ladder).toBe(8 * 60_000);
     });

@@ -16,12 +16,13 @@
 //
 // T39, 4to's long ladder (`long` on the state, set by startLadder for 4to;
 // every other grade keeps the rules above, unchanged): up to MAX_ITEMS_LONG
-// items or CAPS_LONG's 15 minutes (16 for an item open then), up to rung 18
-// (six new rungs, 13–18, built on the Game Workshop's blocks:
-// ladderVm.ts), and a second item per rung from 7 (`variant` 1): a first
-// item not passed gets the rung's second item before the ladder steps down
-// or stops; the second item's result is the rung's. The floor check and the
-// ceiling are the same rules.
+// items, up to rung 18 (six new rungs, 13–18, built on the Game Workshop's
+// blocks: ladderVm.ts), and a second item per rung from 7 (`variant` 1): a
+// first item not passed gets the rung's second item before the ladder steps
+// down or stops; the second item's result is the rung's. The floor check
+// and the ceiling are the same rules. C04: CAPS_LONG's time fields are the
+// same 8/9 minutes as every other grade (MAX_MS/HARD_MS) — only the item
+// count stays higher (18), since the Copa now needs the rest of the class.
 
 import type { LevelStats } from './PlaytestLevel';
 import { LADDER_ITEMS, LADDER_VARIANT_ITEMS } from './ladderItems';
@@ -96,10 +97,15 @@ export interface Caps { itemMs: number; idleMs: number; ladderMs: number; hardMs
 export const CAPS: Caps = { itemMs: ITEM_MS, idleMs: IDLE_MS, ladderMs: MAX_MS, hardMs: HARD_MS };
 /** `?caps=fast` (scripted checks, a quick look): the same rules in seconds. */
 export const FAST_CAPS: Caps = { itemMs: 30_000, idleMs: 12_000, ladderMs: 60_000, hardMs: 70_000 };
-/** T39: 4to's long ladder: up to 18 items in 15 minutes (an item open then ends by 16); the per-item caps unchanged. */
+/**
+ * C04: the 4to class's first half (2026-10-20) found the 15-minute ladder
+ * too long for a 40-minute class with the Copa after it; capped at the same
+ * 8 minutes as every other grade (MAX_MS/HARD_MS), keeping the item-count
+ * cap (18) and every per-item/floor/ceiling rule unchanged.
+ */
 export const MAX_ITEMS_LONG = 18;
-export const CAPS_LONG: Caps = { itemMs: ITEM_MS, idleMs: IDLE_MS, ladderMs: 15 * 60_000, hardMs: 16 * 60_000 };
-export const FAST_CAPS_LONG: Caps = { itemMs: 30_000, idleMs: 12_000, ladderMs: 150_000, hardMs: 160_000 };
+export const CAPS_LONG: Caps = { itemMs: ITEM_MS, idleMs: IDLE_MS, ladderMs: MAX_MS, hardMs: HARD_MS };
+export const FAST_CAPS_LONG: Caps = { itemMs: 30_000, idleMs: 12_000, ladderMs: FAST_CAPS.ladderMs, hardMs: FAST_CAPS.hardMs };
 export const capsFrom = (search: string, long = false): Caps => (/[?&]caps=fast\b/.test(search) ? (long ? FAST_CAPS_LONG : FAST_CAPS) : long ? CAPS_LONG : CAPS);
 /** Failed runs (levels.ts `isFailedRun`) that end an item. */
 export const FAILED_RUNS = 2;

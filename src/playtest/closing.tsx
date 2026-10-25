@@ -51,6 +51,14 @@ const ACTIVITY_WORD: Record<string, string> = {
   typing_race: 'La carrera de teclas', own_game: 'Tu juego',
 };
 
+/**
+ * C04: 4to's survey is this one mid-class trigger (CopaStep.tsx's own
+ * timer, after circuit 3 or 20 minutes), never a second one at the end of
+ * the route (`surveyDone` already covers that, flow.ts) — so it stays the
+ * two base questions ("¿Te gustó?", "¿Fue difícil?") the design asked for,
+ * never "¿Qué te gustó más?" (barely anything played yet by then) or
+ * "¿Querés volver a jugar?" (there is no "again" mid-class).
+ */
 export function surveyQuestions(activities: readonly string[], grade = 1): Question[] {
   const qs: Question[] = [
     {
@@ -77,6 +85,7 @@ export function surveyQuestions(activities: readonly string[], grade = 1): Quest
       ],
     },
   ];
+  if (grade === 4) return qs;
   if (activities.length >= 2) {
     qs.push({
       id: 'favorite_activity',

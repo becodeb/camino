@@ -41,30 +41,38 @@
 // T39: 4to's own route (`route: '4to'` on the state, set by that same
 // first `next` from the grade; every other grade's state has no `route` and
 // follows the default route above, unchanged): name → character → a short
-// tool check → the long ladder → the Game Workshop (`workshop`, mandatory)
-// → the Arcade (`free_play` with 4to's own menu, freePlay.ts). No typing
-// step and no wardrobe step on the way (the wardrobe is an optional card in
-// the Arcade). The Arcade opens (`arcade_open`, `arcadeOpen`) when the
-// Workshop's challenges 1–5 are done — that is also 4to's green flag
+// tool check → the ladder → the Copa de 4to (`copa`, mandatory, C04) → the
+// Arcade (`free_play` with 4to's own menu, freePlay.ts). No typing step and
+// no wardrobe step on the way (the wardrobe is an optional card in the
+// Arcade). The Arcade opens (`arcade_open`, `arcadeOpen`) when the child
+// finishes the Copa's circuit 2, or 20 minutes since the route started,
+// whichever first (CopaStep.tsx) — that is also 4to's green flag
 // (`routeDone`) — or with "Juegos para todos"; once open, the child goes
-// back and forth between the Workshop and the Arcade (`arcade` moves). The
-// Arcade has no end. "Quedan 5 minutos": the item on screen, then the
-// survey, then the Arcade (or the Workshop when it is still closed).
+// back and forth between the Copa (its remaining circuits), the optional
+// Workshop and the Arcade (`arcade` moves). The Arcade has no end. "Quedan 5
+// minutos": the item on screen, then the survey, then the Arcade (or the
+// Copa while it is still closed).
+//
+// C04: the Game Workshop (`workshop`) is no longer 4to's mandatory step —
+// the Copa replaces it — but it stays a reachable step (now an optional
+// Arcade card, freePlay.ts), unchanged in every other way.
 
 export const STEPS = [
   'setup', 'name', 'character', 'tool_check', 'ladder', 'free_play', 'typing', 'wardrobe', 'survey', 'goodbye', 'class_end',
   // T39: 4to's Workshop step, last so the default route's order (stepAfter) is untouched
   'workshop',
+  // C04: 4to's Copa de 4to step, mandatory (replaces `workshop` as 4to's core-route center); same reason kept last
+  'copa',
 ] as const;
 export type StepId = typeof STEPS[number];
 
 /** The child's part: what "end now" cuts short, and what can be skipped. */
-export const CHILD_STEPS: readonly StepId[] = ['name', 'character', 'tool_check', 'ladder', 'free_play', 'typing', 'wardrobe', 'workshop'];
+export const CHILD_STEPS: readonly StepId[] = ['name', 'character', 'tool_check', 'ladder', 'free_play', 'typing', 'wardrobe', 'workshop', 'copa'];
 
 /** The core route, in order: done when the child leaves the wardrobe having been through these. */
 export const ROUTE: readonly StepId[] = ['tool_check', 'ladder', 'free_play', 'typing', 'wardrobe'];
-/** T39: 4to's core route (done when the Workshop's challenges 1–5 are, `arcade_open`). */
-export const ROUTE_4TO: readonly StepId[] = ['tool_check', 'ladder', 'workshop'];
+/** C04: 4to's core route (done when the Arcade opens, `arcade_open`: the Copa's circuit 2, 20 minutes, or the demo/adult). */
+export const ROUTE_4TO: readonly StepId[] = ['tool_check', 'ladder', 'copa'];
 
 /** Planned time per step (the brief's minutes), recorded with each step change; nothing is cut when it runs out. */
 export const BUDGET_MS: Partial<Record<StepId, number>> = {
@@ -81,12 +89,20 @@ export const BUDGET_MS: Partial<Record<StepId, number>> = {
   goodbye: 60_000,
 };
 
-/** T39: 4to's planned times where they differ (a short tool check, the long ladder, the Workshop, the Arcade). */
+/**
+ * T39: 4to's planned times where they differ (a short tool check, the
+ * ladder, the Copa, the Arcade). C04: the ladder's own 8-minute cap
+ * (ladder.ts's MAX_MS) replaced the earlier 15-minute one, so this planned
+ * time now matches every other grade; `workshop` stays for the optional
+ * Arcade card's own planned time, unused by the mandatory route now that
+ * the Copa (`copa`, below) replaces it as 4to's mandatory center.
+ */
 export const BUDGET_4TO_MS: Partial<Record<StepId, number>> = {
   ...BUDGET_MS,
   tool_check: 60_000,
-  ladder: 15 * 60_000,
+  ladder: 8 * 60_000,
   workshop: 20 * 60_000,
+  copa: 20 * 60_000,
   free_play: 10 * 60_000,
 };
 
@@ -149,10 +165,10 @@ export type FlowAction =
   | { type: 'class_end' }
   /** T37: "Juegos para todos" — a no-op where `canGamesAll` is false (character, free play itself, survey, goodbye, class_end, setup). */
   | { type: 'games_all' }
-  /** T39 (4to): the Arcade opens; `workshop` (challenges 1–5 done) is also the green flag. */
-  | { type: 'arcade_open'; via: 'workshop' }
-  /** T39 (4to): the child moves between the Workshop, the Arcade and the Arcade's wardrobe. */
-  | { type: 'arcade'; to: 'workshop' | 'free_play' | 'wardrobe' }
+  /** T39 (4to): the Arcade opens; also the green flag. C04: `via` is `'copa'` (circuit 2, or the 20-minute timer) now that the Copa is the mandatory step, `'workshop'` only from the demo/adult default. */
+  | { type: 'arcade_open'; via: 'workshop' | 'copa' }
+  /** T39 (4to): the child moves between the Copa, the (optional) Workshop, the Arcade and the Arcade's wardrobe. */
+  | { type: 'arcade'; to: 'workshop' | 'copa' | 'free_play' | 'wardrobe' }
   /** Demo tools: straight to a step / to the route done. */
   | { type: 'goto'; to: StepId }
   | { type: 'route_done' };
@@ -174,8 +190,13 @@ export const canSkip = (s: StepId) => CHILD_STEPS.includes(s) || s === 'survey';
 export const canEndNow = (s: StepId) => CHILD_STEPS.includes(s);
 /** T37: "Juegos para todos" only moves a device off a core-route step that is not free play itself (already the games zone) and not the character screen (nothing to preserve yet). */
 export const canGamesAll = (s: StepId) => s === 'tool_check' || s === 'ladder' || s === 'typing' || s === 'wardrobe';
-/** T39: 4to's "Juegos para todos" opens the Arcade from the tool check, the ladder or the Workshop. */
-const canGamesAll4to = (s: StepId) => s === 'tool_check' || s === 'ladder' || s === 'workshop';
+/**
+ * C04: 4to's "Juegos para todos" opens the Arcade from the tool check, the
+ * ladder or the Copa (every step reachable before the Arcade is open); the
+ * optional Workshop is only ever reached after the Arcade already is, so it
+ * falls to the branch below instead (already open: nothing moves).
+ */
+const canGamesAll4to = (s: StepId) => s === 'tool_check' || s === 'ladder' || s === 'copa';
 /** T39: the session follows 4to's route. */
 export const is4to = (state: Pick<FlowState, 'route'>) => state.route === '4to';
 /** The session's core route. */
@@ -192,12 +213,12 @@ export const visited = (state: FlowState, step: StepId) => state.visits.some((v)
 /** Every step of the core route was reached (the wardrobe being the one on screen counts). */
 export const routeComplete = (state: FlowState) => ROUTE.every((s) => visited(state, s));
 
-/** T39: where 4to's child rests: the Arcade once open, else the Workshop. */
-const home4to = (state: FlowState): StepId => (state.arcadeOpen ? 'free_play' : 'workshop');
+/** C04: where 4to's child rests: the Arcade once open, else the Copa (its mandatory step). */
+const home4to = (state: FlowState): StepId => (state.arcadeOpen ? 'free_play' : 'copa');
 
 /**
  * Where "quedan 5 minutos" goes after the step on screen: the wardrobe if not visited, the survey if not done, then free play.
- * T39 (4to): the survey if not done, then the Arcade (the Workshop while it is closed).
+ * C04 (4to): the survey if not done, then the Arcade (the Copa while it is still closed).
  */
 export function wrapTarget(state: FlowState): StepId {
   if (is4to(state)) return !state.surveyDone && state.step !== 'survey' ? 'survey' : home4to(state);
@@ -208,7 +229,7 @@ export function wrapTarget(state: FlowState): StepId {
 
 /** Whether "quedan 5 minutos" still has to move the child on from the step on screen (free play after both is the end). */
 export const wrapPending = (state: FlowState) => !!state.wrapUp && (is4to(state)
-  ? !((state.step === 'free_play' || state.step === 'workshop') && wrapTarget(state) === state.step)
+  ? !((state.step === 'free_play' || state.step === 'copa' || state.step === 'workshop') && wrapTarget(state) === state.step)
   : !(state.step === 'free_play' && wrapTarget(state) === 'free_play'));
 
 /** T39: `next` on 4to's route (after setup, and not ended early). */
@@ -222,10 +243,12 @@ function next4to(state: FlowState): { to: StepId } | null {
     case 'name': return { to: 'character' };
     case 'character': return { to: 'tool_check' };
     case 'tool_check': return { to: 'ladder' };
-    case 'ladder': return { to: 'workshop' };
-    // "Terminé" (challenges 1–7 done): to the Arcade, once it is open
+    case 'ladder': return { to: 'copa' };
+    // the Copa's 5th circuit done: to the Arcade, once it is open (always true by then, C04: circuit 2 or 20 min)
+    case 'copa': return state.arcadeOpen ? { to: 'free_play' } : null;
+    // the optional Workshop (an Arcade card): back to the Arcade, same as any other optional card
     case 'workshop': return state.arcadeOpen ? { to: 'free_play' } : null;
-    // the Arcade has no end; its wardrobe and the survey go back to it (or to the Workshop)
+    // the Arcade has no end; its wardrobe and the survey go back to it (or to the Copa while it is still closed)
     case 'free_play': return null;
     case 'wardrobe':
     case 'survey':
@@ -312,10 +335,12 @@ export function reduce(state: FlowState, action: FlowAction, now: number): Trans
     case 'arcade': {
       if (!is4to(state) || state.step === action.to) return same;
       const from = state.step;
-      const ok = action.to === 'workshop'
+      // C04: `workshop` and `copa` are both reachable any time from the Arcade (or its wardrobe);
+      // leaving either of them (or the wardrobe) back to the Arcade needs the Arcade already open.
+      const ok = action.to === 'workshop' || action.to === 'copa'
         ? from === 'free_play' || from === 'wardrobe'
         : action.to === 'free_play'
-          ? !!state.arcadeOpen && (from === 'workshop' || from === 'wardrobe')
+          ? !!state.arcadeOpen && (from === 'workshop' || from === 'copa' || from === 'wardrobe')
           : !!state.arcadeOpen && from === 'free_play';
       return ok ? go(state, action.to, 'arcade', now) : same;
     }
