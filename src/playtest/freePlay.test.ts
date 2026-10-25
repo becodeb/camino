@@ -10,7 +10,7 @@ const all = () => true;
 describe('the free-play menu', () => {
   it('offers each grade its activities, in order, without the probes nobody built', () => {
     // T43: 1ro's free play is its arcade: the monster games, the character, the wardrobe, the typing letters
-    expect(menuFor(1, none).map((a) => a.id)).toEqual(['recipe', 'buddy', 'wardrobe', 'typing_race']);
+    expect(menuFor(1, none).map((a) => a.id)).toEqual(['recipe', 'dance', 'buddy', 'wardrobe', 'typing_race']);
     expect(menuFor(2, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(3, none).map((a) => a.id)).toEqual(['rule_game', 'sheet', 'recess', 'editor']);
     // T39/T41: 4to's free play is the Arcade: the typing race, the child's own game, La carrera, back to the Workshop (a flow step, no probe needed), the wardrobe
@@ -19,8 +19,8 @@ describe('the free-play menu', () => {
   });
 
   it('T20: muted, 1ro loses its recess (music) card; not muted, or another grade: unchanged (T43: 1ro\'s arcade has none, muted or not)', () => {
-    expect(menuFor(1, none, true).map((a) => a.id)).toEqual(['recipe', 'buddy', 'wardrobe', 'typing_race']);
-    expect(menuFor(1, none, false).map((a) => a.id)).toEqual(['recipe', 'buddy', 'wardrobe', 'typing_race']);
+    expect(menuFor(1, none, true).map((a) => a.id)).toEqual(['recipe', 'dance', 'buddy', 'wardrobe', 'typing_race']);
+    expect(menuFor(1, none, false).map((a) => a.id)).toEqual(['recipe', 'dance', 'buddy', 'wardrobe', 'typing_race']);
     expect(menuFor(2, none, true).map((a) => a.id)).toContain('recess');
     expect(menuFor(3, none, true).map((a) => a.id)).toContain('recess');
   });

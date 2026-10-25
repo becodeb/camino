@@ -22,6 +22,7 @@ import type { Activity } from './freePlay';
 import { RaceCardArt, TypingRaceCardArt } from './raceArt';
 import { OwnGameCardArt, WorkshopCardArt } from '../workshop/art';
 import { RecipeCardArt } from './arcade/monsterArt';
+import { DanceCardArt } from './arcade/puppetArt';
 import { PlayerFace } from '../screens/player';
 
 const INK = '#2b2622';
@@ -257,6 +258,7 @@ function CardArt({ a }: { a: Pick<Activity, 'id' | 'kind'> }) {
     case 'own_game': return <OwnGameCardArt />;
     // T43: 1ro's arcade
     case 'recipe': return <RecipeCardArt />;
+    case 'dance': return <DanceCardArt />;
     case 'buddy': return <BuddyCardArt />;
   }
 }

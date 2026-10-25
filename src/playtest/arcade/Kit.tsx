@@ -69,7 +69,7 @@ export function useGameLog(game: GameId, mode: GameMode, playNo: number, startTi
   const api = usePlaytest();
   const apiRef = useRef(api);
   apiRef.current = api;
-  const s = useRef({ at: Date.now(), roundAt: Date.now(), firstInput: 0, rounds: 0, inRound: false, ended: false, rapid: 0, attempts: 0, round: 0, tier: startTier });
+  const s = useRef({ at: Date.now(), roundAt: Date.now(), firstInput: 0, rounds: 0, inRound: false, ended: false, rapid: 0, attempts: 0, round: 0, tier: startTier, endExtra: {} as Record<string, unknown> });
   const log = (type: string, payload: Record<string, unknown>) => apiRef.current.log(type, payload);
   const base = () => ({ game, mode, play_no: playNo });
 
@@ -95,7 +95,7 @@ export function useGameLog(game: GameId, mode: GameMode, playNo: number, startTi
     if (st.ended) return;
     st.ended = true;
     const lv = apiRef.current.level.current;
-    log('game_end', { ...base(), reason, rounds: st.rounds, ms: Date.now() - st.at, rapid_taps: st.rapid, help_levels: lv?.helpStep ?? 0, adult_helped: !!lv?.adultHelped });
+    log('game_end', { ...base(), reason, rounds: st.rounds, ms: Date.now() - st.at, rapid_taps: st.rapid, help_levels: lv?.helpStep ?? 0, adult_helped: !!lv?.adultHelped, ...st.endExtra });
   }
 
   return useMemo(() => ({
@@ -121,6 +121,8 @@ export function useGameLog(game: GameId, mode: GameMode, playNo: number, startTi
       return { level_id: gameLevelId(game), activity: game, outcome: 'win', time_ms: ms, attempts: st.attempts, help_levels: lv?.helpStep ?? 0, blocks_optimal: 0, adult_helped: !!lv?.adultHelped, round: st.round, tier: st.tier };
     },
     rapid() { s.current.rapid++; },
+    /** The game's own measures for `game_end`, whenever it comes (T45: the longest dance). */
+    endInfo(extra: Record<string, unknown>) { Object.assign(s.current.endExtra, extra); },
     end,
     log,
     state: () => s.current,

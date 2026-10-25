@@ -55,7 +55,8 @@ export const MENU: Record<number, readonly ActivityId[]> = {
   // 2026-10-20: 1ro ran out of activities; the typing race (letters, Cokitos' moto race) joins its menu.
   // T43 (2026-10-25): 1ro's arcade: the monster games first, then the favourites (the character, the wardrobe, the
   // typing letters). La carrera (arrow karts) left it: nobody understood the arrows (it opens from the adult menu).
-  1: ['recipe', 'buddy', 'wardrobe', 'typing_race'],
+  // T45: "Copiá el baile" after the recipe.
+  1: ['recipe', 'dance', 'buddy', 'wardrobe', 'typing_race'],
   2: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   3: ['rule_game', 'sheet', 'recess', 'editor'],
   // T39/T41: 4to's free play is the Arcade (flow.ts): the typing race, the child's own game, La carrera from tier 4,
@@ -93,6 +94,7 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
     case 'own_game': return { id, kind: { own: true }, say: 'Tu juego: jugá el juego que hiciste en el taller.', caption: 'Tu juego' };
     // T43: 1ro's arcade
     case 'recipe': return { id, kind: { game: 'recipe' }, say: 'La receta del monstruo: armale el sándwich que quiere.', caption: 'La receta' };
+    case 'dance': return { id, kind: { game: 'dance' }, say: 'Copiá el baile: mirá cómo baila el monstruo y bailá igual.', caption: 'El baile' };
     case 'buddy': return { id, kind: { buddy: true }, say: 'Tu personaje: tocalo y festeja.', caption: 'Tu personaje' };
     default: return null;
   }
