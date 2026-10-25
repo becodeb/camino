@@ -25,10 +25,24 @@
 //   ends → 1ro's arcade (the green flag): the three monster games, the
 //   character, the wardrobe, the typing letters; no La carrera, no sheet; it
 //   fits, with a short caption that is not cut off.
+// - T47 "Tocá y pasa" (last of the guided pass): building mode (the signs,
+//   the effect cards showing the chosen animal), a card tapped adds a rule
+//   and the animal does it at once; "¡A jugar!" rings; playing mode (signs
+//   and cards gone, a warm sky, an orange frame): an animal without rules
+//   shakes and shows its empty sign, the frog jumps (round 1); back to
+//   building, the five effects unlocked, a card dragged onto the fox, a rule
+//   tapped off a sign; very fast taps while playing make the character dizzy;
+//   round 2; the coatí walks in; round 3 → the guided pass ends → 1ro's
+//   arcade with seven cards (four, then three), all in view.
 // - The arcade: the dance and "¿Qué salió mal?" open at the tier reached;
 //   the recipe again (a voluntary replay) opens at the tier reached; a won round offers "¡Otra vez!", one tier harder; "Tu
 //   personaje" opens the character choice; the adult corner menu offers La
-//   carrera and the ladder.
+//   carrera and the ladder. "Tocá y pasa" again from the arcade (a
+//   voluntary replay, at the tier reached: four animals, five effects).
+// - T49 (with ADMIN_PASSWORD): /admin names the monster game on screen;
+//   "quedan 5 minutos" → the survey with the liking faces per monster game,
+//   each with its drawing → back to the arcade; "terminar la clase" → the
+//   countdown, then the rest screen.
 // - Everything inside the viewport (no scrolling), targets ≥ 48 px; no page
 //   errors.
 // - Postgres: game_start (guided; arcade with voluntary/replay), game_round
@@ -41,6 +55,7 @@
 //   PSQL:     psql against the API's database (default "docker exec -i camino-prueba-1ro-db psql -U postgres -tA")
 //   SHOTS:    optional directory for screenshots (<name>-<width>.png)
 //   VIEWPORT: e.g. 1280x800 (default 1366x768)
+//   ADMIN_PASSWORD: the local throwaway (T49's /admin, survey and class-end part; skipped without it)
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
@@ -49,6 +64,7 @@ const { chromium } = createRequire(`${process.env.PW ?? '/tmp/pw'}/`)('playwrigh
 const base = (process.argv[2] ?? 'http://127.0.0.1:8812/').replace(/\/?$/, '/');
 const PSQL = process.env.PSQL ?? 'docker exec -i camino-prueba-1ro-db psql -U postgres -tA';
 const SHOTS = process.env.SHOTS ?? '';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? '';
 const [VW, VH] = (process.env.VIEWPORT ?? '1366x768').split('x').map(Number);
 const sql = (q) => execSync(PSQL, { input: q }).toString().trim();
 const json = (q) => JSON.parse(sql(`select coalesce(json_agg(_r), '[]') from (${q}) _r;`) || '[]');
@@ -119,6 +135,30 @@ async function dragTo(fromSel, toSel) {
   for (let i = 1; i <= 12; i++) await p.mouse.move(a.x + (b.x - a.x) * (i / 12), a.y + (b.y - a.y) * (i / 12));
   await p.mouse.up();
 }
+/** T47: the tap game's helpers. */
+const tapHit = (a) => `.tp-animal-hit[data-animal="${a}"]`;
+const tapCard = (e) => `.tp-card[data-effect="${e}"]`;
+const rulesOf = async (a) => (await st()).rules[a] ?? [];
+/** A screenshot of the chosen animal held still in the middle of doing `e` (?debug's freeze: a screenshot on a loaded host comes late). */
+const FREEZE_AT = { jump: 330, colour: 180, confetti: 380, hide: 700, spin: 300 };
+async function freezeShot(e, name) {
+  const a = (await st()).selected;
+  await p.evaluate(([aa, ee, at]) => window.__monster.freeze(aa, ee, at), [a, e, FREEZE_AT[e]]);
+  await p.waitForTimeout(200);
+  await shot(p, name);
+  await p.evaluate(() => window.__monster.unfreeze());
+  await p.waitForTimeout(150);
+}
+/** A card tapped (the rule count becomes `n`); `name`: a screenshot of the animal doing it at once (its preview). */
+async function addTapRule(e, n, name) {
+  await p.locator(tapCard(e)).click();
+  await p.waitForFunction(([nn]) => Object.values(window.__monster.state().rules).flat().length === nn, [n], { timeout: 5000 });
+  await p.waitForFunction(() => window.__monster.state().busy.length === 0, null, { timeout: 8000 });
+  if (name) await freezeShot(e, name);
+  await p.waitForTimeout(300);
+}
+async function toMode(m) { await p.locator(`.tp-mode[data-mode="${m}"]`).click(); await p.waitForFunction((mm) => window.__monster.state().phase === mm, m, { timeout: 4000 }); await p.waitForTimeout(500); }
+const waitIdle = () => p.waitForFunction(() => window.__monster.state().busy.length === 0, null, { timeout: 8000 });
 /** No scrolling: the page fits the viewport. */
 const fits = () => p.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1 && document.documentElement.scrollWidth <= innerWidth + 1);
 async function hold(x, y, ms) { await p.mouse.move(x, y); await p.mouse.down(); await p.waitForTimeout(ms); await p.mouse.up(); }
@@ -367,16 +407,116 @@ try {
   await p.waitForTimeout(500);
   await p.locator('.oo-option[data-step="spoon_take"]').click();
   await p.waitForSelector('.pp-cheer', { timeout: 16_000 });
-  ok(true, 'the guided pass ends with a cheer');
+  ok(true, '"¿Qué salió mal?"\'s guided turn ends with a cheer');
+  await p.locator('.pp-cheer-next').click();
+
+  // ---------------------------------------------------------------- T47 "Tocá y pasa"
+  await p.waitForSelector('.piloto[data-step="games"] .tp-game', { timeout: 15_000 });
+  ok(true, 'the guided pass goes on: "Tocá y pasa", the last game');
+  s = await st();
+  ok(s.phase === 'build' && s.tier === 1 && s.animals.join() === 'rana,zorro,carpincho' && s.effects.join() === 'jump,colour,confetti' && s.selected === 'rana',
+    `round 1: building, three animals, three effects, the frog chosen (${s.animals.join(' ')} / ${s.effects.join(' ')})`);
+  ok(await p.waitForSelector('.ghost-hand', { timeout: 6000 }).then(() => true).catch(() => false), 'the first-time ghost demo (an animal, a card, "¡A jugar!", the animal)');
+  await p.waitForTimeout(700);
+  await shot(p, 'tap-ghost');
+  await p.waitForSelector('.ghost-hand', { state: 'detached', timeout: 20_000 }).catch(() => {});
+  ok(await fits(), '"Tocá y pasa" fits the viewport');
+  const tsizes = await p.evaluate(() => [...document.querySelectorAll('.tp-card, .tp-mode, .tp-animal-hit')].map((e) => { const r = e.getBoundingClientRect(); return Math.min(r.width, r.height); }));
+  ok(tsizes.length === 8 && tsizes.every((x) => x >= 48), `the cards, the two modes and the animals are ≥ 48 px (${tsizes.map(Math.round).join(', ')})`);
+  ok((await p.locator('.tp-sign').count()) === 3 && (await p.locator('.tp-sign.is-lit').count()) === 1, 'a sign over each animal, the chosen one lit');
+  await shot(p, 'tap-build');
+  // a card tapped: the frog's rule, and the frog jumps at once
+  await p.locator(tapCard('jump')).click();
+  await p.waitForSelector('.tp-animal[data-animal="rana"] .tp-do-jump', { timeout: 2000 });
+  ok((await rulesOf('rana')).join() === 'jump' && (await p.locator('.tp-slot[data-animal="rana"]').count()) === 1, 'a card tapped: the rule on the frog\'s sign, and the frog jumps at once');
+  await waitIdle();
+  await freezeShot('jump', 'tap-effect-jump');
+  ok((await p.locator('.tp-mode[data-mode="play"].is-ready').count()) === 1, '"¡A jugar!" rings: there is a new rule to try');
+  await toMode('play');
+  await p.waitForTimeout(400);
+  await shot(p, 'tap-play');
+  ok((await p.locator('.tp-game.is-play').count()) === 1 && (await p.locator('.tp-cards.is-off').count()) === 1 && (await p.locator('.tp-bob-hand').count()) === 1,
+    'playing: the cards and the signs go away, a little hand over the frog (the one with rules)');
+  const sky = await p.evaluate(() => getComputedStyle(document.querySelector('.tp-sky')).fill);
+  ok(/251, 233, 191/.test(sky), `playing looks different: a warm sky and the orange frame (${sky})`);
+  await p.locator(tapHit('carpincho')).click();
+  await p.waitForSelector('.tp-empty-sign', { timeout: 2000 });
+  await p.waitForTimeout(250);
+  await shot(p, 'tap-play-empty');
+  ok((await st()).won === 0, 'an animal without rules just shakes and shows its empty sign (no round)');
+  await p.waitForTimeout(800);
+  await p.locator(tapHit('rana')).click();
+  await p.waitForFunction(() => window.__monster.state().won === 1, null, { timeout: 5000 });
+  await p.waitForTimeout(300);
+  await shot(p, 'tap-won');
+  ok((await p.locator('.ga-confetti').count()) === 1 && (await st()).round === 2, 'the frog tapped while playing: it jumps, round 1 won, confetti');
+  // round 2: five effects; a card dragged onto the fox; a rule taken off; very fast taps → dizzy
+  await p.waitForFunction(() => window.__monster.state().tier === 2, null, { timeout: 6000 });
+  await toMode('build');
+  s = await st();
+  ok(s.effects.length === 5 && (await p.locator('.tp-card').count()) === 5, `round 2: the five effects unlocked (${s.effects.join(' ')})`);
+  await dragTo(tapCard('hide'), tapHit('zorro'));
+  await p.waitForFunction(() => (window.__monster.state().rules.zorro ?? []).join() === 'hide', null, { timeout: 4000 });
+  ok((await st()).selected === 'zorro', 'a card dragged onto the fox: its rule, and the fox chosen');
+  await p.waitForSelector('.tp-animal[data-animal="zorro"] .tp-bush-pop', { timeout: 2000 });
+  await waitIdle();
+  await freezeShot('hide', 'tap-effect-hide');
+  await addTapRule('spin', 3, 'tap-effect-spin');
+  await addTapRule('colour', 4, 'tap-effect-colour');
+  await shot(p, 'tap-build-rules');
+  await p.locator('.tp-slot[data-animal="zorro"][data-i="1"]').click();
+  await p.waitForFunction(() => (window.__monster.state().rules.zorro ?? []).join() === 'hide,colour', null, { timeout: 4000 });
+  ok(true, 'a rule tapped on the sign is taken off (hide, spin, colour → hide, colour)');
+  await addTapRule('spin', 4);
+  await waitIdle();
+  await p.locator(tapCard('confetti')).click();
+  await p.waitForTimeout(150);
+  ok((await rulesOf('zorro')).length === 3 && (await p.locator('.tp-animal[data-animal="zorro"] .tp-actor.is-no').count()) === 1, 'a full sign (three rules) takes no more: the fox shakes');
+  await p.waitForTimeout(700);
+  await toMode('play');
+  const rb = await p.locator(tapHit('rana')).boundingBox();
+  for (let i = 0; i < 6; i++) { await p.mouse.click(rb.x + rb.width / 2, rb.y + rb.height / 2); await p.waitForTimeout(60); }
+  await p.waitForSelector('.tp-game.is-dizzy', { timeout: 3000 }).catch(() => {});
+  ok((await p.locator('.tp-game.is-dizzy').count()) === 1, 'very fast taps on the animals: the character sits dizzy');
+  await p.waitForTimeout(300);
+  await shot(p, 'tap-dizzy');
+  await p.waitForSelector('.tp-game.is-dizzy', { state: 'detached', timeout: 5000 });
+  await waitIdle();
+  await p.locator(tapHit('zorro')).click();
+  await p.waitForSelector('.tp-animal[data-animal="zorro"] .tp-do-hide', { timeout: 2000 });
+  await p.waitForFunction(() => window.__monster.state().won === 2, null, { timeout: 8000 });
+  await freezeShot('hide', 'tap-play-hide');
+  ok(true, 'the fox tapped: it hides, changes colour and spins, one after another; round 2 won');
+  // round 3: the coatí walks in
+  await p.waitForFunction(() => window.__monster.state().tier === 3, null, { timeout: 6000 });
+  await p.waitForTimeout(1800);
+  s = await st();
+  ok(s.animals.length === 4 && s.animals[3] === 'coati', 'round 3: the coatí walks in (four animals)');
+  await toMode('build');
+  await p.locator(tapHit('coati')).click();
+  await p.waitForFunction(() => window.__monster.state().selected === 'coati', null, { timeout: 3000 });
+  await p.waitForTimeout(400);
+  await addTapRule('confetti', 5, 'tap-effect-confetti');
+  await shot(p, 'tap-build-four');
+  ok(await fits(), 'four animals and their signs fit');
+  await toMode('play');
+  await p.locator(tapHit('coati')).click();
+  await p.waitForSelector('.tp-animal[data-animal="coati"] .tp-burst', { timeout: 2000 });
+  await waitIdle();
+  await freezeShot('confetti', 'tap-play-confetti');
+  await p.waitForSelector('.pp-cheer', { timeout: 16_000 });
+  ok(true, 'round 3 won: a little more time to play, then the guided pass ends with a cheer');
   await p.locator('.pp-cheer-next').click();
   await p.waitForSelector('.piloto[data-step="free_play"] .pp-menu', { timeout: 15_000 });
   const menu = await p.locator('.pp-menu').getAttribute('data-menu');
-  ok(menu === 'recipe dance oops buddy wardrobe typing_race', `1ro's arcade: ${menu} (no La carrera, no sheet)`);
+  ok(menu === 'recipe dance oops tap buddy wardrobe typing_race', `1ro's arcade: ${menu} (no La carrera, no sheet)`);
   ok((await p.locator('.piloto.route-done').count()) === 1, 'leaving the guided pass raised the green flag');
   await p.waitForTimeout(800);
   ok(await fits(), 'the arcade menu fits the viewport');
   const msizes = await p.evaluate(() => [...document.querySelectorAll('.pp-fp-card')].map((e) => { const r = e.getBoundingClientRect(); return [Math.min(r.width, r.height), r.bottom <= innerHeight && r.right <= innerWidth]; }));
-  ok(msizes.length === 6 && msizes.every(([x, inView]) => x >= 48 && inView), `six cards, all in view and ≥ 48 px (${msizes.map(([x]) => Math.round(x)).join(', ')})`);
+  ok(msizes.length === 7 && msizes.every(([x, inView]) => x >= 48 && inView), `seven cards, all in view and ≥ 48 px (${msizes.map(([x]) => Math.round(x)).join(', ')})`);
+  const rows = await p.evaluate(() => [...document.querySelectorAll('.pp-fp-card')].map((e) => e.getBoundingClientRect().top).sort((x, y) => x - y).reduce((n, t, i, a) => n + (i && t - a[i - 1] > 60 ? 1 : 0), 1));
+  ok(rows === 2, `the seven cards in two rows (${rows})`);
   const cap = await p.evaluate(() => { const t = document.querySelector('.pp-cap-text'); return t ? { text: t.textContent, cut: t.scrollHeight > t.clientHeight + 4, h: [t.scrollHeight, t.clientHeight] } : null; });
   ok(!!cap && !cap.cut && !/receta/i.test(cap.text), `the menu's caption is short and not cut off (${cap?.text} ${cap?.h})`);
   await shot(p, 'arcade-menu');
@@ -450,6 +590,27 @@ try {
   await p.waitForSelector('.pp-menu', { timeout: 10_000 });
   ok(true, '"volver al menú" mid-round');
 
+  // ---------------------------------------------------------------- the arcade: "Tocá y pasa" again (a voluntary replay)
+  await p.locator('.pp-fp-card[data-activity="tap"]').click();
+  await p.waitForSelector('.tp-game', { timeout: 10_000 });
+  s = await st();
+  ok(s.tier === 3 && s.animals.length === 4 && s.effects.length === 5 && Object.keys(s.rules).length === 0, `"Tocá y pasa" from the arcade opens at the tier reached, a fresh meadow (tier ${s.tier}, ${s.animals.length} animals)`);
+  ok((await p.locator('.ghost-hand').count()) === 0, 'no ghost demo the second time');
+  await p.locator(tapHit('carpincho')).click();
+  await p.waitForTimeout(400);
+  await addTapRule('spin', 1);
+  await addTapRule('jump', 2);
+  await toMode('play');
+  await p.locator(tapHit('carpincho')).click();
+  await p.waitForFunction(() => window.__monster.state().won === 1, null, { timeout: 6000 });
+  await p.waitForTimeout(1500);
+  await p.locator(tapHit('carpincho')).click();
+  await p.waitForTimeout(1700);
+  await shot(p, 'tap-arcade');
+  ok(true, 'the arcade\'s "Tocá y pasa": a rule made, then used (endless: it keeps going)');
+  await p.locator('.pp-menu-back').click();
+  await p.waitForSelector('.pp-menu', { timeout: 10_000 });
+
   // ---------------------------------------------------------------- "Tu personaje", the adult menu
   await p.locator('.pp-fp-card[data-activity="buddy"]').click();
   await p.waitForSelector('.choice-row', { timeout: 10_000 });
@@ -470,6 +631,59 @@ try {
   await p.locator('.pp-adult-close').click();
   await p.evaluate(() => window.__piloto.flush());
   await p.waitForTimeout(2500);
+
+  // ---------------------------------------------------------------- T49: /admin names the game; "quedan 5 minutos" → the survey per game; "terminar la clase"
+  if (ADMIN_PASSWORD) {
+    const actx = await browser.newContext({ viewport: { width: VW, height: VH } });
+    const a = await actx.newPage();
+    a.on('pageerror', (e) => errors.push(`admin: ${e}`));
+    await a.goto(`${base}admin`);
+    await a.waitForSelector('#login-card:not([hidden])', { timeout: 30_000 });
+    await a.fill('#password', ADMIN_PASSWORD);
+    await a.click('#login-btn');
+    await a.waitForSelector('#panel:not([hidden])', { timeout: 10_000 });
+    await p.locator('.pp-fp-card[data-activity="tap"]').click();
+    await p.waitForSelector('.tp-game', { timeout: 10_000 });
+    await p.evaluate(() => window.__piloto.flush());
+    await a.waitForFunction((id) => /Tocá y pasa/.test(document.querySelector(`#class-rows tr[data-id="${id}"]`)?.textContent ?? ''), sid, { timeout: 20_000 });
+    const where = await a.locator(`#class-rows tr[data-id="${sid}"] td[data-where]`).innerText();
+    ok(/juego libre · Tocá y pasa/.test(where), `/admin names the monster game on screen ("${where}")`);
+    await a.locator(`#class-rows tr[data-id="${sid}"]`).scrollIntoViewIfNeeded();
+    await shot(a, 'admin-game');
+    // "quedan 5 minutos": the game on screen gets its grace, then the survey
+    await a.click('#five-min');
+    await p.waitForSelector('.pp-five', { timeout: 20_000 });
+    await p.locator('.pp-menu-back').click();
+    await p.waitForSelector('.piloto[data-step="survey"] .pp-survey', { timeout: 30_000 });
+    const expected = ['liked', 'liked_recipe', 'liked_dance', 'liked_oops', 'liked_tap', 'difficulty', 'favorite_activity', 'play_again'];
+    const seen = [];
+    for (const q of expected) {
+      await p.waitForSelector(`.pp-survey[data-question="${q}"]`, { timeout: 15_000 });
+      seen.push(q);
+      await p.waitForTimeout(700);
+      if (q.startsWith('liked_')) {
+        const game = q.slice(6);
+        ok((await p.locator(`.pp-q-game[data-game="${game}"] .pp-fp-art`).count()) === 1 && (await p.locator('.pp-option').count()) === 3, `the survey asks about "${game}" with its drawing and the three faces`);
+        ok(await fits(), `the "${game}" question fits`);
+        await shot(p, `survey-${q}`);
+      }
+      const pick = q === 'favorite_activity' ? await p.locator('.pp-option').first().getAttribute('data-answer') : q === 'liked_dance' ? 'mid' : q === 'difficulty' ? 'easy' : 'yes';
+      await p.locator(`.pp-option[data-answer="${pick}"]`).first().click();
+      await p.waitForTimeout(1300);
+    }
+    ok(seen.join() === expected.join(), `the 1ro survey: ${seen.join(' ')}`);
+    await p.waitForSelector('.piloto[data-step="free_play"] .pp-menu', { timeout: 20_000 });
+    ok(true, 'after the survey: back to the arcade');
+    // "terminar la clase": the countdown, then the rest screen
+    await a.click('#end-class'); await a.click('#end-class');
+    await p.waitForSelector('.pp-end-banner', { timeout: 20_000 });
+    await shot(p, 'class-end-banner');
+    await p.waitForSelector('[data-class-end="rest"]', { timeout: 25_000 });
+    await shot(p, 'class-end-rest');
+    const ended = await p.evaluate(() => window.__piloto.session());
+    ok(ended.end_reason === 'class_end' && !!ended.ended_at, `"terminar la clase": the countdown, then the session ended (${ended.end_reason})`);
+    await actx.close();
+  } else console.log('     (no ADMIN_PASSWORD: the /admin, survey and class-end part is skipped)');
 } catch (e) {
   ok(false, `stopped: ${String(e.message ?? e).split('\n')[0]}`);
   await shot(p, 'stopped');
@@ -481,7 +695,7 @@ try {
 try {
   const ev = (type) => json(`select payload from events where session_id = '${sid}' and type = '${type}' order by seq`).map((r) => r.payload);
   const allStarts = ev('game_start');
-  ok(allStarts.filter((x) => x.mode === 'guided').map((x) => x.game).join(' ') === 'recipe dance oops', `the guided pass: recipe, dance, oops (${allStarts.map((x) => `${x.game}:${x.mode}`).join(' ')})`);
+  ok(allStarts.filter((x) => x.mode === 'guided').map((x) => x.game).join(' ') === 'recipe dance oops tap', `the guided pass: recipe, dance, oops, tap (${allStarts.map((x) => `${x.game}:${x.mode}`).join(' ')})`);
   const starts = allStarts.filter((x) => x.game === 'recipe');
   ok(starts.length === 2 && starts[0].mode === 'guided' && starts[0].voluntary === false && starts[1].mode === 'arcade' && starts[1].voluntary === true && starts[1].replay === true && starts[1].play_no === 2,
     `game_start: guided, then the arcade's voluntary replay (${JSON.stringify(starts.map((x) => [x.mode, x.play_no, x.tier, x.voluntary, x.replay]))})`);
@@ -521,6 +735,31 @@ try {
   const steps = ev('step').map((x) => `${x.from}>${x.to}`);
   ok(steps.slice(0, 3).join(' ') === 'setup>character character>games games>free_play', `steps: ${steps.join(' ')}`);
   ok(ev('route_done').length === 1, 'route_done once');
+  // T47: "Tocá y pasa"
+  const tr = allRounds.filter((x) => x.game === 'tap' && x.solved);
+  ok(tr.length >= 3 && tr[0].round === 1 && tr[0].new_rules === 1 && tr[0].rules?.rana?.join() === 'jump' && tr[0].no_rule_taps === 1 && tr[0].play_taps === 2 && tr[0].correct === true,
+    `tap round 1: one rule made, an animal without rules tapped, the frog used (${JSON.stringify(tr[0])})`);
+  ok(tr[1]?.rules?.zorro?.join() === 'hide,colour,spin' && tr[1].removed === 1 && tr[1].sources?.drag === 1 && tr[1].effects_run?.hide === 1 && tr[1].switches === 2 && tr[1].build_ms > 0 && tr[1].play_ms > 0,
+    `tap round 2: three rules on the fox (one dragged, one taken off), played (${JSON.stringify(tr[1])})`);
+  ok(tr[2]?.animals === 4 && tr[2].rules?.coati?.join() === 'confetti', `tap round 3: four animals, the coatí's confetti (${JSON.stringify(tr[2])})`);
+  const te = ev('game_end').filter((x) => x.game === 'tap');
+  ok(te[0]?.mode === 'guided' && te[0].reason === 'finished' && te[0].rounds === 3 && te[0].rules_made === 6 && te[0].rules_removed === 1 && te[0].play_taps >= 5 && te[0].play_ms > 0,
+    `tap game_end (guided): finished, 3 rounds, the totals (${JSON.stringify(te[0])})`);
+  ok(te.some((x) => x.mode === 'arcade'), 'tap game_end (arcade) logged');
+  const rules = ev('tap_rule');
+  ok(rules.filter((x) => x.action === 'add').length >= 8 && rules.filter((x) => x.action === 'remove').length === 1 && rules.some((x) => x.source === 'drag' && x.animal === 'zorro' && x.effect === 'hide'),
+    `tap_rule: every rule added or taken off (${rules.length} rows)`);
+  const modes = ev('tap_mode');
+  ok(modes.length >= 6 && modes[0].to === 'play' && modes[0].rules_total === 1 && modes.every((x) => x.stretch_ms >= 0), `tap_mode: each switch (${modes.map((x) => x.to).join(' ')})`);
+  ok(rapid.some((r) => r.game === 'tap'), 'rapid_taps in "Tocá y pasa" too');
+  ok(demos.filter((d) => d.level_id === 'game:tap' && d.kind === 'intro').length === 1, '"Tocá y pasa"\'s ghost demo once');
+  if (ADMIN_PASSWORD) {
+    const answers = ev('survey_answer');
+    const perGame = answers.filter((x) => String(x.question).startsWith('liked_'));
+    ok(perGame.map((x) => `${x.game}:${x.answer}`).join(' ') === 'recipe:yes dance:mid oops:yes tap:yes', `survey_answer per game (${JSON.stringify(perGame)})`);
+    const survey = json(`select survey from sessions where id = '${sid}'`)[0]?.survey ?? {};
+    ok(survey.liked_tap === 'yes' && survey.liked_dance === 'mid' && survey.liked === 'yes', `sessions.survey keeps the per-game answers (${JSON.stringify(survey)})`);
+  }
   const choices = ev('choice').filter((c) => c.activity === 'recipe' || c.activity === 'buddy');
   ok(choices.length >= 3, `arcade picks and the character's pick logged (${JSON.stringify(choices)})`);
 } catch (e) {
