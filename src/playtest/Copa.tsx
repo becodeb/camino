@@ -1,13 +1,20 @@
 // Copa de 4to (C03): the screen. Five circuits, each one concept and one
 // empty slot (the rest of the program already in place — never a blank
-// tape), raced against two fixed-pace rivals (honestRace.ts: silver and
-// gold, the fox always gold). Reuses race.ts's own Stretch/judge/Palette/
-// Tape for circuits 1 (sequence), 2 (turbo) and the podium art for every
-// circuit's result; circuits 3 (puddle) and 4 (log event) are a simpler
-// two-button choice (no text reading beyond one big label), and 5 (laps) a
-// row of number buttons for `vueltas`. Not wired into the 4to route yet
-// (C04): `Copa` takes its own props so it can be driven standalone (and
-// screenshotted via the dev-only `?debug#/copa-dev` entry below).
+// tape), raced on the SAME live view as 1ro's own "La carrera"
+// (race.ts/raceArt.tsx, reused via copaTrack.tsx): a side-scrolling road,
+// the child's kart, two critters — never a bare quiz. The two rivals are
+// never the rubber band: they drive continuously at their fixed honest pace
+// (honestRace.ts) from the moment a circuit starts, independent of the
+// child, so the fox visibly pulls ahead when the child is slow and the
+// turbo visibly overtakes it. Circuits 1 (sequence) and 2 (turbo) are live,
+// block-by-block, exactly like La carrera (instant per-block feedback, the
+// kart nudges at once); circuits 3 (puddle), 4 (log event) and 5 (laps) are
+// "pick the block, then ¡Correr!": the child places the one concept slot
+// once, then watches the live consequence play out (slows/skids, jumps/
+// crashes, the right/wrong lap count), landing on the same honest result
+// podium as every other grade's honest races. Not wired into the 4to route
+// yet (C04): `Copa` takes its own props so it can be driven standalone
+// (and screenshotted via the dev-only `?debug#/copa-dev` entry below).
 //
 // Logged by the caller's `logger` prop: `copa_start`, `copa_end`,
 // `copa_revancha` (docs/prueba-piloto-datos.md).
@@ -18,13 +25,20 @@ import { speak } from '../ui/speech';
 import { REDUCED } from '../ui/runtime';
 import { CritterArt } from '../ui/critterArt';
 import { DEBUG } from '../screens/levelKit';
+import { PlayerFace } from '../screens/player';
+import { Bar } from '../screens/LevelBar';
+import { ThenArrow } from '../ui/art';
 import {
   checkSlotChoice, copaMeMs, copaReason, copaPlacement, generateCircuit, medalLabel, rivalsMsFor,
-  type CircuitDef, type CircuitId, type CopaResult, type Medal,
+  COPA_RIVALS, type CircuitDef, type CircuitId, type CopaResult, type Medal,
 } from './copa';
 import { honestRanking, type Racer } from './honestRace';
-import { arrowBlock, filledOf, judge, repeatFor, type Block, type RoadDir, type Stretch } from './race';
-import { AgainArt, Cup, FlagIcon, MiniRoad, PodiumSteps, Shelf } from './raceArt';
+import {
+  PARK, RIVAL_START, START, TURBO_SPEED, ZOOM_SPEED, arrowBlock, filledOf, judge, repeatFor, restingSpot,
+  type Block, type RoadDir, type Stretch,
+} from './race';
+import { buildCourse, nextCam, rivalPositions, RaceScene, type SceneDust } from './copaTrack';
+import { AgainArt, Cup, FlagIcon, PodiumSteps, Shelf } from './raceArt';
 import { Palette, PodiumMe, Tape } from './Race';
 import '../blocks/blocks.css';
 import './playtest.css';
@@ -40,6 +54,7 @@ export interface CopaProps {
 
 const CIRCUIT_PAIR: readonly [CritterId, CritterId] = ['coati', 'zorro']; // [silver, gold] — the fox is always gold
 const SEED_OF: Record<CircuitId, number> = { 1: 101, 2: 202, 3: 303, 4: 404, 5: 505 };
+const VIEW_W = 1200;
 
 const CIRCUIT_GOAL: Record<CircuitId, string> = {
   1: 'Completá el camino',
@@ -135,15 +150,26 @@ export function Copa({ initial = 1, logger, onCircuitDone, onExit }: CopaProps) 
     );
   }
 
+  const instruction = (
+    <span className="drawn-task" aria-hidden="true">
+      <PlayerFace className="bar-face" />
+      <ThenArrow />
+      <FlagIcon size={42} />
+    </span>
+  );
+
   return (
     <main className={`pp-page pp-race copa-page${phase === 'result' ? ' is-podium' : ''}`} data-circuit={id} data-phase={phase}>
-      <header className="bar copa-bar">
-        <span className="copa-bar-title"><b>Copa de 4to</b> {`circuito ${id} de 5`}</span>
-        <span className="copa-bar-actions">
-          {phase === 'play' && <button type="button" className="cut copa-hint-btn" onClick={onHint} aria-label="Pista">🔊 Pista</button>}
-          {onExit && <button type="button" className="cut copa-exit-btn" onClick={onExit} aria-label="Salir">Salir</button>}
-        </span>
-      </header>
+      <Bar
+        instruction={instruction}
+        title={<><b>Copa de 4to</b>{` circuito ${id} de 5`}</>}
+        pages={phase === 'play' ? <p className="copa-reminder">{CIRCUIT_GOAL[id]}</p> : null}
+        onSpeak={onHint}
+        onHelp={onHint}
+      />
+      {onExit && (
+        <button type="button" className="cut copa-exit-btn" onClick={onExit} aria-label="Salir">Salir</button>
+      )}
       {body}
       {DEBUG && <DevHooks id={id} def={def} factsRef={factsRef} setHelpLevel={setHelpLevel} onFinish={finish} goCircuit={startCircuit} goRevancha={goRevancha} goNext={goNext} />}
     </main>
@@ -183,137 +209,257 @@ function CircuitPlay({ def, factsRef, helpLevel, onFinish }: {
   def: CircuitDef; factsRef: { current: Facts }; helpLevel: number;
   onFinish(conceptOk: boolean, usedTurbo?: boolean): void;
 }) {
-  if (def.kind === 'sequence') return <SequencePlay def={def} factsRef={factsRef} helpLevel={helpLevel} onFinish={onFinish} />;
-  if (def.kind === 'turbo') return <TurboPlay def={def} factsRef={factsRef} helpLevel={helpLevel} onFinish={onFinish} />;
-  if (def.kind === 'puddle') return <HazardPlay kind="puddle" pieces={def.pieces} slotIndex={def.slotIndex} factsRef={factsRef} helpLevel={helpLevel} onFinish={onFinish} />;
-  if (def.kind === 'event') return <HazardPlay kind="event" pieces={def.pieces} slotIndex={def.slotIndex} factsRef={factsRef} helpLevel={helpLevel} onFinish={onFinish} />;
-  return <LapsPlay def={def} factsRef={factsRef} helpLevel={helpLevel} onFinish={onFinish} />;
+  if (def.kind === 'sequence') {
+    const stretch: Stretch = { road: [...def.road], turbo: false };
+    return (
+      <OneStretchRace
+        stretch={stretch} prefilledCount={def.emptySlot} allowTurbo={false} factsRef={factsRef} helpLevel={helpLevel}
+        conceptOkFor={() => true} onFinish={onFinish}
+      />
+    );
+  }
+  if (def.kind === 'turbo') {
+    const stretch: Stretch = { road: [...def.lead, ...Array<RoadDir>(def.turboLen).fill('right')], turbo: true };
+    return (
+      <OneStretchRace
+        stretch={stretch} prefilledCount={def.lead.length} allowTurbo factsRef={factsRef} helpLevel={helpLevel}
+        conceptOkFor={(usedTurbo) => checkSlotChoice(def, usedTurbo ? 'turbo' : 'single')} onFinish={onFinish}
+      />
+    );
+  }
+  if (def.kind === 'puddle') return <HazardRun kind="puddle" pieces={def.pieces} helpLevel={helpLevel} onFinish={onFinish} />;
+  if (def.kind === 'event') return <HazardRun kind="event" pieces={def.pieces} helpLevel={helpLevel} onFinish={onFinish} />;
+  return <LapsRun def={def} helpLevel={helpLevel} onFinish={onFinish} />;
 }
 
-function SequencePlay({ def, factsRef, helpLevel, onFinish }: {
-  def: Extract<CircuitDef, { kind: 'sequence' }>; factsRef: { current: Facts }; helpLevel: number; onFinish(ok: boolean): void;
+// ------------------------------------------------------------------ circuits 1 & 2: live, block-by-block (exactly like La carrera)
+
+function OneStretchRace({ stretch, prefilledCount, allowTurbo, factsRef, helpLevel, conceptOkFor, onFinish }: {
+  stretch: Stretch; prefilledCount: number; allowTurbo: boolean; factsRef: { current: Facts }; helpLevel: number;
+  conceptOkFor(usedTurbo: boolean): boolean; onFinish(conceptOk: boolean, usedTurbo?: boolean): void;
 }) {
-  const prefilled = useMemo(() => def.road.slice(0, def.emptySlot).map((d) => arrowBlock(d)), [def]);
-  const [tape, setTape] = useState(prefilled);
+  const course = useMemo(() => buildCourse([stretch]), [stretch]);
+  const prefilled = useMemo(() => stretch.road.slice(0, prefilledCount).map((d) => arrowBlock(d)), [stretch, prefilledCount]);
+  const startMe = useMemo(() => restingSpot(course, 0, prefilledCount), [course, prefilledCount]);
+  const g = useRef({
+    tape: prefilled, phase: 'input' as 'input' | 'zoom', me: startMe, meTarget: startMe,
+    zoomTo: 0, zoomSpeed: ZOOM_SPEED, turboOn: false, ok: true, cam: 0, lastFrame: 0, startAt: Date.now(), finished: false,
+  });
+  const [tapeV, setTapeV] = useState(prefilled);
   const [wrong, setWrong] = useState(false);
-  const stretch: Stretch = { road: [...def.road], turbo: false };
-  const place = (b: Block) => {
-    const r = judge(stretch.road, tape, b);
+  const [live, setLive] = useState({ me: startMe, r0: RIVAL_START[0], r1: RIVAL_START[1], cam: 0, turboOn: false });
+
+  useEffect(() => {
+    let raf = 0;
+    const loop = (t: number) => {
+      raf = requestAnimationFrame(loop);
+      const s = g.current;
+      const dt = s.lastFrame ? Math.min(0.06, (t - s.lastFrame) / 1000) : 0;
+      s.lastFrame = t;
+      const elapsed = Date.now() - s.startAt;
+      const [r0, r1] = rivalPositions(COPA_RIVALS, elapsed, course.finish);
+      if (s.phase === 'zoom') {
+        if (s.me < s.zoomTo) s.me = Math.min(s.zoomTo, s.me + s.zoomSpeed * dt);
+        if (!s.finished && s.me >= course.finish) { s.finished = true; onFinish(s.ok, s.turboOn); }
+      } else {
+        s.me += (s.meTarget - s.me) * Math.min(1, dt * 7);
+      }
+      s.cam = nextCam(s.cam, s.me, VIEW_W, dt);
+      setLive({ me: s.me, r0, r1, cam: s.cam, turboOn: s.turboOn && s.phase === 'zoom' });
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course]);
+
+  const place = (block: Block) => {
+    const s = g.current;
+    if (s.phase !== 'input') return;
+    const r = judge(stretch.road, s.tape, block);
+    if (r.verdict === 'full') return;
     if (r.verdict === 'wrong') {
       factsRef.current.wrongAttempts++;
-      setTape(r.tape);
-      setWrong(true);
-      setTimeout(() => { setTape(prefilled); setWrong(false); }, 750);
+      s.tape = r.tape; setTapeV(r.tape); setWrong(true);
+      setTimeout(() => { s.tape = prefilled; setTapeV(prefilled); setWrong(false); }, 750);
       return;
     }
-    setTape(r.tape);
-    if (r.verdict === 'complete') onFinish(checkSlotChoice(def, (b as { cmd: RoadDir }).cmd));
+    s.tape = r.tape; setTapeV(r.tape);
+    const filled = filledOf(r.tape);
+    if (r.verdict === 'complete') {
+      s.turboOn = block.t === 'loop';
+      s.ok = conceptOkFor(s.turboOn);
+      s.zoomTo = course.finish + PARK;
+      s.zoomSpeed = s.turboOn ? TURBO_SPEED : ZOOM_SPEED;
+      s.phase = 'zoom';
+      return;
+    }
+    s.meTarget = Math.max(s.meTarget, restingSpot(course, 0, filled));
   };
-  const h0 = Math.round(0);
+
+  const repeat = allowTurbo ? repeatFor(stretch, tapeV) : null;
   return (
     <section className="copa-circuit">
-      <section className="sheet copa-road">
-        <MiniRoad road={def.road} turbo={false} h0={h0} covered={wrong ? filledOf(tape) - 1 : filledOf(tape)} next={filledOf(tape) < def.road.length ? filledOf(tape) : null} colors={{ right: '#6aa84f', up: '#3d85c6', down: '#cc4125' } as Record<RoadDir, string>} />
-        <Tape road={def.road} tape={tape} label={LABEL} wrong={wrong} turbo={false} active={!wrong} onTap={() => {}} />
+      <section className="sheet copa-track-card">
+        <RaceScene course={course} stretches={[stretch]} me={live.me} rivals={[live.r0, live.r1]} pair={CIRCUIT_PAIR} viewW={VIEW_W} cam={live.cam} turboOn={live.turboOn} />
       </section>
-      <Palette label={LABEL} repeat={null} reserve={false} disabled={wrong} onPlace={(b) => place(b)} />
-      {helpLevel >= 2 && <p className="copa-highlight" role="status">👉 ¡Ahí! Completá esa flecha.</p>}
+      <div className="copa-build-panel">
+        <Palette label={LABEL} repeat={repeat} reserve={allowTurbo} disabled={wrong} onPlace={(b) => place(b)} />
+        <Tape road={stretch.road} tape={tapeV} label={LABEL} wrong={wrong} turbo={stretch.turbo} active={!wrong} onTap={() => {}} />
+      </div>
+      {helpLevel >= 2 && <p className="copa-highlight" role="status">¡Ahí! Completá esa flecha.</p>}
     </section>
   );
 }
 
-function TurboPlay({ def, factsRef, helpLevel, onFinish }: {
-  def: Extract<CircuitDef, { kind: 'turbo' }>; factsRef: { current: Facts }; helpLevel: number; onFinish(ok: boolean, usedTurbo: boolean): void;
+// ------------------------------------------------------------------ circuits 3 & 4: pick the block, then ¡Correr! (the live consequence)
+
+// The scripted circuits (3/4/5) have no live-building phase to naturally
+// pace them against the honest rivals, so their cruise speed is calibrated
+// against COPA_PACE (copa.ts), not race.ts's own ZOOM_SPEED (which is tuned
+// for a short post-slot flourish, far faster than any honest rival) — a
+// concept-right cruise clears gold (1.1 units/s, honestRace.ts) and a
+// concept-wrong one does not, so the race on screen looks like the race the
+// result screen reports, with the fox visibly close instead of lapped.
+const CRUISE_OK = 1.5;
+const CRUISE_BAD = 0.9;
+const SPEED_SLOW = 0.5;
+const SKID_PAUSE_MS = 650;
+
+function HazardRun({ kind, pieces, helpLevel, onFinish }: {
+  kind: 'puddle' | 'event'; pieces: readonly string[]; helpLevel: number; onFinish(conceptOk: boolean): void;
 }) {
-  const road = useMemo(() => [...def.lead, ...Array<RoadDir>(def.turboLen).fill('right')], [def]);
-  const prefilled = useMemo(() => def.lead.map((d) => arrowBlock(d)), [def]);
-  const [tape, setTape] = useState(prefilled);
-  const [wrong, setWrong] = useState(false);
-  const [usedTurbo, setUsedTurbo] = useState(false);
-  const stretch: Stretch = { road, turbo: true };
-  const repeat = repeatFor(stretch, tape);
-  const place = (b: Block) => {
-    const r = judge(stretch.road, tape, b);
-    if (r.verdict === 'wrong') {
-      factsRef.current.wrongAttempts++;
-      setTape(r.tape);
-      setWrong(true);
-      setTimeout(() => { setTape(prefilled); setWrong(false); }, 750);
-      return;
-    }
-    const turboNow = usedTurbo || b.t === 'loop';
-    setUsedTurbo(turboNow);
-    setTape(r.tape);
-    if (r.verdict === 'complete') onFinish(checkSlotChoice(def, turboNow ? 'turbo' : 'single'), turboNow);
-  };
+  const hazard = kind === 'puddle' ? 'puddle' : 'log';
+  const stretch: Stretch = useMemo(() => ({ road: pieces.map(() => 'right' as const), turbo: false }), [pieces]);
+  const course = useMemo(() => buildCourse([stretch]), [stretch]);
+  const hazardAt = useMemo(() => pieces.reduce<number[]>((a, p, i) => (p === hazard ? [...a, course.starts[0] + i] : a), []), [pieces, hazard, course]);
+  const [picked, setPicked] = useState<'right' | 'wrong' | null>(null);
+  const [running, setRunning] = useState(false);
+  const g = useRef({ me: START, cam: 0, lastFrame: 0, startAt: 0, finished: false, pauseUntil: 0, lastHazard: -1 });
+  const [live, setLive] = useState({ me: START, r0: RIVAL_START[0], r1: RIVAL_START[1], cam: 0, jump: false, skid: false, fx: [] as SceneDust[] });
+
+  useEffect(() => {
+    if (!running) return;
+    g.current.startAt = Date.now();
+    let raf = 0;
+    const loop = (t: number) => {
+      raf = requestAnimationFrame(loop);
+      const s = g.current;
+      const dt = s.lastFrame ? Math.min(0.06, (t - s.lastFrame) / 1000) : 0;
+      s.lastFrame = t;
+      const now = Date.now();
+      const elapsed = now - s.startAt;
+      const [r0, r1] = rivalPositions(COPA_RIVALS, elapsed, course.finish);
+      let jump = false, skid = false;
+      if (now >= s.pauseUntil) {
+        const idx = Math.floor(s.me);
+        const onHazard = hazardAt.includes(idx);
+        let v = picked === 'right' ? CRUISE_OK : CRUISE_BAD;
+        if (onHazard) {
+          if (kind === 'puddle' && picked === 'right') v = SPEED_SLOW; // despacio en el charco
+          if (picked === 'wrong' && s.lastHazard !== idx) { s.lastHazard = idx; s.pauseUntil = now + SKID_PAUSE_MS; skid = true; }
+          else if (picked === 'right' && kind === 'event' && s.lastHazard !== idx) { s.lastHazard = idx; jump = true; }
+        }
+        s.me = Math.min(course.finish + PARK, s.me + v * dt);
+      } else skid = kind === 'puddle';
+      if (!s.finished && s.me >= course.finish) { s.finished = true; onFinish(picked === 'right'); }
+      s.cam = nextCam(s.cam, s.me, VIEW_W, dt);
+      setLive({ me: s.me, r0, r1, cam: s.cam, jump, skid, fx: [] });
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running]);
+
+  const CHOICES = kind === 'puddle'
+    ? [{ v: 'right' as const, label: 'Si hay charco: despacio', sub: 'Si no: acelerá' }, { v: 'wrong' as const, label: 'Si hay charco: acelerá', sub: 'Si no: despacio' }]
+    : [{ v: 'right' as const, label: 'Al aparecer el tronco: saltar', sub: '' }, { v: 'wrong' as const, label: 'Al aparecer el tronco: nada', sub: '' }];
+
   return (
-    <section className="copa-circuit has-turbo">
-      <section className="sheet copa-road">
-        <MiniRoad road={road} turbo covered={wrong ? filledOf(tape) - 1 : filledOf(tape)} h0={0} next={filledOf(tape) < road.length ? filledOf(tape) : null} colors={{ right: '#6aa84f', up: '#3d85c6', down: '#cc4125' } as Record<RoadDir, string>} />
-        <Tape road={road} tape={tape} label={LABEL} wrong={wrong} turbo active={!wrong} onTap={() => {}} />
+    <section className="copa-circuit">
+      <section className="sheet copa-track-card">
+        <RaceScene
+          course={course} stretches={[stretch]} me={live.me} rivals={[live.r0, live.r1]} pair={CIRCUIT_PAIR} viewW={VIEW_W} cam={live.cam}
+          meJump={live.jump} meSkid={live.skid} puddles={kind === 'puddle' ? hazardAt : undefined} logs={kind === 'event' ? hazardAt : undefined}
+        />
       </section>
-      <Palette label={LABEL} repeat={repeat} reserve disabled={wrong} onPlace={(b) => place(b)} />
-      {helpLevel >= 2 && <p className="copa-highlight" role="status">👉 ¡Repetir es turbo!</p>}
+      {!running && (
+        <div className="copa-choices">
+          {CHOICES.map((c) => (
+            <button key={c.v} type="button" className={`cut copa-choice-btn copa-if-btn${picked === c.v ? ' is-picked' : ''}`} onClick={() => setPicked(c.v)}>
+              {kind === 'puddle' ? <PuddleIcon /> : <LogIcon />}
+              <span className="copa-if-label">{c.label}{c.sub && <><br />{c.sub}</>}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {!running && picked && (
+        <button type="button" className="cut copa-run-btn" onClick={() => setRunning(true)}>¡Correr!</button>
+      )}
+      {helpLevel >= 2 && !running && <p className="copa-highlight" role="status">{kind === 'puddle' ? 'Si hay charco, hay que ir despacio.' : 'Cuando aparece el tronco, hay que saltar.'}</p>}
     </section>
   );
 }
 
-function HazardPlay({ kind, pieces, slotIndex, factsRef, helpLevel, onFinish }: {
-  kind: 'puddle' | 'event'; pieces: readonly string[]; slotIndex: number; factsRef: { current: Facts }; helpLevel: number; onFinish(ok: boolean): void;
-}) {
-  const [shake, setShake] = useState(false);
-  const correct = kind === 'puddle' ? 'slow' : 'jump';
-  const CHOICES = kind === 'puddle' ? [{ v: 'slow', label: 'Despacio' }, { v: 'fast', label: 'Acelerá' }] : [{ v: 'jump', label: '¡Saltar!' }, { v: 'none', label: 'Nada' }];
-  const choose = (v: string) => {
-    if (v === correct) { onFinish(true); return; }
-    factsRef.current.wrongAttempts++;
-    setShake(true);
-    setTimeout(() => setShake(false), 650);
-  };
-  return (
-    <section className="copa-circuit copa-hazard">
-      <div className="copa-pieces" role="img" aria-label={kind === 'puddle' ? 'El camino con un charco' : 'El camino con un tronco'}>
-        {pieces.map((p, i) => (
-          <span key={i} className={`copa-piece copa-piece-${p}${i === slotIndex ? ' is-slot' : ''}${i === slotIndex && shake ? ' is-shake' : ''}`}>
-            {p === 'puddle' && <PuddleIcon />}
-            {p === 'log' && <LogIcon />}
-            {i !== slotIndex && (p === 'puddle' || p === 'log') && <span className="copa-piece-ok" aria-hidden="true">✓</span>}
-            {i === slotIndex && <span className="copa-piece-slot-mark" aria-hidden="true">?</span>}
-          </span>
-        ))}
-      </div>
-      <div className="copa-choices">
-        {CHOICES.map((c) => <button key={c.v} type="button" className="cut copa-choice-btn" onClick={() => choose(c.v)}>{c.label}</button>)}
-      </div>
-      {helpLevel >= 2 && <p className="copa-highlight" role="status">👉 Mirá el {kind === 'puddle' ? 'charco' : 'tronco'} marcado con el ?.</p>}
-    </section>
-  );
-}
+// ------------------------------------------------------------------ circuit 5: laps
 
-function LapsPlay({ def, factsRef, helpLevel, onFinish }: {
-  def: Extract<CircuitDef, { kind: 'laps' }>; factsRef: { current: Facts }; helpLevel: number; onFinish(ok: boolean): void;
+function LapsRun({ def, helpLevel, onFinish }: {
+  def: Extract<CircuitDef, { kind: 'laps' }>; helpLevel: number; onFinish(conceptOk: boolean): void;
 }) {
-  const choose = (n: number) => {
-    if (checkSlotChoice(def, n)) { onFinish(true); return; }
-    factsRef.current.wrongAttempts++;
-  };
+  const stretches = useMemo(() => Array.from({ length: def.correctLaps }, () => ({ road: [...def.lapRoad], turbo: false }) as Stretch), [def]);
+  const course = useMemo(() => buildCourse(stretches), [stretches]);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [running, setRunning] = useState(false);
+  const g = useRef({ me: START, cam: 0, lastFrame: 0, startAt: 0, finished: false, pausedOnce: false, pauseUntil: 0 });
+  const [live, setLive] = useState({ me: START, r0: RIVAL_START[0], r1: RIVAL_START[1], cam: 0, lap: 1 });
+  const wrong = picked != null && !checkSlotChoice(def, picked);
+
+  useEffect(() => {
+    if (!running) return;
+    g.current.startAt = Date.now();
+    let raf = 0;
+    const loop = (t: number) => {
+      raf = requestAnimationFrame(loop);
+      const s = g.current;
+      const dt = s.lastFrame ? Math.min(0.06, (t - s.lastFrame) / 1000) : 0;
+      s.lastFrame = t;
+      const now = Date.now();
+      const elapsed = now - s.startAt;
+      const [r0, r1] = rivalPositions(COPA_RIVALS, elapsed, course.finish);
+      if (wrong && !s.pausedOnce) { s.pausedOnce = true; s.pauseUntil = now + 900; }
+      if (now >= s.pauseUntil) s.me = Math.min(course.finish + PARK, s.me + (wrong ? CRUISE_BAD : CRUISE_OK) * dt);
+      if (!s.finished && s.me >= course.finish) { s.finished = true; onFinish(picked === def.correctLaps); }
+      s.cam = nextCam(s.cam, s.me, VIEW_W, dt);
+      const lap = Math.min(def.correctLaps, 1 + Math.floor((s.me - START) / (def.lapRoad.length + 1)));
+      setLive({ me: s.me, r0, r1, cam: s.cam, lap });
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running]);
+
   return (
-    <section className="copa-circuit copa-laps">
-      <section className="sheet copa-road">
-        <MiniRoad road={def.lapRoad} turbo={false} h0={0} covered={def.lapRoad.length} next={null} colors={{ right: '#6aa84f', up: '#3d85c6', down: '#cc4125' } as Record<RoadDir, string>} />
-        <p className="copa-lap-label">repetir ( <b className="copa-lap-blank">?</b> ) vueltas</p>
+    <section className="copa-circuit">
+      <section className="sheet copa-track-card">
+        <RaceScene course={course} stretches={stretches} me={live.me} rivals={[live.r0, live.r1]} pair={CIRCUIT_PAIR} viewW={VIEW_W} cam={live.cam} />
+        {running && <p className="copa-lap-counter">Vuelta {live.lap} de {def.correctLaps}</p>}
       </section>
-      <div className="copa-choices">
-        {def.options.map((n) => <button key={n} type="button" className="cut copa-choice-btn copa-laps-btn" onClick={() => choose(n)}>{n}</button>)}
-      </div>
-      {helpLevel >= 2 && <p className="copa-highlight" role="status">👉 Contá: 1, 2, 3 vueltas.</p>}
+      {!running && (
+        <>
+          <p className="copa-lap-label">repetir ( <b className="copa-lap-blank">{picked ?? '?'}</b> ) vueltas</p>
+          <div className="copa-choices">
+            {def.options.map((n) => <button key={n} type="button" className={`cut copa-choice-btn copa-laps-btn${picked === n ? ' is-picked' : ''}`} onClick={() => setPicked(n)}>{n}</button>)}
+          </div>
+          {picked != null && <button type="button" className="cut copa-run-btn" onClick={() => setRunning(true)}>¡Correr!</button>}
+        </>
+      )}
+      {helpLevel >= 2 && !running && <p className="copa-highlight" role="status">Contá: 1, 2, 3 vueltas.</p>}
     </section>
   );
 }
 
 function PuddleIcon() {
   return (
-    <svg viewBox="0 0 60 36" width={78} height={48} aria-hidden="true">
+    <svg viewBox="0 0 60 36" width={56} height={34} aria-hidden="true">
       <ellipse cx={30} cy={22} rx={26} ry={10} fill="#5fa8d3" stroke="#2b2622" strokeWidth={2} />
       <ellipse cx={22} cy={18} rx={6} ry={3} fill="#a9d6ef" opacity={0.8} />
     </svg>
@@ -321,7 +467,7 @@ function PuddleIcon() {
 }
 function LogIcon() {
   return (
-    <svg viewBox="0 0 60 36" width={78} height={48} aria-hidden="true">
+    <svg viewBox="0 0 60 36" width={56} height={34} aria-hidden="true">
       <rect x={6} y={12} width={48} height={16} rx={8} fill="#8a5a33" stroke="#2b2622" strokeWidth={2} />
       <circle cx={10} cy={20} r={7} fill="#c69765" stroke="#2b2622" strokeWidth={2} />
       <circle cx={50} cy={20} r={7} fill="#c69765" stroke="#2b2622" strokeWidth={2} />
@@ -421,6 +567,13 @@ function DevHooks({ id, def, factsRef, setHelpLevel, onFinish, goCircuit, goReva
       win: () => onFinish(true, true),
       lose: () => onFinish(false, false),
       help: () => setHelpLevel(2),
+      /** Picks a hazard/laps circuit's choice and presses ¡Correr! (circuits 3/4/5 only; a click on the real DOM button is simpler for 1/2). */
+      pickAndRun: (v: string | number) => {
+        const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('.copa-choice-btn'));
+        const idx = typeof v === 'number' ? def.kind === 'laps' ? def.options.indexOf(v) : -1 : v === 'right' ? 0 : 1;
+        btns[idx]?.click();
+        setTimeout(() => document.querySelector<HTMLButtonElement>('.copa-run-btn')?.click(), 50);
+      },
     };
     return () => { delete (window as unknown as { __copa?: unknown }).__copa; };
   });
