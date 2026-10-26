@@ -43,6 +43,18 @@
 //   "quedan 5 minutos" → the survey with the liking faces per monster game,
 //   each with its drawing → back to the arcade; "terminar la clase" → the
 //   countdown, then the rest screen.
+// - T51: the guided turn is 5 minutes; every end screen of 1ro's arcade (a
+//   monster game's round won, the typing race's podium) offers two large
+//   choices side by side, "¡Otra vez!" / "¡Otra carrera!" and "Otro juego"
+//   drawn as the arcade (≥ 96 px tall, different drawings); while playing
+//   any card (the four games, the character, the wardrobe, the typing race)
+//   the same drawing is a large button (≥ 64 px) in the bottom-left corner,
+//   over no target. Ways out: the dance by the corner button mid-round, "¿Qué
+//   salió mal?" by its end screen, the recipe by the bar's small button,
+//   "Tocá y pasa" and the wardrobe by the corner button, the typing letters
+//   race finished and left by its podium's "Otro juego". The survey: one
+//   screen per card played, the card's drawing and three faces only.
+//   Postgres: `game_exit` with each `via`.
 // - Everything inside the viewport (no scrolling), targets ≥ 48 px; no page
 //   errors.
 // - Postgres: game_start (guided; arcade with voluntary/replay), game_round
@@ -169,6 +181,37 @@ const wrongOf = (order) => {
   [o[0], o[j]] = [o[j], o[0]];
   return o;
 };
+
+/** T51: the corner's "Otro juego" while playing: large, in view, over no target (and not in the bar). */
+async function homeOk(name) {
+  const r = await p.evaluate(() => {
+    const b = document.querySelector('.pp-play-home');
+    if (!b || getComputedStyle(b).display === 'none') return null;
+    const h = b.getBoundingClientRect();
+    const hit = (e) => { const x = e.getBoundingClientRect(); return x.width > 0 && x.height > 0 && x.left < h.right && x.right > h.left && x.top < h.bottom && x.bottom > h.top; };
+    const sel = '.ga-target, .ga-ready, .ga-again, .tp-mode, .cast-btn, .choice-btn, .doors-next, .wardrobe-next, .hook button, .level-bar, .tr-text';
+    const over = [...document.querySelectorAll(sel)].filter((e) => !b.contains(e) && getComputedStyle(e).visibility !== 'hidden' && hit(e)).map((e) => e.className.baseVal ?? e.className);
+    return { w: h.width, h: h.height, inView: h.left >= 0 && h.bottom <= innerHeight, art: !!b.querySelector('.ga-home-art'), over };
+  });
+  ok(!!r && r.w >= 64 && r.h >= 64 && r.inView && r.art && r.over.length === 0, `${name}: the corner's drawn "Otro juego" is large and over no target (${r ? `${Math.round(r.w)}×${Math.round(r.h)}${r.over.length ? `, over ${r.over.join(' / ')}` : ''}` : 'missing'})`);
+}
+/** T51: an end screen's two large choices side by side, with different drawings; the corner button hidden meanwhile. */
+async function endOk(name, againSel = '.ga-again') {
+  await p.waitForSelector('.ga-end .ga-home', { timeout: 10_000 });
+  await p.waitForTimeout(1600);
+  const r = await p.evaluate((aSel) => {
+    const a = document.querySelector(`.ga-end ${aSel}`), h = document.querySelector('.ga-end .ga-home');
+    if (!a || !h) return null;
+    const ra = a.getBoundingClientRect(), rh = h.getBoundingClientRect();
+    const corner = document.querySelector('.pp-play-home');
+    return {
+      ah: ra.height, hh: rh.height, side: Math.abs((ra.top + ra.bottom) / 2 - (rh.top + rh.bottom) / 2) < 12 && ra.right <= rh.left,
+      inView: rh.bottom <= innerHeight && rh.right <= innerWidth, distinct: !!h.querySelector('.ga-home-art') && !a.querySelector('.ga-home-art'),
+      cornerHidden: !corner || getComputedStyle(corner).display === 'none',
+    };
+  }, againSel);
+  ok(!!r && r.ah >= 96 && r.hh >= 96 && r.side && r.inView && r.distinct && r.cornerHidden, `${name}: the end screen's "¡Otra vez!" and "Otro juego", large, side by side, different drawings (${r ? `${Math.round(r.ah)} / ${Math.round(r.hh)} px` : 'missing'})`);
+}
 
 let sid = null;
 try {
@@ -529,16 +572,19 @@ try {
   ok(s.tier === 3 && s.seq.length === 4, `the dance from the arcade opens at the tier reached (tier ${s.tier}, ${s.seq.length} poses)`);
   await waitPhase('dance', 'turn', 1);
   ok((await p.locator('.ghost-hand').count()) === 0, 'no ghost demo the second time');
+  await homeOk('the dance');
+  await shot(p, 'dance-home');
   for (const x of s.seq) await pose(x);
-  await p.waitForSelector('.ga-again', { timeout: 10_000 });
-  await p.waitForTimeout(900);
+  await endOk('the dance');
   await shot(p, 'dance-again');
   await p.locator('.ga-again').click();
   await waitPhase('dance', 'show', 2);
   const s2 = await st();
   ok(s2.seq.length === 5 && s2.seq.slice(0, 4).join() === s.seq.join(), '"¡Otra vez!": the same dance plus one pose');
-  await p.locator('.pp-menu-back').click();
+  // T51: leaving mid-round by the corner's drawn "Otro juego"
+  await p.locator('.pp-play-home').click();
   await p.waitForSelector('.pp-menu', { timeout: 10_000 });
+  ok(true, 'the dance left mid-round by the corner\'s "Otro juego"');
   await p.locator('.pp-fp-card[data-activity="oops"]').click();
   await p.waitForSelector('.oo-game', { timeout: 10_000 });
   await waitPhase('oops', 'play', 1);
@@ -553,8 +599,15 @@ try {
   await waitPhase('oops', 'fix', 2);
   await p.waitForTimeout(700);
   await shot(p, 'oops-teeth-options');
-  await p.locator('.pp-menu-back').click();
+  await homeOk('"¿Qué salió mal?" (the options up)');
+  // T51: fixed right, the end screen, left by its "Otro juego"
+  await p.locator(`.oo-option[data-step="${s.right[s.wrongAt[0]]}"]`).click();
+  await waitPhase('oops', 'won', 2);
+  await endOk('"¿Qué salió mal?"');
+  await shot(p, 'oops-end');
+  await p.locator('.ga-end .ga-home').click();
   await p.waitForSelector('.pp-menu', { timeout: 10_000 });
+  ok(true, '"¿Qué salió mal?" left by its end screen\'s "Otro juego"');
 
   // ---------------------------------------------------------------- the arcade: the recipe again, "¡Otra vez!"
   await p.locator('.pp-fp-card[data-activity="recipe"]').click();
@@ -564,9 +617,9 @@ try {
   ok(s.tier === 3, `the recipe from the arcade opens at the tier reached (tier ${s.tier})`);
   ok((await p.locator('.ghost-hand').count()) === 0, 'no ghost demo the second time');
   await build(s.order);
+  await homeOk('the recipe (the plate full)');
   await p.locator('.ga-ready.is-ready').click();
-  await p.waitForSelector('.ga-again', { timeout: 8000 });
-  await p.waitForTimeout(1200);
+  await endOk('the recipe');
   await shot(p, 'arcade-won');
   ok(true, 'a won round in the arcade offers "¡Otra vez!"');
   await p.locator('.ga-again').click();
@@ -586,9 +639,11 @@ try {
   await p.locator('.ga-ready.is-ready').click();
   await p.waitForFunction(() => { const x = window.__monster.state(); return x.phase === 'build' && x.monster === 1; }, null, { timeout: 8000 });
   ok(true, 'the first monster served, the second one\'s turn');
+  await homeOk('the recipe (six cards, two monsters)');
+  await shot(p, 'recipe-home');
   await p.locator('.pp-menu-back').click();
   await p.waitForSelector('.pp-menu', { timeout: 10_000 });
-  ok(true, '"volver al menú" mid-round');
+  ok(true, '"volver al menú" mid-round (the bar\'s small button, kept for adults)');
 
   // ---------------------------------------------------------------- the arcade: "Tocá y pasa" again (a voluntary replay)
   await p.locator('.pp-fp-card[data-activity="tap"]').click();
@@ -596,6 +651,7 @@ try {
   s = await st();
   ok(s.tier === 3 && s.animals.length === 4 && s.effects.length === 5 && Object.keys(s.rules).length === 0, `"Tocá y pasa" from the arcade opens at the tier reached, a fresh meadow (tier ${s.tier}, ${s.animals.length} animals)`);
   ok((await p.locator('.ghost-hand').count()) === 0, 'no ghost demo the second time');
+  await homeOk('"Tocá y pasa" (building)');
   await p.locator(tapHit('carpincho')).click();
   await p.waitForTimeout(400);
   await addTapRule('spin', 1);
@@ -608,8 +664,10 @@ try {
   await p.waitForTimeout(1700);
   await shot(p, 'tap-arcade');
   ok(true, 'the arcade\'s "Tocá y pasa": a rule made, then used (endless: it keeps going)');
-  await p.locator('.pp-menu-back').click();
+  await homeOk('"Tocá y pasa" (playing)');
+  await p.locator('.pp-play-home').click();
   await p.waitForSelector('.pp-menu', { timeout: 10_000 });
+  ok(true, '"Tocá y pasa" left by the corner\'s "Otro juego"');
 
   // ---------------------------------------------------------------- "Tu personaje", the adult menu
   await p.locator('.pp-fp-card[data-activity="buddy"]').click();
@@ -617,9 +675,38 @@ try {
   await p.locator('.choice-btn[data-choice-char="mina"]').click();
   await p.waitForTimeout(700);
   await shot(p, 'arcade-buddy');
+  await homeOk('"Tu personaje"');
   await p.locator('.doors-next').click({ force: true });
   await p.waitForSelector('.pp-menu', { timeout: 10_000 });
   ok(true, '"Tu personaje": the character choice, then back to the menu');
+
+  // ---------------------------------------------------------------- T51: the wardrobe and the typing letters race, and back by their "Otro juego"
+  await p.locator('.pp-fp-card[data-activity="wardrobe"]').click();
+  await p.waitForSelector('.piloto[data-step="wardrobe"] .mode-wardrobe', { timeout: 10_000 });
+  await p.waitForTimeout(900);
+  await homeOk('the wardrobe');
+  await shot(p, 'wardrobe-home');
+  await p.locator('.pp-play-home').click();
+  await p.waitForSelector('.piloto[data-step="free_play"] .pp-menu', { timeout: 10_000 });
+  ok(true, 'the wardrobe left by the corner\'s "Otro juego"');
+  await p.locator('.pp-fp-card[data-activity="typing_race"]').click();
+  await p.waitForSelector('main.pp-trace', { timeout: 20_000 });
+  await p.waitForTimeout(1200);
+  await homeOk('the typing letters race');
+  await shot(p, 'typing-home');
+  for (let i = 0; i < 120; i++) {
+    const t = await p.evaluate(() => window.__typingRace?.state());
+    if (!t || t.phase !== 'input' || t.crossed) break;
+    if (t.word && t.typed < t.word.length) await p.keyboard.press(t.word[t.typed]);
+    await p.waitForTimeout(320);
+  }
+  await p.waitForSelector('.pp-trace.is-podium', { timeout: 40_000 });
+  await endOk('the typing letters race\'s podium', '.rc-again');
+  await p.waitForTimeout(1500);
+  await shot(p, 'typing-end');
+  await p.locator('.ga-end .ga-home').click();
+  await p.waitForSelector('.pp-menu', { timeout: 10_000 });
+  ok(true, 'a typing letters race finished, and back to the games by its podium\'s "Otro juego"');
   await hold(20, 20, 1100);
   await p.waitForSelector('.pp-adult-sheet', { timeout: 5000 });
   const acts = await p.locator('.pp-adult-sheet [data-act]').evaluateAll((els) => els.map((e) => e.getAttribute('data-act')));
@@ -655,7 +742,8 @@ try {
     await p.waitForSelector('.pp-five', { timeout: 20_000 });
     await p.locator('.pp-menu-back').click();
     await p.waitForSelector('.piloto[data-step="survey"] .pp-survey', { timeout: 30_000 });
-    const expected = ['liked', 'liked_recipe', 'liked_dance', 'liked_oops', 'liked_tap', 'difficulty', 'favorite_activity', 'play_again'];
+    // T51: one screen per card played, in the menu's order, nothing else
+    const expected = ['liked_recipe', 'liked_dance', 'liked_oops', 'liked_tap', 'liked_buddy', 'liked_wardrobe', 'liked_typing_race'];
     const seen = [];
     for (const q of expected) {
       await p.waitForSelector(`.pp-survey[data-question="${q}"]`, { timeout: 15_000 });
@@ -663,11 +751,12 @@ try {
       await p.waitForTimeout(700);
       if (q.startsWith('liked_')) {
         const game = q.slice(6);
-        ok((await p.locator(`.pp-q-game[data-game="${game}"] .pp-fp-art`).count()) === 1 && (await p.locator('.pp-option').count()) === 3, `the survey asks about "${game}" with its drawing and the three faces`);
+        ok((await p.locator(`.pp-q-game[data-game="${game}"] .pp-q-game-card`).count()) === 1 && (await p.locator('.pp-option').count()) === 3 && (await p.locator('.pp-option .pp-face, .pp-option svg').count()) >= 3 && (await p.locator('.pp-q-text').count()) === 0,
+          `the survey asks about "${game}" with its drawing and the three faces only`);
         ok(await fits(), `the "${game}" question fits`);
         await shot(p, `survey-${q}`);
       }
-      const pick = q === 'favorite_activity' ? await p.locator('.pp-option').first().getAttribute('data-answer') : q === 'liked_dance' ? 'mid' : q === 'difficulty' ? 'easy' : 'yes';
+      const pick = q === 'liked_dance' ? 'mid' : 'yes';
       await p.locator(`.pp-option[data-answer="${pick}"]`).first().click();
       await p.waitForTimeout(1300);
     }
@@ -756,10 +845,15 @@ try {
   if (ADMIN_PASSWORD) {
     const answers = ev('survey_answer');
     const perGame = answers.filter((x) => String(x.question).startsWith('liked_'));
-    ok(perGame.map((x) => `${x.game}:${x.answer}`).join(' ') === 'recipe:yes dance:mid oops:yes tap:yes', `survey_answer per game (${JSON.stringify(perGame)})`);
+    ok(perGame.map((x) => `${x.game}:${x.answer}`).join(' ') === 'recipe:yes dance:mid oops:yes tap:yes buddy:yes wardrobe:yes typing_race:yes', `survey_answer per card (${JSON.stringify(perGame)})`);
+    ok(answers.every((x) => String(x.question).startsWith('liked_')), `no other survey question for 1ro (${answers.map((x) => x.question).join(' ')})`);
     const survey = json(`select survey from sessions where id = '${sid}'`)[0]?.survey ?? {};
-    ok(survey.liked_tap === 'yes' && survey.liked_dance === 'mid' && survey.liked === 'yes', `sessions.survey keeps the per-game answers (${JSON.stringify(survey)})`);
+    ok(survey.liked_tap === 'yes' && survey.liked_dance === 'mid' && survey.liked_typing_race === 'yes' && !('difficulty' in survey) && !('play_again' in survey) && !('liked' in survey), `sessions.survey keeps the per-card answers only (${JSON.stringify(survey)})`);
   }
+  // T51: every way back to the menu, with its via
+  const exits = ev('game_exit').map((x) => `${x.game}:${x.via}`);
+  const want = ['dance:play_button', 'oops:end_button', 'recipe:bar_menu', 'tap:play_button', 'wardrobe:play_button', 'typing_race:end_button'];
+  ok(want.every((w) => exits.includes(w)) && ev('game_exit').every((x) => ['end_button', 'play_button', 'bar_menu'].includes(x.via)), `game_exit with its via (${exits.join(' ')})`);
   const choices = ev('choice').filter((c) => c.activity === 'recipe' || c.activity === 'buddy');
   ok(choices.length >= 3, `arcade picks and the character's pick logged (${JSON.stringify(choices)})`);
 } catch (e) {
