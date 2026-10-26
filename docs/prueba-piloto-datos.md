@@ -1445,6 +1445,53 @@ A circuit's result (the child always finishes: never blocked by losing).
 { circuit: 1 | 2 | 3 | 4 | 5 }
 ```
 
+### Copa v2, the garage (C09, additive; the 5-copa flow that sends these is C10)
+
+Design v2 of the Copa (see `odd/tasks/copa-4to.md`): the child is the
+engineer, ONE program grows across the five copas, and ¡Largar! runs it
+on a track (`src/playtest/copa2/`, screen `Garage.tsx`). Every row also
+carries the usual session fields; `track` is the track id (`c1-a` ... `c5-b`,
+the copa is its first digit). A crash is not an error: the child goes back
+to the garage with the program intact.
+
+#### `copa2_run`
+One press of ¡Largar!, logged when the run starts (the outcome is already known: the engine is deterministic for a seed).
+```
+{
+  track: string,                    // 'c3-a'
+  run_n: number,                    // 1 for the first run on this mount of the garage, +1 for every ¡Largar! after it (a revancha included)
+  outcome: 'finish' | 'crash' | 'stuck' | 'timeout',   // stuck: the program ended before the line; timeout: it never ends
+  time_ms: number,                  // the run's own clock when it ended (the finish time for 'finish')
+  crash_cause?: 'wall' | 'drop' | 'no_ramp' | 'log',   // outcome 'crash' only
+  crash_block_kind?: string,        // the block that crashed it: forward | up | down | jump | turbo | brake | wait | on_log ... (kind only, never the program)
+  blocks: number,                   // blocks in the program (containers included, the event hat not)
+  slots: number,                    // memory used: every block counts 1, containers included, plus 1 for the event hat
+  place?: 1 | 2 | 3,                // 'finish' only: place among the child and the two animals on the track
+  rival_tier: 'bronze' | 'silver' | 'gold',   // the rival to beat in this race (its neighbour tier runs too)
+  seed: number                      // draws the puddles and the logs' falling times: the run can be replayed exactly
+}
+```
+`place` counts only a finished run; a loss reason is not logged (it follows from `outcome`, `crash_cause`, the program and the track).
+
+#### `copa2_edit`
+What the child did in the editor since the last batch (sent just before each ¡Largar!, before "Ver paso a paso", and when the garage closes). Counts only, never the program. Not sent when everything is 0.
+```
+{
+  track: string,
+  add: number,      // blocks tapped in or dragged from the palette (the first block of the event script also counts its hat)
+  remove: number,   // "Sacar" (a container takes everything inside it as ONE removal)
+  move: number,     // "Antes" / "Después"
+  number: number    // + / - on a number, the "vueltas" switch and the sensor switches of a `si`
+}
+```
+A block refused because the memory is full does not count as an `add`.
+
+#### `copa2_step_view`
+"Ver paso a paso" opened: the child replays the last run one block at a time (the debugging tool).
+```
+{ track: string }
+```
+
 T42/T34 report (`tools/analyze-playtest.mjs`): an Arcade section with, per
 child, typing races (voluntary again, finished), best and median words per
 minute, right keys, and "Tu juego" runs and best; the motivation profiles
