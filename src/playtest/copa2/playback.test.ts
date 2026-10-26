@@ -4,7 +4,7 @@ import { ALL_TRACKS, trackById } from './tracks';
 import { activeFrame, FALL_MS, moveDuration, rivalPos, stateAt, stateAtStep, stepsOf } from './playback';
 import { programBuilder } from './program';
 import { ancestorsOf } from './editor';
-import { reasonText, seconds } from './labels';
+import { aAnimal, reasonText, seconds } from './labels';
 
 const gold = (id: string) => trackById(id)!.refs.gold;
 
@@ -178,6 +178,11 @@ describe('words', () => {
   it('seconds uses a decimal comma', () => {
     expect(seconds(5400)).toBe('5,4 s');
     expect(seconds(-1250)).toBe('1,3 s');
+  });
+
+  it('the animals come with their article: al zorro, a la rana', () => {
+    expect(aAnimal('el zorro')).toBe('al zorro');
+    expect(aAnimal('la rana')).toBe('a la rana');
   });
 
   it('reason lines are truthful about what happened', () => {

@@ -31,7 +31,7 @@ export const nextCam = (cam: number, me: number, viewW: number, dt: number): num
 const angleAt = (c: Course, u: number) => (-Math.atan2(slopeAt(c, u) * STEP, SEG) * 180) / Math.PI;
 
 /** One kart, positioned and tilted on the course; `extra` overlays flames/driver-side effects. */
-function TrackKart({ course, u, lane, tone, seed, driver, extra }: {
+export function TrackKart({ course, u, lane, tone, seed, driver, extra }: {
   course: Course; u: number; lane: keyof typeof LANES; tone: 'me' | 'r0' | 'r1'; seed: number; driver: ReactNode; extra?: ReactNode;
 }) {
   const L = LANES[lane];

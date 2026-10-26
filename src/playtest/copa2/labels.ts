@@ -49,3 +49,6 @@ export function reasonText(reason: ReasonCode, o: { rivalName: string; rivalIsFo
     case 'stuck': return STUCK_TEXT;
   }
 }
+
+/** "a el zorro" is "al zorro": the animals' names come with their article ("el zorro", "la rana"). */
+export const aAnimal = (name: string): string => (name.startsWith('el ') ? `al ${name.slice(3)}` : `a ${name}`);
