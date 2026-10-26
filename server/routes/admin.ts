@@ -108,7 +108,7 @@ export function adminRoute(pool: pg.Pool, opts: AdminOptions | string | undefine
          EXTRACT(EPOCH FROM (COALESCE(s.ended_at, s.last_seen_at) - s.started_at)) AS duration_seconds,
          (SELECT count(*) FROM events e WHERE e.session_id = s.id) AS event_count,
          EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.type = 'route_done') AS route_done,
-         -- T39/C04: where 4to's child is: the ladder's rung on screen, the Copa's circuit (and golds), the
+         -- T39/C10: where 4to's child is: the ladder's rung on screen, the Copa's copa and track (and medals), the
          -- (optional) Workshop's challenge, the Arcade opened
          (SELECT e.payload->>'rung' FROM events e
             WHERE e.session_id = s.id AND e.type = 'level_start' AND e.payload->>'activity' = 'ladder'
@@ -116,11 +116,18 @@ export function adminRoute(pool: pg.Pool, opts: AdminOptions | string | undefine
          (SELECT e.payload->>'n' FROM events e
             WHERE e.session_id = s.id AND e.type = 'workshop_challenge' AND NOT (e.payload ? 'free')
             ORDER BY e.seq DESC LIMIT 1) AS workshop_challenge,
-         (SELECT e.payload->>'circuit' FROM events e
-            WHERE e.session_id = s.id AND e.type = 'copa_start'
-            ORDER BY e.seq DESC LIMIT 1) AS copa_circuit,
-         (SELECT count(DISTINCT e.payload->>'circuit') FROM events e
-            WHERE e.session_id = s.id AND e.type = 'copa_end' AND (e.payload->>'place')::int = 1) AS copa_golds,
+         -- C10 (Copa v2): the track on screen (the last one opened: a deer step counts as the copa's first track, flagged), and the best medal of each track finished
+         (SELECT e.payload->>'track' FROM events e
+            WHERE e.session_id = s.id AND e.type = 'garage_track_start'
+            ORDER BY e.seq DESC LIMIT 1) AS copa_track,
+         (SELECT (e.payload ? 'deer') FROM events e
+            WHERE e.session_id = s.id AND e.type = 'garage_track_start'
+            ORDER BY e.seq DESC LIMIT 1) AS copa_deer,
+         (SELECT coalesce(json_object_agg(m.track, m.medal), '{}'::json) FROM (
+            SELECT e.payload->>'track' AS track,
+                   CASE max(CASE e.payload->>'medal' WHEN 'gold' THEN 3 WHEN 'silver' THEN 2 WHEN 'bronze' THEN 1 ELSE 0 END)
+                        WHEN 3 THEN 'gold' WHEN 2 THEN 'silver' WHEN 1 THEN 'bronze' ELSE 'none' END AS medal
+              FROM events e WHERE e.session_id = s.id AND e.type = 'garage_track_done' GROUP BY 1) m) AS copa_medals,
          EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.type = 'arcade_open') AS arcade_open,
          -- T49: the 1ro monster game on screen (the last game_start not yet followed by its game_end)
          (SELECT CASE WHEN e.type = 'game_start' THEN e.payload->>'game' END FROM events e

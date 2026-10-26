@@ -262,11 +262,22 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
   };
   // T49: 1ro's monster games by name
   var GAME = { recipe: 'La receta del monstruo', dance: 'Copiá el baile', oops: '¿Qué salió mal?', tap: 'Tocá y pasa' };
-  // T39/C04: 4to's live detail: the ladder's rung, the Copa's circuit and golds, the (optional) Workshop's challenge; T49: 1ro's monster game on screen
+  // C10: the medals of the tracks finished so far, best of each ("2 oro, 1 plata")
+  function medals(m) {
+    if (!m) return '';
+    var n = { gold: 0, silver: 0, bronze: 0 };
+    for (var t in m) if (n[m[t]] != null) n[m[t]]++;
+    var out = [];
+    if (n.gold) out.push(n.gold + ' oro');
+    if (n.silver) out.push(n.silver + ' plata');
+    if (n.bronze) out.push(n.bronze + ' bronce');
+    return out.length ? ' · ' + out.join(', ') : '';
+  }
+  // T39/C10: 4to's live detail: the ladder's rung, the Copa's copa and track with the medals, the (optional) Workshop's challenge; T49: 1ro's monster game on screen
   function detail(s) {
     var d = '';
     if (s.current_step === 'ladder' && s.ladder_rung) d = ' · escalón ' + s.ladder_rung;
-    else if (s.current_step === 'copa' && s.copa_circuit) d = ' · circuito ' + s.copa_circuit + (s.copa_golds > 0 ? ' · ' + s.copa_golds + ' oro' : '');
+    else if (s.current_step === 'copa' && s.copa_track) d = ' · Copa ' + String(s.copa_track).charAt(1) + (s.copa_deer ? ' · ciervo' : ' · pista ' + String(s.copa_track).slice(1)) + medals(s.copa_medals);
     else if (s.current_step === 'workshop' && s.workshop_challenge) d = ' · desafío ' + s.workshop_challenge;
     else if ((s.current_step === 'games' || s.current_step === 'free_play') && s.monster_game) d = ' · ' + (GAME[s.monster_game] || s.monster_game);
     return d;

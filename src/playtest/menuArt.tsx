@@ -9,7 +9,7 @@
 // curling back to them. Ink boiled by #rough, flat facets, no text needed.
 
 import { WardrobeIcon } from '../ui/wardrobeArt';
-import { memo, type ReactNode } from 'react';
+import { memo, useContext, type ReactNode } from 'react';
 import { useProgress } from '../curriculum/progress';
 import { blob, leaf, wobblyLine, wobblyPoly } from '../ink/ink.js';
 import { sheetByN } from '../curriculum/primer';
@@ -20,6 +20,10 @@ import { Sprout } from './round2Art';
 import { Pencil } from '../ui/workshopArt';
 import type { Activity } from './freePlay';
 import { CupIcon, RaceCardArt, TypingRaceCardArt } from './raceArt';
+import { PlaytestContext } from './context';
+import { MedalDot } from './copa2/Hub';
+import { copaMedals } from './copa2/journey';
+import { loadJourney } from './copa2/store';
 import { OwnGameCardArt, WorkshopCardArt } from '../workshop/art';
 import { RecipeCardArt } from './arcade/monsterArt';
 import { DanceCardArt } from './arcade/puppetArt';
@@ -259,7 +263,7 @@ function CardArt({ a }: { a: Pick<Activity, 'id' | 'kind'> }) {
     case 'typing_race': return <TypingRaceCardArt />;
     case 'own_game': return <OwnGameCardArt />;
     // C04: "Tu mejor tiempo" — the cup it's racing for
-    case 'copa': return <span className="pp-fp-copa"><CupIcon size={120} /></span>;
+    case 'copa': return <CopaCardArt />;
     // T43: 1ro's arcade
     case 'recipe': return <RecipeCardArt />;
     case 'dance': return <DanceCardArt />;
@@ -267,6 +271,24 @@ function CardArt({ a }: { a: Pick<Activity, 'id' | 'kind'> }) {
     case 'tap': return <TapCardArt />;
     case 'buddy': return <BuddyCardArt />;
   }
+}
+
+/**
+ * C10: "Tu mejor tiempo": the cup and, under it, the five copas as medals — the best one earned on each (gold, silver,
+ * bronze; a dashed ring where nothing was finished yet). The full list (every track's best place and time) is the Copa's
+ * own strip, one tap away.
+ */
+function CopaCardArt() {
+  const sid = useContext(PlaytestContext)?.session?.id;
+  const medals = copaMedals(loadJourney(sid));
+  return (
+    <span className="pp-fp-copa">
+      <CupIcon size={96} />
+      <span className="pp-fp-medals" aria-hidden="true">
+        {medals.map((m, i) => <MedalDot key={i} medal={m.medal} done={m.done} size={30} />)}
+      </span>
+    </span>
+  );
 }
 
 /** T43: "Tu personaje": the child's character, big, in a burst of paper confetti. */
