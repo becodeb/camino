@@ -258,7 +258,9 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', seedOv
     const s = g.current;
     if (s.phase !== 'input') return;
     const word = words[s.k];
-    const v = judgeKey(word[s.typed], k0);
+    // C01/T51: a key after the race's last letter, before the kart crosses the line (a child mashing keys), has no letter
+    // to judge: `judgeKey` answers 'ignore' for a missing letter (and `word` itself may already be past the last one)
+    const v = judgeKey(word?.[s.typed], k0);
     if (v === 'ignore') return;
     const now = Date.now();
     // C02: a long gap since the last key counts towards the honest result's `slow_idle` reason (own idea, not race.ts's idle-nudge timing).

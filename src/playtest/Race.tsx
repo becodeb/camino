@@ -64,6 +64,7 @@ import {
 } from './raceArt';
 import '../blocks/blocks.css';
 import './race.css';
+import { EndChoices } from './arcade/home';
 
 const LEVEL_ID = 'race';
 type Phase = 'intro' | 'input' | 'zoom' | 'finish' | 'podium';
@@ -1038,10 +1039,13 @@ export function Podium({ pair, order, cups, again, extra }: { pair: readonly [Cr
         <Shelf cups={fresh ? cups : cups - 1} fresh={fresh} />
         {extra}
       </div>
-      <button type="button" className="cut rc-again" aria-label={LINES.again} onClick={() => { speak(LINES.again); again(); }}>
-        <AgainArt />
-        <span className="rc-again-word" aria-hidden="true">{LINES.again}</span>
-      </button>
+      {/* T51: on 1ro's arcade only, "Otro juego" beside it (EndChoices renders just the button anywhere else) */}
+      <EndChoices className="rc-end" again={(
+        <button type="button" className="cut rc-again" aria-label={LINES.again} onClick={() => { speak(LINES.again); again(); }}>
+          <AgainArt />
+          <span className="rc-again-word" aria-hidden="true">{LINES.again}</span>
+        </button>
+      )} />
     </section>
   );
 }

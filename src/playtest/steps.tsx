@@ -39,6 +39,7 @@ import { TypingStep } from './TypingStep';
 import { WardrobeStep } from './WardrobeStep';
 import { WorkshopStep } from './WorkshopStep';
 import { CopaStep } from './CopaStep';
+import { GuidedGames } from './arcade/GuidedGames';
 import type { StartInput } from './telemetry';
 import { ClassEnd } from './classroom';
 import { useHold } from './AdultControls';
@@ -197,4 +198,6 @@ export const STEP_VIEWS: Record<StepId, ComponentType<StepViewProps>> = {
   class_end: ClassEnd,
   workshop: WorkshopStep,
   copa: CopaStep,
+  // T43: 1ro's guided pass through the monster games
+  games: GuidedGames,
 };

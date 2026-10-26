@@ -362,6 +362,15 @@
 .pp-menu-sheet.n5 .pp-fp-cards > li { grid-column: span 2; }
 .pp-menu-sheet.n5 .pp-fp-cards > li:nth-child(4) { grid-column: 2 / span 2; }
 .pp-menu-sheet.n1 .pp-fp-cards, .pp-menu-sheet.n2 .pp-fp-cards { grid-template-columns: repeat(2, auto); }
+/* T45/T46: six cards (1ro's arcade): two rows of three */
+.pp-menu-sheet.n6 { --art-h: clamp(110px, calc((100dvh - 350px) / 2), 210px); padding: 22px 26px 20px; }
+.pp-menu-sheet.n6 .pp-fp-cards { grid-template-columns: repeat(3, auto); gap: 14px 26px; }
+/* T47: seven cards (1ro's arcade): four, then three centred, each card a bit narrower */
+.pp-menu-sheet.n7 { --art-h: clamp(100px, calc((100dvh - 360px) / 2), 200px); padding: 20px 24px 18px; }
+.pp-menu-sheet.n7 .pp-fp-cards { grid-template-columns: repeat(8, auto); gap: 12px 10px; }
+.pp-menu-sheet.n7 .pp-fp-cards > li { grid-column: span 2; }
+.pp-menu-sheet.n7 .pp-fp-cards > li:nth-child(5) { grid-column: 2 / span 2; }
+.pp-menu-sheet.n7 .pp-fp-art, .pp-menu-sheet.n7 .pp-fp-buddy { max-width: calc((100vw - 250px) / 4); }
 .pp-fp-cards > li { rotate: var(--tilt, 0deg); }
 .pp-fp-card {
   --r-cut: 16px 12px 18px 11px / 12px 17px 11px 16px;
@@ -818,3 +827,7 @@ html.pp-demo .pad > .sheet { max-width: calc(100vw - var(--demo-w) - 36px - 2 * 
 .pp-vm-script-who .ws-thumb { width: 34px; height: 34px; }
 .pp-vm-head { display: grid; gap: 4px; }
 .pp-vm.is-predict .ws-main { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+/* T49 (1ro's route): "¿Te gustó este juego?": the game's own menu drawing, big, and the heart */
+.pp-q-game { gap: 18px; }
+.pp-q-game-card { --fill: #fdfaf2; display: block; padding: 6px 10px; }
+.pp-q-game-card .pp-fp-art, .pp-q-game-card .pp-fp-buddy { height: clamp(120px, 22dvh, 170px); max-width: none; }

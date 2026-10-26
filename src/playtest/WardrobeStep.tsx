@@ -18,6 +18,8 @@ import { outfitOf, unlockOf, unlockedItems } from '../curriculum/rewards';
 import { WardrobePage } from '../screens/WardrobeScreen';
 import { usePlaytest } from './context';
 import { Cheer } from './interlude';
+import { is1ro } from './flow';
+import { PlayHomeButton } from './arcade/home';
 
 /**
  * Seeds for each piece in the playtest (the year's are 3 to 50 seeds and
@@ -43,7 +45,7 @@ const LINES = {
 };
 
 export function WardrobeStep() {
-  const { next, log, did } = usePlaytest();
+  const { next, log, did, flow } = usePlaytest();
   const since = useRef(Date.now());
   const taps = useRef(0);
   const closed = useRef(false);
@@ -75,7 +77,7 @@ export function WardrobeStep() {
     log('wardrobe', { action: result, outfit_id: item.id, slot: item.slot, ...(result === 'locked' && 'seeds' in u ? { needs: u.seeds } : {}) });
   };
 
-  return (
+  const page = (
     <WardrobePage
       title={<b>Vestidor</b>}
       quit={null}
@@ -83,5 +85,13 @@ export function WardrobeStep() {
       onTap={tap}
       next={() => { close('done'); next(); }}
     />
+  );
+  // T51: a card of 1ro's arcade: the same large drawn way back to the games as every other card
+  if (!is1ro(flow)) return page;
+  return (
+    <div className="pp-wardrobe-home">
+      {page}
+      <PlayHomeButton onPress={() => { log('game_exit', { game: 'wardrobe', via: 'play_button' }); close('done'); next(); }} />
+    </div>
   );
 }

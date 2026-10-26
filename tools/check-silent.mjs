@@ -4,7 +4,10 @@
 // was ever asked to speak, without a real speech engine.
 //
 // Checked: speechSynthesis.speak is never called through the character,
-// the tool check and a ladder item; the on-screen text is forced on and in
+// the first monster game (T43: 1ro's route goes from the character to the
+// guided monster games; it used to be the tool check) and a ladder item
+// (reached by the debug jump: the ladder left 1ro's route, the adult menu
+// still opens it); the on-screen text is forced on and in
 // capital letters (grade 1); a wordless ghost demo plays on the first
 // ladder item (`ghost_demo` logged, kind 'intro') and leaves the notebook
 // empty again when it ends (never a wrong block left for the child to
@@ -58,10 +61,10 @@ try {
   await p.locator('.choice-btn').nth(2).click();
   await p.waitForTimeout(600);
   await p.locator('.doors-next').click({ force: true });
-  await p.waitForSelector('main.level[data-level="tool-1"]', { timeout: 20_000 });
+  await p.waitForSelector('.piloto[data-step="games"] .rx-game', { timeout: 20_000 });
   await p.waitForTimeout(700);
-  ok((await speakCalls()) === 0, 'the tool check: still never called');
-  ok(await p.locator('.pp-cap.is-upper').count() > 0, 'the tool check: the on-screen text is forced on, in capital letters (grade 1, muted)');
+  ok((await speakCalls()) === 0, 'the first monster game: still never called');
+  ok(await p.locator('.pp-cap.is-upper').count() > 0, 'the first monster game: the on-screen text is forced on, in capital letters (grade 1, muted)');
 
   // ladder rung 1 ("Rodear los charcos", a build-a-path page): the wordless demo
   await jump('ladder');

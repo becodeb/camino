@@ -38,10 +38,11 @@ import { SheetScreen } from '../screens/SheetScreen';
 import { SeedPouch } from '../screens/yearKit';
 import { ThenArrow } from '../ui/art';
 import { useMuted } from '../ui/mute';
+import { isVoiceOff } from '../ui/voice';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { usePlaytest } from './context';
-import { activityFor, budgetFrom, budgetVerdict, menuFor, MENU_LINES, RACE_START_TIER, raceRivalsFor, type Activity, type ProbeId } from './freePlay';
-import { freePlayEndless, is4to, wrapPending } from './flow';
+import { activityFor, budgetFrom, budgetVerdict, menuFor, MENU_LINES, RACE_START_TIER, raceRivalsFor, type Activity, type ActivityId } from './freePlay';
+import { freePlayEndless, is1ro, is4to, wrapPending } from './flow';
 import { provideDemoActions } from './demo';
 import { setHashConsumer } from './hashHold';
 import { Cheer, WalkOn } from './interlude';
@@ -53,6 +54,9 @@ import { hasProbe, OPEN_PROBE_EVENT, PROBES } from './probes';
 import { Race } from './Race';
 import { TypingRace } from './TypingRace';
 import { OwnGame } from './OwnGame';
+import { GamePlay } from './arcade/games';
+import { BuddyActivity } from './arcade/BuddyActivity';
+import { ArcadeHomeContext, PlayHomeButton, type ExitVia } from './arcade/home';
 import { rememberPart, resumedPart } from './resume';
 import { NextChoice } from './NextChoice';
 import { BarProgressContext, type BarProgress } from './barProgress';
@@ -91,7 +95,9 @@ export function FreePlay() {
   const grade = api.session?.grade ?? 1;
   const muted = useMuted();
   // T20: 1ro's recess (music) drops off the menu while muted; it comes back if sound does
-  const menu = useMemo(() => menuFor(grade, hasProbe, muted), [grade, muted]);
+  // T43: a 1ro session on the classic route (`?ruta=clasica`) keeps its 2026-10-20 menu
+  const classic1ro = grade === 1 && !is1ro(api.flow);
+  const menu = useMemo(() => menuFor(grade, hasProbe, muted, classic1ro), [grade, muted, classic1ro]);
   const [budget, setBudget] = useState(() => budgetFrom(location.search));
   // a reloaded tab carries on with free play's clock and visit count (resume.ts); the child is back on the menu
   const [kept] = useState(() => resumedPart<{ startedAt: number; visits: number }>('free_play'));
@@ -218,7 +224,8 @@ export function FreePlay() {
       const cur = viewRef.current;
       // T33: the race, like a probe, is an activity of its own: "quedan 5 minutos" gives it the grace of a non-level page (its podium may already be told)
       // T41: the typing race and "Tu juego" too
-      const inProbe = cur.kind === 'activity' && ('probe' in cur.a.kind || 'race' in cur.a.kind || 'typing' in cur.a.kind || 'own' in cur.a.kind);
+      // T43: 1ro's monster games and "Tu personaje" too
+      const inProbe = cur.kind === 'activity' && ('probe' in cur.a.kind || 'race' in cur.a.kind || 'typing' in cur.a.kind || 'own' in cur.a.kind || 'game' in cur.a.kind || 'buddy' in cur.a.kind);
       const levelOpen = cur.kind === 'activity' && ('sheet' in cur.a.kind ? levelsOpen.current > 0 : !(wrapping && inProbe));
       // "¿Cómo seguís?" is a menu too: the time ends there at once
       const onMenu = cur.kind === 'menu' || (cur.kind === 'activity' && cur.page?.kind === 'doors');
@@ -248,10 +255,10 @@ export function FreePlay() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => () => closeVisit('left'), []);
 
-  // the adult menu opens a probe (any grade): the open activity is left for it
+  // the adult menu opens a probe (any grade): the open activity is left for it (T43: or La carrera, for 1ro)
   useEffect(() => {
     const on = (e: Event) => {
-      const a = activityFor((e as CustomEvent<ProbeId>).detail, grade);
+      const a = activityFor((e as CustomEvent<ActivityId>).detail, grade);
       if (!a || finished.current) return;
       if (viewRef.current.kind === 'activity') {
         if (viewRef.current.a.id === a.id) return;
@@ -286,7 +293,8 @@ export function FreePlay() {
   // whole sheet (pages, doors, boss) by itself instead of the menu; the menu comes after it.
   const autoSheet = useRef(false);
   useEffect(() => {
-    if (autoSheet.current || grade !== 1 || view.kind !== 'menu' || view.n !== 0) return;
+    // T43: not in 1ro's own route (its arcade has no sheet; the guided monster games came first)
+    if (autoSheet.current || grade !== 1 || is1ro(api.flow) || view.kind !== 'menu' || view.n !== 0) return;
     if (api.flow.activities.includes('sheet')) return;
     const a = menu.find((x) => x.id === 'sheet');
     if (!a) return;
@@ -311,7 +319,7 @@ export function FreePlay() {
     return <Cheer line={MENU_LINES.over} say={MENU_LINES.over} done={api.next} />;
   }
   if (view.kind === 'menu') {
-    return <Menu key={view.n} cards={menu} first={view.n === 0} onPick={pick} arcade={is4to(api.flow)} />;
+    return <Menu key={view.n} cards={menu} first={view.n === 0} onPick={pick} arcade={is4to(api.flow)} short={is1ro(api.flow)} />;
   }
 
   const a = view.a;
@@ -339,12 +347,19 @@ export function FreePlay() {
   } else if ('own' in a.kind) {
     // T41: "Tu juego"; "Mejorarlo en el taller" goes back to the Workshop step
     body = <OwnGame key={view.n} improve={() => { leaving.current = 'done'; apiRef.current.arcade('workshop'); }} />;
+  } else if ('game' in a.kind) {
+    // T43: a monster game of 1ro's arcade, endless ("¡Otra vez!"); each round won is a won "level"
+    body = <GamePlay key={view.n} id={a.kind.game} mode="arcade" done={() => toMenu('done')} roundWon={(end) => { counted('level_end', end); levelEnded(end); }} />;
+  } else if ('buddy' in a.kind) {
+    body = <BuddyActivity key={view.n} back={() => toMenu('done')} />;
   } else if ('probe' in a.kind) {
     const Probe = PROBES[a.kind.probe];
     body = Probe ? <Probe key={view.n} activity={a.kind.probe} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} done={() => toMenu('done')} /> : null;
   }
+  // T51: on 1ro's arcade every way back to the menu is logged (`game_exit`), and the games offer large drawn ones
+  const home = is1ro(api.flow) ? (via: ExitVia) => { log('game_exit', { game: a.id, via, visit: view.n }); toMenu('menu'); } : undefined;
   return (
-    <ActivityFrame id={a.id} page={view.page} back={() => toMenu('menu')}>{body}</ActivityFrame>
+    <ActivityFrame id={a.id} page={view.page} back={() => toMenu('menu')} home={home}>{body}</ActivityFrame>
   );
 }
 
@@ -354,7 +369,7 @@ export function FreePlay() {
  * covers the palette, the board or the page's next-page button; a page
  * without a bar gets it in the bottom-left corner.
  */
-function ActivityFrame({ id, page, back, children }: { id: string; page: SheetPage | null; back: () => void; children: ReactNode }) {
+function ActivityFrame({ id, page, back, home, children }: { id: string; page: SheetPage | null; back: () => void; home?: (via: ExitVia) => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [bar, setBar] = useState<Element | null>(null);
   useLayoutEffect(() => {
@@ -367,11 +382,13 @@ function ActivityFrame({ id, page, back, children }: { id: string; page: SheetPa
     return () => mo.disconnect();
   }, []);
   const button = (
-    <button type="button" className={`pp-menu-back cut${bar ? ' in-bar' : ''}`} aria-label="Volver al menú" onClick={back}><MenuBackArt /></button>
+    <button type="button" className={`pp-menu-back cut${bar ? ' in-bar' : ''}`} aria-label="Volver al menú" onClick={home ? () => home('bar_menu') : back}><MenuBackArt /></button>
   );
+  // T51 (1ro's arcade): the large drawn way back while playing, and the games' end screens' (ArcadeHomeContext)
   return (
-    <div ref={ref} className="pp-fp-activity" data-activity={id} data-page={page ? JSON.stringify(page) : undefined}>
-      {children}
+    <div ref={ref} className={`pp-fp-activity${home ? ' pp-has-home' : ''}`} data-activity={id} data-page={page ? JSON.stringify(page) : undefined}>
+      <ArcadeHomeContext.Provider value={home ?? null}>{children}</ArcadeHomeContext.Provider>
+      {home && <PlayHomeButton onPress={() => home('play_button')} />}
       {bar ? createPortal(button, bar) : button}
     </div>
   );
@@ -400,14 +417,17 @@ function MenuTask() {
   );
 }
 
-function Menu({ cards, first, onPick, arcade }: { cards: Activity[]; first: boolean; onPick: (a: Activity) => void; arcade?: boolean }) {
+function Menu({ cards, first, onPick, arcade, short }: { cards: Activity[]; first: boolean; onPick: (a: Activity) => void; arcade?: boolean; short?: boolean }) {
   const rootRef = useRef<HTMLElement>(null);
   const ghost = useGhost(rootRef);
   const [lit, setLit] = useState<string | null>(null);
   const held = useRef<{ id: string; t: number; fired: boolean } | null>(null);
   // T41: 4to's Arcade opens with its name
   const opener = arcade ? MENU_LINES.arcade : first ? MENU_LINES.first : MENU_LINES.again;
-  const all = [opener, ...cards.map((c) => c.say)].join(' ');
+  // T45/T46: 1ro's arcade has six cards; with nothing to hear (muted, or the voice off) the line on screen is just
+  // the question (every card's name in capitals would not fit the bar); holding a card still says its name
+  const silent = useMuted() || isVoiceOff();
+  const all = short && silent ? opener : [opener, ...cards.map((c) => c.say)].join(' ');
 
   // said when it opens: the question, then each card's name while it glows
   useEffect(() => {

@@ -7,6 +7,8 @@
 //   said aloud and shown small in the bar) also appears large inside the
 //   card (`.pp-q-text`); 1ro/2do keep the pictures and the spoken line
 //   alone, unchanged (they are not expected to read yet).
+//   T51: on 1ro's own route the survey is only one screen per arcade card
+//   played, its drawing and three faces (surveyPlan.ts).
 // - The goodbye: the session's garden (every page solved planted a seed; a
 //   boss won sent its critter or plant) with the character in it, wearing
 //   the outfit kept in the wardrobe; a big drawn "jugar otra vez" starts the
@@ -34,14 +36,18 @@ import { usePlaytest } from './context';
 import { postPreviousAdultForm } from './runtime';
 import type { AdultFormValue, PreviousChild } from './previousChild';
 import { submitPreviousAdultForm } from './previousChild';
-import { ActivityPicture, DifficultyArt, DifficultyHeaderArt, Face, LikedHeaderArt, YesNo } from './surveyArt';
+import { ActivityPicture, DifficultyArt, DifficultyHeaderArt, Face, GameLikedHeaderArt, LikedHeaderArt, YesNo } from './surveyArt';
+import type { ActivityId } from './freePlay';
+import { surveyPlan, type SurveyQuestionId } from './surveyPlan';
+import { is1ro } from './flow';
 import type { StepViewProps } from './steps';
 import { PlayAgainArt } from './round2Art';
 import { SessionGarden } from './SessionGarden';
 
-type QuestionId = 'liked' | 'difficulty' | 'favorite_activity' | 'play_again';
+// T49: 1ro's route asks the liking faces per game (`liked_<game>`); T51: only those (surveyPlan.ts)
+type QuestionId = SurveyQuestionId;
 interface Option { value: string; word: string; art: React.ReactNode }
-interface Question { id: QuestionId; say: string; adult: string; options: Option[]; header?: React.ReactNode }
+interface Question { id: QuestionId; say: string; adult: string; options: Option[]; header?: React.ReactNode; game?: ActivityId }
 
 /** How each activity is named aloud when its picture is tapped. */
 const ACTIVITY_WORD: Record<string, string> = {
@@ -49,67 +55,83 @@ const ACTIVITY_WORD: Record<string, string> = {
   wardrobe: 'El vestidor', free_play: 'Jugar libre', sheet: 'Una hoja', recess: 'La música', guardas: 'Las guardas',
   editor: 'Hacer un nivel', corkboard: 'La cartelera', rule_game: 'El juego de reglas', game_maker: 'Hacer tu juego', text_probe: 'Bloques y texto', race: 'La carrera', workshop: 'El taller de juegos',
   typing_race: 'La carrera de teclas', own_game: 'Tu juego',
+  // T43: 1ro's arcade
+  recipe: 'La receta del monstruo', dance: 'Copiá el baile', oops: '¿Qué salió mal?', tap: 'Tocá y pasa', buddy: 'Tu personaje', games: 'Los juegos del monstruo',
 };
 
+/** T49/T51: how each game of 1ro's arcade is named in its own question. */
+const GAME_SAY: Partial<Record<ActivityId, string>> = {
+  recipe: 'la receta del monstruo', dance: 'copiar el baile', oops: '«¿Qué salió mal?»', tap: '«Tocá y pasa»',
+  buddy: 'tu personaje', wardrobe: 'el vestidor', typing_race: 'la carrera de teclas',
+};
+
+const likedFaces = (): Option[] => [
+  { value: 'yes', word: '¡Mucho!', art: <Face mood="happy" seed={1} /> },
+  { value: 'mid', word: 'Más o menos.', art: <Face mood="mid" seed={2} /> },
+  { value: 'no', word: 'No.', art: <Face mood="sad" seed={3} /> },
+];
+
 /**
- * C04: 4to's survey is this one mid-class trigger (CopaStep.tsx's own
- * timer, after circuit 3 or 20 minutes), never a second one at the end of
- * the route (`surveyDone` already covers that, flow.ts) — so it stays the
- * two base questions ("¿Te gustó?", "¿Fue difícil?") the design asked for,
- * never "¿Qué te gustó más?" (barely anything played yet by then) or
- * "¿Querés volver a jugar?" (there is no "again" mid-class).
+ * The survey's questions (which ones: surveyPlan.ts). T51: on 1ro's route
+ * (`games1ro`) only the liking faces, one screen per arcade card played,
+ * each with that card's drawing; other grades and 1ro's classic route are
+ * unchanged.
  */
-export function surveyQuestions(activities: readonly string[], grade = 1): Question[] {
-  const qs: Question[] = [
-    {
-      id: 'liked',
-      say: '¿Te gustó jugar? Tocá una carita: mucho, más o menos, o no.',
-      adult: '¿Te gustó?',
-      header: <LikedHeaderArt />,
-      options: [
-        { value: 'yes', word: '¡Mucho!', art: <Face mood="happy" seed={1} /> },
-        { value: 'mid', word: 'Más o menos.', art: <Face mood="mid" seed={2} /> },
-        { value: 'no', word: 'No.', art: <Face mood="sad" seed={3} /> },
-      ],
-    },
-    {
-      id: 'difficulty',
-      say: '¿Fue fácil o difícil? Tocá un camino: fácil, más o menos, o difícil.',
-      adult: '¿Fue fácil o difícil?',
-      // T23: drawn differently from the liking faces (the "¿Cómo seguís?" hills), so a muted 1ro never confuses the two questions
-      header: <DifficultyHeaderArt />,
-      options: [
-        { value: 'easy', word: 'Fácil.', art: <DifficultyArt level="easy" /> },
-        { value: 'mid', word: 'Más o menos.', art: <DifficultyArt level="mid" /> },
-        { value: 'hard', word: 'Difícil.', art: <DifficultyArt level="hard" /> },
-      ],
-    },
-  ];
-  if (grade === 4) return qs;
-  if (activities.length >= 2) {
-    qs.push({
-      id: 'favorite_activity',
-      say: '¿Qué te gustó más? Tocá el dibujo.',
-      adult: '¿Qué te gustó más?',
-      options: activities.map((a) => ({ value: a, word: ACTIVITY_WORD[a] ?? '', art: <ActivityPicture activity={a} grade={grade} /> })),
-    });
-  }
-  qs.push({
-    id: 'play_again',
-    say: '¿Querés volver a jugar otro día? Tocá sí o no.',
-    adult: '¿Querés volver a jugar?',
-    options: [
-      { value: 'yes', word: '¡Sí!', art: <YesNo yes /> },
-      { value: 'no', word: 'No.', art: <YesNo yes={false} /> },
-    ],
+export function surveyQuestions(activities: readonly string[], grade = 1, games1ro = false): Question[] {
+  return surveyPlan(activities, games1ro, grade).map((step): Question => {
+    if (step.game) {
+      const g = step.game;
+      return {
+        id: step.id, game: g,
+        say: `¿Te gustó ${GAME_SAY[g] ?? ACTIVITY_WORD[g] ?? 'jugar'}? Tocá una carita.`,
+        adult: `¿Te gustó «${ACTIVITY_WORD[g] ?? g}»?`,
+        header: <GameLikedHeaderArt game={g} />,
+        options: likedFaces(),
+      };
+    }
+    switch (step.id) {
+      case 'difficulty': return {
+        id: 'difficulty',
+        say: '¿Fue fácil o difícil? Tocá un camino: fácil, más o menos, o difícil.',
+        adult: '¿Fue fácil o difícil?',
+        // T23: drawn differently from the liking faces (the "¿Cómo seguís?" hills), so a muted 1ro never confuses the two questions
+        header: <DifficultyHeaderArt />,
+        options: [
+          { value: 'easy', word: 'Fácil.', art: <DifficultyArt level="easy" /> },
+          { value: 'mid', word: 'Más o menos.', art: <DifficultyArt level="mid" /> },
+          { value: 'hard', word: 'Difícil.', art: <DifficultyArt level="hard" /> },
+        ],
+      };
+      case 'favorite_activity': return {
+        id: 'favorite_activity',
+        say: '¿Qué te gustó más? Tocá el dibujo.',
+        adult: '¿Qué te gustó más?',
+        options: activities.map((a) => ({ value: a, word: ACTIVITY_WORD[a] ?? '', art: <ActivityPicture activity={a} grade={grade} /> })),
+      };
+      case 'play_again': return {
+        id: 'play_again',
+        say: '¿Querés volver a jugar otro día? Tocá sí o no.',
+        adult: '¿Querés volver a jugar?',
+        options: [
+          { value: 'yes', word: '¡Sí!', art: <YesNo yes /> },
+          { value: 'no', word: 'No.', art: <YesNo yes={false} /> },
+        ],
+      };
+      default: return {
+        id: 'liked',
+        say: '¿Te gustó jugar? Tocá una carita: mucho, más o menos, o no.',
+        adult: '¿Te gustó?',
+        header: <LikedHeaderArt />,
+        options: likedFaces(),
+      };
+    }
   });
-  return qs;
 }
 
 export function Survey() {
   const api = usePlaytest();
   const grade = api.session?.grade ?? 1;
-  const [questions] = useState(() => surveyQuestions(api.flow.activities, grade));
+  const [questions] = useState(() => surveyQuestions(api.flow.activities, grade, is1ro(api.flow)));
   const [i, setI] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const answers = useRef<Record<string, string>>({});
@@ -126,7 +148,7 @@ export function Survey() {
     if (picked) return;
     setPicked(o.value);
     if (o.word) speak(o.word);
-    api.log('survey_answer', { question: q.id, answer: o.value });
+    api.log('survey_answer', { question: q.id, answer: o.value, ...(q.game ? { game: q.game } : {}) });
     answers.current = { ...answers.current, [q.id]: o.value };
     setTimeout(() => {
       if (i + 1 < questions.length) {

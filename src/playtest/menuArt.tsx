@@ -21,6 +21,11 @@ import { Pencil } from '../ui/workshopArt';
 import type { Activity } from './freePlay';
 import { CupIcon, RaceCardArt, TypingRaceCardArt } from './raceArt';
 import { OwnGameCardArt, WorkshopCardArt } from '../workshop/art';
+import { RecipeCardArt } from './arcade/monsterArt';
+import { DanceCardArt } from './arcade/puppetArt';
+import { OopsCardArt } from './arcade/oopsArt';
+import { TapCardArt } from './arcade/tapArt';
+import { PlayerFace } from '../screens/player';
 
 const INK = '#2b2622';
 const PEN = '#3d6ea5';
@@ -255,7 +260,30 @@ function CardArt({ a }: { a: Pick<Activity, 'id' | 'kind'> }) {
     case 'own_game': return <OwnGameCardArt />;
     // C04: "Tu mejor tiempo" — the cup it's racing for
     case 'copa': return <span className="pp-fp-copa"><CupIcon size={120} /></span>;
+    // T43: 1ro's arcade
+    case 'recipe': return <RecipeCardArt />;
+    case 'dance': return <DanceCardArt />;
+    case 'oops': return <OopsCardArt />;
+    case 'tap': return <TapCardArt />;
+    case 'buddy': return <BuddyCardArt />;
   }
+}
+
+/** T43: "Tu personaje": the child's character, big, in a burst of paper confetti. */
+function BuddyCardArt() {
+  const bits = [[40, 40, '#de8a56', 20], [214, 34, '#7298c1', -15], [60, 150, '#f0d27a', 35], [204, 140, '#c9574a', -30], [130, 22, '#a4b86d', 10], [24, 96, '#e7a3a0', 50], [236, 92, '#f0d27a', -45]] as const;
+  return (
+    <span className="pp-fp-buddy">
+      <svg className="pp-fp-art" viewBox="0 0 260 190" aria-hidden="true">
+        <g filter="url(#rough)">
+          {bits.map(([x, y, c, r], i) => <rect key={i} x={x - 7} y={y - 4} width={14} height={8} rx={2} fill={c} stroke={INK} strokeWidth={1.6} transform={`rotate(${r} ${x} ${y})`} />)}
+          <path d={wobblyLine(70, 60, 50, 44, { bow: 2, seed: 3 })} stroke={PEN} strokeWidth={3} strokeLinecap="round" fill="none" />
+          <path d={wobblyLine(190, 60, 210, 44, { bow: -2, seed: 4 })} stroke={PEN} strokeWidth={3} strokeLinecap="round" fill="none" />
+        </g>
+      </svg>
+      <PlayerFace className="pp-fp-buddy-face" mood="grin" />
+    </span>
+  );
 }
 
 /** "Volver al menú": four little cards of the menu, and a blue pen arrow curling back to them. */

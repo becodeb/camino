@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { sheetByN } from '../curriculum/primer';
 import { isBuilt } from '../curriculum/model';
-import { FREE_PLAY_BUDGET_MS, FREE_PLAY_GRACE_MS, FREE_PLAY_MIN_VISITS, budgetFrom, budgetVerdict, menuFor, type ProbeId } from './freePlay';
+import { FREE_PLAY_BUDGET_MS, FREE_PLAY_GRACE_MS, FREE_PLAY_MIN_VISITS, activityFor, budgetFrom, budgetVerdict, menuFor, type ProbeId } from './freePlay';
 import { FREE_RULES, RULE_GAME_PAGES, pilotLevel } from './levels';
 
 const none = () => false;
@@ -9,7 +9,8 @@ const all = () => true;
 
 describe('the free-play menu', () => {
   it('offers each grade its activities, in order, without the probes nobody built', () => {
-    expect(menuFor(1, none).map((a) => a.id)).toEqual(['race', 'typing_race', 'sheet', 'recess', 'guardas', 'editor']);
+    // T43: 1ro's free play is its arcade: the monster games, the character, the wardrobe, the typing letters
+    expect(menuFor(1, none).map((a) => a.id)).toEqual(['recipe', 'dance', 'oops', 'tap', 'buddy', 'wardrobe', 'typing_race']);
     expect(menuFor(2, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(3, none).map((a) => a.id)).toEqual(['rule_game', 'sheet', 'recess', 'editor']);
     // C04: 4to's free play is the Arcade: the typing race, "Tu mejor tiempo" (back to the Copa), the wardrobe, the optional Workshop (all flow steps, no probe needed)
@@ -17,10 +18,9 @@ describe('the free-play menu', () => {
     expect(menuFor(5, none).map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess']);
   });
 
-  it('T20: muted, 1ro loses its recess (music) card; not muted, or another grade: unchanged', () => {
-    expect(menuFor(1, none, true).map((a) => a.id)).toEqual(['race', 'typing_race', 'sheet', 'guardas', 'editor']);
-    expect(menuFor(1, none, false).map((a) => a.id)).toEqual(['race', 'typing_race', 'sheet', 'recess', 'guardas', 'editor']);
-    expect(menuFor(1, none).map((a) => a.id)).toContain('recess'); // the default, unchanged
+  it('T20: muted, 1ro loses its recess (music) card; not muted, or another grade: unchanged (T43: 1ro\'s arcade has none, muted or not)', () => {
+    expect(menuFor(1, none, true).map((a) => a.id)).toEqual(['recipe', 'dance', 'oops', 'tap', 'buddy', 'wardrobe', 'typing_race']);
+    expect(menuFor(1, none, false).map((a) => a.id)).toEqual(['recipe', 'dance', 'oops', 'tap', 'buddy', 'wardrobe', 'typing_race']);
     expect(menuFor(2, none, true).map((a) => a.id)).toContain('recess');
     expect(menuFor(3, none, true).map((a) => a.id)).toContain('recess');
   });
@@ -36,16 +36,16 @@ describe('the free-play menu', () => {
 
   it('plays built sheets: the staircase for 1ro, the zigzag for 2do, before and after for 3ro, the right workshop', () => {
     const sheetOf = (grade: number, id: string) => {
-      const a = menuFor(grade, none).find((x) => x.id === id)!;
-      return 'sheet' in a.kind ? a.kind.sheet : null;
+      const a = menuFor(grade, none).find((x) => x.id === id);
+      return a && 'sheet' in a.kind ? a.kind.sheet : null;
     };
-    expect(sheetOf(1, 'sheet')).toBe(6);
+    expect(sheetOf(1, 'sheet')).toBeNull();
     expect(sheetOf(2, 'sheet')).toBe(8);
     expect(sheetOf(3, 'sheet')).toBe(13);
-    expect(sheetOf(1, 'editor')).toBe(7);
+    expect(sheetOf(2, 'editor')).toBe(7);
     expect(sheetOf(5, 'editor')).toBe(15);
-    expect(sheetOf(1, 'recess')).toBe(9);
-    expect(sheetOf(1, 'guardas')).toBe(14);
+    expect(sheetOf(2, 'recess')).toBe(9);
+    expect(sheetOf(2, 'guardas')).toBe(14);
     for (const g of [1, 2, 3, 4, 5]) {
       for (const a of menuFor(g, all)) {
         if (!('sheet' in a.kind)) continue;
@@ -59,11 +59,13 @@ describe('the free-play menu', () => {
 
   it('names every card aloud (the child does not need to read)', () => {
     for (const g of [1, 2, 3, 4, 5]) for (const a of menuFor(g, all)) expect(a.say.length).toBeGreaterThan(8);
-    expect(menuFor(1, none)[2].say).toBe('La escalera: una hoja con caminos y un desafío.');
+    expect(activityFor('sheet', 1)?.say).toBe('La escalera: una hoja con caminos y un desafío.');
   });
 
-  it('T33: the race is first on 1ro\'s and 2do\'s menus (muted too: it needs no sound), not on 3ro–5to\'s', () => {
-    for (const g of [1, 2]) {
+  it('T33: the race is first on 2do\'s menu (muted too: it needs no sound), not on 3ro–5to\'s (T43: nor 1ro\'s, it opens from the adult menu)', () => {
+    expect(menuFor(1, all).map((a) => a.id)).not.toContain('race');
+    expect(activityFor('race', 1)).toMatchObject({ id: 'race', kind: { race: true } });
+    for (const g of [2]) {
       expect(menuFor(g, none)[0]).toMatchObject({ id: 'race', kind: { race: true }, caption: 'La carrera' });
       expect(menuFor(g, none, true)[0].id).toBe('race');
     }

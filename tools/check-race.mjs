@@ -2,8 +2,10 @@
 // 1ro, and its telemetry in Postgres.
 //
 // - A fresh muted 1ro session (`?grado=1&sonido=no`, a real character pick)
-//   reaches free play; the race is the menu's first card and is picked for
-//   real.
+//   reaches free play. T43 (2026-10-25): La carrera left 1ro's route and
+//   menu (1ro's arcade of monster games); this check now opens it the only
+//   way 1ro has, from the adult corner menu ("Abrir «La carrera»"), and
+//   checks it is not on the menu.
 // - Race 1 (tier 1): the first-time wordless ghost demo shows a block
 //   carried into the first slot; then every stretch is built with real
 //   input: taps on the palette, one keyboard arrow, one real mouse drag,
@@ -68,6 +70,12 @@ async function drag(cmd) {
   await p.mouse.up();
 }
 let removed = 0;
+/** T43: the adult corner menu (hold the top-left corner) opens La carrera for 1ro. */
+async function openRaceFromAdultMenu() {
+  await p.mouse.move(20, 20); await p.mouse.down(); await p.waitForTimeout(1100); await p.mouse.up();
+  await p.waitForSelector('.pp-adult-sheet [data-act="open-race"]', { timeout: 5000 });
+  await p.locator('.pp-adult-sheet [data-act="open-race"]').click();
+}
 const filledIs = (n) => p.waitForFunction((nn) => window.__race.state().filled === nn, n, { timeout: 5000 });
 
 /**
@@ -127,16 +135,16 @@ try {
   await p.waitForSelector('.piloto[data-step="character"]', { timeout: 30_000 });
   await p.locator('.choice-btn[data-choice-char="brote"]').click();
   await p.locator('.next-page').click({ force: true });
-  await p.waitForSelector('.piloto[data-step="tool_check"]', { timeout: 20_000 });
+  // T43: 1ro's route goes from the character to the guided monster games
+  await p.waitForSelector('.piloto[data-step="games"]', { timeout: 20_000 });
   const sid = await p.evaluate(() => window.__piloto.session()?.id);
   ok(!!sid, `session ${sid} (grade 1, muted)`);
   await p.evaluate(() => window.__piloto.jump('free_play'));
   await p.waitForSelector('.pp-fp-card', { timeout: 20_000 });
-  const first = await p.locator('.pp-fp-card').first().getAttribute('data-activity');
-  ok(first === 'race', `free play's first card is the race (${first})`);
+  ok((await p.locator('.pp-fp-card[data-activity="race"]').count()) === 0, 'T43: the race is not on 1ro\'s menu any more');
   await p.waitForTimeout(600);
   await shot(p, 'race-menu');
-  await p.locator('.pp-fp-card[data-activity="race"]').click();
+  await openRaceFromAdultMenu();
   await p.waitForSelector('.pp-race', { timeout: 20_000 });
 
   // ---------------------------------------------------------------- race 1, tier 1: the ghost demo, then real input
@@ -183,8 +191,9 @@ try {
   await p.waitForSelector('.pp-fp-card', { timeout: 10_000 });
   await p.evaluate(() => window.__piloto.flush());
   await p.reload();
-  await p.waitForSelector('.pp-fp-card[data-activity="race"]', { timeout: 30_000 });
-  await p.locator('.pp-fp-card[data-activity="race"]').click();
+  await p.waitForSelector('.pp-fp-card', { timeout: 30_000 });
+  await p.waitForTimeout(600);
+  await openRaceFromAdultMenu();
   await p.waitForFunction(() => window.__race?.state().phase === 'input', null, { timeout: 15_000 });
   const s4 = await state();
   const cupsBar = await p.locator('.rc-cups').getAttribute('data-cups');

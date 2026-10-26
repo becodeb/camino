@@ -761,7 +761,7 @@ menu opens and when the card is held (a tap picks it). **RQ 5.**
 
 | Grade | Menu (in order) |
 |---|---|
-| 1ro | `race` (T33, "La carrera"; see below), `sheet` (sheet 6 "La escalera", its doors and boss), `recess` (sheet 9, the music recess; left off while muted), `guardas` (sheet 14), `editor` (sheet 7's workshop and corkboard) |
+| 1ro | T43–T47 (from 2026-10-25, 1ro's route): the arcade of "1ro's monster games" (see below): `recipe`, `dance`, `oops`, `tap`, `buddy` ("Tu personaje"), `wardrobe` (the wardrobe step), `typing_race`. With `?ruta=clasica`, and before 2026-10-25: `race` (T33, "La carrera"; see below), `sheet` (sheet 6 "La escalera", its doors and boss), `recess` (sheet 9, the music recess; left off while muted), `guardas` (sheet 14), `editor` (sheet 7's workshop and corkboard) |
 | 2do | `race`, `sheet` (sheet 8 "Zigzag"), `recess`, `guardas`, `editor` (sheet 7) |
 | 3ro | `rule_game`, `sheet` (sheet 13 "Antes y después"), `recess`, `editor` (sheet 7) |
 | 4to | T39/T41: the Arcade (see "4to's Arcade" below): `typing_race` ("Carrera de teclas"), `own_game` ("Tu juego"), `race` (from tier 4), `workshop` (back to the Workshop step), `wardrobe` (the wardrobe step). Before T39: `rule_game`, `editor` (sheet 15), `recess`, `game_maker` (T7's probe "Hacé tu juego", now only from the adult's corner menu) |
@@ -1431,11 +1431,174 @@ count typing races for `racer` (like La carrera's) and a little more for
 `keyboard` (`TYPING_RACE_WEIGHT`), so a child who only types reads
 `keyboard`.
 
+### 1ro's monster games, "Los juegos del monstruo" (T43–T47)
+
+From 2026-10-25, a 1ro session (`grado=1`, not `?ruta=clasica`) follows its
+own route: character → `games` (the guided first pass: each game once, in
+the order `recipe`, `dance`, `oops`, `tap`, 3 rounds or 4 minutes each
+(T51, from 2026-10-26: 5 minutes, ~20 minutes for the pass),
+whichever comes first after the round on screen; leaving it is the green
+flag, `route_done`) → `free_play` (1ro's arcade, endless: the four games,
+`buddy`, `wardrobe`, `typing_race`). Code: `src/playtest/arcade/` (`kit.ts`
+the shared rules, `Kit.tsx` the telemetry, one file per game). **The main
+data of this round: what each child picks and replays by themselves.**
+
+| Game id | Name | The idea | Its skill measure (report) |
+|---|---|---|---|
+| `recipe` | "La receta del monstruo" | sequence: stack the sandwich in the order drawn, then the bell | right at the first serve, order errors, time to the first input |
+| `dance` | "Copiá el baile" | sequence and memory (a silent Simon) | the longest dance copied |
+| `oops` | "¿Qué salió mal?" | finding the error in an everyday routine | found at the first tap, the first fix right |
+| `tap` | "Tocá y pasa" | events, cause and effect: rules "when I tap it → …" per animal, then play | rules made, time playing with them, taps while playing, which effects |
+
+Every game logs the same three events, plus `rapid_taps`; `help`, `speak`
+and `ghost_demo` carry `level_id: 'game:<id>'`; free play's `choice` and
+`activity_end` carry `activity: <id>`; each round won is a won level for
+free play (`level_end` with `level_id: 'game:<id>'`).
+
+#### `game_start`
+A play of a game begins (its place in the guided pass, or an arcade pick).
+```
+{
+  game: 'recipe' | 'dance' | 'oops' | 'tap',
+  mode: 'guided' | 'arcade',
+  play_no: number,      // how many times this game was started this session, this one included
+  tier: number,         // the tier of its first round (the arcade opens at the hardest tier reached)
+  voluntary: boolean,   // an arcade pick (the child chose it)
+  replay: boolean       // play_no > 1: a game already played (the guided pass counts)
+}
+```
+
+#### `game_round`
+A round won (`solved: true`), or the round on screen when the play is left
+mid-way (`solved: false`).
+```
+{
+  game, mode, play_no,
+  round: number, tier: number,
+  correct: boolean,             // right with no mistake (attempts <= 1)
+  solved: boolean,
+  attempts: number,             // tries judged (1 = right at once)
+  ms: number,                   // the round's time
+  first_input_ms: number | null,// time to the first input: did they look first?
+  again?: true,                 // the round was started by "¡Otra vez!" (a voluntary replay)
+  // recipe: order_errors, ingredient_errors, wrong_at, removed, sources {tap, drag}, orders, layers, monsters
+  // dance: length, seq, misses, miss_at, taps, shows
+  // oops: routine, kind ('replace' | 'swap'), steps, found_try, first_tap_ms, fix_correct, fix_tries, replays, sources
+  // tap: see below
+}
+```
+
+#### `game_end`
+Once per play.
+```
+{
+  game, mode, play_no,
+  reason: 'finished' | 'quit',  // finished: after a won round or the guided rounds; quit: left mid-round
+  rounds: number,               // rounds won in this play
+  ms: number,
+  rapid_taps: number,           // dizzy spells in this play
+  help_levels: number, adult_helped: boolean,
+  // dance: longest (the longest dance copied); tap: see below
+}
+```
+
+#### `rapid_taps`
+Very fast taps on a game's targets (4 within 1 s, `kit.ts`) make the
+child's character dizzy for 2.6 s (input waits; that tap and the ones
+during the spell do not count): `{ game, round, taps, window_ms }`.
+
+#### "Tocá y pasa" (`tap`, T47)
+A meadow with the garden's critters (`rana`, `zorro`, `carpincho`, and the
+`coati` from tier 3); over each one a sign: the pointing hand on the animal
+("when I tap it"), then its rules (up to 3), each an effect: `jump`,
+`colour`, `confetti`, `hide`, `spin` (tier 1 offers the first three; tier 2
+all five). Two modes: building (tap or drag an effect card onto an animal:
+the rule, and the animal does it once; tap a rule on a sign to take it
+off) and playing (a tap on an animal runs its rules in order; one without
+rules shakes and shows its empty sign). Free play, no wrong answers. A
+round is "a rule made, then used": it starts with the first rule made
+since the last round, and is won the first time the child, playing, taps
+an animal that got a new rule in it (then the next tier unlocks).
+`attempts` is always 1 (`correct: true`). Leaving with a rule made and not
+yet played is `quit`; leaving otherwise is `finished`.
+
+`game_round` (tap) adds, for that round:
+```
+{
+  animals: number, effects_offered: number,
+  new_rules: number, removed: number,          // rules added / taken off in the round
+  rules: { [animal]: effect[] },               // every animal's rules when it was won
+  rules_total: number,
+  play_taps: number,                           // taps on animals while playing
+  play_taps_by_animal: { [animal]: number },
+  no_rule_taps: number,                        // taps on an animal with no rules
+  effects_run: { [effect]: number },           // effects played by those taps
+  switches: number,                            // building ↔ playing
+  build_ms: number, play_ms: number,           // time in each mode (playing counts only with rules: "time playing with what they made")
+  sources: { tap: number, drag: number }       // how the effect cards were put
+}
+```
+`game_end` (tap) adds the play's totals: `rules` (the final rules),
+`rules_total`, `rules_made`, `rules_removed`, `animals_with_rules`, `tier`,
+`play_taps`, `play_taps_by_animal`, `no_rule_taps`, `effects_run`,
+`switches`, `build_ms`, `play_ms`, `sources`.
+
+#### `tap_rule`
+Every rule added or taken off:
+`{ game: 'tap', mode, play_no, round, tier, animal, effect, action: 'add' | 'remove', count (the animal's rules after it), source?: 'tap' | 'drag' (add) }`.
+
+#### `tap_mode`
+Every switch between building and playing:
+`{ game: 'tap', mode, play_no, round, tier, to: 'play' | 'build', rules_total, stretch_ms (the time in the mode left) }`.
+
+#### `game_exit` (T51, from 2026-10-26)
+A child left a card of 1ro's arcade for the menu (1ro's own route only;
+other grades and `?ruta=clasica` log nothing new):
+`{ game: <the card's activity id: recipe | dance | oops | tap | buddy | wardrobe | typing_race, or race when opened from the adult menu>, via, visit? }`.
+`via`: `'end_button'` (the end screen's large "Otro juego", drawn as the
+arcade, beside "¡Otra vez!" / "¡Otra carrera!": a monster game's round won,
+the typing race's podium), `'play_button'` (the large drawn "Otro juego" in
+the bottom-left corner while playing, every card), `'bar_menu'` (the bar's
+small four-cards button, kept for adults). `visit`: free play's visit number
+(as on `choice` and `activity_end`; absent for the wardrobe, a flow step of
+its own). The other ways out are not `game_exit`: "Tu personaje"'s page
+arrow and the wardrobe's page ("listo") end the card as before
+(`activity_end` / `wardrobe` `close`), and "quedan 5 minutos" or the adult's
+moves end it by themselves. "Tocá y pasa" has no end screen (its rounds roll
+on while playing): only the corner button and the bar's.
+
+The survey on 1ro's route asks only the liking faces per card played
+(`survey_answer` `liked_<game>`, see below). T49 report
+(`tools/analyze-playtest.mjs`, pure module `src/playtest/reportMonster.ts`):
+a section "Los juegos del monstruo" with, per game, the children who played
+it, plays, arcade picks, rounds won, voluntary replays (an arcade pick of a
+game already played, or "¡Otra vez!"), finished vs quit, dizzy spells, its
+skill measure and its survey faces; per child, plays and voluntary replays
+per game, the favourite (the most voluntary replays; ties listed) and the
+guided pass completion (guided games finished, the green flag). T51: the
+section also counts the exits by `via` ("Salidas de un juego al menú"),
+overall and per card. No SQL view yet: read the export with the report.
+
 ### `survey_answer`
 One spoken survey question answered with drawn faces/pictures. **RQ 9.**
 ```
-{ question: 'liked' | 'difficulty' | 'favorite_activity' | 'play_again' | 'typing_liked' | 'game_maker_liked' | 'text_probe_liked', answer: string }
+{ question: 'liked' | 'difficulty' | 'favorite_activity' | 'play_again' | 'typing_liked' | 'game_maker_liked' | 'text_probe_liked' | `liked_${game}`, answer: string, game?: string }
 ```
+T49 (1ro's route only, from 2026-10-25): right after `liked`, the survey
+asks "¿Te gustó …?" once per monster game the child played (in the order
+`recipe`, `dance`, `oops`, `tap`), each card headed by that game's own menu
+drawing and a heart, answered with the same three faces: `question:
+'liked_recipe' | 'liked_dance' | 'liked_oops' | 'liked_tap'`, `answer:
+'yes'|'mid'|'no'`, `game`: the game id; mirrored onto `sessions.survey` like
+the others. Other grades and `?ruta=clasica` are unchanged.
+T51 (1ro's route only, from 2026-10-26): the survey is only those screens,
+one per arcade card played (the guided pass counts), in the menu's order
+`recipe`, `dance`, `oops`, `tap`, `buddy`, `wardrobe`, `typing_race`
+(`liked_buddy`, `liked_wardrobe`, `liked_typing_race` are new), each the
+card's drawing and the three faces; no `liked`, `difficulty`,
+`favorite_activity` or `play_again` (1ro neither reads nor listens; the
+hills and the "play again" question were not understood). A 1ro child who
+played no card is asked `liked` alone.
 `liked`: `'yes'|'mid'|'no'`. `typing_liked` (`'yes'|'mid'|'no'`) is asked by
 the typing game at its end, `game_maker_liked` (`'yes'|'mid'|'no'`,
 "¿Te gustó hacer tu juego?") by the game maker probe at its end, and
@@ -2012,7 +2175,10 @@ wipe the data early):
   (`sessions.survey` set), `in_class` (seen in the last 2 hours),
   `current_step`, `last_seen_at`, …; `class_counts {sessions, route_done,
   survey_done}` for the sessions in class; `active_now` (seen in the last 2
-  minutes, not ended); `counts_by_grade`; `demo_hidden` (how many demo
+  minutes, not ended); T49: `monster_game` (1ro: the game of the last
+  `game_start` not yet followed by its `game_end`, null otherwise; the page
+  shows it by name next to the step, e.g. "juego libre · Tocá y pasa");
+  `counts_by_grade`; `demo_hidden` (how many demo
   sessions exist, not listed); `commands` (the live ones, newest first);
   `sound_setting` (the live `class_settings` row, T18).
 - The page: a password form; then "Quedan 5 minutos", "Terminar la clase"
@@ -2034,7 +2200,8 @@ wipe the data early):
   the green flag; the repeat dropped-after-not-inside heuristic; predict's
   no-guess presses and wrong→right patterns; typing's touch vs physical
   accuracy; help usage; garden views/reloads/visibility/idle; late class
-  commands; the survey; T33's race; T37's motivation profiles). The actual
+  commands; the survey; T33's race; T37's motivation profiles; T49's 1ro
+  monster games, from `src/playtest/reportMonster.ts`). The actual
   computations are a pure module, `src/playtest/report.ts` (unit-tested in
   `report.test.ts`), imported directly by its `.ts` path — Node strips the
   types at load time, same as `server/*.ts`. Run it with `node

@@ -122,6 +122,10 @@ export function adminRoute(pool: pg.Pool, opts: AdminOptions | string | undefine
          (SELECT count(DISTINCT e.payload->>'circuit') FROM events e
             WHERE e.session_id = s.id AND e.type = 'copa_end' AND (e.payload->>'place')::int = 1) AS copa_golds,
          EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.type = 'arcade_open') AS arcade_open,
+         -- T49: the 1ro monster game on screen (the last game_start not yet followed by its game_end)
+         (SELECT CASE WHEN e.type = 'game_start' THEN e.payload->>'game' END FROM events e
+            WHERE e.session_id = s.id AND e.type IN ('game_start', 'game_end')
+            ORDER BY e.seq DESC LIMIT 1) AS monster_game,
          (s.survey IS NOT NULL) AS survey_done,
          (s.last_seen_at > now() - ($1 || ' minutes')::interval) AS in_class
        FROM sessions s

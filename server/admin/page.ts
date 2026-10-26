@@ -173,7 +173,7 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
         <svg viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="32" r="22" fill="#fbf7ee" stroke="#2b2622" stroke-width="3.5"/><path d="M30 32 L30 17 M30 32 L41 38" stroke="#2b2622" stroke-width="4" stroke-linecap="round" fill="none"/><path d="M22 6 L38 6" stroke="#2b2622" stroke-width="4" stroke-linecap="round"/></svg>
         Quedan 5 minutos
       </button>
-      <p class="big-note">Cada compu termina lo que está haciendo y pasa al vestidor y la encuesta (en 4to, directo a la encuesta).</p>
+      <p class="big-note">Cada compu termina lo que está haciendo y pasa al vestidor y la encuesta (en 1ro y 4to, directo a la encuesta).</p>
     </div>
     <div class="big-wrap">
       <button type="button" class="big stop" id="end-class">
@@ -258,14 +258,17 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
   var STEP = {
     setup: 'preparación', character: 'personaje', tool_check: 'probar los botones', ladder: 'escalera de niveles',
     free_play: 'juego libre', typing: 'Teclas del bosque', wardrobe: 'vestidor', survey: 'encuesta', goodbye: 'despedida',
-    class_end: 'actividad terminada', name: 'nombre', workshop: 'taller de juegos', copa: 'Copa de 4to'
+    class_end: 'actividad terminada', name: 'nombre', workshop: 'taller de juegos', copa: 'Copa de 4to', games: 'juegos del monstruo'
   };
-  // T39/C04: 4to's live detail: the ladder's rung, the Copa's circuit and golds, the (optional) Workshop's challenge
+  // T49: 1ro's monster games by name
+  var GAME = { recipe: 'La receta del monstruo', dance: 'Copiá el baile', oops: '¿Qué salió mal?', tap: 'Tocá y pasa' };
+  // T39/C04: 4to's live detail: the ladder's rung, the Copa's circuit and golds, the (optional) Workshop's challenge; T49: 1ro's monster game on screen
   function detail(s) {
     var d = '';
     if (s.current_step === 'ladder' && s.ladder_rung) d = ' · escalón ' + s.ladder_rung;
     else if (s.current_step === 'copa' && s.copa_circuit) d = ' · circuito ' + s.copa_circuit + (s.copa_golds > 0 ? ' · ' + s.copa_golds + ' oro' : '');
     else if (s.current_step === 'workshop' && s.workshop_challenge) d = ' · desafío ' + s.workshop_challenge;
+    else if ((s.current_step === 'games' || s.current_step === 'free_play') && s.monster_game) d = ' · ' + (GAME[s.monster_game] || s.monster_game);
     return d;
   }
   var FLAG = '<svg class="flag" viewBox="0 0 28 22" aria-hidden="true"><path d="M3 21 L3 2" stroke="#2b2622" stroke-width="2.4" stroke-linecap="round"/><path d="M4 3 C10 0 15 6 24 3 L24 13 C15 16 10 10 4 13 Z" fill="#8fae4f" stroke="#2b2622" stroke-width="2" stroke-linejoin="round"/></svg>';

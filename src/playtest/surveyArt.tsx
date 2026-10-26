@@ -115,6 +115,21 @@ export function LikedHeaderArt() {
   );
 }
 
+/**
+ * T49 (1ro's route): "¿Te gustó este juego?" asked per monster game: the
+ * game's own menu drawing, big, with the heart of "¿Te gustó?" next to it
+ * (the options are the same three faces).
+ */
+export function GameLikedHeaderArt({ game }: { game: ActivityId }) {
+  const a = activityFor(game, 1);
+  return (
+    <span className="pp-q-header-art pp-q-game" aria-hidden="true" data-game={game}>
+      {a && <span className="pp-q-game-card cut"><ActivityArt a={a} /></span>}
+      <HeartIcon />
+    </span>
+  );
+}
+
 /** Two little peaks: "effort/how hard", distinct from the single hills of the options below. */
 function EffortIcon() {
   const d = 'M2,48 L22,14 L34,30 L48,6 L78,48 Z';

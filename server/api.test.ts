@@ -210,6 +210,28 @@ dbDescribe('API against Postgres', () => {
     await pool.query('DELETE FROM sessions WHERE id = $1', [kid.id]);
   });
 
+  it('T49: /admin/summary names the 1ro monster game on screen (the last game_start not yet ended)', async () => {
+    const app = createApp(pool, { adminToken: 'admin-t', distDir });
+    const post = (body: unknown) => app.request('/api/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const kid = newSession({ grade: 1, code: 'Rana 49', current_step: 'games' });
+    const row = async () => {
+      const sum = await (await app.request('/api/admin/summary', { headers: { authorization: 'Bearer admin-t' } })).json() as { sessions: Array<Record<string, unknown>> };
+      return sum.sessions.find((s) => s.session_id === kid.id)!;
+    };
+    expect((await post({ session: kid, events: [event(0, { type: 'game_start', payload: { game: 'recipe', mode: 'guided', play_no: 1 } })] })).status).toBe(200);
+    expect(await row()).toMatchObject({ monster_game: 'recipe' });
+    expect((await post({ session: { ...kid, current_step: 'free_play' }, events: [
+      event(1, { type: 'game_end', payload: { game: 'recipe', mode: 'guided', reason: 'finished' } }),
+    ] })).status).toBe(200);
+    expect(await row()).toMatchObject({ current_step: 'free_play', monster_game: null });
+    expect((await post({ session: { ...kid, current_step: 'free_play' }, events: [
+      event(2, { type: 'game_start', payload: { game: 'tap', mode: 'arcade', play_no: 1 } }),
+      event(3, { type: 'tap_rule', payload: { game: 'tap', animal: 'rana', effect: 'jump', action: 'add' } }),
+    ] })).status).toBe(200);
+    expect(await row()).toMatchObject({ monster_game: 'tap' });
+    await pool.query('DELETE FROM sessions WHERE id = $1', [kid.id]);
+  });
+
   it('v_activity_time counts a free-play visit whole (activity_end) and the other activities by their pages', async () => {
     const app = createApp(pool, { distDir });
     const session = newSession();

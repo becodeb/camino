@@ -68,6 +68,8 @@ export interface PlaytestApi {
   arcade(to: 'workshop' | 'copa' | 'free_play' | 'wardrobe'): void;
   /** C04 (4to): the Copa's circuit 2 is done (or the Workshop's challenges 1–5, or the 20-minute timer): the Arcade opens (and the green flag). */
   openArcade(via?: 'workshop' | 'copa'): void;
+  /** T43 (1ro): the adult corner menu opens the ladder (it left 1ro's route), or goes back to the arcade. */
+  adultGoto(to: import('./flow').AdultGotoTarget): void;
 }
 
 export const PlaytestContext = createContext<PlaytestApi | null>(null);

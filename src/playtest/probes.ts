@@ -12,7 +12,7 @@
 // in it (`activity_end`), and plants the seeds of the pages solved.
 
 import type { ComponentType } from 'react';
-import type { ProbeId } from './freePlay';
+import type { ActivityId, ProbeId } from './freePlay';
 import type { LevelEnd } from './PlaytestLevel';
 import { GameMaker } from './GameMaker';
 import { TextProbe } from './TextProbe';
@@ -36,4 +36,9 @@ export const hasProbe = (id: ProbeId) => !!PROBES[id];
 export const OPEN_PROBE_EVENT = 'pp-open-probe';
 export function openProbe(id: ProbeId) {
   window.dispatchEvent(new CustomEvent<ProbeId>(OPEN_PROBE_EVENT, { detail: id }));
+}
+
+/** T43: the same, for any free-play activity (1ro's La carrera, which left its menu). */
+export function openActivity(id: ActivityId) {
+  window.dispatchEvent(new CustomEvent<ActivityId>(OPEN_PROBE_EVENT, { detail: id }));
 }

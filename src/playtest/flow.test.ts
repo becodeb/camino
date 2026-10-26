@@ -215,8 +215,8 @@ describe('the playtest flow', () => {
     const start4 = (nameOn = true) => reduce(initialFlow(0), { type: 'next', nameOn, grade: 4 }, 1000).state;
     const to = (s: FlowState, a: FlowAction, t = 5000) => reduce(s, a, t);
 
-    it('only grade 4 gets it; every other grade\'s state is as before (no route field)', () => {
-      for (const g of [1, 2, 3, 5]) expect(reduce(initialFlow(0), { type: 'next', grade: g }, 1000).state).toEqual(reduce(initialFlow(0), { type: 'next' }, 1000).state);
+    it('only grade 4 gets it; every other grade\'s state is as before (no route field; T43: 1ro has its own, flow1ro.test.ts)', () => {
+      for (const g of [2, 3, 5]) expect(reduce(initialFlow(0), { type: 'next', grade: g }, 1000).state).toEqual(reduce(initialFlow(0), { type: 'next' }, 1000).state);
       expect(start4().route).toBe('4to');
       expect(routeOf(start4())).toBe(ROUTE_4TO);
       expect(routeOf(initialFlow(0))).toBe(ROUTE);
