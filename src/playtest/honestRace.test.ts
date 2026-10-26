@@ -167,9 +167,10 @@ describe('the result: place, margin, reason', () => {
     it('a long idle stretch explains a clean but slow loss', () => {
       expect(reasonFor({ place: 3, turboOffered: 0, turboUsed: 0, wrongTotal: 1, idleMs: 5000 })).toBe('slow_idle');
     });
-    it('falls back to slow_idle with no other signal, or crashes with at least one error', () => {
-      expect(reasonFor({ place: 2, turboOffered: 0, turboUsed: 0, wrongTotal: 0, idleMs: 0 })).toBe('slow_idle');
-      expect(reasonFor({ place: 2, turboOffered: 0, turboUsed: 0, wrongTotal: 1, idleMs: 0 })).toBe('crashes');
+    it('C10: with no other signal (no missed turbo, fewer than 3 errors, no long pause) the rival simply came in faster: it never blames the child', () => {
+      expect(reasonFor({ place: 2, turboOffered: 0, turboUsed: 0, wrongTotal: 0, idleMs: 0 })).toBe('rival_faster');
+      expect(reasonFor({ place: 3, turboOffered: 0, turboUsed: 0, wrongTotal: 2, idleMs: 3999 })).toBe('rival_faster');
+      expect(reasonFor({ place: 2, turboOffered: 1, turboUsed: 1, wrongTotal: 0, idleMs: 0 })).toBe('rival_faster');
     });
   });
 });
@@ -188,5 +189,7 @@ describe('resultLine (Rioplatense Spanish, kid-facing)', () => {
   it('2nd/3rd: place, margin, and the reason line, naming the rival when given', () => {
     expect(resultLine({ place: 2, marginMs: 3000, reason: 'no_turbo' }, 'el zorro')).toBe('2do — te faltaron 3 s. el zorro usó turbo en la recta.');
     expect(resultLine({ place: 3, marginMs: 6000, reason: 'crashes' })).toBe('3ro — te faltaron 6 s. Te chocaste varias veces.');
+    expect(resultLine({ place: 2, marginMs: 2000, reason: 'rival_faster' }, 'el zorro')).toBe('2do — te faltaron 2 s. Esta vez el zorro vino más rápido.');
+    expect(resultLine({ place: 2, marginMs: 2000, reason: 'rival_faster' })).toBe('2do — te faltaron 2 s. Esta vez el rival vino más rápido.');
   });
 });

@@ -107,7 +107,8 @@ export const rivalTiersFor = (raceNo: number): [RivalTier, RivalTier] => RIVAL_T
 
 // ------------------------------------------------------------------ the result: place, margin, reason
 
-export type ReasonCode = 'no_turbo' | 'crashes' | 'slow_idle' | 'fast_and_clean';
+/** `rival_faster` (C10): nothing the child did explains the loss (no missed turbo, a few errors at most, no long pause): the animal simply came in faster this time. */
+export type ReasonCode = 'no_turbo' | 'crashes' | 'slow_idle' | 'rival_faster' | 'fast_and_clean';
 
 export interface HonestFacts {
   /** The child's own finish time, ms from the race's start (the same zero point as `rivalsMs`). */
@@ -139,7 +140,8 @@ export function reasonFor(f: { place: 1 | 2 | 3; turboOffered: number; turboUsed
   if (f.turboOffered > 0 && f.turboUsed === 0) return 'no_turbo';
   if (f.wrongTotal >= 3) return 'crashes';
   if (f.idleMs >= 4000) return 'slow_idle';
-  return f.wrongTotal > 0 ? 'crashes' : 'slow_idle';
+  // C10: the adaptive rivals can win a clean, steady race; saying "te quedaste pensando" or "te chocaste" then would blame the child for nothing
+  return 'rival_faster';
 }
 
 /**
@@ -165,6 +167,7 @@ const REASON_LINE: Readonly<Record<ReasonCode, (rivalName?: string) => string>> 
   no_turbo: (rivalName) => `${rivalName ?? 'El rival'} usó turbo en la recta.`,
   crashes: () => 'Te chocaste varias veces.',
   slow_idle: () => 'Te quedaste pensando mucho rato.',
+  rival_faster: (rivalName) => `Esta vez ${rivalName ?? 'el rival'} vino más rápido.`,
   fast_and_clean: () => '',
 };
 
