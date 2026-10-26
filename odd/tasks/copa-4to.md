@@ -30,6 +30,26 @@ The second half of 4to plays next. The goal is still to measure each child's lev
 - **Arcade:** typing race, wardrobe, and the old Workshop as an optional card. It also shows the child's best time per circuit. The admin "Juegos para todos" button keeps working.
 - Fix the JS errors seen in class (`toLowerCase` of undefined ×7, `getBoundingClientRect` of null ×1).
 
+
+## Design v2 (approved 2026-10-26: "ok, hacelo")
+
+The user reviewed C01–C05 and found two problems. Placing blocks against rivals that drive while the child thinks punishes thinking slowly. And single-slot circuits are too recreational and isolated ("connect two blocks and done"). The approved redesign:
+
+- **You are the engineer, not the driver.** The kart drives itself with ONE program that grows across the whole Copa. Each copa brings a track where the current program stops being enough, so the new concept is needed instead of being requested.
+- **Program first, race after.** The garage has no clock; rivals wait at the start line. **¡Largar!** runs the program.
+- **A wall crash means a wrong program.** The kart stops with smoke, the failing block glows red, and the child goes back to the garage with the program intact. **Ver paso a paso** replays slowly, lighting each block. Skidding or a slow program is not wrong, only slower.
+- **Block-race rivals are tied to program quality.** Each track has target times (bronze = a working program, silver = good with no time losses, gold = optimal). A loss means the next race is against the rival below; a win means the rival above. Winning always means the program was better, and the result line says why truthfully.
+- **Typing race (Arcade) rivals adapt to the child's speed**, as the user meant originally. In the first race the rivals adapt gently while racing. From then on they start at the child's wpm from the previous race: after a loss a bit slower (−10%), after a win a bit faster (+5%), clamped. A very slow typist does not always lose and a very fast one does not always win.
+- **Copas:**
+  1. Conocés la pista (sequence on a fixed track).
+  2. La pista no entra: memory of 8 slots, long patterned tracks, so `repetir` (with several blocks inside) is the only way to fit.
+  3. La pista cambia: puddles move every run, including revancha, so the kart must look: `si hay charco adelante → saltar / si no → avanzar` inside the `repetir`.
+  4. Cosas que pasan de golpe: a log falls at an unknown time, so a second script runs at the same time: `cuando cae un tronco → frenar, esperar 1, seguir`. Teaches "si = a place you check, event = a moment you cannot predict".
+  5. Gran Premio: variables, 3 nitro cans and 3 laps (`si recta y nitro > 0 → turbo, cambiar nitro en -1`), using everything.
+- **Espiá el programa del zorro:** after a loss, read the fox's program and tap where its trick is before watching it run. **Ayudá al ciervo:** the deer crashes and the child fixes the deer's program. These are the predict and debug steps, made part of the story.
+- **Pacing:** about 5 min per copa. The ladder ceiling picks the starting copa. A first-try solve skips ahead. After two failures on the same track, the ghost hand shows only the next block. No rivals drive during the garage.
+- Unchanged from v1: no free canvas, no coordinates, no emoji (tofu on the Pi), goal large inside the screen, the Arcade unlock (copa 2 or minute 20), the mid-class survey, `/admin` circuit and medals.
+
 ## Constraints
 
 - Raspberry Pi: one writer at a time; vitest `--maxWorkers=2`. Ports: same as the parent feature (8810/8811/54340); never kill 8797.
@@ -56,6 +76,15 @@ Route: delegated direct (one writer at a time; each task touches 2+ non-trivial 
 - [x] C03 Copa de 4to: 5 circuits with the concept blocks (`repetir` turbo, `si charco / si no`, event `al aparecer tronco → saltar`, variable `vueltas`), one empty slot each, plus events for the data.
 - [x] C04 4to route: short ladder (cap 8 min), Copa replaces the Workshop, Arcade unlock (circuit 2 or minute 20), old Workshop as an optional Arcade card, best times in the Arcade, 2-question survey at about minute 25.
 - [x] C05 Report and guide: `analyze-playtest.mjs` reads the Copa (place, margin, concept per circuit, revanchas), teacher guide in `docs/prompts/prueba-4to.md`, §7 exception note in `docs/next-iteration.md`.
+
+Tasks C06–C11 implement Design v2. C03's single-slot circuits and C02's fixed typing paces are superseded by them.
+
+- [ ] C06 Merge `origin/feat/prueba-piloto` (the other agent's 1ro rounds T43–T51, up to 73f8d6e) into `feat/copa-4to`, resolving conflicts so both 1ro's new route and 4to's Copa route work. Both agents fixed the typing race last-letter crash: keep one fix.
+- [ ] C07 Typing race adaptive rivals for 4to (v2 rule above), replacing the fixed 6/10/15 wpm.
+- [ ] C08 Copa v2 engine (pure, unit-tested): the kart program model (arrows/avanzar, saltar, turbo, frenar, esperar, `repetir n [...]`, `si <sensor> → … si no → …`, `cuando cae un tronco` second script, variables nitro/vueltas), tracks with walls, moving puddles and timed logs, seeded simulation with timeline, crash-at-block, total time, slot limit, and reference programs giving the bronze/silver/gold times per track.
+- [ ] C09 Copa v2 garage and race UI: slot memory strip with nesting, limited palette per copa, ¡Largar!, rivals waiting at the start, crash → back to the garage with the red block, Ver paso a paso, result with truthful reason and adaptive rival tier, ghost next block after 2 failures.
+- [ ] C10 Copa v2 flow: 5 copas with their tracks, ladder placement, skip on first-try solve, Espiá al zorro, Ayudá al ciervo, data events, Arcade unlock and survey wiring, `/admin`, report, teacher guide.
+- [ ] C11 Final: merge the latest `origin/feat/prueba-piloto` again, full checks, deploy everything to camino-prueba (authorized 2026-10-26: "subís todos los cambios juntos a producción"), verify the served bundle by sha256.
 
 ## Progress
 
