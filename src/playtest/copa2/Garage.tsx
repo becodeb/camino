@@ -11,7 +11,7 @@
 // The engine (simulate, tracks, rivals, hints) is copa2/*; the editor's rules
 // (caret, memory, nesting) are editor.ts; this file is the screen.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { speak } from '../../ui/speech';
 import { CritterArt } from '../../ui/critterArt';
 import { playGhost, type GhostRun } from '../../ui/ghost';
@@ -28,8 +28,9 @@ import {
 import { stateAt, stateAtStep, stepsOf, type SceneState } from './playback';
 import { CRASH_TEXT, STUCK_TEXT, TIMEOUT_TEXT, BLOCK_LABEL, aAnimal, seconds } from './labels';
 import { BlockIcon } from './blockArt';
-import { MemoryMeter, NO_LIVE, ProgramPanel, type Live } from './ProgramPanel';
+import { MemoryMeter, NO_LIVE, ProgramPanel, ReferencePanel, type Live } from './ProgramPanel';
 import { CAM_MIN, COAST_U, PARK_U, RUN_W, Scene, camFor, courseFor, maybePuddles, previewWidth, uOfPos, type KartLook } from './Scene';
+import { DeerDeed, DeerDriver } from './DeerArt';
 import { GarageResult } from './GarageResult';
 import '../playtest.css';
 import '../race.css';
@@ -49,8 +50,39 @@ export interface GarageResultPayload {
   used: number;
 }
 
+/** What a ¡Largar! turned out to be, told to the flow the moment it starts (the engine is deterministic: the outcome is already known). */
+export interface RunReport {
+  n: number;
+  outcome: SimResult['outcome'];
+  timeMs: number;
+  crashCause?: string;
+  /** A finished run only. */
+  result?: RaceResult;
+}
+
+export type GaragePhase = 'garage' | 'run' | 'step' | 'result';
+
 export interface GarageProps {
   track: TrackSpec;
+  /** `deer`: Ayudá al ciervo. The goal is the deer's program running to the end (no rivals, no podium); a finished run ends in a small thank-you. */
+  mode?: 'race' | 'deer';
+  /** The copa's name for the header, when it is not the track's own (the deer's). */
+  title?: string;
+  /** A previous program, shown faded beside the garage as "tu programa anterior" (copas 2 and 3 start empty). */
+  reference?: Program | null;
+  /** Small buttons for the header (the copa strip, the Arcade): the flow's. */
+  headerExtra?: ReactNode;
+  /** After enough failures the flow lets the child go on without fixing the deer. */
+  giveUp?: { label: string; onGiveUp(): void } | null;
+  onRun?(r: RunReport): void;
+  onPhase?(phase: GaragePhase): void;
+  /** ¡Revancha! pressed on a result (the rival of the next race follows from it). */
+  onRevancha?(p: GarageResultPayload): void;
+  /** After a loss: "Espiá el programa del <rival>". */
+  onSpy?(p: GarageResultPayload): void;
+  /** Whether the result offers "¡Saltar a la copa siguiente!" (the flow's rule: journey.offerSkip). */
+  offerSkip?(p: GarageResultPayload): boolean;
+  onSkip?(p: GarageResultPayload): void;
   /** The rival to beat: its target time is the goal (the other animal on the track is its neighbour tier). */
   rivalTier: Tier;
   /** The program so far (it grows across the whole Copa). */
@@ -67,7 +99,7 @@ export interface GarageProps {
   raceSpeed?: number;
 }
 
-type Phase = 'garage' | 'run' | 'step' | 'result';
+type Phase = GaragePhase;
 
 /** The race plays this much faster than the engine's clock (rivals too). */
 const RACE_SPEED = 1.4;
@@ -101,7 +133,11 @@ function noticeApplies(n: Notice | null, program: Program): boolean {
   return JSON.stringify(program) === n.sig;
 }
 
-export function Garage({ track, rivalTier, initialProgram, ghostHint = false, onResult, onProgramChange, logger, seedFor, raceSpeed = RACE_SPEED }: GarageProps) {
+export function Garage({
+  track, rivalTier, initialProgram, ghostHint = false, onResult, onProgramChange, logger, seedFor, raceSpeed = RACE_SPEED,
+  mode = 'race', title, reference, headerExtra, giveUp, onRun, onPhase, onRevancha, onSpy, offerSkip, onSkip,
+}: GarageProps) {
+  const deer = mode === 'deer';
   const rules = useMemo<Rules>(() => ({ palette: PALETTES[track.copa], slots: track.slots }), [track]);
   const [ed, setEdState] = useState(() => newEditor(initialProgram));
   const edRef = useRef(ed);
@@ -123,7 +159,14 @@ export function Garage({ track, rivalTier, initialProgram, ghostHint = false, on
   const [drag, setDrag] = useState<{ kind: BlockKind; x: number; y: number } | null>(null);
   const runCount = useRef(0);
   const page = useRef<HTMLElement>(null);
-  const log = useCallback((type: string, payload: Record<string, unknown>) => logger?.(type, { track: track.id, ...payload }), [logger, track.id]);
+  const log = useCallback((type: string, payload: Record<string, unknown>) => logger?.(type, { track: track.id, ...(deer ? { deer: true } : {}), ...payload }), [logger, track.id, deer]);
+  const phaseCb = useRef(onPhase);
+  phaseCb.current = onPhase;
+  useEffect(() => { phaseCb.current?.(phase); }, [phase]);
+  const payloadOf = useCallback((done: Run): GarageResultPayload => ({
+    trackId: track.id, rival: rivalTier, won: done.result?.won ?? false, place: done.result?.place ?? 3, result: done.result!, program: done.program,
+    timeMs: done.sim.timeMs, runs: runCount.current, slots: track.slots, used: slotCount(done.program),
+  }), [rivalTier, track.id, track.slots]);
 
   // ---------------------------------------------------------------- the track
 
@@ -143,14 +186,17 @@ export function Garage({ track, rivalTier, initialProgram, ghostHint = false, on
     const { counts, state } = takeEdits(edRef.current);
     if (!hasEdits(counts)) return;
     edRef.current = state;
-    log('copa2_edit', { ...counts });
+    log('garage_edit', { ...counts });
   }, [log]);
   useEffect(() => () => {
     const { counts } = takeEdits(edRef.current);
-    if (hasEdits(counts)) logger?.('copa2_edit', { track: track.id, ...counts });
+    if (hasEdits(counts)) logger?.('garage_edit', { track: track.id, ...(deer ? { deer: true } : {}), ...counts });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => { onProgramChange?.(ed.program); }, [ed.program, onProgramChange]);
+  // the flow gets the program after every edit (and once on mount); a new callback each render must not re-send it
+  const programCb = useRef(onProgramChange);
+  programCb.current = onProgramChange;
+  useEffect(() => { programCb.current?.(ed.program); }, [ed.program]);
 
   // ---------------------------------------------------------------- the editor's actions
 
@@ -217,17 +263,22 @@ export function Garage({ track, rivalTier, initialProgram, ghostHint = false, on
   const largar = useCallback(() => {
     const program = edRef.current.program;
     if (!program.main.length && !program.onLog) return;
+    if (slotCount(program) > rules.slots) return; // it does not fit the memory: the banner says so
     flushEdits();
     runCount.current += 1;
     const seed = seedFor ? seedFor(runCount.current) : Math.floor(Math.random() * 2 ** 31);
     const sim = simulate(program, track, seed);
     const result = sim.outcome === 'finish' ? raceResult(sim, track, rivalTier) : null;
     const r: Run = { sim, program, seed, result, n: runCount.current };
-    log('copa2_run', {
+    log('garage_run', {
       run_n: r.n, outcome: sim.outcome, time_ms: sim.timeMs,
       ...(sim.crash ? { crash_cause: sim.crash.cause, crash_block_kind: blockKindOf(program, sim.crash.blockId) } : {}),
       blocks: allBlocks(program).length, slots: slotCount(program),
       ...(result ? { place: result.place } : {}), rival_tier: rivalTier, seed,
+    });
+    onRun?.({
+      n: r.n, outcome: sim.outcome, timeMs: sim.timeMs,
+      ...(sim.crash ? { crashCause: sim.crash.cause } : {}), ...(result ? { result } : {}),
     });
     setNotice(null);
     setMsg(null);
@@ -235,7 +286,7 @@ export function Garage({ track, rivalTier, initialProgram, ghostHint = false, on
     setLast(r);
     setClock(0);
     setPhase('run');
-  }, [flushEdits, log, rivalTier, seedFor, track]);
+  }, [flushEdits, log, onRun, rivalTier, rules.slots, seedFor, track]);
 
   const backToGarage = useCallback((r: Run) => {
     const s = r.sim;
@@ -278,7 +329,7 @@ export function Garage({ track, rivalTier, initialProgram, ghostHint = false, on
   const stepList = useMemo(() => (last ? stepsOf(last.sim, last.program) : []), [last]);
   const openStep = () => {
     if (!last) return;
-    log('copa2_step_view', {});
+    log('garage_step_view', {});
     flushEdits();
     setNotice(null);
     setStep({ i: -1, since: 0 });
@@ -350,6 +401,7 @@ export function Garage({ track, rivalTier, initialProgram, ghostHint = false, on
 
   // ---------------------------------------------------------------- what the screen says
 
+  const inGarageEarly = phase === 'garage';
   const noticeOn = phase === 'garage' && noticeApplies(notice, ed.program) ? notice : null;
   const crashId = phase === 'step' && last?.sim.crash && sceneState?.crashed ? last.sim.crash.blockId : noticeOn?.kind === 'crash' ? noticeOn.blockId ?? null : null;
   const lap = sceneState ? Math.min(track.laps, Math.floor(Math.min(sceneState.pos, total - 0.001) / lapTiles) + 1) : 1;
@@ -417,8 +469,12 @@ export function Garage({ track, rivalTier, initialProgram, ghostHint = false, on
     </div>
   );
 
+  // a program carried from the last track that does not fit this memory: shown as it is, gently, and ¡Largar! waits until it fits
+  const used = slotCount(ed.program);
+  const tooBig = inGarageEarly && used > rules.slots;
   const banner = (
     <>
+      {tooBig && <p className="gx-banner is-toobig" role="alert"><b>No entra: hay que achicarlo.</b> Tu programa usa {used} lugares y la memoria tiene {rules.slots}.{track.copa >= 2 ? ' ¿Hay algo que se repite?' : ''}</p>}
       {noticeOn && <p className={`gx-banner is-${noticeOn.kind}`} role="status"><b>{noticeOn.kind === 'crash' ? '¡Chocaste!' : noticeOn.kind === 'stuck' ? '¡Falta camino!' : '¡No termina!'}</b> {noticeOn.text}</p>}
       {!noticeOn && hint?.wrongBlockId && <p className="gx-banner is-hint" role="status">Este bloque no va ahí. Sacalo.</p>}
     </>
@@ -428,14 +484,28 @@ export function Garage({ track, rivalTier, initialProgram, ghostHint = false, on
 
   if (phase === 'result' && run?.result) {
     const done = run;
+    const payload = payloadOf(done);
+    if (deer) {
+      return (
+        <main className="pp-page pp-race is-podium gx-result-page gx-deer-done" data-deer-fixed="1">
+          <section className="sheet gx-deer-result" aria-label="El ciervo llegó">
+            <DeerDeed />
+            <p className="gx-result-line">¡Lo arreglaste! El ciervo llegó a la meta.</p>
+            <p className="gx-result-reason">Tu programa lo hizo en <b>{seconds(done.sim.timeMs)}</b>.</p>
+            <button type="button" className="cut gx-seguir gx-deer-next" onClick={() => onResult(payload)}>
+              <span className="rc-again-word">¡Seguir!</span>
+            </button>
+          </section>
+        </main>
+      );
+    }
     return (
       <GarageResult
         track={track} sim={done.sim} result={done.result!}
-        onRevancha={() => { setRun(null); setPhase('garage'); }}
-        onNext={() => onResult({
-          trackId: track.id, rival: rivalTier, won: done.result!.won, place: done.result!.place, result: done.result!, program: done.program,
-          timeMs: done.sim.timeMs, runs: runCount.current, slots: track.slots, used: slotCount(done.program),
-        })}
+        onRevancha={() => { onRevancha?.(payload); setRun(null); setPhase('garage'); }}
+        onNext={() => onResult(payload)}
+        onSpy={!done.result!.won && onSpy ? () => onSpy(payload) : undefined}
+        onSkip={onSkip && offerSkip?.(payload) ? () => onSkip(payload) : undefined}
       />
     );
   }
@@ -450,19 +520,30 @@ export function Garage({ track, rivalTier, initialProgram, ghostHint = false, on
     <main className={`gx-page${hint ? ' has-hint' : ''}`} data-phase={phase} data-track={track.id} data-copa={track.copa} ref={page}>
       <header className="gx-head">
         <div className="gx-title">
-          <small>Copa {track.copa}</small>
-          <h1>{track.name}</h1>
+          <div className="gx-title-row">
+            <small>Copa {track.copa}</small>
+            {headerExtra}
+          </div>
+          <h1>{deer ? 'Ayudá al ciervo' : title ?? track.name}</h1>
         </div>
-        <div className="gx-goal" aria-label={`Ganale ${aAnimal(rivalName)}`}>
-          <span className="gx-goal-critter"><svg viewBox="-60 -90 120 100" width="64" height="54" aria-hidden="true"><CritterArt id={RIVAL_ANIMAL[rivalTier]} bare /></svg></span>
-          <span className="gx-goal-text">Ganale {aAnimal(rivalName).split(' ')[0]} <b>{rivalName.replace(/^el /, '')}</b>: llegá en menos de <b>{seconds(goalMs)}</b></span>
-        </div>
+        {deer ? (
+          <div className="gx-goal gx-goal-deer" aria-label="Arreglá el programa del ciervo">
+            <span className="gx-goal-critter"><svg viewBox="-60 -90 120 100" width="64" height="54" aria-hidden="true"><DeerDriver bare /></svg></span>
+            <span className="gx-goal-text">El ciervo se chocó. <b>Arreglá su programa</b> para que llegue a la meta</span>
+          </div>
+        ) : (
+          <div className="gx-goal" aria-label={`Ganale ${aAnimal(rivalName)}`}>
+            <span className="gx-goal-critter"><svg viewBox="-60 -90 120 100" width="64" height="54" aria-hidden="true"><CritterArt id={RIVAL_ANIMAL[rivalTier]} bare /></svg></span>
+            <span className="gx-goal-text">Ganale {aAnimal(rivalName).split(' ')[0]} <b>{rivalName.replace(/^el /, '')}</b>: llegá en menos de <b>{seconds(goalMs)}</b></span>
+          </div>
+        )}
       </header>
 
       <section className="sheet gx-scene-card">
         <Scene
           course={course} road={road} lapTiles={lapTiles} viewW={viewW} cam={cam} me={me} rivals={rivals} pair={pair}
           puddles={puddles} logs={logs} numbers={inGarage} spinKey={sceneState?.skidding ? 1 : 0}
+          meDriver={deer ? <DeerDriver /> : undefined} hideRivals={deer}
         />
         {inGarage && <TrackNotes track={track} moving={movingPuddles} />}
         {phase === 'run' && sceneState && !runOver && (
@@ -482,7 +563,8 @@ export function Garage({ track, rivalTier, initialProgram, ghostHint = false, on
       </section>
 
       <div className="gx-body">
-        <div className="gx-left">
+        <div className={`gx-left${reference ? ' has-ref' : ''}`}>
+          {reference && inGarage && <ReferencePanel program={reference} rules={rules} />}
           <ProgramPanel
             program={inGarage ? ed.program : (active?.program ?? ed.program)}
             rules={rules} caret={ed.caret} selected={inGarage ? ed.selected : null}
@@ -514,14 +596,15 @@ export function Garage({ track, rivalTier, initialProgram, ghostHint = false, on
                 {hint && !hint.wrongBlockId && <p className="gx-hint-caption">Pista: poné <b>{hintLabel(hint.block)}</b></p>}
               </section>
               <div className="gx-actions">
-                <button type="button" className="cut gx-largar" disabled={!ed.program.main.length && !ed.program.onLog} onClick={largar}>
-                  <svg viewBox="0 0 40 40" width="46" height="46" aria-hidden="true"><path d="M8,5 V36" stroke="#2b2622" strokeWidth="4" strokeLinecap="round" /><path d="M8,6 L34,10 L28,18 L34,26 L8,22 Z" fill="#fbf7ee" stroke="#2b2622" strokeWidth="3" strokeLinejoin="round" /></svg>
-                  ¡Largar!
+                <button type="button" className="cut gx-largar" disabled={(!ed.program.main.length && !ed.program.onLog) || tooBig} onClick={largar}>
+                  <svg viewBox="0 0 40 40" width="52" height="52" aria-hidden="true"><path d="M8,5 V36" stroke="#2b2622" strokeWidth="4" strokeLinecap="round" /><path d="M8,6 L34,10 L28,18 L34,26 L8,22 Z" fill="#fbf7ee" stroke="#2b2622" strokeWidth="3" strokeLinejoin="round" /></svg>
+                  <span className="gx-largar-word">¡Largar!</span>
                 </button>
                 <button type="button" className="cut gx-stepbtn" disabled={!last} onClick={openStep}>
                   <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true"><circle cx="13" cy="13" r="8" fill="#fbf7ee" stroke="#2b2622" strokeWidth="3" /><path d="M19,19 L28,28" stroke="#2b2622" strokeWidth="4" strokeLinecap="round" /></svg>
                   Ver paso a paso
                 </button>
+                {giveUp && <button type="button" className="cut gx-giveup" onClick={giveUp.onGiveUp}>{giveUp.label}</button>}
               </div>
             </>
           )}

@@ -45,8 +45,15 @@ export function resultWords(result: RaceResult, sim: SimResult): { headline: str
   return { headline, reason };
 }
 
-export function GarageResult({ track, sim, result, onRevancha, onNext }: {
+/** "del zorro": the animals' names come with their article ("el zorro", "la rana"). */
+export const delAnimal = (name: string): string => (name.startsWith('el ') ? `del ${name.slice(3)}` : `de ${name}`);
+
+export function GarageResult({ track, sim, result, onRevancha, onNext, onSpy, onSkip }: {
   track: TrackSpec; sim: SimResult; result: RaceResult; onRevancha(): void; onNext(): void;
+  /** After a loss: look at the rival's program before trying again (C10). */
+  onSpy?(): void;
+  /** The first-run silver finish of a copa's first track: go to the next copa (C10). */
+  onSkip?(): void;
 }) {
   const pair: readonly [CritterId, CritterId] = [RIVAL_ANIMAL[result.field[0]], RIVAL_ANIMAL[result.field[1]]];
   const order = podiumOrder(sim.timeMs, result.field, track);
@@ -74,6 +81,22 @@ export function GarageResult({ track, sim, result, onRevancha, onNext }: {
           <p className="gx-result-reason">{reason}</p>
           <p className="gx-result-times">Tu programa: <b>{seconds(sim.timeMs)}</b></p>
         </div>
+        {(onSkip || onSpy) && (
+          <div className="gx-result-extra">
+          {onSkip && (
+            <button type="button" className="cut gx-skip" data-act="skip-copa" onClick={onSkip}>
+              <FlagIcon size={44} />
+              <span>¡Saltar a la copa siguiente!</span>
+            </button>
+          )}
+          {onSpy && (
+            <button type="button" className="cut gx-spy-btn" data-act="spy" onClick={onSpy}>
+              <svg viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><circle cx="13" cy="13" r="8" fill="#fbf7ee" stroke="#2b2622" strokeWidth="3" /><path d="M19,19 L28,28" stroke="#2b2622" strokeWidth="4" strokeLinecap="round" /></svg>
+              <span>Espiá el programa {delAnimal(NAME[RIVAL_ANIMAL[result.rival]])}</span>
+            </button>
+          )}
+          </div>
+        )}
         <div className="rc-honest-buttons">
           <button type="button" className="cut rc-again rc-revancha gx-revancha" onClick={onRevancha}>
             <span className="rc-revancha-flip"><AgainArt /></span>

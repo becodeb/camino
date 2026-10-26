@@ -40,6 +40,9 @@ interface Ctx extends PanelHandlers {
   crashId: string | null;
   wrongId: string | null;
   readOnly: boolean;
+  /** Espiá: the blocks can be tapped to answer (a read-only program with a question) and `answerId` shows the right one. */
+  pick?: (id: string) => void;
+  answerId?: string | null;
 }
 
 const dropAttr = (pos: Position) => JSON.stringify(pos);
@@ -94,12 +97,14 @@ function rowClass(b: { id: string }, c: Ctx, extra = ''): string {
     c.live.around.has(b.id) ? 'is-around' : '',
     c.crashId === b.id ? 'is-crash' : '',
     c.wrongId === b.id ? 'is-wrongpick' : '',
+    c.answerId === b.id ? 'is-answer' : '',
+    c.pick ? 'is-pickable' : '',
   ].filter(Boolean).join(' ');
 }
 
 function BlockView({ b, pos, c }: { b: Block; pos: Position; c: Ctx }) {
   const after: Position = { script: pos.script, path: pos.path, index: pos.index + 1 };
-  const select = () => { if (!c.readOnly) c.onSelect(b.id); };
+  const select = () => { if (c.pick) c.pick(b.id); else if (!c.readOnly) c.onSelect(b.id); };
   if (b.kind === 'repeat') {
     const inside = (index: number): Position => ({ script: pos.script, path: [...pos.path, { index: pos.index, branch: 'body' }], index });
     return (
@@ -210,30 +215,63 @@ function BlockList({ blocks, script, path, c, emptyText }: { blocks: readonly Bl
 
 // ------------------------------------------------------------------ the two lanes
 
-export function ProgramPanel({ program, rules, caret, selected, live, crashId, wrongId, readOnly, handlers, banner, toolbar }: {
+/**
+ * Brings `el` into view by scrolling only the lane that holds it (`scrollIntoView` also scrolls the overflow-hidden
+ * ancestors, which pushed the lane's own title out of the panel). `centre`: a running block is put in the middle of the
+ * lane whenever it is not clearly inside it, so a long program (copa 5's nested repeats) keeps the executing block on screen.
+ */
+export function keepInView(el: Element | null | undefined, centre = false): void {
+  const lane = el?.closest<HTMLElement>('.gx-lane');
+  if (!el || !lane) return;
+  const l = lane.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  const title = lane.querySelector<HTMLElement>('.gx-lane-title')?.getBoundingClientRect().height ?? 0;
+  const top = l.top + title + 8;
+  const bottom = l.bottom - 8;
+  if (r.top >= top && r.bottom <= bottom) return;
+  if (centre) lane.scrollTop += r.top - (l.top + title + (l.height - title) / 2 - r.height / 2);
+  else lane.scrollTop += r.top < top ? r.top - top : r.bottom - bottom;
+}
+
+/** "Tu programa anterior": the program of the last copa, faded and read-only, beside the garage (copas 2 and 3 start empty). */
+export function ReferencePanel({ program, rules }: { program: Program; rules: Rules }) {
+  const none: PanelHandlers = { onSelect() {}, onCaret() {}, onBump() {}, onLaps() {}, onSensor() {}, onAddEvent() {} };
+  return (
+    <section className="sheet gx-ref" aria-label="Tu programa anterior">
+      <h2 className="gx-ref-title">Tu programa anterior</h2>
+      <div className="gx-ref-body" aria-hidden="true">
+        <ProgramPanel program={program} rules={rules} caret={{ script: 'main', path: [], index: 0 }} selected={null} live={NO_LIVE} crashId={null} wrongId={null} readOnly handlers={none} compact />
+      </div>
+    </section>
+  );
+}
+
+export function ProgramPanel({ program, rules, caret, selected, live, crashId, wrongId, readOnly, handlers, banner, toolbar, pick, answerId, compact, title }: {
   program: Program; rules: Rules; caret: Caret; selected: string | null; live: Live; crashId: string | null; wrongId: string | null;
   readOnly: boolean; handlers: PanelHandlers; banner?: ReactNode; toolbar?: ReactNode;
+  pick?: (id: string) => void; answerId?: string | null; compact?: boolean; title?: string;
 }) {
-  const c: Ctx = { ...handlers, rules, caret, selected, live, crashId, wrongId, readOnly };
+  const c: Ctx = { ...handlers, rules, caret, selected, live, crashId, wrongId, readOnly, pick, answerId };
   const body = useRef<HTMLDivElement>(null);
   // keep the insertion point in view (a long program scrolls)
   const first = useRef(true);
   useEffect(() => {
     if (first.current) { first.current = false; return; }
-    body.current?.querySelector('.gx-caret')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    keepInView(body.current?.querySelector('.gx-caret'));
   }, [caret, program]);
+  // the running block stays on screen, however long the program is
   useEffect(() => {
-    if (live.leaf) body.current?.querySelector('.is-live')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (live.leaf) keepInView(body.current?.querySelector('.is-live'), true);
   }, [live.leaf]);
   const hat = program.onLog;
   const hatClass = ['gx-row', 'gx-hat', selected === hat?.id ? 'is-sel' : '', live.leaf === hat?.id || live.around.has(hat?.id ?? '') ? 'is-around' : '', crashId === hat?.id ? 'is-crash' : ''].filter(Boolean).join(' ');
   return (
-    <section className="gx-program sheet" aria-label="El programa del auto">
+    <section className={`gx-program sheet${compact ? ' is-compact' : ''}`} aria-label={compact ? 'Programa' : 'El programa del auto'}>
       {banner}
       <div className="gx-lanes" ref={body}>
         <div className="gx-lane gx-lane-main">
           <button type="button" className="gx-lane-title" disabled={readOnly} onClick={() => handlers.onCaret({ script: 'main', path: [], index: 0 })}>
-            Programa del auto <small>empieza acá</small>
+            {title ?? 'Programa del auto'} <small>empieza acá</small>
           </button>
           <BlockList blocks={program.main} script="main" path={[]} c={c} emptyText="Tocá un bloque de la derecha para empezar" />
         </div>
@@ -241,7 +279,7 @@ export function ProgramPanel({ program, rules, caret, selected, live, crashId, w
           <div className={`gx-lane gx-lane-event${hat ? '' : ' is-empty'}`}>
             {hat ? (
               <>
-                <div className={hatClass} role="button" tabIndex={0} onClick={() => !readOnly && handlers.onSelect(hat.id)} onKeyDown={onKey(() => !readOnly && handlers.onSelect(hat.id))} data-id={hat.id}>
+                <div className={`${hatClass}${answerId === hat.id ? ' is-answer' : ''}${pick ? ' is-pickable' : ''}`} role="button" tabIndex={0} onClick={() => (pick ? pick(hat.id) : !readOnly && handlers.onSelect(hat.id))} onKeyDown={onKey(() => (pick ? pick(hat.id) : !readOnly && handlers.onSelect(hat.id)))} data-id={hat.id}>
                   <BlockIcon kind="on_log" />
                   <span className="gx-label">Si cae un tronco</span>
                 </div>

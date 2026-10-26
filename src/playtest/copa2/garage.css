@@ -16,7 +16,7 @@
 }
 
 /* ------------------------------------------------ header: the copa, the track, the goal */
-.gx-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.gx-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-right: 64px; }
 .gx-title small { display: block; font: 700 18px/1 var(--body); color: var(--ink-2); letter-spacing: 0.04em; text-transform: uppercase; }
 .gx-title h1 { margin: 2px 0 0; font: 700 clamp(26px, 3.2vw, 38px)/1.05 var(--body); }
 .gx-goal { display: flex; align-items: center; gap: 12px; padding: 4px 18px 4px 10px; background: var(--sheet); border: 3px solid var(--ink); border-radius: 16px 12px 17px 11px / 12px 17px 11px 16px; box-shadow: 3px 4px 0 var(--shadow); }
@@ -95,7 +95,7 @@
 .gx-lanes { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: stretch; }
 .gx-lane { min-height: 0; overflow-y: auto; padding: 2px 6px 8px 2px; }
 .gx-lanes:has(.gx-lane-event) { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 8px; }
-.gx-lane-title { display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 2px 4px; border: 0; background: none; color: var(--ink); font: 700 22px/1.1 var(--body); cursor: pointer; }
+.gx-lane-title { display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 4px 4px 6px; border: 0; background: var(--sheet); color: var(--ink); font: 700 22px/1.1 var(--body); cursor: pointer; position: sticky; top: 0; z-index: 3; }
 .gx-lane-title small { font-weight: 400; font-size: 16px; color: var(--ink-2); margin-left: 8px; }
 .gx-lane-title:disabled { cursor: default; }
 .gx-lane-event { border-left: 4px dotted #b3aa9a; padding-left: 12px; }
@@ -183,7 +183,9 @@
 .gx-dragghost { position: fixed; z-index: 90; translate: -50% -50%; pointer-events: none; opacity: 0.92; filter: drop-shadow(3px 5px 3px rgba(84, 62, 38, 0.35)); }
 
 .gx-actions { display: grid; gap: 8px; }
-.gx-largar { display: flex; align-items: center; justify-content: center; gap: 14px; min-height: 78px; font: 700 40px/1 var(--body); cursor: pointer; --fill: #a4b86d; }
+/* `button.cut { font: inherit }` (notebook.css) outranks a bare class: the label carries its own size */
+.gx-largar { display: flex; align-items: center; justify-content: center; gap: 16px; min-height: 92px; cursor: pointer; --fill: #a4b86d; }
+.gx-largar .gx-largar-word { font: 800 54px/1 var(--body); letter-spacing: 0.01em; }
 .gx-largar:disabled { opacity: 0.5; --fill: #d7d2c6; cursor: default; }
 .gx-stepbtn { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 54px; font: 700 22px/1 var(--body); cursor: pointer; --fill: #dbe7f3; }
 .gx-stepbtn:disabled { opacity: 0.45; cursor: default; }
@@ -219,3 +221,50 @@
 @media (prefers-reduced-motion: reduce) {
   .gx-rev .rc-kart-in, .gx-puffs circle, .gx-row.is-live, .gx-caret, .gx-pal.is-hinted { animation: none; }
 }
+
+
+/* ------------------------------------------------ C10: the flow's additions */
+.gx-title-row { display: flex; align-items: center; gap: 12px; min-height: 18px; }
+.gx-title-row .gx-hbtn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 16px; font: 700 20px/1 var(--body); cursor: pointer; }
+.gx-title-row .gx-hbtn svg { flex: none; }
+.gx-goal-deer .gx-goal-text { font-size: 23px; }
+
+/* "tu programa anterior": faded, read-only, beside the program (copas 2 and 3 start empty) */
+.gx-left.has-ref { flex-direction: row; gap: 10px; }
+.gx-left.has-ref > .gx-program { flex: 1; min-width: 0; }
+.gx-ref { flex: 0 0 218px; min-height: 0; display: flex; flex-direction: column; padding: 8px 8px 6px; opacity: 0.62; background: #f3eee1; border-style: dashed; }
+.gx-ref-title { margin: 0 0 4px 2px; font: 700 18px/1.1 var(--body); color: var(--ink-2); }
+.gx-ref-body { flex: 1; min-height: 0; display: flex; pointer-events: none; }
+.gx-program.is-compact { padding: 4px 2px; border: 0; box-shadow: none; background: transparent; flex: 1; min-width: 0; }
+.gx-program.is-compact .gx-lane-title { display: none; }
+.gx-program.is-compact .gx-lane { padding: 0 2px 4px 0; }
+.gx-program.is-compact .gx-row { min-height: 38px; padding: 2px 8px 2px 4px; gap: 4px 8px; box-shadow: 1px 2px 0 var(--shadow); }
+.gx-program.is-compact .gx-label { font-size: 17px; }
+.gx-program.is-compact .gx-numchip { font-size: 15px; padding: 3px 9px; }
+.gx-program.is-compact .gx-icon { width: 28px; height: 28px; }
+.gx-program.is-compact .gx-list { gap: 4px; }
+.gx-program.is-compact .gx-c-body { margin-left: 4px; padding-left: 5px; }
+
+.gx-banner.is-toobig { background: #fdeccb; border-color: #d4ac4a; }
+
+.gx-giveup { min-height: 54px; font: 700 20px var(--body); cursor: pointer; --fill: #efe8d8; }
+button.gx-giveup { font-size: 20px; font-weight: 700; }
+
+/* the result's extras: skip to the next copa, spy on the rival */
+.gx-result-extra { grid-column: 1 / -1; justify-self: center; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 14px; }
+.gx-result-page .rc-honest-podium { grid-template-rows: minmax(0, 1fr) auto auto auto; }
+.gx-skip { display: inline-flex; align-items: center; gap: 12px; min-height: 72px; padding: 6px 26px; cursor: pointer; --fill: #f0d27a; }
+.gx-skip span { font: 800 32px/1.05 var(--body); }
+.gx-spy-btn { display: inline-flex; align-items: center; gap: 12px; min-height: 64px; padding: 6px 24px; cursor: pointer; --fill: #dbe7f3; }
+.gx-spy-btn span { font: 700 28px/1.05 var(--body); }
+
+/* Ayudá al ciervo: the thank-you */
+.gx-deer-result { display: grid; justify-items: center; align-content: center; gap: 10px; min-height: 60vh; padding: 20px 30px; text-align: center; }
+.gx-deer-next { display: inline-flex; align-items: center; gap: 12px; min-height: 80px; padding: 8px 48px; cursor: pointer; --fill: #a4b86d; }
+.gx-deer-next .rc-again-word { font: 800 46px/1 var(--body); }
+.gx-deer-art { width: 260px; height: 220px; }
+
+/* Espiá: the blocks can be tapped */
+.gx-row.is-pickable, .gx-c .gx-head-row.is-pickable { cursor: pointer; }
+.gx-row.is-pickable:hover { background: #fff0b8; }
+.gx-row.is-answer { background: #cfe9c2; border-color: #4f8a3c; box-shadow: 0 0 0 5px rgba(79, 138, 60, 0.55); }

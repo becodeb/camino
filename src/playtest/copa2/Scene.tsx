@@ -80,6 +80,10 @@ export interface SceneProps {
   numbers: boolean;
   /** Bumps when the kart skids again (restarts the spin). */
   spinKey?: number;
+  /** Who drives the main kart (default: the child's own character). Ayudá al ciervo: the deer; Espiá: the rival. */
+  meDriver?: React.ReactNode;
+  /** Only the main kart on the road (Ayudá al ciervo, Espiá). */
+  hideRivals?: boolean;
 }
 
 /** Where a tile's hazard sits (course unit of its left edge: HazardMark centres itself in the piece). */
@@ -172,10 +176,10 @@ export const Scene = memo(function Scene(p: SceneProps) {
             </g>
           );
         })}
-        <Kart course={course} look={p.rivals[1]} lane="r1" tone="r1" seed={3} driver={<CritterDriver id={p.pair[1]} />} />
-        <Kart course={course} look={p.rivals[0]} lane="r0" tone="r0" seed={2} driver={<CritterDriver id={p.pair[0]} />} />
+        {!p.hideRivals && <Kart course={course} look={p.rivals[1]} lane="r1" tone="r1" seed={3} driver={<CritterDriver id={p.pair[1]} />} />}
+        {!p.hideRivals && <Kart course={course} look={p.rivals[0]} lane="r0" tone="r0" seed={2} driver={<CritterDriver id={p.pair[0]} />} />}
         <g key={p.spinKey ?? 0}>
-          <Kart course={course} look={p.me} lane="me" tone="me" seed={1} driver={<MeDriver />} />
+          <Kart course={course} look={p.me} lane="me" tone="me" seed={1} driver={p.meDriver ?? <MeDriver />} />
         </g>
         {p.me.skidding && <g transform={`translate(${p.me.u * SEG} ${surfaceY(course, p.me.u) + 22})`}><Dust /></g>}
       </g>
