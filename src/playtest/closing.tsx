@@ -7,6 +7,8 @@
 //   said aloud and shown small in the bar) also appears large inside the
 //   card (`.pp-q-text`); 1ro/2do keep the pictures and the spoken line
 //   alone, unchanged (they are not expected to read yet).
+//   T51: on 1ro's own route the survey is only one screen per arcade card
+//   played, its drawing and three faces (surveyPlan.ts).
 // - The goodbye: the session's garden (every page solved planted a seed; a
 //   boss won sent its critter or plant) with the character in it, wearing
 //   the outfit kept in the wardrobe; a big drawn "jugar otra vez" starts the
@@ -35,16 +37,17 @@ import { postPreviousAdultForm } from './runtime';
 import type { AdultFormValue, PreviousChild } from './previousChild';
 import { submitPreviousAdultForm } from './previousChild';
 import { ActivityPicture, DifficultyArt, DifficultyHeaderArt, Face, GameLikedHeaderArt, LikedHeaderArt, YesNo } from './surveyArt';
-import { GAME_IDS, type GameId } from './arcade/kit';
+import type { ActivityId } from './freePlay';
+import { surveyPlan, type SurveyQuestionId } from './surveyPlan';
 import { is1ro } from './flow';
 import type { StepViewProps } from './steps';
 import { PlayAgainArt } from './round2Art';
 import { SessionGarden } from './SessionGarden';
 
-// T49: 1ro's route also asks the liking faces per monster game (`liked_<game>`)
-type QuestionId = 'liked' | 'difficulty' | 'favorite_activity' | 'play_again' | `liked_${GameId}`;
+// T49: 1ro's route asks the liking faces per game (`liked_<game>`); T51: only those (surveyPlan.ts)
+type QuestionId = SurveyQuestionId;
 interface Option { value: string; word: string; art: React.ReactNode }
-interface Question { id: QuestionId; say: string; adult: string; options: Option[]; header?: React.ReactNode; game?: GameId }
+interface Question { id: QuestionId; say: string; adult: string; options: Option[]; header?: React.ReactNode; game?: ActivityId }
 
 /** How each activity is named aloud when its picture is tapped. */
 const ACTIVITY_WORD: Record<string, string> = {
@@ -56,9 +59,10 @@ const ACTIVITY_WORD: Record<string, string> = {
   recipe: 'La receta del monstruo', dance: 'Copiá el baile', oops: '¿Qué salió mal?', tap: 'Tocá y pasa', buddy: 'Tu personaje', games: 'Los juegos del monstruo',
 };
 
-/** T49: how each monster game is named in its own question. */
-const GAME_SAY: Record<GameId, string> = {
+/** T49/T51: how each game of 1ro's arcade is named in its own question. */
+const GAME_SAY: Partial<Record<ActivityId, string>> = {
   recipe: 'la receta del monstruo', dance: 'copiar el baile', oops: '«¿Qué salió mal?»', tap: '«Tocá y pasa»',
+  buddy: 'tu personaje', wardrobe: 'el vestidor', typing_race: 'la carrera de teclas',
 };
 
 const likedFaces = (): Option[] => [
@@ -68,63 +72,60 @@ const likedFaces = (): Option[] => [
 ];
 
 /**
- * The survey's questions. T49: on 1ro's route (`games1ro`) the liking faces
- * are also asked once per monster game the child played, right after
- * "¿Te gustó jugar?", each with that game's drawing; other grades and 1ro's
- * classic route are unchanged.
+ * The survey's questions (which ones: surveyPlan.ts). T51: on 1ro's route
+ * (`games1ro`) only the liking faces, one screen per arcade card played,
+ * each with that card's drawing; other grades and 1ro's classic route are
+ * unchanged.
  */
 export function surveyQuestions(activities: readonly string[], grade = 1, games1ro = false): Question[] {
-  const qs: Question[] = [
-    {
-      id: 'liked',
-      say: '¿Te gustó jugar? Tocá una carita: mucho, más o menos, o no.',
-      adult: '¿Te gustó?',
-      header: <LikedHeaderArt />,
-      options: [
-        { value: 'yes', word: '¡Mucho!', art: <Face mood="happy" seed={1} /> },
-        { value: 'mid', word: 'Más o menos.', art: <Face mood="mid" seed={2} /> },
-        { value: 'no', word: 'No.', art: <Face mood="sad" seed={3} /> },
-      ],
-    },
-    ...(games1ro ? GAME_IDS.filter((g) => activities.includes(g)).map((g): Question => ({
-      id: `liked_${g}`,
-      game: g,
-      say: `¿Te gustó ${GAME_SAY[g]}? Tocá una carita.`,
-      adult: `¿Te gustó «${ACTIVITY_WORD[g]}»?`,
-      header: <GameLikedHeaderArt game={g} />,
-      options: likedFaces(),
-    })) : []),
-    {
-      id: 'difficulty',
-      say: '¿Fue fácil o difícil? Tocá un camino: fácil, más o menos, o difícil.',
-      adult: '¿Fue fácil o difícil?',
-      // T23: drawn differently from the liking faces (the "¿Cómo seguís?" hills), so a muted 1ro never confuses the two questions
-      header: <DifficultyHeaderArt />,
-      options: [
-        { value: 'easy', word: 'Fácil.', art: <DifficultyArt level="easy" /> },
-        { value: 'mid', word: 'Más o menos.', art: <DifficultyArt level="mid" /> },
-        { value: 'hard', word: 'Difícil.', art: <DifficultyArt level="hard" /> },
-      ],
-    },
-  ];
-  if (activities.length >= 2) {
-    qs.push({
-      id: 'favorite_activity',
-      say: '¿Qué te gustó más? Tocá el dibujo.',
-      adult: '¿Qué te gustó más?',
-      options: activities.map((a) => ({ value: a, word: ACTIVITY_WORD[a] ?? '', art: <ActivityPicture activity={a} grade={grade} /> })),
-    });
-  }
-  qs.push({
-    id: 'play_again',
-    say: '¿Querés volver a jugar otro día? Tocá sí o no.',
-    adult: '¿Querés volver a jugar?',
-    options: [
-      { value: 'yes', word: '¡Sí!', art: <YesNo yes /> },
-      { value: 'no', word: 'No.', art: <YesNo yes={false} /> },
-    ],
+  return surveyPlan(activities, games1ro).map((step): Question => {
+    if (step.game) {
+      const g = step.game;
+      return {
+        id: step.id, game: g,
+        say: `¿Te gustó ${GAME_SAY[g] ?? ACTIVITY_WORD[g] ?? 'jugar'}? Tocá una carita.`,
+        adult: `¿Te gustó «${ACTIVITY_WORD[g] ?? g}»?`,
+        header: <GameLikedHeaderArt game={g} />,
+        options: likedFaces(),
+      };
+    }
+    switch (step.id) {
+      case 'difficulty': return {
+        id: 'difficulty',
+        say: '¿Fue fácil o difícil? Tocá un camino: fácil, más o menos, o difícil.',
+        adult: '¿Fue fácil o difícil?',
+        // T23: drawn differently from the liking faces (the "¿Cómo seguís?" hills), so a muted 1ro never confuses the two questions
+        header: <DifficultyHeaderArt />,
+        options: [
+          { value: 'easy', word: 'Fácil.', art: <DifficultyArt level="easy" /> },
+          { value: 'mid', word: 'Más o menos.', art: <DifficultyArt level="mid" /> },
+          { value: 'hard', word: 'Difícil.', art: <DifficultyArt level="hard" /> },
+        ],
+      };
+      case 'favorite_activity': return {
+        id: 'favorite_activity',
+        say: '¿Qué te gustó más? Tocá el dibujo.',
+        adult: '¿Qué te gustó más?',
+        options: activities.map((a) => ({ value: a, word: ACTIVITY_WORD[a] ?? '', art: <ActivityPicture activity={a} grade={grade} /> })),
+      };
+      case 'play_again': return {
+        id: 'play_again',
+        say: '¿Querés volver a jugar otro día? Tocá sí o no.',
+        adult: '¿Querés volver a jugar?',
+        options: [
+          { value: 'yes', word: '¡Sí!', art: <YesNo yes /> },
+          { value: 'no', word: 'No.', art: <YesNo yes={false} /> },
+        ],
+      };
+      default: return {
+        id: 'liked',
+        say: '¿Te gustó jugar? Tocá una carita: mucho, más o menos, o no.',
+        adult: '¿Te gustó?',
+        header: <LikedHeaderArt />,
+        options: likedFaces(),
+      };
+    }
   });
-  return qs;
 }
 
 export function Survey() {
