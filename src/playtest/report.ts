@@ -839,6 +839,326 @@ export function copaReport(sessions: PtSession[], events: PtEvent[]): CopaReport
   };
 }
 
+// ------------------------------------------------------------------ C10: Copa v2 (the growing program, the garage)
+//
+// `docs/prueba-piloto-datos.md`'s "Copa v2" section is the contract. The Copa
+// is five copas, one concept each (1 sequence, 2 repeat, 3 conditions, 4
+// events, 5 variables: the same `CONCEPT_FAMILIES` keys as the ladder). Per
+// child, per concept: did the child SOLVE their own track (and how many runs and
+// crashes it took, and whether the ghost hand had to show the next block),
+// Ayudá al ciervo (debug: was the deer fixed) and Espiá (read: did the child tap
+// the trick). Those three are the "entiende / a medias / copia o no llegó"
+// signal of this section: `lee` (Espiá right), `depura` (the deer fixed), `crea`
+// (an own track solved without the ghost hand).
+//
+// "Own track" of a copa = the first track the child ran in it (the deer's runs
+// carry `deer: true` and are never an own track).
+
+export type Copa2Id = CopaCircuitId;
+
+/** The copa a track id belongs to (`c3-b` is copa 3), or null. */
+export function copaOfTrackId(track: unknown): Copa2Id | null {
+  const m = /^c([1-5])-[a-c]$/.exec(String(track ?? ''));
+  return m ? (Number(m[1]) as Copa2Id) : null;
+}
+
+export interface Copa2OwnTrack {
+  track: string;
+  runs: number;
+  /** Runs that did not finish before the first one that did (all of them when it was never solved). */
+  crashesBeforeSuccess: number;
+  solved: boolean;
+  /** The ghost hand turned on (two failed runs in a row) before the success, or at all when it was not solved. */
+  ghostUsed: boolean;
+  solvedWithoutGhost: boolean;
+  /** The child's best place among their finished runs (1-3). */
+  bestPlace: 1 | 2 | 3 | null;
+  revanchas: number;
+}
+
+export interface Copa2Deer {
+  /** Ayudá al ciervo was on screen (a `garage_debug` row, or a deer run left unfinished). */
+  seen: boolean;
+  fixed: boolean;
+  attempts: number;
+  ms: number | null;
+  ghostUsed: boolean;
+}
+
+export interface Copa2Concept {
+  /** The child ran their own track of this copa at least once. */
+  reached: boolean;
+  own: Copa2OwnTrack | null;
+  deer: Copa2Deer;
+  spies: number;
+  spiesCorrect: number;
+  /** The child skipped past this copa ("¡Saltar a la copa siguiente!"). */
+  skipped: boolean;
+}
+
+export interface Copa2ChildReport {
+  /** Any `garage_*` row at all. */
+  reached: boolean;
+  startCopa: Copa2Id | null;
+  ceilingRung: number | null;
+  furthestCopa: Copa2Id | null;
+  concepts: Record<Copa2Id, Copa2Concept>;
+  conceptsReached: number;
+  /** Own tracks solved without the ghost hand. */
+  conceptsCreated: number;
+  revanchas: number;
+  skips: number;
+  spies: number;
+  spiesCorrect: number;
+  deerSeen: number;
+  deerFixed: number;
+  /** `lee`: the trick tapped right in at least half of the Espiás (null: never spied). */
+  reads: boolean | null;
+  /** `depura`: the deer fixed in at least half of the copas it appeared in (null: never seen). */
+  debugs: boolean | null;
+  /** `crea`: at least two thirds of the own tracks reached solved without the ghost hand (null: none reached). */
+  creates: boolean | null;
+  /** Why the runs did not finish: the crash causes, plus `stuck` and `timeout`. */
+  crashCauses: Record<string, number>;
+  understanding: UnderstandingSignal;
+}
+
+export const COPA2_UNDERSTANDING_RULE = {
+  /** Fewer own tracks reached than this (an interrupted session, or a child who stayed in copa 1) is never enough to call it "entiende" or "a medias". */
+  MIN_CONCEPTS_REACHED: 2,
+  /** `crea`: this share of the own tracks reached solved without the ghost hand. */
+  MIN_CREATED_SHARE: 2 / 3,
+  /** `lee` and `depura`: at least this share right, when there was something to read or to fix. */
+  MIN_READ_DEBUG_SHARE: 0.5,
+  /** "copia o no llegó": at most this many own tracks solved without the ghost hand (the rest needed it, or were not solved). */
+  MAX_CREATED_FOR_COPIA: 1,
+} as const;
+
+/** "entiende": `crea` and neither `lee` nor `depura` fails; "copia o no llegó": too few concepts reached, or at most one made without the ghost hand; the rest "a medias". */
+export function copa2Understanding(c: Pick<Copa2ChildReport, 'conceptsReached' | 'conceptsCreated' | 'reads' | 'debugs'>): UnderstandingSignal {
+  const r = COPA2_UNDERSTANDING_RULE;
+  if (c.conceptsReached < r.MIN_CONCEPTS_REACHED || c.conceptsCreated <= r.MAX_CREATED_FOR_COPIA) return 'copia_o_no_llego';
+  const creates = c.conceptsCreated / c.conceptsReached >= r.MIN_CREATED_SHARE;
+  if (creates && c.reads !== false && c.debugs !== false) return 'entiende';
+  return 'a_medias';
+}
+
+const emptyCopa2Concept = (): Copa2Concept => ({
+  reached: false, own: null, deer: { seen: false, fixed: false, attempts: 0, ms: null, ghostUsed: false }, spies: 0, spiesCorrect: 0, skipped: false,
+});
+
+/** `rows` must be this one session's `garage_*` rows (any order; sorted here). */
+export function copa2ChildReport(rows: PtEvent[]): Copa2ChildReport {
+  const sorted = [...rows].sort((a, b) => a.seq - b.seq);
+  const concepts: Record<Copa2Id, Copa2Concept> = { 1: emptyCopa2Concept(), 2: emptyCopa2Concept(), 3: emptyCopa2Concept(), 4: emptyCopa2Concept(), 5: emptyCopa2Concept() };
+  const crashCauses: Record<string, number> = {};
+  const bump = (k: string) => { crashCauses[k] = (crashCauses[k] ?? 0) + 1; };
+  let startCopa: Copa2Id | null = null;
+  let ceilingRung: number | null = null;
+  let furthest = 0;
+  const seen = (copa: number | null) => { if (copa && copa > furthest) furthest = copa; };
+
+  const own = new Map<Copa2Id, string>(); // copa -> the first own track run
+  for (const e of sorted) {
+    const copa = copaOfTrackId(e.payload.track);
+    if (e.type === 'garage_place') {
+      const c = Number(e.payload.start_copa);
+      if (c >= 1 && c <= 5) startCopa = c as Copa2Id;
+      ceilingRung = e.payload.ceiling_rung == null ? null : Number(e.payload.ceiling_rung);
+      if (ceilingRung != null && !Number.isFinite(ceilingRung)) ceilingRung = null;
+    } else if (e.type === 'garage_copa_start') {
+      seen(Number(e.payload.copa));
+      // an older row without `garage_place`: the first copa the child opened is where they started
+      if (startCopa == null && Number(e.payload.copa) >= 1 && Number(e.payload.copa) <= 5) startCopa = Number(e.payload.copa) as Copa2Id;
+    }
+    else if (e.type === 'garage_run' && copa && e.payload.deer !== true && !own.has(copa)) own.set(copa, String(e.payload.track));
+    if (copa && (e.type === 'garage_run' || e.type === 'garage_track_start' || e.type === 'garage_track_done')) seen(copa);
+  }
+
+  for (const copa of [1, 2, 3, 4, 5] as Copa2Id[]) {
+    const track = own.get(copa);
+    if (!track) continue;
+    const c = concepts[copa];
+    const runs = sorted.filter((e) => e.type === 'garage_run' && e.payload.track === track && e.payload.deer !== true);
+    const win = runs.findIndex((e) => e.payload.outcome === 'finish');
+    const before = win < 0 ? runs : runs.slice(0, win);
+    const limitSeq = win < 0 ? Infinity : runs[win].seq;
+    const ghost = sorted.some((e) => e.type === 'garage_ghost' && e.payload.track === track && e.payload.deer !== true && e.seq < limitSeq);
+    const places = runs.filter((e) => e.payload.outcome === 'finish').map((e) => Number(e.payload.place)).filter((p) => p === 1 || p === 2 || p === 3);
+    c.reached = true;
+    c.own = {
+      track, runs: runs.length, crashesBeforeSuccess: before.length, solved: win >= 0, ghostUsed: ghost, solvedWithoutGhost: win >= 0 && !ghost,
+      bestPlace: places.length ? (Math.min(...places) as 1 | 2 | 3) : null,
+      revanchas: sorted.filter((e) => e.type === 'garage_revancha' && e.payload.track === track).length,
+    };
+  }
+
+  // why the runs did not finish (the deer's included: a crash is a crash)
+  for (const e of sorted) {
+    if (e.type !== 'garage_run') continue;
+    const outcome = String(e.payload.outcome ?? '');
+    if (outcome === 'crash') bump(String(e.payload.crash_cause ?? 'crash'));
+    else if (outcome === 'stuck' || outcome === 'timeout') bump(outcome);
+  }
+
+  // Ayudá al ciervo: the child's own summary row, else the unfinished deer's runs
+  for (const e of sorted) {
+    if (e.type !== 'garage_debug') continue;
+    const copa = Number(e.payload.copa) as Copa2Id;
+    if (!concepts[copa]) continue;
+    concepts[copa].deer = {
+      seen: true, fixed: e.payload.fixed === true, attempts: Number(e.payload.attempts) || 0,
+      ms: Number.isFinite(Number(e.payload.ms)) ? Number(e.payload.ms) : null, ghostUsed: e.payload.ghost === true,
+    };
+  }
+  for (const e of sorted) {
+    if (e.type !== 'garage_run' || e.payload.deer !== true) continue;
+    const copa = copaOfTrackId(e.payload.track);
+    if (copa && !concepts[copa].deer.seen) concepts[copa].deer = { seen: true, fixed: false, attempts: sorted.filter((x) => x.type === 'garage_run' && x.payload.deer === true && x.payload.track === e.payload.track).length, ms: null, ghostUsed: false };
+  }
+  for (const e of sorted) {
+    if (e.type === 'garage_spy') {
+      const copa = copaOfTrackId(e.payload.track);
+      if (!copa) continue;
+      concepts[copa].spies++;
+      if (e.payload.correct === true) concepts[copa].spiesCorrect++;
+    } else if (e.type === 'garage_skip') {
+      const from = Number(e.payload.from_copa) as Copa2Id;
+      if (concepts[from]) concepts[from].skipped = true;
+    }
+  }
+
+  const list = (Object.values(concepts) as Copa2Concept[]);
+  const conceptsReached = list.filter((c) => c.reached).length;
+  const conceptsCreated = list.filter((c) => c.own?.solvedWithoutGhost).length;
+  const spies = list.reduce((n, c) => n + c.spies, 0);
+  const spiesCorrect = list.reduce((n, c) => n + c.spiesCorrect, 0);
+  const deerSeen = list.filter((c) => c.deer.seen).length;
+  const deerFixed = list.filter((c) => c.deer.fixed).length;
+  const r = COPA2_UNDERSTANDING_RULE;
+  const reads = spies ? spiesCorrect / spies >= r.MIN_READ_DEBUG_SHARE : null;
+  const debugs = deerSeen ? deerFixed / deerSeen >= r.MIN_READ_DEBUG_SHARE : null;
+  const creates = conceptsReached ? conceptsCreated / conceptsReached >= r.MIN_CREATED_SHARE : null;
+  const reached = sorted.length > 0;
+  const base = { conceptsReached, conceptsCreated, reads, debugs };
+  return {
+    reached, startCopa, ceilingRung, furthestCopa: furthest ? (furthest as Copa2Id) : null, concepts, ...base,
+    revanchas: sorted.filter((e) => e.type === 'garage_revancha').length, skips: sorted.filter((e) => e.type === 'garage_skip').length,
+    spies, spiesCorrect, deerSeen, deerFixed, creates, crashCauses,
+    understanding: reached ? copa2Understanding(base) : 'copia_o_no_llego',
+  };
+}
+
+export interface Copa2Child extends Copa2ChildReport {
+  sessionId: string;
+  code: string;
+}
+
+export interface Copa2Report {
+  /** One row per child with any Copa v2 activity. */
+  children: Copa2Child[];
+  /** The copa each child started in (placement from the ladder's ceiling). */
+  startDist: Record<string, number>;
+  /** The furthest copa each child reached. */
+  furthestDist: Record<string, number>;
+  /** Children who ran their own track of each copa. */
+  reachedByCopa: Record<Copa2Id, number>;
+  /** Of the children who reached each copa, the share (%) who solved their own track at all. */
+  solvedShareByCopa: Record<Copa2Id, number | null>;
+  /** The share (%) who solved it WITHOUT the ghost hand: the concept made by the child. */
+  createdShareByCopa: Record<Copa2Id, number | null>;
+  /** Why the runs did not finish, over every child. */
+  crashCauses: Record<string, number>;
+  /** "¡Revancha!" pressed (the child's own choice: nothing asks for it). */
+  revanchasTotal: number;
+  /** Children who used "¡Saltar a la copa siguiente!" and how many times it was used. */
+  skipChildren: number;
+  skipTotal: number;
+  /** Children for whom the ghost hand turned on at least once. */
+  ghostChildren: number;
+  spyTotal: number;
+  spyCorrectShare: number | null;
+  deerSeenTotal: number;
+  deerFixedShare: number | null;
+  /** The Arcade's unlock: copa 2 finished, the 20-minute timer, "Juegos para todos", or else (elapsed-time inference, see the v1 note). */
+  arcadeUnlockVia: { copa_2: number; timer: number; admin: number; other: number };
+  /** Kept running tracks (any `garage_run`) after `arcade_open`: voluntary interest. */
+  keptPlayingAfterArcade: number;
+  typingAgainHonestTotal: number;
+  typingPlaceDistHonest: Record<string, number>;
+}
+
+export function copa2Report(sessions: PtSession[], events: PtEvent[]): Copa2Report {
+  const eventsBySession = groupBy(events, (e) => e.session_id);
+  const children: Copa2Child[] = [];
+  for (const s of sessions) {
+    const rows = eventsBySession.get(s.id) ?? [];
+    const copaRows = rows.filter((e) => e.type.startsWith('garage_'));
+    if (copaRows.length === 0) continue;
+    children.push({ sessionId: s.id, code: childLabel(s), ...copa2ChildReport(copaRows) });
+  }
+  const ids: Copa2Id[] = [1, 2, 3, 4, 5];
+  const reachedByCopa = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } as Record<Copa2Id, number>;
+  const solved = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } as Record<Copa2Id, number>;
+  const created = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } as Record<Copa2Id, number>;
+  const crashCauses: Record<string, number> = {};
+  for (const c of children) {
+    for (const id of ids) {
+      const k = c.concepts[id];
+      if (!k.reached) continue;
+      reachedByCopa[id]++;
+      if (k.own?.solved) solved[id]++;
+      if (k.own?.solvedWithoutGhost) created[id]++;
+    }
+    for (const [cause, n] of Object.entries(c.crashCauses)) crashCauses[cause] = (crashCauses[cause] ?? 0) + n;
+  }
+  const solvedShareByCopa = { 1: null, 2: null, 3: null, 4: null, 5: null } as Record<Copa2Id, number | null>;
+  const createdShareByCopa = { 1: null, 2: null, 3: null, 4: null, 5: null } as Record<Copa2Id, number | null>;
+  for (const id of ids) { solvedShareByCopa[id] = pct(solved[id], reachedByCopa[id]); createdShareByCopa[id] = pct(created[id], reachedByCopa[id]); }
+
+  const sessionIds = new Set(children.map((c) => c.sessionId));
+  const typingStarts = events.filter((e) => sessionIds.has(e.session_id) && e.type === 'typing_race_start' && e.payload.rival_mode === 'honest');
+  const typingEnds = events.filter((e) => sessionIds.has(e.session_id) && e.type === 'typing_race_end' && e.payload.rival_mode === 'honest');
+
+  const arcadeUnlockVia = { copa_2: 0, timer: 0, admin: 0, other: 0 };
+  let keptPlayingAfterArcade = 0;
+  for (const sid of sessionIds) {
+    const rows = [...(eventsBySession.get(sid) ?? [])].sort((a, b) => a.seq - b.seq);
+    const open = rows.find((e) => e.type === 'arcade_open');
+    if (!open) continue;
+    const via = String(open.payload.via ?? '—');
+    if (via === 'games_all') arcadeUnlockVia.admin++;
+    else if (via === 'copa') {
+      const firstT = rows.map((e) => Date.parse(e.client_t ?? e.server_t ?? '')).find((t) => Number.isFinite(t)) ?? NaN;
+      const openT = Date.parse(open.client_t ?? open.server_t ?? '');
+      const elapsed = Number.isFinite(firstT) && Number.isFinite(openT) ? openT - firstT : null;
+      if (elapsed != null && elapsed < ARCADE_UNLOCK_TIMER_MS) arcadeUnlockVia.copa_2++;
+      else arcadeUnlockVia.timer++;
+    } else arcadeUnlockVia.other++;
+    if (rows.some((e) => e.type === 'garage_run' && e.seq > open.seq)) keptPlayingAfterArcade++;
+  }
+
+  const spyTotal = children.reduce((n, c) => n + c.spies, 0);
+  const spyCorrect = children.reduce((n, c) => n + c.spiesCorrect, 0);
+  const deerSeenTotal = children.reduce((n, c) => n + c.deerSeen, 0);
+  const deerFixed = children.reduce((n, c) => n + c.deerFixed, 0);
+  return {
+    children,
+    startDist: count(children.filter((c) => c.startCopa != null), (c) => String(c.startCopa)),
+    furthestDist: count(children.filter((c) => c.furthestCopa != null), (c) => String(c.furthestCopa)),
+    reachedByCopa, solvedShareByCopa, createdShareByCopa, crashCauses,
+    revanchasTotal: children.reduce((n, c) => n + c.revanchas, 0),
+    skipChildren: children.filter((c) => c.skips > 0).length,
+    skipTotal: children.reduce((n, c) => n + c.skips, 0),
+    ghostChildren: children.filter((c) => (Object.values(c.concepts) as Copa2Concept[]).some((k) => k.own?.ghostUsed || k.deer.ghostUsed)).length,
+    spyTotal, spyCorrectShare: pct(spyCorrect, spyTotal),
+    deerSeenTotal, deerFixedShare: pct(deerFixed, deerSeenTotal),
+    arcadeUnlockVia, keptPlayingAfterArcade,
+    typingAgainHonestTotal: typingStarts.filter((e) => e.payload.again === true).length,
+    typingPlaceDistHonest: count(typingEnds.filter((e) => e.payload.place != null), (e) => String(e.payload.place)),
+  };
+}
+
 // ------------------------------------------------------------------ T37: motivation profiles (a heuristic, not a measurement)
 //
 // Parent review (2026-10-17, on the real export): the first cut let the
@@ -1220,18 +1540,19 @@ export interface GradeChildReport {
   /** Keyed by `ConceptFamily.key`. */
   concepts: Record<string, ConceptResult>;
   workshop: WorkshopChildReport;
-  /** C05: Copa de 4to (C04's own route, replacing the Workshop's position); `null` for a session with no Copa activity at all (every pre-C04 export, and every non-4to grade). */
+  /** C05: Copa de 4to v1 (C04's single-slot circuits, never in a class); `null` for a session with no `copa_*` rows (everything but a v1 test). */
   copa: CopaChildReport | null;
+  /** C10: Copa v2 (the garage); `null` for a session with no `garage_*` rows (every export from before C10, and every non-4to grade). */
+  copa2: Copa2ChildReport | null;
   /**
    * The final "entiende / a medias / copia o no llegó" signal for this child
    * — the Workshop's own `workshop.understanding` when the Workshop was
    * reached (unchanged, so old sessions keep reading exactly as before),
-   * else the Copa's `copa.understanding` when the Copa was reached (C04's
-   * own mandatory route), else the old Workshop-not-reached default
-   * ('copia o no llegó') when neither was.
+   * else Copa v2's (C10: crea, depura, lee), else the v1 Copa's, else the
+   * old Workshop-not-reached default ('copia o no llegó') when none was.
    */
   understanding: UnderstandingSignal;
-  understandingSource: 'workshop' | 'copa' | 'none';
+  understandingSource: 'workshop' | 'copa2' | 'copa' | 'none';
   /** From `arcadeReport` (T41); `null` for a session with no Arcade activity at all (every 5to, and a 4to who never reached it). */
   arcade: ArcadeChild | null;
   time: ChildTimeReport;
@@ -1247,8 +1568,10 @@ function gradeChildReport(s: PtSession, events: PtEvent[], arcadeBySession: Map<
   const workshop = workshopChildReport(events);
   const copaRows = events.filter((e) => e.type.startsWith('copa_'));
   const copa = copaRows.length ? copaChildReport(copaRows) : null;
-  const understandingSource: 'workshop' | 'copa' | 'none' = workshop.reached ? 'workshop' : copa ? 'copa' : 'none';
-  const understanding = workshop.reached ? workshop.understanding : copa ? copa.understanding : workshop.understanding;
+  const copa2Rows = events.filter((e) => e.type.startsWith('garage_'));
+  const copa2 = copa2Rows.length ? copa2ChildReport(copa2Rows) : null;
+  const understandingSource: 'workshop' | 'copa2' | 'copa' | 'none' = workshop.reached ? 'workshop' : copa2 ? 'copa2' : copa ? 'copa' : 'none';
+  const understanding = workshop.reached ? workshop.understanding : copa2 ? copa2.understanding : copa ? copa.understanding : workshop.understanding;
   return {
     sessionId: s.id,
     code: childLabel(s),
@@ -1257,6 +1580,7 @@ function gradeChildReport(s: PtSession, events: PtEvent[], arcadeBySession: Map<
     concepts,
     workshop,
     copa,
+    copa2,
     understanding,
     understandingSource,
     arcade: arcadeBySession.get(s.id) ?? null,
@@ -1402,6 +1726,7 @@ export interface Analysis {
   race: RaceReport;
   arcade: ArcadeReport;
   copa: CopaReport;
+  copa2: Copa2Report;
   profiles: ProfileReport;
   grades: GradeEvaluation;
 }
@@ -1419,6 +1744,7 @@ export function analyze(data: PtExport, opts: FilterOptions = {}): Analysis {
     freePlay: freePlayReport(kept, events),
     repeatDrop: repeatDropReport(events),
     copa: copaReport(kept, events),
+    copa2: copa2Report(kept, events),
     predict: predictReport(events),
     typing: typingReport(events),
     help: helpReport(events),

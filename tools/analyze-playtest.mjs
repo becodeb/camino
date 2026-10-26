@@ -10,7 +10,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import {
-  analyze, childLabel, CONCEPT_FAMILIES, COPA_UNDERSTANDING_RULE, localTime, UNDERSTANDING_RULE,
+  analyze, childLabel, CONCEPT_FAMILIES, COPA2_UNDERSTANDING_RULE, COPA_UNDERSTANDING_RULE, localTime, UNDERSTANDING_RULE,
 } from '../src/playtest/report.ts';
 // T49: the 1ro arcade section (its own module, so 1ro's and 4to's report work never touch the same lines)
 import { MONSTER_GAME_NAME, MONSTER_GAMES, monsterReport } from '../src/playtest/reportMonster.ts';
@@ -204,6 +204,56 @@ function reportCopa(r) {
   }
 }
 
+// ---- C10: Copa v2 (the garage: one program that grows across five copas)
+
+const COPA2_LABEL = { 1: 'secuencia', 2: 'repetir', 3: 'si / si no', 4: 'eventos (tronco)', 5: 'variables (vueltas)' };
+const yn = (b) => (b == null ? '—' : b ? 'sí' : 'no');
+
+function copa2ConceptCell(k) {
+  if (!k.reached) return k.deer.seen ? `no corrió su pista; ciervo ${k.deer.fixed ? 'arreglado' : 'no arreglado'}` : 'no llegó';
+  const o = k.own;
+  const parts = [
+    `pista ${o.track}: ${o.solved ? 'resuelta' : 'sin resolver'} en ${o.runs} corrida(s), ${o.crashesBeforeSuccess} choque(s)/corte(s) antes del éxito`,
+    `mano fantasma ${yn(o.ghostUsed)}`,
+    `mejor lugar ${o.bestPlace ?? '—'}`,
+    `revanchas ${o.revanchas}`,
+  ];
+  if (k.deer.seen) parts.push(`ciervo ${k.deer.fixed ? 'arreglado' : 'sin arreglar'} (${k.deer.attempts} intento(s), ${fmtMs(k.deer.ms)})`);
+  if (k.spies) parts.push(`Espiá ${k.spiesCorrect}/${k.spies} bien`);
+  if (k.skipped) parts.push('saltó a la copa siguiente');
+  return `${parts.join('; ')}.`;
+}
+
+function reportCopa2Child(c) {
+  line(`      Copa v2: empezó en la copa ${c.startCopa ?? '—'} (techo de la escalera ${c.ceilingRung ?? '—'}), llegó hasta la copa ${c.furthestCopa ?? '—'}.`);
+  for (const id of [1, 2, 3, 4, 5]) line(`        copa ${id} (${COPA2_LABEL[id]}): ${copa2ConceptCell(c.concepts[id])}`);
+  line(`        lee (Espiá bien): ${yn(c.reads)} · depura (ciervo arreglado): ${yn(c.debugs)} · crea (pista propia sin mano fantasma): ${yn(c.creates)} (${c.conceptsCreated}/${c.conceptsReached}).`);
+}
+
+function reportCopa2(r) {
+  section('Copa v2 (C10): el garaje');
+  if (r.children.length === 0) {
+    line('Sin datos de la Copa v2 en este export (de antes de C10, o nadie de 4to llegó).');
+    return;
+  }
+  line(`Chicos con datos de la Copa v2: ${r.children.length}.`);
+  line(`Dónde empezaron (copa de partida según la escalera): ${fmtDist(r.startDist)}. Hasta dónde llegaron: ${fmtDist(r.furthestDist)}.`);
+  line('Por copa: cuántos corrieron su pista, cuántos la resolvieron, y qué % la resolvió sin la mano fantasma (el concepto lo armó el chico):');
+  for (const id of [1, 2, 3, 4, 5]) {
+    line(`  - copa ${id} (${COPA2_LABEL[id]}): llegaron ${r.reachedByCopa[id]}, la resolvieron ${fmtPctOrDash(r.solvedShareByCopa[id])}, sin mano fantasma ${fmtPctOrDash(r.createdShareByCopa[id])}.`);
+  }
+  line(`Por qué no terminaron las corridas (choques por causa, programa que se corta o que no termina): ${fmtDist(r.crashCauses)}.`);
+  line(`Revanchas voluntarias: ${r.revanchasTotal}. Usaron "¡Saltar a la copa siguiente!": ${r.skipChildren} chico(s), ${r.skipTotal} vez(ces). La mano fantasma se encendió en ${r.ghostChildren} chico(s).`);
+  line(`Ayudá al ciervo: visto ${r.deerSeenTotal} vez(ces), arreglado ${fmtPctOrDash(r.deerFixedShare)}. Espiá el programa del zorro: ${r.spyTotal} vez(ces), truco bien ${fmtPctOrDash(r.spyCorrectShare)}.`);
+  line(`Cómo se abrió el Arcade: copa 2 terminada → ${r.arcadeUnlockVia.copa_2}, temporizador de 20 min → ${r.arcadeUnlockVia.timer}, "Juegos para todos" → ${r.arcadeUnlockVia.admin}, otro → ${r.arcadeUnlockVia.other}.`);
+  line(`Siguieron corriendo pistas de la Copa después de que se abrió el Arcade (interés voluntario): ${r.keptPlayingAfterArcade} de ${r.children.length}.`);
+  line(`Carrera de teclas honesta entre estos chicos: "¡Otra carrera!" ${r.typingAgainHonestTotal}; lugares: ${fmtDist(r.typingPlaceDistHonest)}.`);
+  line('Por chico:');
+  for (const c of r.children) {
+    line(`  - ${c.code}: empezó en la copa ${c.startCopa ?? '—'}, llegó a la ${c.furthestCopa ?? '—'}; pistas propias sin mano fantasma ${c.conceptsCreated}/${c.conceptsReached}; lee ${yn(c.reads)}, depura ${yn(c.debugs)}, crea ${yn(c.creates)}; señal: ${UNDERSTANDING_LABEL[c.understanding]}.`);
+  }
+}
+
 function reportArcade(r) {
   section('El Arcade de 4to: Carrera de teclas y Tu juego (T41)');
   if (r.children.length === 0) {
@@ -262,7 +312,7 @@ const UNDERSTANDING_LABEL = {
   copia_o_no_llego: 'copia o no llegó',
 };
 
-const SOURCE_LABEL = { workshop: 'Taller', copa: 'Copa', none: 'sin datos' };
+const SOURCE_LABEL = { workshop: 'Taller', copa2: 'Copa v2', copa: 'Copa (circuitos)', none: 'sin datos' };
 
 function conceptCell(r) {
   if (r.status === 'not_reached') return 'no llegó';
@@ -284,7 +334,9 @@ function reportGradeChild(c) {
   } else {
     line('      Taller: no llegó.');
   }
-  if (c.copa) reportCopaChild(c.copa); else line('      Copa de 4to: no llegó.');
+  if (c.copa2) reportCopa2Child(c.copa2);
+  else if (c.copa) reportCopaChild(c.copa);
+  else line('      Copa de 4to: no llegó.');
   line(`      Señal de comprensión (${SOURCE_LABEL[c.understandingSource]}): ${UNDERSTANDING_LABEL[c.understanding]}.`);
   if (c.arcade) {
     line(`      Carrera de teclas: mejor ${c.arcade.bestWpm ?? '—'} ppm, teclas justas ${fmtPctOrDash(c.arcade.accuracy)}.`);
@@ -301,7 +353,7 @@ function reportGradeChild(c) {
 function reportGrades(g) {
   if (g.grade4.length === 0 && g.grade5.length === 0) return;
   section('Evaluación de 4to (y 5to) para el año que viene (T42)');
-  line(`Regla del Taller — "entiende / a medias / copia o no llegó" (UNDERSTANDING_RULE en report.ts): "entiende" necesita predecir e investigar bien Y ≥${UNDERSTANDING_RULE.MIN_SOLVED_WITHOUT_HELP_FOR_ENTIENDE} desafíos core resueltos sin ayuda; "copia o no llegó" si predecir o investigar salió mal, o si resolvió ≤${UNDERSTANDING_RULE.MAX_CORE_SOLVED_FOR_COPIA} desafíos core (de ${UNDERSTANDING_RULE.CORE_CHALLENGES}); el resto queda "a medias". Para un chico que nunca llegó al Taller pero sí a la Copa (C05, la ruta de 4to desde C04), la señal viene de la Copa en cambio (COPA_UNDERSTANDING_RULE): "entiende" con el concepto bien al primer intento en ≥${COPA_UNDERSTANDING_RULE.MIN_FIRST_TRY_OK_FOR_ENTIENDE} de los 5 circuitos y sin necesitar nunca el nivel de ayuda 2 (la ranura resaltada); "copia o no llegó" con ≤${COPA_UNDERSTANDING_RULE.MAX_FIRST_TRY_OK_FOR_COPIA} circuito(s) bien al primer intento, o con menos de ${COPA_UNDERSTANDING_RULE.MIN_CIRCUITS_REACHED} circuitos alcanzados; el resto, "a medias". Cada chico de esta tabla indica cuál de las dos fuentes usó ("Señal de comprensión").`);
+  line(`Regla del Taller — "entiende / a medias / copia o no llegó" (UNDERSTANDING_RULE en report.ts): "entiende" necesita predecir e investigar bien Y ≥${UNDERSTANDING_RULE.MIN_SOLVED_WITHOUT_HELP_FOR_ENTIENDE} desafíos core resueltos sin ayuda; "copia o no llegó" si predecir o investigar salió mal, o si resolvió ≤${UNDERSTANDING_RULE.MAX_CORE_SOLVED_FOR_COPIA} desafíos core (de ${UNDERSTANDING_RULE.CORE_CHALLENGES}); el resto queda "a medias". Para un chico que nunca llegó al Taller pero sí a la Copa (C05, la ruta de 4to desde C04), la señal viene de la Copa en cambio (COPA_UNDERSTANDING_RULE): "entiende" con el concepto bien al primer intento en ≥${COPA_UNDERSTANDING_RULE.MIN_FIRST_TRY_OK_FOR_ENTIENDE} de los 5 circuitos y sin necesitar nunca el nivel de ayuda 2 (la ranura resaltada); "copia o no llegó" con ≤${COPA_UNDERSTANDING_RULE.MAX_FIRST_TRY_OK_FOR_COPIA} circuito(s) bien al primer intento, o con menos de ${COPA_UNDERSTANDING_RULE.MIN_CIRCUITS_REACHED} circuitos alcanzados; el resto, "a medias". Para la Copa v2 (C10, el garaje: un programa que crece), la señal viene de tres cosas: "crea" (resolvió su pista propia de cada copa SIN que la mano fantasma mostrara el próximo bloque), "depura" (arregló el programa del ciervo) y "lee" (tocó el bloque del truco en Espiá): "entiende" con al menos ${COPA2_UNDERSTANDING_RULE.MIN_CONCEPTS_REACHED} conceptos alcanzados, ≥${Math.round(COPA2_UNDERSTANDING_RULE.MIN_CREATED_SHARE * 100)}% de las pistas propias armadas sin mano fantasma y ni "lee" ni "depura" fallando (al menos ${COPA2_UNDERSTANDING_RULE.MIN_READ_DEBUG_SHARE * 100}% bien, si hubo algo que leer o arreglar); "copia o no llegó" con menos de ${COPA2_UNDERSTANDING_RULE.MIN_CONCEPTS_REACHED} conceptos alcanzados o a lo sumo ${COPA2_UNDERSTANDING_RULE.MAX_CREATED_FOR_COPIA} pista(s) propia(s) sin mano fantasma; el resto, "a medias". Cada chico de esta tabla indica cuál de las fuentes usó ("Señal de comprensión").`);
   if (g.grade4.length) {
     line('');
     line(`4to (${g.grade4.length} chico(s)):`);
@@ -332,6 +384,8 @@ function reportGrades(g) {
   }
 }
 
+const yn2 = (b) => (b == null ? '' : b ? 'si' : 'no');
+
 function csvEscape(v) {
   const s = v == null ? '' : String(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -350,6 +404,8 @@ function writeGradeCsv(path, g) {
     'taller_llego', 'taller_core_resueltos', 'taller_core_total', 'taller_libres_resueltos',
     'taller_predecir_bien', 'taller_investigar_bien', 'taller_resueltos_sin_ayuda',
     'copa_llego', 'copa_circuitos_llegados', 'copa_revanchas',
+    'garage_llego', 'garage_copa_inicial', 'garage_copa_mas_lejos', 'garage_pistas_sin_mano', 'garage_pistas_llegadas',
+    'garage_lee', 'garage_depura', 'garage_crea', 'garage_revanchas', 'garage_saltos',
     'senal_comprension', 'fuente_senal',
     'carrera_teclas_mejor_ppm', 'carrera_teclas_justas_pct',
     'minutos_totales', 'minutos_en_tarea', 'pestana_oculta_pct', 'inactividad_ms',
@@ -368,6 +424,8 @@ function writeGradeCsv(path, g) {
       w.investigateCorrect == null ? '' : (w.investigateCorrect ? 'si' : 'no'),
       w.solvedWithoutHelp,
       copa ? 'si' : 'no', copa?.circuitsReached ?? 0, copa?.revanchasTotal ?? 0,
+      c.copa2 ? 'si' : 'no', c.copa2?.startCopa ?? '', c.copa2?.furthestCopa ?? '', c.copa2?.conceptsCreated ?? '', c.copa2?.conceptsReached ?? '',
+      yn2(c.copa2?.reads), yn2(c.copa2?.debugs), yn2(c.copa2?.creates), c.copa2?.revanchas ?? '', c.copa2?.skips ?? '',
       UNDERSTANDING_LABEL[c.understanding], SOURCE_LABEL[c.understandingSource],
       c.arcade?.bestWpm ?? '', c.arcade?.accuracy ?? '',
       Math.round(c.time.totalMs / 60_000), Math.round(c.time.onTaskMs / 60_000),
@@ -414,6 +472,7 @@ async function main() {
   reportRace(a.race);
   reportArcade(a.arcade);
   reportCopa(a.copa);
+  reportCopa2(a.copa2);
   {
     const keptIds = new Set(a.kept.map((s) => s.id));
     reportMonster(monsterReport(a.kept, data.events.filter((e) => keptIds.has(e.session_id))));
