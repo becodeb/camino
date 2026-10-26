@@ -1,6 +1,6 @@
 // 1ro's `games` step (T43): the guided first pass through the monster games,
 // each once, in a fixed order (kit.ts GUIDED), a few short rounds each
-// (GUIDED_ROUNDS, or GUIDED_TURN_MS: the four games fit ~15 minutes; each
+// (GUIDED_ROUNDS, or GUIDED_TURN_MS: the four games fit ~20 minutes; each
 // game ends its own turn with kit.ts guidedTurnOver); a
 // cheer between games; then the arcade (flow.ts: the green flag). "Quedan 5
 // minutos" ends the pass after the round on screen.

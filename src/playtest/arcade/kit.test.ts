@@ -19,11 +19,13 @@ describe('T43: the arcade kit', () => {
     expect(arcadeStartTier(9, 6)).toBe(6);
   });
 
-  it('a guided turn ends after its rounds, or after the round on screen once its time is up (four games fit ~15 min)', () => {
+  it('a guided turn ends after its rounds, or after the round on screen once its time is up (four games fit ~20 min)', () => {
     expect(guidedTurnOver(GUIDED_ROUNDS - 1, 0, 60_000)).toBe(false);
     expect(guidedTurnOver(GUIDED_ROUNDS, 0, 60_000)).toBe(true);
     expect(guidedTurnOver(1, 0, GUIDED_TURN_MS)).toBe(true);
-    expect(4 * GUIDED_TURN_MS).toBeLessThanOrEqual(16 * 60_000);
+    // T51: up to 5 min a game, the four games fit ~20 minutes
+    expect(GUIDED_TURN_MS).toBe(5 * 60_000);
+    expect(4 * GUIDED_TURN_MS).toBeLessThanOrEqual(20 * 60_000);
   });
 
   describe('the rapid-tap detector', () => {

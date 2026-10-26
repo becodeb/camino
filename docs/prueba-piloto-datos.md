@@ -1367,7 +1367,8 @@ count typing races for `racer` (like La carrera's) and a little more for
 
 From 2026-10-25, a 1ro session (`grado=1`, not `?ruta=clasica`) follows its
 own route: character → `games` (the guided first pass: each game once, in
-the order `recipe`, `dance`, `oops`, `tap`, 3 rounds or 4 minutes each,
+the order `recipe`, `dance`, `oops`, `tap`, 3 rounds or 4 minutes each
+(T51, from 2026-10-26: 5 minutes, ~20 minutes for the pass),
 whichever comes first after the round on screen; leaving it is the green
 flag, `route_done`) → `free_play` (1ro's arcade, endless: the four games,
 `buddy`, `wardrobe`, `typing_race`). Code: `src/playtest/arcade/` (`kit.ts`
@@ -1482,7 +1483,23 @@ Every rule added or taken off:
 Every switch between building and playing:
 `{ game: 'tap', mode, play_no, round, tier, to: 'play' | 'build', rules_total, stretch_ms (the time in the mode left) }`.
 
-The survey on 1ro's route also asks the liking faces per game played
+#### `game_exit` (T51, from 2026-10-26)
+A child left a card of 1ro's arcade for the menu (1ro's own route only;
+other grades and `?ruta=clasica` log nothing new):
+`{ game: <the card's activity id: recipe | dance | oops | tap | buddy | wardrobe | typing_race, or race when opened from the adult menu>, via, visit? }`.
+`via`: `'end_button'` (the end screen's large "Otro juego", drawn as the
+arcade, beside "¡Otra vez!" / "¡Otra carrera!": a monster game's round won,
+the typing race's podium), `'play_button'` (the large drawn "Otro juego" in
+the bottom-left corner while playing, every card), `'bar_menu'` (the bar's
+small four-cards button, kept for adults). `visit`: free play's visit number
+(as on `choice` and `activity_end`; absent for the wardrobe, a flow step of
+its own). The other ways out are not `game_exit`: "Tu personaje"'s page
+arrow and the wardrobe's page ("listo") end the card as before
+(`activity_end` / `wardrobe` `close`), and "quedan 5 minutos" or the adult's
+moves end it by themselves. "Tocá y pasa" has no end screen (its rounds roll
+on while playing): only the corner button and the bar's.
+
+The survey on 1ro's route asks only the liking faces per card played
 (`survey_answer` `liked_<game>`, see below). T49 report
 (`tools/analyze-playtest.mjs`, pure module `src/playtest/reportMonster.ts`):
 a section "Los juegos del monstruo" with, per game, the children who played
@@ -1490,8 +1507,9 @@ it, plays, arcade picks, rounds won, voluntary replays (an arcade pick of a
 game already played, or "¡Otra vez!"), finished vs quit, dizzy spells, its
 skill measure and its survey faces; per child, plays and voluntary replays
 per game, the favourite (the most voluntary replays; ties listed) and the
-guided pass completion (guided games finished, the green flag). No SQL view
-yet: read the export with the report.
+guided pass completion (guided games finished, the green flag). T51: the
+section also counts the exits by `via` ("Salidas de un juego al menú"),
+overall and per card. No SQL view yet: read the export with the report.
 
 ### `survey_answer`
 One spoken survey question answered with drawn faces/pictures. **RQ 9.**
@@ -1505,6 +1523,14 @@ drawing and a heart, answered with the same three faces: `question:
 'liked_recipe' | 'liked_dance' | 'liked_oops' | 'liked_tap'`, `answer:
 'yes'|'mid'|'no'`, `game`: the game id; mirrored onto `sessions.survey` like
 the others. Other grades and `?ruta=clasica` are unchanged.
+T51 (1ro's route only, from 2026-10-26): the survey is only those screens,
+one per arcade card played (the guided pass counts), in the menu's order
+`recipe`, `dance`, `oops`, `tap`, `buddy`, `wardrobe`, `typing_race`
+(`liked_buddy`, `liked_wardrobe`, `liked_typing_race` are new), each the
+card's drawing and the three faces; no `liked`, `difficulty`,
+`favorite_activity` or `play_again` (1ro neither reads nor listens; the
+hills and the "play again" question were not understood). A 1ro child who
+played no card is asked `liked` alone.
 `liked`: `'yes'|'mid'|'no'`. `typing_liked` (`'yes'|'mid'|'no'`) is asked by
 the typing game at its end, `game_maker_liked` (`'yes'|'mid'|'no'`,
 "¿Te gustó hacer tu juego?") by the game maker probe at its end, and

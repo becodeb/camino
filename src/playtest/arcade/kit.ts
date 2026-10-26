@@ -22,11 +22,11 @@ export const GUIDED: readonly GameId[] = ['recipe', 'dance', 'oops', 'tap'];
 export const GUIDED_ROUNDS = 3;
 /**
  * A game's guided turn also ends after the round on screen once it has
- * lasted this long: the class (2026-10-27, ~45–50 min) plans ~5 min of
- * unplugged warm-up, ~15 min of guided pass for the four games, ~25 min of
- * free arcade.
+ * lasted this long: the class (2026-10-27, ~45–50 min) is all on screens
+ * (T51: no unplugged warm-up), ~20 min of guided pass for the four games,
+ * the rest free arcade.
  */
-export const GUIDED_TURN_MS = 4 * 60_000;
+export const GUIDED_TURN_MS = 5 * 60_000;
 
 /** The guided turn is over after the round just won: its rounds are done, or its time is. */
 export const guidedTurnOver = (roundsWon: number, startedAt: number, now: number, rounds = GUIDED_ROUNDS, turnMs = GUIDED_TURN_MS) =>
