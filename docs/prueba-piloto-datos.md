@@ -1333,7 +1333,7 @@ One per word finished (4–11 a race).
   cups: number,             // typing-race cups after this race (honest mode: unchanged on a loss — only 1st place earns one)
   rival_mode: 'band' | 'honest',  // C02
   place?: 1 | 2 | 3,        // C02 (honest mode only): where the child actually finished
-  reason?: 'no_turbo' | 'crashes' | 'slow_idle' | 'fast_and_clean',  // C02 (honest mode only): why, from the race's own facts
+  reason?: 'no_turbo' | 'crashes' | 'slow_idle' | 'rival_faster' | 'fast_and_clean',  // C02 (honest mode only): why, from the race's own facts; C10: `rival_faster` = nothing the child did explains it (at most 2 wrong keys, no long pause): "esta vez el zorro vino más rápido"
   adapt?: 'first' | 'after_win' | 'after_loss',  // C07 (honest mode only): how the rivals were paced (below)
   rival_base_wpm?: number | null  // C07 (honest mode only): the rivals' base pace, in wpm, one decimal
 }
@@ -1392,7 +1392,9 @@ Every run's end.
 #### `own_game_improve`
 "Mejorarlo en el taller" pressed (`{}`); the `step` free_play → workshop follows.
 
-### Copa de 4to (C03, not yet on the 4to route — C04 wires it in)
+### Copa de 4to, version 1 (C03/C04; no longer sent: Copa v2 replaced it on the 4to route in C10)
+
+Kept for reading old data: no class ever ran it (the 2026-10-20 class had the Workshop), and the report still reads these rows unchanged.
 
 Five kart circuits (`src/playtest/copa.ts` pure logic, `Copa.tsx` the
 screen), each one concept with a single empty slot pre-filled around it
@@ -1445,7 +1447,9 @@ A circuit's result (the child always finishes: never blocked by losing).
 { circuit: 1 | 2 | 3 | 4 | 5 }
 ```
 
-### Copa v2, the garage (C09, additive; the 5-copa flow that sends these is C10)
+### Copa v2, the garage and the 5-copa flow (C09 the garage, C10 the flow)
+
+Every event of this section is named `garage_*`. C09 first named them `copa2_*`, but the server only accepts event types that match `^[a-z_]{1,40}$` (no digits) and rejects the WHOLE batch of a bad one: they were renamed in C10 before anything was sent from a real route.
 
 Design v2 of the Copa (see `odd/tasks/copa-4to.md`): the child is the
 engineer, ONE program grows across the five copas, and ¡Largar! runs it
@@ -1454,7 +1458,23 @@ carries the usual session fields; `track` is the track id (`c1-a` ... `c5-b`,
 the copa is its first digit). A crash is not an error: the child goes back
 to the garage with the program intact.
 
-#### `copa2_run`
+C10 puts the garage in 4to's route (`CopaStep.tsx`, the rules in
+`copa2/journey.ts`): the child starts in the copa the ladder's ceiling points
+to (rung 5+ copa 2, rung 9+ copa 3, never later), each copa 2 to 5 opens with
+**Ayudá al ciervo** (the deer's broken program, fixed in the garage), then its
+tracks in order; a track is done when it is finished, in any place. After a
+loss: **Espiá el programa del <rival>** (tap the trick, then watch the rival's
+run). The first track of a copa, finished on the first run beating at least the
+silver target, offers "¡Saltar a la copa siguiente!". Two failed runs in a row
+on a track turn the ghost hand on. The Arcade opens when copa 2 is finished or
+at 20 minutes, the 2-question survey when copa 3 is finished or at 25. The
+garage's `garage_run`, `garage_edit` and `garage_step_view` rows of Ayudá al ciervo
+carry `deer: true` and the track id of the copa's first track (the deer's
+track). The rival to beat starts from the ladder (bronze below rung 10, silver
+10-14, gold from 15) and then follows each result (a win: the tier above, a
+loss: the tier below).
+
+#### `garage_run`
 One press of ¡Largar!, logged when the run starts (the outcome is already known: the engine is deterministic for a seed).
 ```
 {
@@ -1473,7 +1493,7 @@ One press of ¡Largar!, logged when the run starts (the outcome is already known
 ```
 `place` counts only a finished run; a loss reason is not logged (it follows from `outcome`, `crash_cause`, the program and the track).
 
-#### `copa2_edit`
+#### `garage_edit`
 What the child did in the editor since the last batch (sent just before each ¡Largar!, before "Ver paso a paso", and when the garage closes). Counts only, never the program. Not sent when everything is 0.
 ```
 {
@@ -1486,10 +1506,78 @@ What the child did in the editor since the last batch (sent just before each ¡L
 ```
 A block refused because the memory is full does not count as an `add`.
 
-#### `copa2_step_view`
+#### `garage_step_view`
 "Ver paso a paso" opened: the child replays the last run one block at a time (the debugging tool).
 ```
 { track: string }
+```
+
+#### `garage_place` (C10)
+Once, when the Copa opens: where the child starts.
+```
+{ start_copa: 1 | 2 | 3, ceiling_rung: number | null, start_tier: 'bronze' | 'silver' | 'gold' }
+```
+
+#### `garage_copa_start` (C10)
+A copa's first step on screen (once per copa per mount of the Copa; the report counts each copa once).
+```
+{ copa: 1..5, via: 'placement' | 'next' | 'skip' | 'strip' | 'back', start_copa: 1..3 }
+```
+
+#### `garage_track_start` (C10)
+A track (or the deer, `deer: true`) came on screen; `/admin` shows the last one.
+```
+{ copa: 1..5, track: string, rival?: 'bronze' | 'silver' | 'gold', ghost?: boolean, deer?: true }
+```
+
+#### `garage_track_done` (C10)
+¡Seguir! on a finished track (the track is done and the child moves on).
+```
+{
+  copa: 1..5, track: string,
+  place: 1 | 2 | 3, won: boolean,         // the last run: place among the child and the two animals, and whether it beat the rival
+  medal: 'gold' | 'silver' | 'bronze' | null,   // the BEST medal on the track so far: the best tier whose target the child beat
+  time_ms: number, best_ms: number,       // the last run's time, and the track's best
+  runs: number, crashes: number,          // ¡Largar! presses on the track, and how many did not finish
+  ghost: boolean,                         // the ghost hand was shown on this track
+  rival: 'bronze' | 'silver' | 'gold',
+  skipped_ahead?: true                    // the child left through "¡Saltar a la copa siguiente!"
+}
+```
+
+#### `garage_revancha` (C10)
+"¡Revancha!" pressed on a result (the child's own choice).
+```
+{ track: string, won: boolean, rival: 'bronze' | 'silver' | 'gold' }
+```
+
+#### `garage_ghost` (C10)
+The ghost hand turned on: two failed runs (a crash, a program that ends short, or one that never ends) in a row on the track. Logged once per track and while it stays on.
+```
+{ track: string, failures: number, deer?: true }
+```
+
+#### `garage_skip` (C10)
+"¡Saltar a la copa siguiente!" pressed.
+```
+{ from_copa: 1..4, to_copa: 2..5, track: string, place: 1 | 2 | 3, time_ms: number }
+```
+
+#### `garage_spy` (C10)
+Espiá el programa del <rival>: the child tapped a block of the rival's program as "the trick".
+```
+{
+  track: string, rival: 'bronze' | 'silver' | 'gold',   // the fox is gold, the coatí silver, the carpincho bronze
+  tapped_block_kind: 'forward' | 'up' | 'down' | 'jump' | 'turbo' | 'brake' | 'wait' | 'repeat' | 'if' | 'nitro' | 'on_log',
+  correct: boolean
+}
+```
+The fox's trick: copa 1 every jump over a puddle, copa 2 the `repetir`, copa 3 the `si`, copa 4 the event script, copa 5 the turbo. The coatí's: its first `saltar` (else its `repetir`). The carpincho's: its first `repetir` (else its first block).
+
+#### `garage_debug` (C10)
+Ayudá al ciervo left (fixed, or given up after four failed runs in a row).
+```
+{ copa: 2..5, attempts: number, fixed: boolean, ms: number, ghost: boolean }   // ms: from the deer's program first on screen to leaving it
 ```
 
 T42/T34 report (`tools/analyze-playtest.mjs`): an Arcade section with, per

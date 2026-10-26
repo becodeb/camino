@@ -114,49 +114,113 @@ Cut line if time runs out before the class: T38 and T39 must ship; T40 ships wit
 
 ## Guía rápida para el docente — 4to
 
-**El link para abrir en cada compu:** `https://camino-prueba.becode.com.ar/?grado=4`
+**El enlace para abrir en cada computadora:** `https://camino-prueba.becode.com.ar/?grado=4`
 
-Esta guía describe la ruta nueva de 4to (la "Copa de 4to"), rehecha después de que la primera mitad de 4to (clase del 2026-10-20) rechazara el Taller de juegos: lo encontraron aburrido y difícil de manejar, y nadie llegó a jugar el Arcade. Lo que sí les gustó, y pidieron repetir sin que nadie se lo pidiera, fue la carrera de autos y la de escribir. La Copa construye sobre eso.
+Esta guía describe la ruta de 4to, la "Copa de 4to", en su segunda versión (Copa v2). Se rehízo dos veces: la primera mitad de 4to (clase del 2026-10-20) rechazó el Taller de juegos por aburrido y difícil de manejar, y después una primera Copa de circuitos de una sola ranura resultó demasiado recreativa y aislada. Lo que los chicos sí repitieron sin que nadie se lo pidiera fue la carrera de autos y la de escribir; la Copa v2 construye sobre eso.
 
-**Lo que van a hacer los chicos, minuto a minuto:**
+### La idea, en una frase
 
-1. **"¿Cómo te llamás?"**: un campo grande para escribir el nombre (o una inicial si hay dos con el mismo nombre). Es obligatorio para 4to — así se puede leer el nivel de cada chico después de la clase.
-2. **El personaje**: elegir quién los representa.
-3. **La escalera corta** (hasta unos 8 minutos): empieza en el escalón 7, como antes, pero ya no es la actividad principal de la clase — mide el nivel de entrada y se frena sola en cuanto el chico deja de poder subir.
-4. **La Copa de 4to** (el centro de la clase, obligatoria): cinco circuitos de karts, uno por concepto — secuencia, `repetir` (el turbo), `si hay charco / si no`, el evento "al aparecer un tronco → saltar", y la variable `vueltas`. Cada circuito corre contra dos animales con un ritmo fijo y honesto: no dejan ganar a nadie, así que un programa flojo sale 2do o 3ro de verdad. Al terminar, la pantalla muestra el lugar real, cuánto faltó y por qué ("te faltaron 3 s — el zorro usó turbo en la recta"), con "¡Revancha!" para repetir el mismo circuito.
-5. **El Arcade se abre solo**, en lo que ocurra primero: cuando el chico termina el circuito 2, o a los 20 minutos de clase. Desde ahí tiene, además de la Copa, la Carrera de teclas (también con rivales honestos: 6/10/15 palabras por minuto), el vestidor, y el viejo Taller de juegos como una carta más, ya no obligatoria.
-6. **La encuesta corta** (dos preguntas, no cuatro) aparece sola en lo que ocurra primero: al terminar el circuito 3, o a los 25 minutos.
-7. Después de la encuesta, el chico sigue jugando la Copa y el Arcade hasta que termina la clase.
+**El auto se maneja solo; el chico es el ingeniero.** Arma un programa con bloques en el garaje, aprieta "¡Largar!" y mira cómo el auto lo ejecuta en la pista. Un solo programa va creciendo a lo largo de cinco copas, y cada copa trae pistas donde el programa que ya tiene deja de alcanzar, de modo que el concepto nuevo se necesita en lugar de explicarse.
 
-**Los rivales son honestos — se puede perder, y es a propósito.** A diferencia de las otras actividades de Camino (donde el rival siempre deja ganar), en la Copa y en la Carrera de teclas de 4to el chico puede salir 2do o 3ro si el programa no anduvo bien. Es intencional: en la clase del 2026-10-20 los chicos notaron que siempre ganaban y eso les vació de sentido el ganar. Los rivales son siempre animales (el zorro, el coatí…), nunca compañeros, y no hay ranking entre chicos — nadie ve el resultado de otro.
+- **En el garaje no corre ningún reloj.** Los rivales esperan en la línea de partida mientras el chico piensa. Pensar despacio no se castiga.
+- **Los rivales dependen de la calidad del programa, no de la velocidad del chico.** Cada pista tiene tres tiempos objetivo (bronce: un programa que funciona; plata: uno bueno que no pierde tiempo; oro: el óptimo, el del zorro). Ganar siempre significa que el programa fue mejor, y la pantalla de resultado dice por qué.
 
-**Si un chico pierde varias veces seguidas:** mostrale la línea de motivo en la pantalla de resultado (dice exactamente qué le faltó: el turbo, frenar en el charco, saltar el tronco…) y ofrecele "¡Revancha!" para repetir ese mismo circuito ya con esa pista. Perder no traba el avance — el chico siempre termina el circuito y sigue a la Copa entera, pierda o gane.
+### Lo que hacen los chicos, minuto a minuto
 
-**`/admin`** (con la contraseña del docente) muestra, para cada chico: su nombre, en qué paso está, y ahora también en qué circuito de la Copa está y cuántos oros ya tiene ("Copa de 4to · circuito 3 · 1 oro"), o el escalón de la escalera, o el desafío del Taller si volvió ahí, y si ya tiene el Arcade abierto. Hay tres botones de clase:
-- **"Quedan 5 minutos"**: avisa y, cuando termina el ítem en pantalla, manda a cada chico a la encuesta y después al Arcade (o sigue en la Copa si todavía no la abrió).
-- **"Juegos para todos"**: abre el Arcade en todas las compus ya, aunque el chico no haya llegado al circuito 2.
-- **"Terminar la clase"**: avisa con una cuenta regresiva de 10 segundos (el chico puede seguir jugando esos 10 segundos) y después cierra la sesión.
+1. **"¿Cómo te llamás?"**: un campo grande para escribir el nombre (o una inicial si hay dos iguales). Es obligatorio en 4to, porque permite leer el nivel de cada chico después de la clase.
+2. **El personaje**: elegir quién lo representa.
+3. **La escalera corta** (hasta unos 8 minutos): empieza en el escalón 7, mide el nivel de entrada y se detiene sola cuando el chico deja de subir. **De su resultado sale la copa donde empieza la Copa** (ver "Ubicación").
+4. **La Copa de 4to** (el centro de la clase, obligatoria): cinco copas, una por concepto. Empieza con el mapa de las copas, que muestra cada pista con su medalla y su mejor tiempo.
+5. **El Arcade se abre solo** cuando ocurre lo primero de esto: el chico termina la copa 2, o pasan 20 minutos desde que empezó. Aparece un aviso grande ("¡Se abrió el Arcade!") y desde ahí hay un botón "Arcade" siempre a mano. En el Arcade hay la Carrera de teclas, el vestidor, el viejo Taller de juegos como una carta más, y "Tu mejor tiempo", que vuelve al mapa de las copas.
+6. **La encuesta corta** (dos preguntas) aparece sola cuando el chico termina la copa 3 o a los 25 minutos, y nunca en medio de una carrera.
+7. Después de la encuesta el chico sigue jugando la Copa y el Arcade hasta que termina la clase.
 
-**El rincón del adulto**: mantené apretada la esquina superior izquierda de la pantalla unos 0,8 segundos para abrir el menú oculto (terminar la sesión, registrar una ayuda, saltar un paso). El mismo mantener apretado (~0,8 s) sobre el ✋ de la barra registra "¿en qué lo ayudaste?" cuando ayudás a un chico.
+### Las cinco copas
 
-**El switch de Voz**: en el menú del rincón, "Voz sí/no" apaga solo la voz hablada (el texto en pantalla sigue, y los sonidos y la música también); es por compu, así que si una compu habla y molesta podés callarla a esa sola sin bajar el volumen.
+| Copa | Idea nueva | Cómo la pide la pista |
+|---|---|---|
+| 1. Conocés la pista | una secuencia de bloques lleva al auto por la pista | el camino es fijo; subir, bajar y saltar el charco |
+| 2. La pista no entra | `repetir` | la memoria del auto tiene 8 lugares y el camino es largo y con un patrón: solo entra con `repetir` |
+| 3. La pista cambia | `si hay charco adelante / si no` | los charcos cambian de lugar en cada corrida (también en la revancha): el auto tiene que mirar antes de decidir |
+| 4. Cosas que pasan de golpe | evento: `cuando cae un tronco` | un tronco cae en un momento que nadie sabe: un segundo programa se ejecuta aparte. Enseña la diferencia entre "un lugar donde se mira" (`si`) y "un momento que no se puede predecir" (evento) |
+| 5. Gran Premio | variables (`nitro`, `vueltas`) | tres vueltas y tres nitros: usa todo lo aprendido junto |
 
-**Después de la clase, cómo leer el informe:**
+La memoria del auto se ve como una fila de lugares numerados: cada bloque ocupa uno (un `repetir` o un `si` ocupa uno más los bloques de adentro). Si el programa no entra, el garaje lo dice con un aviso amable ("No entra") y no permite largar hasta que entre.
+
+### El programa que crece
+
+- **Dentro de una copa** el programa pasa de una pista a la siguiente tal como el chico lo dejó (si entra en la memoria de la nueva pista).
+- **De la copa 3 a la 4 y de la 4 a la 5** el programa principal se conserva: la copa 4 agrega el carril del evento y la copa 5 agrega el turbo, el nitro y las vueltas.
+- **De la copa 1 a la 2 y de la 2 a la 3** el chico empieza con el programa vacío, pero ve su programa anterior atenuado al costado ("Tu programa anterior") para consultarlo.
+- El programa de cada pista se guarda en la computadora: si se recarga la página, el chico lo encuentra donde lo dejó.
+
+### Qué significa un choque (y qué no)
+
+**Un choque significa que el programa es incorrecto**, no que el chico perdió: el auto se detiene con humo, el bloque que falló se marca en rojo ("¡Acá chocó!") y el chico vuelve al garaje con el programa intacto. Patinar en un charco o ir lento **no** es un error: solo es más lento, y la pantalla de resultado lo cuenta ("patinaste 3 veces en charcos").
+
+**"Ver paso a paso"** repite la última corrida despacio, iluminando cada bloque y diciendo qué pregunta hace cada `si` y qué respondió. Es la herramienta de depuración: conviene señalarla antes de dar cualquier explicación.
+
+Terminar una pista en cualquier lugar la da por hecha: perder nunca bloquea el avance. **"¡Revancha!"** siempre está disponible; después de una derrota el siguiente rival es el del nivel de abajo, y después de una victoria el de arriba.
+
+### Espiá el programa del zorro y Ayudá al ciervo
+
+Son los pasos de "predecir" y "depurar" del diseño, integrados a la historia.
+
+- **Espiá el programa del <rival>**: después de **perder**, el resultado ofrece espiar el programa del rival (el zorro, el coatí o el carpincho). El chico lo ve sin poder editarlo, con la pregunta grande "¿Dónde está el truco? Tocá el bloque", toca un bloque, se le dice cuál era (el bloque correcto se marca en verde), y después se anima la corrida del rival con el bloque en ejecución iluminado. Termina con "¡A tu taller!", que vuelve al garaje.
+- **Ayudá al ciervo**: abre cada copa de la 2 a la 5. Se muestra el programa roto del ciervo, que corre y se choca; el chico lo arregla en el garaje (la memoria es el programa del ciervo más un lugar libre) y el ciervo llega a la meta. Después de dos corridas fallidas aparece la mano fantasma; después de cuatro se ofrece "Seguir sin arreglarlo".
+
+### La ubicación inicial, "saltar" y la mano fantasma
+
+- **Ubicación**: el techo de la escalera decide la copa inicial: hasta el escalón 4, copa 1; desde el 5 (pasó `repetir`), copa 2; desde el 9 (pasó las condiciones), copa 3. Nunca más tarde que la 3. Las copas anteriores siguen disponibles desde el mapa de las copas (botón "Copas").
+- **Saltar**: si el chico termina la **primera pista** de una copa **en su primera corrida** y supera al menos el tiempo de plata, aparece un botón grande "¡Saltar a la copa siguiente!" junto a "¡Seguir!". Nunca se ofrece en la copa 5.
+- **Mano fantasma**: después de **dos corridas fallidas seguidas** en la misma pista (un choque, un programa que se corta antes de la meta o uno que nunca termina), una mano señala solamente el **próximo** bloque (nunca el programa entero). Queda registrado, y el informe distingue las pistas resueltas con y sin mano fantasma.
+
+### Qué decir cuando un chico se traba
+
+La regla es **no dar la respuesta**: devolver la pregunta y señalar la herramienta.
+
+- *El auto se chocó.* "¿Cuál es el bloque rojo? ¿Qué le pediste hacer ahí? ¿Qué hay en el camino en ese lugar?" y después "Probá Ver paso a paso".
+- *El programa no entra en la memoria.* "¿Hay algo que se repite? ¿Cuántas veces?" (copa 2). No decir que use `repetir`.
+- *Los charcos cambian de lugar* (copa 3). "¿Siempre están en el mismo lugar? Entonces, ¿el auto puede decidir antes de ir?".
+- *El tronco* (copa 4). "¿Sabés cuándo cae? ¿Qué tiene que hacer el auto en ese momento?".
+- *Perdió contra el zorro.* "Mirá lo que dice la pantalla que hizo distinto. ¿Querés espiar su programa?".
+- *Lleva mucho tiempo sin avanzar.* Dejar que aparezca la mano fantasma antes de intervenir; si hace falta ayuda adulta, registrarla con el rincón del adulto (✋ mantenido 0,8 s).
+
+### Los rivales honestos: se puede perder, y es a propósito
+
+A diferencia de las otras actividades de Camino (donde el rival siempre deja ganar), en la Copa y en la Carrera de teclas de 4to el chico puede salir 2.º o 3.º si el programa no anduvo bien. Es intencional: el 2026-10-20 los chicos notaron que siempre ganaban y eso le quitó sentido al ganar. En la Carrera de teclas, los rivales se adaptan al ritmo del chico (un poco más lentos después de perder, un poco más rápidos después de ganar), de modo que quien escribe despacio no siempre pierde ni quien escribe rápido siempre gana; cuando nada de lo que hizo el chico explica la derrota, la pantalla lo dice con verdad ("esta vez el zorro vino más rápido"). Los rivales son siempre animales, nunca compañeros, y no hay ranking entre chicos.
+
+### `/admin` y los botones de la clase
+
+`/admin` (con la contraseña del docente) muestra, para cada chico: el nombre, el paso en que está y, en la Copa, **la copa y la pista actual con sus medallas** ("Copa 3 · pista 3-a · 2 oro, 1 plata"; "Copa 4 · ciervo" mientras ayuda al ciervo), o el escalón de la escalera, y si ya tiene el Arcade abierto. Hay tres botones de clase:
+
+- **"Quedan 5 minutos"**: avisa y, cuando termina la corrida en pantalla, manda a cada chico a la encuesta y después al Arcade (o sigue en la Copa si el Arcade todavía no se abrió). Nunca interrumpe una corrida.
+- **"Juegos para todos"**: abre el Arcade en todas las computadoras de inmediato.
+- **"Terminar la clase"**: avisa con una cuenta regresiva de 10 segundos y después cierra la sesión.
+
+**El rincón del adulto**: mantener apretada la esquina superior izquierda unos 0,8 segundos abre el menú oculto (terminar la sesión, registrar una ayuda, saltar un paso). El mismo gesto sobre el ✋ de la barra registra "¿en qué lo ayudó?" cuando se ayuda a un chico.
+
+**El interruptor de Voz**: en el menú del rincón, "Voz sí/no" apaga solo la voz hablada de esa computadora (el texto en pantalla sigue, y los sonidos también).
+
+### Después de la clase: cómo leer el informe
 
 ```
 node tools/export-playtest.mjs
 node tools/analyze-playtest.mjs exports/<archivo>.json --csv clase-4to.csv
 ```
 
-El primer comando baja los datos de la clase; el segundo imprime el informe completo (por chico y el resumen de la clase, con una sección propia "Copa de 4to": quién llegó a cada circuito, quién tuvo el concepto bien al primer intento, revanchas, cómo se abrió el Arcade, y los lugares reales de la Carrera de teclas) y además escribe `clase-4to.csv`, una tabla con una fila por chico, para abrir en una planilla.
+El primer comando baja los datos de la clase; el segundo imprime el informe completo y escribe `clase-4to.csv` (una fila por chico). La sección **"Copa v2 (C10): el garaje"** muestra, por chico: la copa donde empezó, hasta dónde llegó y, por concepto (secuencia, `repetir`, `si / si no`, eventos, variables), si resolvió su pista propia, en cuántas corridas, cuántos choques tuvo antes de lograrlo y si la mano fantasma tuvo que mostrar el próximo bloque; si arregló al ciervo; y si acertó el truco en Espiá. El resumen de la clase cuenta cuántos llegaron a cada copa, el porcentaje que resolvió cada concepto **sin** mano fantasma, las causas de los choques, las revanchas voluntarias, quiénes usaron "saltar" y quiénes siguieron jugando la Copa después de que se abrió el Arcade.
 
-**Qué mirar en la clase, en vivo:**
-- **Quién copia vs. quién entiende**: en la Copa, si un chico elige el turbo o el "si/si no" al azar sin mirar la pista, o te pide que le digas exactamente qué tocar, probablemente esté copiando más que entendiendo — el informe después lo confirma con la señal "entiende / a medias / copia o no llegó", que ahora viene de la Copa para quien nunca llegó al Taller.
-- **Los teclados de las Chromebook**: la Carrera de teclas acepta las palabras sin tilde (escribir "leccion" cuenta como "lección"), pero la ñ no aparece en el banco de palabras porque un teclado en inglés de Chromebook no la tiene — no es un error si un chico no la encuentra.
-- **El cambio de pestaña**: si un chico cambia de pestaña o minimiza para hacer otra cosa, el informe lo mide (tiempo con la pestaña oculta); no hace falta anotarlo a mano, pero si ves que pasa mucho en una compu puede valer la pena mirar esa pantalla.
-- **Alguien que pierde seguido y se frustra**: es más probable con el turbo (circuito 2) y el tronco (circuito 4), que son los que más ayuda pidieron en las pruebas. Ofrecele la Revancha y, si hace falta, usá la ayuda graduada (🔊 pista hablada, después la ranura resaltada) antes de decirle la respuesta.
+La señal "entiende / a medias / copia o no llegó" de cada chico combina tres cosas: **crea** (resolvió su pista propia sin mano fantasma), **depura** (arregló al ciervo) y **lee** (acertó el truco en Espiá). La regla exacta se imprime al pie del informe.
 
-## English: the C01–C04 redesign (why)
+### Qué mirar en la clase, en vivo
+
+- **Quién copia y quién entiende**: un chico que arma el programa tocando bloques al azar hasta que algo anda, o que pide que se le diga exactamente qué tocar, probablemente esté copiando; uno que mira el bloque rojo, usa "Ver paso a paso" y cambia una sola cosa, probablemente entienda. El informe lo confirma después.
+- **Los teclados de las Chromebook**: la Carrera de teclas acepta las palabras sin tilde (escribir "leccion" cuenta como "lección"), pero la ñ no aparece en el banco de palabras porque un teclado en inglés no la tiene.
+- **El cambio de pestaña**: si un chico cambia de pestaña o minimiza para hacer otra cosa, el informe lo mide (tiempo con la pestaña oculta); no hace falta anotarlo a mano.
+- **Alguien que pierde seguido y se frustra**: es más probable en las copas 2 y 4. Ofrecerle "Ver paso a paso" y "Espiá" antes de cualquier explicación.
+
+## English: the redesign (why)
 
 4to's route changed after the 2026-10-20 class (25 children, data from the first half of the grade) rejected the Scratch-like Game Workshop: it was impossible for most of them to drive (characters could not be deleted, too many things asked at once), and the children are already tired of Scratch at school. A median of 6 minutes went into the Workshop's first challenge, only 7 children ever solved challenge 3, nobody reached challenge 5, nobody earned the Arcade, and the survey never ran because the class ended first. The ladder's median ceiling was rung 8, with every struggling child walled at `repetir`/conditions. The two things the children replayed on their own, without being asked, were the typing race (92 voluntary "¡Otra carrera!") and 1ro's block race — both honest-feeling, fast-feedback activities, unlike the Workshop. They also noticed that every rival always let them win (the rubber band), which made winning feel hollow.
 
@@ -169,3 +233,15 @@ The redesign (`feat/copa-4to`, tasks C01–C05) keeps the measurement goal — a
 - **C05** (this change) taught the class report to read the Copa's data and folded its concept results into the per-child evaluation for children who never reach the Workshop, and rewrote this guide for the new route.
 
 This is a pilot hypothesis, not a settled design: whether honest, losable rivals actually keep this age group engaged (rather than discouraging the weaker half of the class) is exactly what the next class's data — revanchas, voluntary continuation after the Arcade opens, and whether a child who loses keeps playing — is meant to check. See `docs/next-iteration.md` §7 for the exception this carves out of Camino's general "nobody loses" rule, and for where it is marked as something to verify, not an established finding.
+
+### Copa v2 (C06–C10): why the first redesign was redesigned
+
+The first Copa (C03–C05: five circuits, each with one empty slot, raced live against fixed-pace animals) was reviewed on 2026-10-26 and two problems were found. Placing blocks against rivals that drive while the child thinks punishes thinking slowly; and single-slot circuits are too recreational and isolated ("connect two blocks and done"). The approved redesign:
+
+- **You are the engineer, not the driver.** The kart drives itself with ONE program that grows across the whole Copa. Each copa brings tracks where the program so far stops being enough, so the new concept is needed instead of being requested (a memory of 8 places makes `repetir` the only way to fit a long track; puddles that move every run make `si` necessary; a log that falls at an unknown time makes an event script necessary).
+- **Program first, race after.** The garage has no clock; the rivals wait at the line. A wall crash means a wrong program (the failing block is marked and the program is kept); skidding or a slow program is not wrong, only slower. **Ver paso a paso** is the debugging tool.
+- **Rivals are tied to program quality.** Each track has bronze, silver and gold target times (the simulated times of a working, a good and an optimal reference program). A loss means the next rival is the tier below; a win, the tier above. Winning always means the program was better, and the result line says why from what the run actually did.
+- **Predict and debug as part of the story.** After a loss, "Espiá el programa del zorro" asks where the trick is before the rival's run is shown; each copa from the second opens with "Ayudá al ciervo", where the deer's program has exactly one bug.
+- **Pacing.** About five minutes per copa. The ladder's ceiling picks the starting copa (never later than the third); a first-run silver finish of a copa's first track offers to skip to the next copa; after two failed runs on a track the ghost hand shows only the next block. The ghost hand's use is data: a concept solved with it is shown, not made.
+- **Typing race (Arcade).** Its rivals adapt to the child's pace (a bit slower after a loss, a bit faster after a win, clamped), so a very slow typist does not always lose and a very fast one does not always win; when the child's play does not explain a loss, the line says the rival was faster this time instead of blaming the child.
+- **Measurement.** The per-child "entiende / a medias / copia o no llegó" signal is now `crea` (own track solved without the ghost hand) plus `depura` (the deer fixed) plus `lee` (the trick found in Espiá); the report prints the rule. As before this is a pilot hypothesis: whether this works for the weaker half of the class is what the next class's data (revanchas, voluntary continuation after the Arcade opens, ghost-hand use per concept) is meant to show.
