@@ -1333,19 +1333,40 @@ One per word finished (4–11 a race).
   cups: number,             // typing-race cups after this race (honest mode: unchanged on a loss — only 1st place earns one)
   rival_mode: 'band' | 'honest',  // C02
   place?: 1 | 2 | 3,        // C02 (honest mode only): where the child actually finished
-  reason?: 'no_turbo' | 'crashes' | 'slow_idle' | 'fast_and_clean'  // C02 (honest mode only): why, from the race's own facts
+  reason?: 'no_turbo' | 'crashes' | 'slow_idle' | 'fast_and_clean',  // C02 (honest mode only): why, from the race's own facts
+  adapt?: 'first' | 'after_win' | 'after_loss',  // C07 (honest mode only): how the rivals were paced (below)
+  rival_base_wpm?: number | null  // C07 (honest mode only): the rivals' base pace, in wpm, one decimal
 }
 ```
 
-**C02 (4to only), honest rivals:** the typing race's two animals drive at a
-fixed words-per-minute pace (6/10/15, cycling bronze+silver / silver+gold /
-bronze+gold by `race_no`, `honestRace.ts`'s `rivalTiersFor`), independent of
-the child — unlike every other grade's rubber band (`BAND`, `race.ts`),
+**C02 (4to only), honest rivals:** the typing race's two animals are
+really racing, unlike every other grade's rubber band (`BAND`, `race.ts`),
 which always lets the child win. `place`/`margin_ms`/`reason` come from
 `honestResult()`; a loss does not add a typing-race cup, and the next
 race's tier does not escalate (the result screen's "¡Revancha!" replays the
-exact same race — same seed, same words, same two rivals — instead of a new
-one).
+exact same race — same seed, same words — instead of a new one).
+
+**C07 (4to only), the rivals adapt to the child** (`typingAdapt.ts`; this
+replaces C02's fixed 6/10/15 wpm). `adapt` says how this race's rivals were
+paced:
+
+- `first`: the child's first finished typing race of the session. The two
+  rivals follow the child's live pace (last ~10 s of right keys) softly:
+  about 0.88x and 0.97x of it, with a gentle catch-up when one falls behind,
+  so a steady child wins by a small margin and a child who slows down can be
+  passed. `rival_base_wpm` is then the child's average live pace as the
+  rivals saw it.
+- `after_loss` / `after_win`: from the second race the rivals run at a
+  constant pace around a base = the child's measured `wpm` of the previous
+  race x 0.90 (after a loss: not 1st) or x 1.05 (after a win: 1st), clamped
+  to 1.2-40 wpm; the two rivals are the base x 0.84 and x 0.95.
+  `rival_base_wpm` is that base. A child who types the same every race wins
+  about 2 of 3 (simulated, `typingAdapt.test.ts`).
+
+The state carries across races in the session (memory, and the resume
+state `typing_adapt`, so a reload keeps it); a race that was left
+(`reason: 'left'`) changes nothing. "¡Revancha!" (same words) uses the state
+as it is after the race just lost, so its rivals are the `after_loss` ones.
 
 **Tu juego** (`src/playtest/OwnGame.tsx` around the Workshop's
 `WorkshopGamePlayer`): the child's own "Al revés" (the Workshop's device

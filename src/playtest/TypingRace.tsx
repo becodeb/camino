@@ -45,14 +45,23 @@ import {
   Backdrop, BumpBush, Clouds, CritterDriver, Dust, Flames, FlagIcon, Kart, LANES, MeDriver, SEG, STEP, TRACK_H, TrackRoad, surfaceY,
 } from './raceArt';
 import { accuracy, judgeKey, TYPING_CUP_PREFIX, typedSpot, typingRaceDef, wordsFor, wpm } from './typingRace';
-import { honestRanking, honestResult, rivalTiersFor, typingFinishMs, typingPosition, type HonestResult as HonestResultData, type RivalTier } from './honestRace';
+import { honestRanking, honestResult, positionAtChars, totalChars, type HonestResult as HonestResultData } from './honestRace';
+import {
+  ADAPT_START, EASE_MS, PRIOR_WPM, adaptOf, advanceRival, afterRace, firstRaceTarget, liveWpm, readAdapt, rivalBase, rivalFinish, rivalWpms, startRival,
+  type AdaptState, type RivalRun,
+} from './typingAdapt';
 import { HonestResultScreen } from './HonestResult';
 import './race.css';
 
-/** C02 (4to only): the honest rivals' fixed pace, instead of the band's "the child always wins". Defaults to the band for every other grade. */
+/**
+ * C02/C07 (4to only): honest rivals instead of the band's "the child always wins". C07: they adapt to the child (typingAdapt.ts): in the
+ * first race they follow the child's live pace softly; from the second their pace comes from the child's previous race (slower after a
+ * loss, faster after a win). Defaults to the band for every other grade.
+ */
 export type RivalMode = 'band' | 'honest';
 
 const LEVEL_ID = 'typing_race';
+const round1 = (v: number) => Math.round(v * 10) / 10;
 if (DEBUG && typeof window !== 'undefined') (window as unknown as { __typingWords: typeof wordsFor }).__typingWords = wordsFor;
 type Phase = 'input' | 'finish' | 'podium';
 
@@ -78,7 +87,7 @@ const LINES = {
 const typingCups = (solved: Readonly<Record<string, boolean>>) => Object.keys(solved).filter((k) => k.startsWith(TYPING_CUP_PREFIX) && solved[k]).length;
 
 /** What carries over between typing races while the page lives (the activity remounts at every visit from the menu). */
-let memory: { sid: string; saved: RaceSaved } | null = null;
+let memory: { sid: string; saved: RaceSaved; adapt: AdaptState } | null = null;
 
 /**
  * The typing race activity: the race on screen and what carries over
@@ -89,11 +98,14 @@ export function TypingRace({ levelEnded, rivals = 'band' }: { levelEnded(end: Le
   const sid = usePlaytest().session?.id ?? '';
   const [saved, setSaved] = useState<RaceSaved>(() => withCups(memory?.sid === sid ? memory.saved : readSaved(resumedPart('typing_race')), typingCups(progress.get().solved)));
   const savedRef = useRef(saved);
+  /** C07: what the honest rivals adapt to (the child's last race), kept like the cups: in memory and in the resume state. */
+  const adaptRef = useRef<AdaptState>(memory?.sid === sid ? memory.adapt : readAdapt(resumedPart('typing_adapt')));
+  const keepAdapt = (a: AdaptState) => { adaptRef.current = a; memory = { sid, saved: savedRef.current, adapt: a }; rememberPart('typing_adapt', a); };
   const [cur, setCur] = useState<{ no: number; tier: number; again: boolean; seed?: number; revancha?: boolean }>(() => ({ no: saved.raceNo + 1, tier: saved.tier, again: false }));
   const [run, setRun] = useState(0);
   /** C02: the last race's own seed, for "¡Revancha!" (honest mode only: the band never loses, so it never needs one). */
   const lastSeedRef = useRef<number | undefined>(undefined);
-  const keep = (s: RaceSaved) => { savedRef.current = s; memory = { sid, saved: s }; setSaved(s); rememberPart('typing_race', s); };
+  const keep = (s: RaceSaved) => { savedRef.current = s; memory = { sid, saved: s, adapt: adaptRef.current }; setSaved(s); rememberPart('typing_race', s); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => keep({ ...savedRef.current, raceNo: cur.no }), [cur.no]);
   return (
@@ -105,6 +117,8 @@ export function TypingRace({ levelEnded, rivals = 'band' }: { levelEnded(end: Le
       revanchaRun={!!cur.revancha}
       cups={saved.cups}
       rivals={rivals}
+      adapt={adaptRef.current}
+      onAdapt={keepAdapt}
       seedOverride={cur.seed}
       reportSeed={(s) => { lastSeedRef.current = s; }}
       won={() => keep({ ...savedRef.current, raceNo: cur.no, cups: savedRef.current.cups + 1, tier: savedRef.current.tier + 1 })}
@@ -124,8 +138,9 @@ const inTextField = (t: EventTarget | null) => {
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 };
 
-function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', seedOverride, reportSeed, won, next, revancha, setTier, levelEnded }: {
-  no: number; tier: number; again: boolean; revanchaRun?: boolean; cups: number; rivals?: RivalMode; seedOverride?: number; reportSeed?(seed: number): void;
+function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt = ADAPT_START, onAdapt, seedOverride, reportSeed, won, next, revancha, setTier, levelEnded }: {
+  no: number; tier: number; again: boolean; revanchaRun?: boolean; cups: number; rivals?: RivalMode; adapt?: AdaptState; onAdapt?(a: AdaptState): void;
+  seedOverride?: number; reportSeed?(seed: number): void;
   won(): void; next(): void; revancha?(): void; setTier(t: number): void; levelEnded(end: LevelEnd): void;
 }) {
   const api = usePlaytest();
@@ -148,12 +163,16 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', seedOv
   const pair = PAIRS[(no - 1) % PAIRS.length];
   const [firstEver] = useState(() => no === 1);
   const [cups0] = useState(cups);
-  /** C02: the two tiers racing today (null in band mode: `rivals` still steps the rubber band exactly as before). */
-  const honestTiers = useMemo<[RivalTier, RivalTier] | null>(() => (rivals === 'honest' ? rivalTiersFor(no) : null), [rivals, no]);
-  const honestFinish = useMemo<[number, number] | null>(
-    () => (honestTiers ? [typingFinishMs(honestTiers[0], words), typingFinishMs(honestTiers[1], words)] : null),
-    [honestTiers, words],
-  );
+  /**
+   * C07: honest mode's adaptive rivals (null in band mode: `rivals` still steps the rubber band exactly as before). What they adapt to is
+   * the state at the race's start: nothing yet (the first race: they follow the child's live pace) or the child's previous race.
+   */
+  const honest = rivals === 'honest';
+  const [adapt0] = useState(adapt);
+  const adaptKind = adaptOf(adapt0);
+  const baseWpm = honest ? rivalBase(adapt0) : null;
+  const fixedWpms = baseWpm != null ? rivalWpms(baseWpm) : null;
+  const totalLetters = useMemo(() => totalChars(words), [words]);
 
   const [phase, setPhase] = useState<Phase>('input');
   const [k, setK] = useState(0);
@@ -207,6 +226,12 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', seedOv
     /** C02 (honest mode only): the place/margin/reason computed once the child crosses the line. */
     honestResult: null as HonestResultData | null,
     honestRanking: null as Array<'me' | 0 | 1> | null,
+    /** C07: the times (Date.now) of the child's right keys, for their live pace in the first race. */
+    rightAt: [] as number[],
+    /** C07: the two rivals running (ms since the child's first key); the first race also averages the live pace they followed. */
+    runs: [startRival(fixedWpms ? fixedWpms[0] : PRIOR_WPM), startRival(fixedWpms ? fixedWpms[1] : PRIOR_WPM)] as [RivalRun, RivalRun],
+    liveSum: 0,
+    liveMs: 0,
   });
 
   const rootRef = useRef<HTMLElement>(null);
@@ -248,6 +273,8 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', seedOv
       help_levels: s.helpStep, adult_helped: !!lv?.adultHelped, cups: reason === 'finished' && isWin ? cups0 + 1 : cups0,
       rival_mode: rivals,
       ...(s.honestResult ? { place: s.honestResult.place, reason: s.honestResult.reason } : {}),
+      // C07: how the rivals were paced. `rival_base_wpm`: the base (the child's previous wpm x 0.90 after a loss / x 1.05 after a win); in the first race, the child's average live pace they followed
+      ...(honest ? { adapt: adaptKind, rival_base_wpm: baseWpm != null ? round1(baseWpm) : s.liveMs > 0 ? round1(s.liveSum / s.liveMs) : null } : {}),
     });
   }
 
@@ -279,6 +306,7 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', seedOv
       return;
     }
     s.right++;
+    s.rightAt.push(now);
     s.typed++;
     setTyped(s.typed);
     if (word[s.typed - 1] !== ' ') ringNote(NOTES[Math.min(NOTES.length - 1, Math.floor((s.typed / word.length) * NOTES.length))]);
@@ -322,10 +350,15 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', seedOv
     setPhase('finish');
     // C02: honest mode computes the real place now (the child's own finish time against the two fixed-pace rivals);
     // band mode is unchanged (the child always wins by construction, so there is nothing to compute).
-    if (honestFinish) {
+    if (honest) {
       const playMs = s.firstKeyAt ? s.crossedAt - s.firstKeyAt : 0;
-      s.honestResult = honestResult({ meMs: playMs, rivalsMs: honestFinish, wrongTotal: s.wrong, idleMs: s.idleMsTotal });
-      s.honestRanking = honestRanking(playMs, honestFinish);
+      // C07: the rivals that have not finished are projected from here at their current speed (a rival that finished already keeps its time)
+      advanceRivals(playMs);
+      const rivalsMs: [number, number] = [rivalFinish(s.runs[0], totalLetters), rivalFinish(s.runs[1], totalLetters)];
+      s.honestResult = honestResult({ meMs: playMs, rivalsMs, wrongTotal: s.wrong, idleMs: s.idleMsTotal });
+      s.honestRanking = honestRanking(playMs, rivalsMs);
+      // the next race's rivals adapt to this one: its measured pace and whether it was a win (1st place)
+      onAdapt?.(afterRace(adapt0, { wpm: wpm(s.right, playMs), won: s.honestResult.place === 1 }));
     }
     const isWin = !s.honestResult || s.honestResult.place === 1;
     if (isWin) {
@@ -337,6 +370,16 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', seedOv
       chime(['sol', 'mi'], 160);
     }
     apiRef.current.lowerHand('moved_on', LEVEL_ID);
+  }
+
+  /** C07: the rivals' running to `toMs` (ms since the child's first key): a constant pace from the second race, the soft follow in the first. */
+  function advanceRivals(toMs: number) {
+    const s = g.current;
+    if (!s.firstKeyAt) return; // the clock starts with the first key
+    const now = s.firstKeyAt + toMs;
+    const live = fixedWpms ? 0 : liveWpm(s.rightAt, s.firstKeyAt, now);
+    if (!fixedWpms) { const dt = Math.max(0, toMs - s.runs[0].t); s.liveSum += live * dt; s.liveMs += dt; }
+    s.runs = s.runs.map((r, i) => advanceRival(r, toMs, totalLetters, fixedWpms ? fixedWpms[i] : firstRaceTarget(i as 0 | 1, live, s.right, r.chars), fixedWpms ? 0 : EASE_MS)) as [RivalRun, RivalRun];
   }
 
   function toPodium() {
@@ -414,9 +457,10 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', seedOv
         if (s.crossedAt) {
           const park = course.finish + PARK - 0.8 - role * 0.9;
           nx = Math.min(park, pos + Math.min(BAND.afterSpeed, Math.max(0.3, (park - pos) * 1.6)) * dt);
-        } else if (honestTiers) {
-          // C02: a fixed pace, completely independent of `inp`/the child's own position or idleness.
-          nx = typingPosition(honestTiers[role], now - s.firstKeyAt, words, course);
+        } else if (honest) {
+          // C07: from the second race a constant pace set by the child's previous race, in the first a soft follow of their live pace; never `inp`'s band
+          if (role === 0) advanceRivals(now - s.firstKeyAt);
+          nx = positionAtChars(s.runs[role].chars, words, course);
         } else nx = stepRival(pos, dt, inp, role);
         if (!s.rivalAt[role] && s.crossedAt && nx >= course.finish) s.rivalAt[role] = now;
         s.rivals[role] = nx;
@@ -593,6 +637,7 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', seedOv
           phase: s.phase, raceNo: no, tier, seed, words: [...words], k: s.k + 1, word: words[s.k], typed: s.typed, right: s.right, wrong: s.wrong,
           me: s.me, rivals: [...s.rivals], finish: course.finish, crossed: s.crossedAt > 0, cups: cups0, ended: s.ended, rivalsNames: [...pair],
           wordsDone: s.wordsDone, words_n: n, boostTo: s.boostTo, started: s.started, honestResult: s.honestResult, rivalMode: rivals,
+          adapt: adaptKind, rivalBaseWpm: baseWpm, rivalRuns: s.runs.map((r) => ({ wpm: r.wpm, chars: r.chars, finishMs: r.finishMs })), totalLetters,
         };
       },
       key: (ch: string) => keyRef.current(ch),

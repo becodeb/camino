@@ -32,7 +32,10 @@
 //    design doc: 6 (bronze), 10 (silver), 15 (gold) — the 4to pilot's own
 //    median was 9.3 words per minute, so these three straddle a real
 //    child's typical pace instead of sitting comfortably above or below
-//    all of it.
+//    all of it. SUPERSEDED in the app by C07 (Design v2): 4to's typing race
+//    rivals now adapt to the child (typingAdapt.ts) and no longer use these
+//    fixed tiers; HONEST_WPM and its helpers stay as the tested reference
+//    (and `positionAtChars` is what the adaptive rivals use to land on the track).
 
 import type { Course } from './race';
 import { typedSpot } from './typingRace';
@@ -75,7 +78,13 @@ export const typingFinishMs = (tier: RivalTier, words: readonly string[]): numbe
  */
 export function typingPosition(tier: RivalTier, elapsedMs: number, words: readonly string[], course: Pick<Course, 'starts' | 'ends' | 'finish'>): number {
   if (elapsedMs <= 0) return 0;
-  let charsLeft = elapsedMs / msPerChar(tier);
+  return positionAtChars(elapsedMs / msPerChar(tier), words, course);
+}
+
+/** C07: where a rival that has typed `chars` characters of the race's words sits on the track (the same walk `typingPosition` does). */
+export function positionAtChars(chars: number, words: readonly string[], course: Pick<Course, 'starts' | 'ends' | 'finish'>): number {
+  if (!(chars > 0)) return 0;
+  let charsLeft = chars;
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
     const withSpace = w.length + (i < words.length - 1 ? 1 : 0);
