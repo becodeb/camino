@@ -33,6 +33,7 @@ import { ClimbPath } from './ClimbPath';
 import type { LevelDef } from '../game/levels';
 import { PlaytestLevel, type LevelEnd } from './PlaytestLevel';
 import { rememberPart, resumedPart } from './resume';
+import { noteLadderCeiling } from './copa2/store';
 import { wrapPending } from './flow';
 
 /** Said while the character walks to the next page (in turn, never about how it went). */
@@ -84,6 +85,8 @@ export function Ladder() {
     stopped.current = true;
     const s = state.current;
     rememberPart('ladder', { state: s, ended: true } satisfies SavedLadder);
+    // C10: 4to's Copa places the child by this (Copa v2 starts at copa 2 or 3 for a child who passed `repetir`/conditions)
+    noteLadderCeiling(session?.id, ceiling(s));
     log('ladder_end', {
       entry_rung: s.entry,
       ceiling_rung: ceiling(s),

@@ -36,7 +36,7 @@ import { forgetRealtimeIntros } from '../screens/RealtimeLevel';
 import { forgetWorkshopGuides } from '../screens/WorkshopScreen';
 import { setUnlocks } from '../curriculum/rewards';
 import { forgetSilentDemos } from '../ui/silentDemo';
-import { resetCopaMemory } from './Copa';
+import { resetCopaMemory } from './copa2/store';
 import { setSpeechFilter } from '../ui/speech';
 import { clearCaption, installCaptions, setCaptions } from './captions';
 import { Captions } from './Captions';

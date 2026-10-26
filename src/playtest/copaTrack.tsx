@@ -1,32 +1,12 @@
-// The Copa's live race view (C03 rework): the same side-scrolling road,
-// kart and critters as 1ro's own "La carrera" (race.ts/Race.tsx/raceArt.tsx),
-// reused as-is rather than rebuilt, so a circuit never reads as a bare quiz.
-// Every circuit drives a real `Course` (race.ts's own `courseOf`) and draws
-// it with `TrackRoad`/`Kart`/`CritterDriver`; the two rivals are NOT the
-// rubber band — they drive continuously at their fixed honest pace
-// (honestRace.ts's `honestPosition`) from the moment a circuit starts,
-// independent of the child, so the fox visibly pulls ahead when the child
-// is slow and the turbo visibly overtakes it.
+// The Copa's road pieces (C03, trimmed in C10): one kart placed and tilted on a
+// course, and a puddle or a log drawn on the road. Both are used by the Copa v2
+// garage scene (copa2/Scene.tsx); the rest of C03's live-race view went with the
+// single-slot circuits when Copa v2 replaced them.
 
-import { type ReactNode } from 'react';
-import type { CritterId } from '../curriculum/motivation';
-import { courseOf, slopeAt, type Course, type RaceDef, type Stretch } from './race';
-import { Backdrop, Clouds, CritterDriver, Dust, Flames, Kart, LANES, MeDriver, SEG, STEP, TRACK_H, TrackRoad, surfaceY } from './raceArt';
-import { honestPosition, type RivalTier } from './honestRace';
-
-/** A `Course` from plain stretches (tier/seed are unused by `courseOf`, only the geometry matters here). */
-export const buildCourse = (stretches: readonly Stretch[]): Course =>
-  courseOf({ tier: 1, seed: 1, stretches: stretches as Stretch[] } as RaceDef);
-
-/** The two rivals' live positions, `elapsedMs` into the circuit — never the rubber band. */
-export const rivalPositions = (tiers: readonly [RivalTier, RivalTier], elapsedMs: number, finish: number): [number, number] =>
-  [honestPosition(tiers[0], elapsedMs, finish), honestPosition(tiers[1], elapsedMs, finish)];
-
-/** The camera's next position: eased toward the child's kart, same formula as Race.tsx's own `draw()`. */
-export const nextCam = (cam: number, me: number, viewW: number, dt: number): number => {
-  const want = Math.max(-SEG * 0.6, me * SEG - viewW * 0.34);
-  return cam ? cam + (want - cam) * Math.min(1, dt * 6) : want;
-};
+import type { ReactNode } from 'react';
+import { slopeAt, type Course } from './race';
+import { LANES, SEG, STEP, surfaceY } from './raceArt';
+import { Kart } from './raceArt';
 
 const angleAt = (c: Course, u: number) => (-Math.atan2(slopeAt(c, u) * STEP, SEG) * 180) / Math.PI;
 
@@ -58,38 +38,5 @@ export function HazardMark({ course, u, kind }: { course: Course; u: number; kin
         </g>
       )}
     </g>
-  );
-}
-
-export interface SceneDust { id: number; kind: 'dust' | 'bump'; u: number }
-
-/** The live scene: the road, the finish, the two hazards and the three karts, panned by `cam`. */
-export function RaceScene({ course, stretches, me, rivals, pair, viewW, cam, turboOn, meJump, meSkid, puddles, logs, fx }: {
-  course: Course; stretches: readonly Stretch[]; me: number; rivals: readonly [number, number];
-  pair: readonly [CritterId, CritterId]; viewW: number; cam: number; turboOn?: boolean; meJump?: boolean; meSkid?: boolean;
-  puddles?: readonly number[]; logs?: readonly number[]; fx?: readonly SceneDust[];
-}) {
-  const meY = meJump ? -34 : 0;
-  return (
-    <svg className="rc-scene copa-scene" viewBox={`0 0 ${viewW} ${TRACK_H}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="La pista">
-      <g transform={`translate(${(-cam * 0.15).toFixed(1)} 0)`}><Clouds width={course.length * SEG + 2000} /></g>
-      <g transform={`translate(${(-cam * 0.45).toFixed(1)} 0)`}><Backdrop width={course.length * SEG * 0.6 + 2000} /></g>
-      <g transform={`translate(${(-cam).toFixed(1)} 0)`}>
-        <TrackRoad c={course} stretches={stretches} />
-        {puddles?.map((u) => <HazardMark key={`p${u}`} course={course} u={u} kind="puddle" />)}
-        {logs?.map((u) => <HazardMark key={`l${u}`} course={course} u={u} kind="log" />)}
-        <TrackKart course={course} u={rivals[1]} lane="r1" tone="r1" seed={3} driver={<CritterDriver id={pair[1]} />} />
-        <TrackKart course={course} u={rivals[0]} lane="r0" tone="r0" seed={2} driver={<CritterDriver id={pair[0]} />} />
-        {fx?.filter((f) => f.kind === 'dust').map((f) => (
-          <g key={f.id} transform={`translate(${f.u * SEG} ${surfaceY(course, f.u) + LANES.me.dy})`}><Dust /></g>
-        ))}
-        <g transform={`translate(0 ${meY})`} className={meSkid ? 'copa-skid' : undefined}>
-          <TrackKart
-            course={course} u={me} lane="me" tone="me" seed={1} driver={<MeDriver />}
-            extra={turboOn && <Flames />}
-          />
-        </g>
-      </g>
-    </svg>
   );
 }
