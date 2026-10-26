@@ -82,10 +82,29 @@ describe('the 1ro arcade section ("Los juegos del monstruo")', () => {
     expect(r.favourites).toEqual({ dance: 1, oops: 1, tap: 1 });
   });
 
+  it('T51: counts how the children left a game, by `via` and per card (other grades\' exits are not 1ro\'s)', () => {
+    seq = 0;
+    const exit = (sid: string, game: string, via: string) => ev(sid, 'game_exit', { game, via, visit: 1 });
+    const events = [
+      ...guidedPass('a'),
+      start('a', 'recipe', 'arcade', 2), exit('a', 'recipe', 'end_button'),
+      start('a', 'dance', 'arcade', 2), exit('a', 'dance', 'play_button'),
+      exit('a', 'typing_race', 'end_button'), exit('a', 'wardrobe', 'play_button'), exit('a', 'buddy', 'bar_menu'),
+      start('b', 'recipe', 'guided'), start('b', 'tap', 'arcade'), exit('b', 'tap', 'play_button'),
+      start('c', 'recipe', 'arcade'), exit('c', 'recipe', 'bar_menu'),
+    ];
+    const r = monsterReport([session('a'), session('b'), session('c', 2)], events);
+    expect(r.exits).toEqual({ end_button: 2, play_button: 3, bar_menu: 1 });
+    expect(r.exitsByGame).toEqual({
+      recipe: { end_button: 1 }, dance: { play_button: 1 }, typing_race: { end_button: 1 }, wardrobe: { play_button: 1 }, buddy: { bar_menu: 1 }, tap: { play_button: 1 },
+    });
+  });
+
   it('says nothing when no 1ro child played a monster game', () => {
     const r = monsterReport([session('x'), session('y', 4)], [ev('y', 'game_start', { game: 'recipe', mode: 'arcade' }), ev('x', 'level_start', {})]);
     expect(r.sessions).toBe(0);
     expect(r.children).toEqual([]);
     expect(r.games.every((g) => g.plays === 0 && g.skill != null)).toBe(true);
+    expect(r.exits).toEqual({});
   });
 });

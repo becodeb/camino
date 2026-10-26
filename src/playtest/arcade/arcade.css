@@ -389,3 +389,76 @@
 .tp-game.is-play .tp-scene-sheet { outline-color: var(--orange); }
 /* ?debug screenshots only: an effect held still at a moment (Tap.tsx __monster.freeze) */
 .tp-game[data-freeze] .tp-actor, .tp-game[data-freeze] .tp-bush-pop, .tp-game[data-freeze] .tp-burst rect { animation-play-state: paused !important; animation-delay: var(--freeze) !important; }
+
+/* ------------------------------------------------ T51: the way back to 1ro's arcade */
+/* the arcade drawn small: a taped sheet with the four monster games' menu cards (2×2, tilted like the menu) */
+.ga-home-art {
+  --w: 150px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--w) * 0.05);
+  width: var(--w);
+  aspect-ratio: 150 / 112;
+  padding: calc(var(--w) * 0.07) calc(var(--w) * 0.06);
+  background: #fbf6ea;
+  border: 2px solid var(--ink);
+  border-radius: 5px 3px 6px 4px;
+  box-shadow: 2px 3px 0 rgba(84, 62, 38, 0.22);
+  rotate: -1.5deg;
+  flex: none;
+}
+.ga-home-card {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  background: #fdfaf2;
+  border: 1.6px solid var(--ink);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ga-home-card .pp-fp-art { display: block; width: 100%; height: 100%; max-width: none; }
+.ga-home-tape { position: absolute; top: -7px; width: 26%; height: 12px; background: rgba(226, 205, 150, 0.85); border: 1px solid rgba(84, 62, 38, 0.25); }
+.ga-home-tape.is-l { left: 6%; rotate: -8deg; }
+.ga-home-tape.is-r { right: 6%; rotate: 7deg; }
+
+/* the end screen: "¡Otra vez!" (orange) and "Otro juego" (blue), large, side by side */
+.ga-end { display: flex; align-items: center; justify-content: center; gap: 44px; min-width: 0; }
+.ga-home {
+  --fill: #d7e5f2;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 104px;
+  padding: 8px 26px 8px 14px;
+  animation: pop-in 360ms ease-out 1.1s both;
+  touch-action: manipulation;
+}
+.ga-home .ga-home-art { --w: 124px; }
+.ga-home:hover { transform: translateY(-3px); }
+.ga-home:active { transform: translate(2px, 3px); }
+.ga-home-word { font: 400 34px/1 var(--hand); color: var(--ink); white-space: nowrap; }
+.ga-end .ga-again { min-height: 104px; }
+/* Oops' panel is a grid (character | options | end): the end screen takes the options' and the end's columns */
+.oo-panel .ga-end { grid-column: 2 / -1; }
+
+/* while playing: the same drawing, large, alone in the bottom-left corner (the bar's corner is the adult's) */
+.pp-play-home {
+  --fill: #d7e5f2;
+  --r-cut: 16px 12px 18px 11px / 12px 17px 11px 16px;
+  position: fixed; left: 14px; bottom: 12px; z-index: 55;
+  display: grid; justify-items: center; align-content: center; gap: 2px;
+  width: 116px; min-height: 100px;
+  padding: 10px 8px 6px;
+  touch-action: manipulation;
+}
+.pp-play-home .ga-home-art { --w: 88px; }
+.pp-play-home-word { font: 400 21px/1 var(--hand); color: var(--ink); white-space: nowrap; }
+.pp-play-home:active { transform: translate(2px, 3px); }
+/* an end screen offers it already, larger */
+.pp-has-home:has(.ga-end) .pp-play-home { display: none; }
+/* the games' panels keep the corner free, so the button is never under a card */
+.pp-has-home .rx-panel, .pp-has-home .dz-panel, .pp-has-home .oo-panel, .pp-has-home .tp-panel { padding-left: 128px; }
+/* 1ro's wardrobe: the characters' column stops above the corner's button */
+.pp-wardrobe-home { display: contents; }
+.piloto .pp-wardrobe-home .mode-wardrobe .cast { justify-content: flex-start; gap: 8px; padding-bottom: 112px; }

@@ -17,6 +17,10 @@
 // arcade pick of a game already played this session (`game_start` with
 // `mode: 'arcade'` and `replay: true`, the guided pass counts as played), or
 // a round started by "¡Otra vez!" (`game_round.again`).
+//
+// T51: how the children left a game of the arcade (`game_exit.via`: the end
+// screen's "Otro juego", the large drawn button while playing, or the bar's
+// small menu button), over every card of 1ro's arcade.
 
 import type { PtEvent, PtSession } from './report';
 
@@ -96,12 +100,15 @@ export interface MonsterReport {
   guidedDone: number;
   /** The favourite's tally over the class (a child with a tie counts for each). */
   favourites: Record<string, number>;
+  /** T51: the ways out of a game (`game_exit.via` → count), and the same per card (`game` → via → count). */
+  exits: Record<string, number>;
+  exitsByGame: Record<string, Record<string, number>>;
 }
 
 const label = (s: Pick<PtSession, 'child_name' | 'code' | 'id'>) => s.child_name?.trim() || s.code || s.id;
 
 export function monsterReport(sessions: PtSession[], events: PtEvent[], guided: readonly MonsterGame[] = MONSTER_GAMES): MonsterReport {
-  const mine = events.filter((e) => ['game_start', 'game_round', 'game_end', 'rapid_taps', 'tap_rule', 'route_done', 'survey_answer'].includes(e.type));
+  const mine = events.filter((e) => ['game_start', 'game_round', 'game_end', 'rapid_taps', 'tap_rule', 'route_done', 'survey_answer', 'game_exit'].includes(e.type));
   const bySession = new Map<string, PtEvent[]>();
   for (const e of mine) {
     const list = bySession.get(e.session_id);
@@ -188,6 +195,16 @@ export function monsterReport(sessions: PtSession[], events: PtEvent[], guided: 
 
   const favourites: Record<string, number> = {};
   for (const c of children) for (const g of c.favourite) favourites[g] = (favourites[g] ?? 0) + 1;
+  const exits: Record<string, number> = {};
+  const exitsByGame: Record<string, Record<string, number>> = {};
+  for (const e of all) {
+    if (e.type !== 'game_exit') continue;
+    const via = String(e.payload.via ?? 'unknown');
+    const g = String(e.payload.game ?? 'unknown');
+    exits[via] = (exits[via] ?? 0) + 1;
+    const per = (exitsByGame[g] ??= {});
+    per[via] = (per[via] ?? 0) + 1;
+  }
   return {
     sessions: children.length,
     games,
@@ -195,5 +212,7 @@ export function monsterReport(sessions: PtSession[], events: PtEvent[], guided: 
     guidedAll: children.filter((c) => c.guidedFinished.length === guided.length).length,
     guidedDone: children.filter((c) => c.guidedDone).length,
     favourites,
+    exits,
+    exitsByGame,
   };
 }

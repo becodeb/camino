@@ -36,6 +36,7 @@ import { AgainButton, Buddy, ConfettiRain, DizzyStars, ReadyButton, RoundDots, g
 import { GUIDED_ROUNDS, guidedTurnOver, nextTier } from './kit';
 import { BellArt, IngredientCardArt, Layer, Monster, Sandwich, ThoughtBubble, type MonsterLook, type MonsterMood } from './monsterArt';
 import { RECIPE_MAX_TIER, judgeSandwich, keepAfterWrong, recipeRound, trayOf, type Ingredient, type RecipeRound } from './recipe';
+import { EndChoices } from './home';
 import './arcade.css';
 
 const GAME = 'recipe' as const;
@@ -464,6 +465,8 @@ export function RecipeGame({ mode, startTier, rounds, done, roundWon, stopAfterR
         </svg>
       </section>
       <div className="rx-panel">
+        {/* T51: the arcade's end screen, "¡Otra vez!" and "Otro juego" (the tray waits for the next round) */}
+        {phase === 'won' && mode === 'arcade' ? <EndChoices again={<AgainButton onPress={() => nextRound(true)} />} /> : <>
         <ul className="rx-tray" aria-label="Los ingredientes">
           {tray.map((ing, i) => (
             <li key={ing} style={{ '--tilt': `${[-1.4, 1, -0.6, 1.3, -1, 0.7][i % 6]}deg` } as React.CSSProperties}>
@@ -478,9 +481,8 @@ export function RecipeGame({ mode, startTier, rounds, done, roundWon, stopAfterR
             </li>
           ))}
         </ul>
-        {phase === 'won' && mode === 'arcade'
-          ? <AgainButton onPress={() => nextRound(true)} />
-          : <ReadyButton ready={full && phase === 'build'} onPress={serve} />}
+        <ReadyButton ready={full && phase === 'build'} onPress={serve} />
+        </>}
       </div>
       {drag && (
         <div className="rx-drag" style={{ left: drag.x, top: drag.y }} aria-hidden="true"><IngredientCardArt ing={drag.ing} /></div>

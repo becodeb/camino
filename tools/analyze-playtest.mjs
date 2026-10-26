@@ -211,6 +211,11 @@ function reportMonster(r) {
     line(`    Encuesta "¿Te gustó?": ${fmtDist(g.liked)}`);
   }
   line(`Favorito (más repeticiones voluntarias; un empate cuenta para cada uno): ${fmtDist(r.favourites)}`);
+  // T51: how they left a game of the arcade (game_exit.via)
+  const VIA = { end_button: '"Otro juego" al terminar', play_button: 'botón grande jugando', bar_menu: 'botón chico de la barra' };
+  const viaDist = (d) => Object.keys(d).length ? Object.entries(d).map(([k, v]) => `${VIA[k] ?? k} ${v}`).join(', ') : '—';
+  line(`Salidas de un juego al menú (T51): ${viaDist(r.exits)}.`);
+  for (const [g, d] of Object.entries(r.exitsByGame)) line(`    ${g}: ${viaDist(d)}`);
   line('Por chico:');
   for (const c of r.children) {
     const per = MONSTER_GAMES.map((g) => `${g} ${c.plays[g] ?? 0}${c.voluntary[g] ? ` (+${c.voluntary[g]} vol.)` : ''}`).join(', ');

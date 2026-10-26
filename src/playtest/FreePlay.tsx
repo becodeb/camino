@@ -56,6 +56,7 @@ import { TypingRace } from './TypingRace';
 import { OwnGame } from './OwnGame';
 import { GamePlay } from './arcade/games';
 import { BuddyActivity } from './arcade/BuddyActivity';
+import { ArcadeHomeContext, PlayHomeButton, type ExitVia } from './arcade/home';
 import { rememberPart, resumedPart } from './resume';
 import { NextChoice } from './NextChoice';
 import { BarProgressContext, type BarProgress } from './barProgress';
@@ -354,8 +355,10 @@ export function FreePlay() {
     const Probe = PROBES[a.kind.probe];
     body = Probe ? <Probe key={view.n} activity={a.kind.probe} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} done={() => toMenu('done')} /> : null;
   }
+  // T51: on 1ro's arcade every way back to the menu is logged (`game_exit`), and the games offer large drawn ones
+  const home = is1ro(api.flow) ? (via: ExitVia) => { log('game_exit', { game: a.id, via, visit: view.n }); toMenu('menu'); } : undefined;
   return (
-    <ActivityFrame id={a.id} page={view.page} back={() => toMenu('menu')}>{body}</ActivityFrame>
+    <ActivityFrame id={a.id} page={view.page} back={() => toMenu('menu')} home={home}>{body}</ActivityFrame>
   );
 }
 
@@ -365,7 +368,7 @@ export function FreePlay() {
  * covers the palette, the board or the page's next-page button; a page
  * without a bar gets it in the bottom-left corner.
  */
-function ActivityFrame({ id, page, back, children }: { id: string; page: SheetPage | null; back: () => void; children: ReactNode }) {
+function ActivityFrame({ id, page, back, home, children }: { id: string; page: SheetPage | null; back: () => void; home?: (via: ExitVia) => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [bar, setBar] = useState<Element | null>(null);
   useLayoutEffect(() => {
@@ -378,11 +381,13 @@ function ActivityFrame({ id, page, back, children }: { id: string; page: SheetPa
     return () => mo.disconnect();
   }, []);
   const button = (
-    <button type="button" className={`pp-menu-back cut${bar ? ' in-bar' : ''}`} aria-label="Volver al menú" onClick={back}><MenuBackArt /></button>
+    <button type="button" className={`pp-menu-back cut${bar ? ' in-bar' : ''}`} aria-label="Volver al menú" onClick={home ? () => home('bar_menu') : back}><MenuBackArt /></button>
   );
+  // T51 (1ro's arcade): the large drawn way back while playing, and the games' end screens' (ArcadeHomeContext)
   return (
-    <div ref={ref} className="pp-fp-activity" data-activity={id} data-page={page ? JSON.stringify(page) : undefined}>
-      {children}
+    <div ref={ref} className={`pp-fp-activity${home ? ' pp-has-home' : ''}`} data-activity={id} data-page={page ? JSON.stringify(page) : undefined}>
+      <ArcadeHomeContext.Provider value={home ?? null}>{children}</ArcadeHomeContext.Provider>
+      {home && <PlayHomeButton onPress={() => home('play_button')} />}
       {bar ? createPortal(button, bar) : button}
     </div>
   );

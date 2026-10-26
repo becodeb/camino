@@ -42,6 +42,7 @@ import { AgainButton, Buddy, ConfettiRain, DizzyStars, RoundDots, gameLevelId, s
 import { GUIDED_ROUNDS, guidedTurnOver, nextTier } from './kit';
 import { OOPS_MAX_TIER, isRightFix, isSwapPartner, isWrongStep, optionsOf, routineFor, type Routine, type StepId } from './oops';
 import { STEP_H, STEP_W, StepArt, StepPicture, WrongRing, actOf } from './oopsArt';
+import { EndChoices } from './home';
 import './arcade.css';
 
 const GAME = 'oops' as const;
@@ -461,6 +462,8 @@ export function OopsGame({ mode, startTier, rounds, done, roundWon, stopAfterRou
           <Buddy x={90} y={162} w={150} onView={(v) => { buddy.current = v; }} />
           {dizzy && <DizzyStars x={90} y={28} />}
         </svg>
+        {/* T51: the arcade's end screen, "¡Otra vez!" and "Otro juego" (beside the child's character) */}
+        {phase === 'won' && mode === 'arcade' ? <EndChoices again={<AgainButton onPress={() => nextRound(true)} />} /> : <>
         <ul className={`oo-options${phase === 'fix' ? ' is-on' : ''}`} aria-label="Qué poner en su lugar">
           {phase === 'fix' && options.map((id, i) => (
             <li key={id} style={{ '--tilt': `${[-1.4, 1.1, -0.7][i % 3]}deg`, '--i': i } as CSSProperties}>
@@ -475,7 +478,8 @@ export function OopsGame({ mode, startTier, rounds, done, roundWon, stopAfterRou
             </li>
           ))}
         </ul>
-        {phase === 'won' && mode === 'arcade' ? <AgainButton onPress={() => nextRound(true)} /> : <span className="oo-panel-end" aria-hidden="true" />}
+        <span className="oo-panel-end" aria-hidden="true" />
+        </>}
       </div>
       {drag && <div className="oo-drag" style={{ left: drag.x, top: drag.y }} aria-hidden="true"><StepPicture id={drag.id} /></div>}
       {confetti > 0 && phase === 'won' && <ConfettiRain key={confetti} seed={confetti} />}

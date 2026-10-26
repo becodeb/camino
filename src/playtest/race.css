@@ -153,3 +153,6 @@ button.rc-slot { cursor: pointer; touch-action: manipulation; }
   .tr-ch.is-bad, .tr-ch.is-call,
   .rc-here, .rc-podium-sun, .rc-flame, .rc-piece.is-next .rc-piece-ring, .rc-slot.is-next { animation: none; }
 }
+/* T51 (1ro's arcade only): "¡Otra carrera!" and "Otro juego" side by side, in the again button's row */
+.rc-podium .rc-end { grid-column: 1 / -1; justify-self: center; }
+.rc-podium .rc-end .rc-again { grid-column: auto; }

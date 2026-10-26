@@ -36,6 +36,7 @@ import { AgainButton, Buddy, ConfettiRain, DizzyStars, RoundDots, gameLevelId, s
 import { GUIDED_ROUNDS, guidedTurnOver, nextTier } from './kit';
 import { DANCE_MAX_TIER, POSES, danceRound, judgeStep, type DanceRound, type Pose } from './dance';
 import { HOP, POINT, POSE_COLOR, POSE_PARAMS, PoseCardArt, Puppet, REST, TUMBLE, usePoseTween, type Face, type PoseParams } from './puppetArt';
+import { EndChoices } from './home';
 import './arcade.css';
 
 const GAME = 'dance' as const;
@@ -405,6 +406,8 @@ export function DanceGame({ mode, startTier, rounds, done, roundWon, stopAfterRo
         </svg>
       </section>
       <div className={`dz-panel${phase === 'turn' ? ' is-turn' : ' is-watch'}`}>
+        {/* T51: the arcade's end screen, "¡Otra vez!" and "Otro juego" */}
+        {phase === 'won' && mode === 'arcade' ? <EndChoices again={<AgainButton onPress={() => nextRound(true)} />} /> : (
         <ul className="dz-cards" aria-label="Los pasos de baile">
           {POSES.map((p, i) => (
             <li key={p} style={{ '--tilt': `${[-1.4, 1, -0.6, 1.3][i]}deg`, '--i': i } as CSSProperties}>
@@ -420,7 +423,7 @@ export function DanceGame({ mode, startTier, rounds, done, roundWon, stopAfterRo
             </li>
           ))}
         </ul>
-        {phase === 'won' && mode === 'arcade' && <AgainButton onPress={() => nextRound(true)} />}
+        )}
       </div>
       {confetti > 0 && (phase === 'yay' || phase === 'won') && <ConfettiRain key={confetti} seed={confetti} />}
     </main>
