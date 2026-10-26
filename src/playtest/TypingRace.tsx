@@ -221,7 +221,10 @@ function TypingRun({ no, tier, again, cups, won, next, setTier, levelEnded }: {
     const s = g.current;
     if (s.phase !== 'input') return;
     const word = words[s.k];
-    const v = judgeKey(word[s.typed], k0);
+    // T51: a key after the race's last letter, before the kart crosses the line (a child mashing keys), has no letter to judge
+    const expected = word?.[s.typed];
+    if (expected == null) return;
+    const v = judgeKey(expected, k0);
     if (v === 'ignore') return;
     const now = Date.now();
     s.lastInput = now;
