@@ -39,7 +39,6 @@ export interface SceneState {
   logs: LogView[];
 }
 
-const moves = (f: Frame): boolean => f.kind === 'exec' && f.to > f.from;
 
 /** How long the movement part of a frame lasts (a skid keeps the kart spinning after it has arrived). */
 export const moveDuration = (f: Frame): number => (f.fx.includes('skid') ? Math.max(1, f.dur - TIMING.SKID_MS) : f.dur);
