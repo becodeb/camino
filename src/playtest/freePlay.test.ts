@@ -14,7 +14,7 @@ describe('the free-play menu', () => {
     expect(menuFor(2, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(3, none).map((a) => a.id)).toEqual(['rule_game', 'sheet', 'recess', 'editor']);
     // C04: 4to's free play is the Arcade: the typing race, "Tu mejor tiempo" (back to the Copa), the wardrobe, the optional Workshop (all flow steps, no probe needed)
-    expect(menuFor(4, none).map((a) => a.id)).toEqual(['typing_race', 'copa', 'wardrobe']);
+    expect(menuFor(4, none).map((a) => a.id)).toEqual(['typing_race', 'race', 'copa', 'wardrobe']);
     expect(menuFor(5, none).map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess']);
   });
 
@@ -26,7 +26,7 @@ describe('the free-play menu', () => {
   });
 
   it('shows a probe\'s card once its component is registered, on its grade only', () => {
-    expect(menuFor(4, all).map((a) => a.id)).toEqual(['typing_race', 'copa', 'wardrobe']);
+    expect(menuFor(4, all).map((a) => a.id)).toEqual(['typing_race', 'race', 'copa', 'wardrobe']);
     expect(menuFor(5, (id: ProbeId) => id === 'text_probe').map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess', 'text_probe']);
     expect(menuFor(5, all).map((a) => a.id)).toEqual(['workshop', 'rule_game', 'editor', 'recess', 'text_probe']);
     expect(menuFor(3, all).map((a) => a.id)).not.toContain('workshop');
@@ -127,7 +127,8 @@ describe('T39/C04: 4to\'s Arcade', () => {
   it('no xylophone, no 1ro sheet editor, no rule game, no old game maker, no La carrera, no "Tu juego"; the Copa, the Workshop and the wardrobe are steps', async () => {
     const { activityFor, menuFor, RACE_START_TIER } = await import('./freePlay');
     const ids = menuFor(4, () => true).map((a) => a.id);
-    for (const gone of ['recess', 'editor', 'rule_game', 'game_maker', 'sheet', 'race', 'own_game']) expect(ids).not.toContain(gone);
+    for (const gone of ['recess', 'editor', 'rule_game', 'game_maker', 'sheet', 'own_game']) expect(ids).not.toContain(gone);
+    expect(ids).toContain('race'); // 2026-10-27: 4to replayed 1ro's La carrera on their own on 2026-10-20
     expect(activityFor('copa', 4)!.kind).toEqual({ step: 'copa' });
     expect(activityFor('workshop', 4)!.kind).toEqual({ step: 'workshop' });
     expect(activityFor('wardrobe', 4)!.kind).toEqual({ step: 'wardrobe' });
