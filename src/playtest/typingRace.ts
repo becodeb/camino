@@ -42,8 +42,8 @@ export const WORD_BANK_1RO: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, readonly stri
   5: ['perro', 'mango', 'leche', 'pelota', 'queso', 'nube', 'tomate', 'conejo', 'regalo', 'helado', 'zapato', 'camion'],
   6: ['mi sol', 'el oso', 'la luna', 'un pato', 'mi casa', 'el gato', 'la mesa', 'un sapo', 'mi perro', 'la nube'],
 };
-/** 1ro's races are short (a six-year-old looks for every key); they grow with each "¡Otra carrera!". */
-export const RACE_CHARS_1RO: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, number>> = { 1: 10, 2: 12, 3: 14, 4: 18, 5: 22, 6: 26 };
+/** 1ro's races are short (a six-year-old looks for every key); harder tiers keep the same length (user, 2026-10-27: "no alargues la carrera"). */
+export const RACE_CHARS_1RO: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, number>> = { 1: 10, 2: 12, 3: 14, 4: 16, 5: 16, 6: 16 };
 
 const clampTier = (tier: number) => Math.min(4, Math.max(1, Math.floor(tier) || 1)) as 1 | 2 | 3 | 4;
 /** 1ro has two more tiers than the other grades. */
