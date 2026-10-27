@@ -55,6 +55,16 @@
 //   race finished and left by its podium's "Otro juego". The survey: one
 //   screen per card played, the card's drawing and three faces only.
 //   Postgres: `game_exit` with each `via`.
+// - T52 (understood by a 6-year-old): the recipe's first-time ghost really
+//   puts the bread on the plate (then hands over), the plate shows the
+//   wanted layers faded in their places, the next one marked, and a layer
+//   that is not wanted makes the monster frown at once; the dance's first
+//   round is one pose (1, 2, 3), the card of the pose it holds lifts while it
+//   dances, a drawn eye says "watch", the ghost's tap is copied by the
+//   monster without counting; "¿Qué salió mal?" keeps the bad result acting;
+//   "Tocá y pasa"'s ghost really puts the jump on the frog's sign and
+//   "¡A jugar!" calls; after 8 s idle the ghost shows the next thing to do
+//   (`ghost_demo` kind `idle`).
 // - Everything inside the viewport (no scrolling), targets ≥ 48 px; no page
 //   errors.
 // - Postgres: game_start (guided; arcade with voluntary/replay), game_round
@@ -215,6 +225,7 @@ async function endOk(name, againSel = '.ga-again') {
 
 let sid = null;
 try {
+  let s;
   // ---------------------------------------------------------------- the bookmark: character → the guided games
   await p.goto(`${base}?debug&grado=1&sonido=no#/piloto`);
   await p.waitForSelector('.piloto[data-step="character"] .choice-row', { timeout: 30_000 });
@@ -232,12 +243,27 @@ try {
   await shot(p, 'recipe-ghost');
   await p.waitForSelector('.ghost-hand', { state: 'detached', timeout: 15_000 }).catch(() => {});
   ok(await fits(), 'the game fits the viewport (no scrolling)');
+  // T52: the ghost's drag really put the bread on the plate; the rest of the sandwich faded in its place, the next layer marked
+  s = await st();
+  ok(s.stack.join() === 'pan', `T52: the first-time ghost really put the bread on the plate, then handed over (${s.stack.join(' ')})`);
+  ok((await p.locator('.rx-ghost').count()) === s.order.length - 1 && (await p.locator(`.rx-ghost.is-next[data-ing="${s.order[1]}"]`).count()) === 1,
+    'T52: the plate shows the layers still to put, faded in their places, the next one marked');
+  await shot(p, 'recipe-handover');
+  // a layer that is not wanted: the monster frowns at once (judged only at the bell), then it comes off
+  const notWanted = ['queso', 'tomate', 'lechuga', 'jamon'].find((x) => !s.order.includes(x));
+  await card(notWanted).click();
+  await p.waitForSelector('.mx-monster.is-yuck', { timeout: 2000 });
+  ok((await st()).phase === 'build', 'T52: a layer it does not want makes the monster frown at once (still building)');
+  await p.waitForTimeout(450);
+  await p.locator('.rx-layer.ga-target[data-layer="0"]').click();
+  await stackIs(0);
+  await p.waitForTimeout(450);
   const sizes = await p.evaluate(() => [...document.querySelectorAll('.rx-card, .ga-ready, .level-bar .help')].map((e) => { const r = e.getBoundingClientRect(); return Math.min(r.width, r.height); }));
   ok(sizes.length >= 6 && sizes.every((s) => s >= 48), `every card and the bell are ≥ 48 px (${sizes.map(Math.round).join(', ')})`);
 
   // ---------------------------------------------------------------- round 1: wrong order → disgust and spit; then right
   await waitBuild(1);
-  let s = await st();
+  s = await st();
   ok(s.tier === 1 && s.monsters === 1 && s.order.length === 2 && s.order[0] === 'pan', `round 1: one monster, a 2-layer sandwich (${s.order.join(' ')})`);
   const wrong = wrongOf(s.order);
   await build(wrong);
@@ -315,13 +341,16 @@ try {
   ok(true, 'the guided pass goes on: "Copiá el baile"');
   await waitPhase('dance', 'show', 1);
   s = await st();
-  ok(s.tier === 1 && s.seq.length === 2, `round 1: a dance of 2 poses (${s.seq.join(' ')})`);
-  await p.waitForTimeout(900);
-  // (the dance of 2 poses lasts under 3 s: the tap first, then the slow screenshot)
+  ok(s.tier === 1 && s.seq.length === 1, `round 1: a dance of 1 pose (T52: trivial first) (${s.seq.join(' ')})`);
+  await p.waitForSelector('.dz-eye', { timeout: 3000 });
+  ok(true, 'T52: while it dances, a drawn eye next to the grey cards');
+  const shown = await p.waitForFunction((x) => document.querySelectorAll('.dz-card.is-shown').length === 1 && !!document.querySelector(`.dz-card.is-shown[data-pose="${x}"]`), s.seq[0], { timeout: 3000 }).then(() => true).catch(() => false);
+  ok(shown, 'T52: the card of the pose it holds lifts out of the grey row');
+  ok((await p.locator('.dz-panel.is-watch').count()) === 1 && (await p.locator('.dz-spot.is-on').count()) === 1, 'while it dances: the spotlight on the monster, the cards dimmed');
+  // (the dance of 1 pose lasts under 3 s: the tap first, then the slow screenshot)
   await rawTap(`.dz-card[data-pose="${s.seq[0]}"]`);
   const dancing = await st();
   ok(dancing.phase === 'show' && dancing.input.length === 0, 'a tap on a card while the monster dances is ignored');
-  ok((await p.locator('.dz-panel.is-watch').count()) === 1 && (await p.locator('.dz-spot.is-on').count()) === 1, 'while it dances: the spotlight on the monster, the cards dimmed');
   await shot(p, 'dance-show');
   await waitPhase('dance', 'turn', 1);
   await p.waitForTimeout(700);
@@ -329,14 +358,15 @@ try {
   ok((await p.locator('.dz-panel.is-turn').count()) === 1 && (await p.locator('.dz-spot-you.is-on').count()) === 1 && (await p.locator('.pz-puppet.is-point').count()) === 1,
     'the child\'s turn: the spotlight on the child\'s character, the monster points, the cards light up');
   ok(await p.waitForSelector('.ghost-hand', { timeout: 4000 }).then(() => true).catch(() => false), 'the first-time ghost demo taps a card');
+  const copied = await p.waitForFunction(() => document.querySelectorAll('.dz-card.is-tapped').length === 1 && window.__monster.state().input.length === 0 && window.__monster.state().phase === 'turn', null, { timeout: 6000, polling: 50 }).then(() => true).catch(() => false);
+  ok(copied, 'T52: the monster copies the ghost\'s tap (not counted)');
   await p.waitForSelector('.ghost-hand', { state: 'detached', timeout: 10_000 }).catch(() => {});
   ok(await fits(), 'the dance fits the viewport');
   const dsizes = await p.evaluate(() => [...document.querySelectorAll('.dz-card')].map((e) => { const r = e.getBoundingClientRect(); return Math.min(r.width, r.height); }));
   ok(dsizes.length === 4 && dsizes.every((x) => x >= 48), `four pose cards ≥ 48 px (${dsizes.map(Math.round).join(', ')})`);
-  // a miss: the first pose right, the second wrong → the tumble, the same dance again
+  // a miss: the one pose wrong → the tumble, the same dance again
   const first = s.seq;
-  await pose(first[0]);
-  const wrongPose = ['up', 'star', 'squat', 'flamingo'].find((x) => x !== first[1]);
+  const wrongPose = ['up', 'star', 'squat', 'flamingo'].find((x) => x !== first[0]);
   await pose(wrongPose);
   await p.waitForSelector('.pz-puppet.is-dizzy', { timeout: 3000 });
   await p.waitForTimeout(250);
@@ -354,7 +384,7 @@ try {
   // round 2: the same dance plus one pose; very fast taps → dizzy
   await waitPhase('dance', 'show', 2);
   s = await st();
-  ok(s.seq.length === 3 && s.seq.slice(0, 2).join() === first.join(), `round 2 keeps the dance and adds one pose (${s.seq.join(' ')})`);
+  ok(s.seq.length === 2 && s.seq.slice(0, 1).join() === first.join(), `round 2 keeps the dance and adds one pose (${s.seq.join(' ')})`);
   await waitPhase('dance', 'turn', 2);
   const cb = await p.locator('.dz-card[data-pose="squat"]').boundingBox();
   for (let i = 0; i < 5; i++) { await p.mouse.click(cb.x + cb.width / 2, cb.y + cb.height / 2); await p.waitForTimeout(60); }
@@ -367,7 +397,7 @@ try {
   await playDance(2);
   await waitPhase('dance', 'show', 3);
   s = await st();
-  ok(s.seq.length === 4, `round 3: 4 poses (${s.seq.join(' ')})`);
+  ok(s.seq.length === 3, `round 3: 3 poses (${s.seq.join(' ')})`);
   await playDance(3);
   await p.waitForSelector('.pp-cheer', { timeout: 12_000 });
   ok(true, 'the dance\'s guided turn ends with a cheer');
@@ -388,6 +418,7 @@ try {
   await p.waitForTimeout(700);
   await shot(p, 'oops-find');
   ok((await p.locator('.oo-sheet.is-turn').count()) === 1, 'the child\'s turn: the steps light up');
+  ok((await p.locator('.oo-frame.is-bad[data-i="2"]').count()) === 1, 'T52: the funny bad result keeps acting, in a red frame');
   ok(await p.waitForSelector('.ghost-hand', { timeout: 4000 }).then(() => true).catch(() => false), 'the first-time ghost demo taps a step');
   await p.waitForSelector('.ghost-hand', { state: 'detached', timeout: 10_000 }).catch(() => {});
   ok(await fits(), '"¿Qué salió mal?" fits the viewport');
@@ -468,10 +499,8 @@ try {
   ok(tsizes.length === 8 && tsizes.every((x) => x >= 48), `the cards, the two modes and the animals are ≥ 48 px (${tsizes.map(Math.round).join(', ')})`);
   ok((await p.locator('.tp-sign').count()) === 3 && (await p.locator('.tp-sign.is-lit').count()) === 1, 'a sign over each animal, the chosen one lit');
   await shot(p, 'tap-build');
-  // a card tapped: the frog's rule, and the frog jumps at once
-  await p.locator(tapCard('jump')).click();
-  await p.waitForSelector('.tp-animal[data-animal="rana"] .tp-do-jump', { timeout: 2000 });
-  ok((await rulesOf('rana')).join() === 'jump' && (await p.locator('.tp-slot[data-animal="rana"]').count()) === 1, 'a card tapped: the rule on the frog\'s sign, and the frog jumps at once');
+  // T52: the ghost's card tap really put the rule on the frog's sign (a card tapped by a child does the same: round 2 below)
+  ok((await rulesOf('rana')).join() === 'jump' && (await p.locator('.tp-slot[data-animal="rana"]').count()) === 1, 'T52: the first-time ghost really put the jump on the frog\'s sign, then handed over');
   await waitIdle();
   await freezeShot('jump', 'tap-effect-jump');
   ok((await p.locator('.tp-mode[data-mode="play"].is-ready').count()) === 1, '"¡A jugar!" rings: there is a new rule to try');
@@ -569,7 +598,7 @@ try {
   await p.waitForSelector('.dz-game', { timeout: 10_000 });
   await waitPhase('dance', 'show', 1);
   s = await st();
-  ok(s.tier === 3 && s.seq.length === 4, `the dance from the arcade opens at the tier reached (tier ${s.tier}, ${s.seq.length} poses)`);
+  ok(s.tier === 3 && s.seq.length === 3, `the dance from the arcade opens at the tier reached (tier ${s.tier}, ${s.seq.length} poses)`);
   await waitPhase('dance', 'turn', 1);
   ok((await p.locator('.ghost-hand').count()) === 0, 'no ghost demo the second time');
   await homeOk('the dance');
@@ -580,7 +609,7 @@ try {
   await p.locator('.ga-again').click();
   await waitPhase('dance', 'show', 2);
   const s2 = await st();
-  ok(s2.seq.length === 5 && s2.seq.slice(0, 4).join() === s.seq.join(), '"¡Otra vez!": the same dance plus one pose');
+  ok(s2.seq.length === 4 && s2.seq.slice(0, 3).join() === s.seq.join(), '"¡Otra vez!": the same dance plus one pose');
   // T51: leaving mid-round by the corner's drawn "Otro juego"
   await p.locator('.pp-play-home').click();
   await p.waitForSelector('.pp-menu', { timeout: 10_000 });
@@ -791,7 +820,7 @@ try {
   const allRounds = ev('game_round');
   const rounds = allRounds.filter((x) => x.game === 'recipe');
   const r1 = rounds[0];
-  ok(r1 && r1.round === 1 && r1.attempts === 2 && r1.correct === false && r1.order_errors === 1 && r1.wrong_at?.[0] === 0 && r1.sources?.drag === 1,
+  ok(r1 && r1.round === 1 && r1.attempts === 2 && r1.correct === false && r1.order_errors === 1 && r1.wrong_at?.[0] === 0 && r1.sources?.drag === 1 && r1.ghost_placed === 1,
     `game_round 1: two attempts, one order error at the bottom layer, one drag (${JSON.stringify(r1)})`);
   ok(rounds[1]?.correct === true && rounds[2]?.correct === true && rounds.slice(0, 3).every((r) => r.mode === 'guided' && r.ms > 0 && r.first_input_ms != null),
     `game_round 2 and 3 right on the first try, with their times (${rounds.length} rows)`);
@@ -799,12 +828,12 @@ try {
   ok(rounds.some((r) => r.mode === 'arcade' && r.solved === false), 'the round left mid-way is logged unsolved');
   // T45: the dance
   const dr = allRounds.filter((x) => x.game === 'dance');
-  ok(dr[0] && dr[0].round === 1 && dr[0].length === 2 && dr[0].attempts === 2 && dr[0].correct === false && dr[0].misses === 1 && dr[0].miss_at?.[0] === 1 && dr[0].shows === 2,
-    `dance round 1: 2 poses, a miss at the second, shown twice (${JSON.stringify(dr[0])})`);
-  ok(dr.filter((x) => x.mode === 'guided' && x.solved).map((x) => x.length).join() === '2,3,4' && dr.every((x) => x.ms > 0), `dance rounds grow 2, 3, 4 (${dr.map((x) => `${x.mode}:${x.length}`).join(' ')})`);
+  ok(dr[0] && dr[0].round === 1 && dr[0].length === 1 && dr[0].attempts === 2 && dr[0].correct === false && dr[0].misses === 1 && dr[0].miss_at?.[0] === 0 && dr[0].shows === 2,
+    `dance round 1: 1 pose, a miss, shown twice (${JSON.stringify(dr[0])})`);
+  ok(dr.filter((x) => x.mode === 'guided' && x.solved).map((x) => x.length).join() === '1,2,3' && dr.every((x) => x.ms > 0), `dance rounds grow 1, 2, 3 (${dr.map((x) => `${x.mode}:${x.length}`).join(' ')})`);
   const de = ev('game_end').filter((x) => x.game === 'dance');
-  ok(de[0]?.reason === 'finished' && de[0]?.rounds === 3 && de[0]?.longest === 4, `dance game_end: finished, the longest dance 4 (${JSON.stringify(de.map((x) => [x.mode, x.reason, x.rounds, x.longest]))})`);
-  ok(de[1]?.mode === 'arcade' && de[1]?.longest === 4 && de[1]?.reason === 'quit', 'the arcade\'s dance: quit mid-round, its longest dance 4');
+  ok(de[0]?.reason === 'finished' && de[0]?.rounds === 3 && de[0]?.longest === 3, `dance game_end: finished, the longest dance 3 (${JSON.stringify(de.map((x) => [x.mode, x.reason, x.rounds, x.longest]))})`);
+  ok(de[1]?.mode === 'arcade' && de[1]?.longest === 3 && de[1]?.reason === 'quit', 'the arcade\'s dance: quit mid-round, its longest dance 3');
   ok(allStarts.some((x) => x.game === 'dance' && x.mode === 'arcade' && x.voluntary && x.replay && x.tier === 3), 'the arcade\'s dance: a voluntary replay at tier 3');
   // T46: ¿qué salió mal?
   const orr = allRounds.filter((x) => x.game === 'oops' && x.solved);
@@ -842,6 +871,7 @@ try {
   ok(modes.length >= 6 && modes[0].to === 'play' && modes[0].rules_total === 1 && modes.every((x) => x.stretch_ms >= 0), `tap_mode: each switch (${modes.map((x) => x.to).join(' ')})`);
   ok(rapid.some((r) => r.game === 'tap'), 'rapid_taps in "Tocá y pasa" too');
   ok(demos.filter((d) => d.level_id === 'game:tap' && d.kind === 'intro').length === 1, '"Tocá y pasa"\'s ghost demo once');
+  ok(rules.some((x) => x.source === 'ghost' && x.animal === 'rana' && x.effect === 'jump'), 'T52: the ghost\'s rule logged with source ghost');
   if (ADMIN_PASSWORD) {
     const answers = ev('survey_answer');
     const perGame = answers.filter((x) => String(x.question).startsWith('liked_'));

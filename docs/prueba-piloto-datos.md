@@ -277,7 +277,7 @@ raises the character's hand (`call_adult`).
 ### `ghost_demo`
 A demonstration played on the page. **RQ 3.**
 ```
-{ level_id: string, kind: 'hint' | 'footprints' | 'intro' | 'tool', gesture?: string }
+{ level_id: string, kind: 'hint' | 'footprints' | 'intro' | 'tool' | 'idle' | 'intro_step', gesture?: string }
 ```
 `hint`: ✋ step 2 (or step 3's fallback), the ghost hand shows the next
 thing to do; `footprints`: ✋ step 3, the solution's way on the board;
@@ -1637,7 +1637,8 @@ mid-way (`solved: false`).
   ms: number,                   // the round's time
   first_input_ms: number | null,// time to the first input: did they look first?
   again?: true,                 // the round was started by "¡Otra vez!" (a voluntary replay)
-  // recipe: order_errors, ingredient_errors, wrong_at, removed, sources {tap, drag}, orders, layers, monsters
+  // recipe: order_errors, ingredient_errors, wrong_at, removed, sources {tap, drag}, orders, layers, monsters,
+  //         ghost_placed? (T52: layers the first-time ghost put on the plate itself, not in sources)
   // dance: length, seq, misses, miss_at, taps, shows
   // oops: routine, kind ('replace' | 'swap'), steps, found_try, first_tap_ms, fix_correct, fix_tries, replays, sources
   // tap: see below
@@ -1694,6 +1695,20 @@ yet played is `quit`; leaving otherwise is `finished`.
   sources: { tap: number, drag: number }       // how the effect cards were put
 }
 ```
+**T52 (from 2026-10-27).** The dance's tiers moved down by one pose: tier
+`t` is a dance of `t` poses (1 to 7; it was `t + 1`, 2 to 7), so the guided
+pass plays 1, 2, 3 poses; read `length`, not `tier`, when comparing dances
+across the change. The first-time ghost demos now do the action for real
+and hand over: the recipe's ghost puts the bread on the plate (`ghost_placed`
+on that round), "Tocá y pasa"'s ghost puts the jump on the frog's sign (a
+`tap_rule` with `source: 'ghost'`; it counts in `rules_made` and starts
+round 1, which the child wins by playing it), the dance's ghost tap is
+copied by the monster but is not an input. `ghost_demo` gains kind `idle`
+(after 8 s with no input on a monster game, the ghost points at the next
+thing to do; in the dance the dance is shown again, which also counts in
+`shows`) and `intro_step` ("¿Qué salió mal?"'s first fix or swap, a hand
+pointing from the options to the circled step).
+
 `game_end` (tap) adds the play's totals: `rules` (the final rules),
 `rules_total`, `rules_made`, `rules_removed`, `animals_with_rules`, `tier`,
 `play_taps`, `play_taps_by_animal`, `no_rule_taps`, `effects_run`,
@@ -1701,7 +1716,7 @@ yet played is `quit`; leaving otherwise is `finished`.
 
 #### `tap_rule`
 Every rule added or taken off:
-`{ game: 'tap', mode, play_no, round, tier, animal, effect, action: 'add' | 'remove', count (the animal's rules after it), source?: 'tap' | 'drag' (add) }`.
+`{ game: 'tap', mode, play_no, round, tier, animal, effect, action: 'add' | 'remove', count (the animal's rules after it), source?: 'tap' | 'drag' | 'ghost' (add; `ghost` the first-time demo's rule, T52) }`.
 
 #### `tap_mode`
 Every switch between building and playing:
