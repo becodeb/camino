@@ -101,23 +101,66 @@ describe('robust to partial programs: the longest correct prefix', () => {
     expect(hint.position).toMatchObject({ index: 1 });
   });
 
-  it('a wrong repeat count is a wrong block too', () => {
+  it('a correct repetir with another count is never flagged for removal: its number is what to change', () => {
     const t = trackById('c2-a')!;
+    const gold = t.refs.gold.main[0];
+    if (gold.kind !== 'repeat') throw new Error('c2-a gold starts with a repetir');
     const b = programBuilder('c');
-    const rep3 = b.repeat(3, []);
-    const hint = nextBlockHint({ main: [rep3] }, t)!;
-    expect(hint.block).toEqual({ kind: 'repeat', n: 4 });
-    expect(hint.wrongBlockId).toBe(rep3.id);
+    const rep = b.repeat(2, gold.body.map((x) => ({ ...x, id: `${x.id}-mine` })));
+    const hint = nextBlockHint({ main: [rep] }, t)!;
+    expect(hint.wrongBlockId).toBeUndefined();
+    expect(hint.changeNumberId).toBe(rep.id);
+    expect(hint.block).toEqual({ kind: 'repeat', n: gold.n });
   });
 
-  it('a block in the wrong branch does not match', () => {
+  it('a program that finishes gets no hint to remove anything, even when it is not the reference program', () => {
     const t = trackById('c3-a')!;
     const b = programBuilder('c');
-    const p: Program = { main: [b.repeat(10, [b.iff('puddle_ahead', [], [b.jump()])])] };
+    // jumping on every tile is valid on this track, and it is not what the reference does
+    const alt: Program = { main: [b.repeat(5, [b.jump(), b.jump()])] };
+    expect(simulate(alt, t, 1).outcome).toBe('finish');
+    expect(nextBlockHint(alt, t)).toBeNull();
+    const alt2: Program = { main: [b.repeat(10, [b.jump()])] };
+    expect(simulate(alt2, t, 1).outcome).toBe('finish');
+    expect(nextBlockHint(alt2, t)).toBeNull();
+  });
+
+  it('a crashing program flags exactly the block the engine blames, and nothing it ran fine', () => {
+    for (const t of ALL_TRACKS) {
+      const b = programBuilder('c');
+      const p: Program = { main: [b.down(), b.forward(), b.forward()] }; // a drop on a track that starts flat
+      const sim = simulate(p, t, 1);
+      if (sim.outcome !== 'crash') continue;
+      const hint = nextBlockHint(p, t)!;
+      expect(hint.wrongBlockId, t.id).toBe(sim.crash!.blockId);
+    }
+  });
+
+  it('a program that ends before the line gets a block to ADD for the tile where the kart stopped, and nothing is flagged', () => {
+    const t = trackById('c1-a')!;
+    const b = programBuilder('c');
+    const p: Program = { main: [b.jump()] }; // not the reference prefix, but it runs fine and stops short
+    const sim = simulate(p, t, 1);
+    expect(sim.outcome).toBe('stuck');
     const hint = nextBlockHint(p, t)!;
-    expect(hint.block.kind).toBe('jump');
-    expect(hint.position.path[1]).toEqual({ index: 0, branch: 'then' });
-    expect(hint.wrongBlockId).toBeDefined();
+    expect(hint.wrongBlockId).toBeUndefined();
+    expect(hint.changeNumberId).toBeUndefined();
+    expect(hint.position).toEqual({ script: 'main', path: [], index: 1 });
+    const tile = t.tiles[sim.pos % t.tiles.length];
+    expect(hint.block.kind).toBe(tile.kind === 'rise' ? 'up' : tile.kind === 'drop' ? 'down' : 'forward');
+  });
+
+  it('following the hints from an empty program reaches a finishing program on every track', () => {
+    for (const t of ALL_TRACKS) {
+      let p: Program = { main: [] };
+      for (let i = 0; i < 60; i++) {
+        const h = nextBlockHint(p, t);
+        if (!h) break;
+        expect(h.wrongBlockId, t.id).toBeUndefined();
+        p = apply(p, h);
+      }
+      expect(simulate(p, t, 1).outcome, t.id).toBe('finish');
+    }
   });
 
   it('the condition is compared as a set (the order of `y` does not matter)', () => {
@@ -174,7 +217,9 @@ describe('every copa hints only blocks its palette has', () => {
   it('the hint stream never asks for a block the copa does not offer', () => {
     for (const c of COPAS) for (const t of c.tracks as readonly TrackSpec[]) {
       let p: Program = { main: [] };
+      let guard = 0;
       for (let h = nextBlockHint(p, t); h; h = nextBlockHint(p, t)) {
+        if (++guard > 40) throw new Error(`${t.id}: the hints never end (${JSON.stringify(h)})`);
         if (h.block.kind === 'sensor') expect(c.palette.sensors, `${t.id}: ${h.block.sensor}`).toContain(h.block.sensor);
         else if (h.block.kind !== 'on_log') expect(c.palette.blocks, `${t.id}: ${h.block.kind}`).toContain(h.block.kind);
         p = apply(p, h);

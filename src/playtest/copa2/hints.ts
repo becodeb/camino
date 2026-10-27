@@ -12,6 +12,8 @@
 // where they sit (depth and branch), never by id: the child's ids are their own.
 
 import { SENSORS, type Block, type BlockKind, type Program, type Sensor } from './program';
+import { simulate } from './sim';
+import { tileAt } from './track';
 import type { Tier, TrackSpec } from './tracks';
 
 export type Branch = 'body' | 'then' | 'else';
@@ -38,8 +40,10 @@ export interface Hint {
   wrongBlockId?: string;
   /** A `sensor` hint: the child's own `si` that takes it (its hole is the target). */
   ifId?: string;
-  /** The child's own condition that should not be in that `si` (take it out). */
+  /** The child's own condition that should not be in that `si` (take it out). Not produced any more: only the engine's culprit is ever flagged. */
   wrongSensor?: { ifId: string; sensor: Sensor };
+  /** A `repetir` of the child's that is the right block with the wrong number: change its number (never delete it). */
+  changeNumberId?: string;
 }
 
 interface Token { key: string; id: string; block: HintBlock; position: Position; ifId?: string }
@@ -90,7 +94,7 @@ const prefixLength = (cur: readonly Token[], sol: readonly Token[]): number => {
  * already contains a whole reference solution (the gold one, or the silver
  * one: it is as good as the child needs to be).
  */
-export function nextBlockHint(program: Program, track: Pick<TrackSpec, 'refs'>): Hint | null {
+function referenceHint(program: Program, track: Pick<TrackSpec, 'refs'>): Hint | null {
   const cur = tokensOf(program);
   let best: { from: 'gold' | 'silver'; sol: Token[]; matched: number } | null = null;
   for (const from of ['gold', 'silver'] as const) {
@@ -115,4 +119,89 @@ export function nextBlockHint(program: Program, track: Pick<TrackSpec, 'refs'>):
     ...(wrong && wrong.block.kind !== 'sensor' && want.block.kind !== 'sensor' ? { wrongBlockId: wrong.id } : {}),
     ...(wrong && wrong.block.kind === 'sensor' && wrong.ifId ? { wrongSensor: { ifId: wrong.ifId, sensor: wrong.block.sensor! } } : {}),
   };
+}
+
+// ------------------------------------------------------------------ grounded in the simulation
+
+const shapeOf = (b: Block): string => (b.kind === 'repeat' ? `r(${b.body.map(shapeOf).join(',')})` : b.kind === 'if' ? `i(${b.then.map(shapeOf).join(',')}|${b.else.map(shapeOf).join(',')})` : b.kind);
+
+/** Every `repetir` of a program in reading order, with the ids of the blocks inside it (its whole subtree). */
+function repeatsOf(p: Program): { block: Extract<Block, { kind: 'repeat' }>; inside: Set<string>; position: Position }[] {
+  const out: { block: Extract<Block, { kind: 'repeat' }>; inside: Set<string>; position: Position }[] = [];
+  const ids = (bs: readonly Block[], into: Set<string>) => bs.forEach((b) => { into.add(b.id); if (b.kind === 'repeat') ids(b.body, into); else if (b.kind === 'if') { ids(b.then, into); ids(b.else, into); } });
+  const walk = (blocks: readonly Block[], script: 'main' | 'event', path: PathStep[]) => {
+    blocks.forEach((b, index) => {
+      if (b.kind === 'repeat') {
+        const inside = new Set<string>();
+        ids(b.body, inside);
+        out.push({ block: b, inside, position: { script, path: [...path], index } });
+        walk(b.body, script, [...path, { index, branch: 'body' }]);
+      } else if (b.kind === 'if') {
+        walk(b.then, script, [...path, { index, branch: 'then' }]);
+        walk(b.else, script, [...path, { index, branch: 'else' }]);
+      }
+    });
+  };
+  walk(p.main, 'main', []);
+  if (p.onLog) walk(p.onLog.body, 'event', []);
+  return out;
+}
+
+/**
+ * A `repetir` of the child's with the reference's own body but another number, when the engine's trouble is at it
+ * (the culprit block is inside it, or the program ended / never ended): the fix is its number, not the block.
+ */
+function numberFix(program: Program, track: Pick<TrackSpec, 'refs'>, culprit: string | null): { id: string; n: number; position: Position; from: 'gold' | 'silver' } | null {
+  const mine = repeatsOf(program);
+  for (const from of ['gold', 'silver'] as const) {
+    const theirs = repeatsOf(track.refs[from]);
+    for (let i = 0; i < mine.length && i < theirs.length; i++) {
+      const m = mine[i].block;
+      const t = theirs[i].block;
+      if (typeof m.n !== 'number' || typeof t.n !== 'number' || m.n === t.n || shapeOf(m) !== shapeOf(t)) continue;
+      if (culprit && !mine[i].inside.has(culprit)) continue;
+      return { id: m.id, n: t.n, position: mine[i].position, from };
+    }
+  }
+  return null;
+}
+
+/**
+ * The next thing to tell the child, grounded in what the program DOES (the engine's run), never in a comparison
+ * with the reference programs: a block the run executed without trouble is never flagged.
+ * - finishes: nothing to say (null);
+ * - crashes: only the block the engine blames is flagged (unless it is the right block with the wrong number: then "change the number");
+ * - ends before the line (or never ends): the next block to ADD for the tile where the kart stopped (the reference
+ *   only picks the shape when the child is following it), or the number of a `repetir` that is off.
+ */
+export function nextBlockHint(program: Program, track: TrackSpec, seed = 1): Hint | null {
+  const empty = !program.main.length && !program.onLog;
+  const ref = referenceHint(program, track);
+  if (empty) return ref;
+  const sim = simulate(program, track, seed);
+  if (sim.outcome === 'finish') return null;
+  const cur = tokensOf(program);
+  // a program that is exactly the start of a reference is unfinished, not wrong (a `repetir 4` with its body half built
+  // crashes when run): carry on with the reference's next block
+  if (ref && ref.matched === cur.length && !ref.wrongBlockId) return ref;
+  const base = { from: ref?.from ?? 'gold', matched: ref?.matched ?? 0 } as const;
+
+  if (sim.outcome === 'crash' && sim.crash) {
+    const id = sim.crash.blockId;
+    const fix = numberFix(program, track, id);
+    if (fix) return { block: { kind: 'repeat', n: fix.n }, position: fix.position, from: fix.from, matched: base.matched, changeNumberId: fix.id };
+    const at = cur.find((t) => t.id === id);
+    return { block: ref?.block ?? { kind: 'forward' }, position: at?.position ?? ref?.position ?? { script: 'main', path: [], index: 0 }, ...base, wrongBlockId: id };
+  }
+
+  // stuck or timeout: add, or fix a number
+  const fix = numberFix(program, track, null);
+  if (fix && (sim.outcome === 'timeout' || !ref || ref.matched < cur.length)) return { block: { kind: 'repeat', n: fix.n }, position: fix.position, from: fix.from, matched: base.matched, changeNumberId: fix.id };
+  if (sim.outcome === 'stuck') {
+    // the child is following a reference: carry on with its next block (without ever flagging what is there)
+    const tile = tileAt(track, sim.pos);
+    const kind: BlockKind = tile.kind === 'rise' ? 'up' : tile.kind === 'drop' ? 'down' : sim.puddles.includes(sim.pos) ? 'jump' : 'forward';
+    return { block: { kind }, position: { script: 'main', path: [], index: program.main.length }, ...base };
+  }
+  return null;
 }

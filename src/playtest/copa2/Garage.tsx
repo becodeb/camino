@@ -281,10 +281,11 @@ export function Garage({
   // ---------------------------------------------------------------- the ghost hand (after two failures): only the NEXT block
 
   const hint = useMemo(() => (ghostHint && phase === 'garage' ? nextBlockHint(ed.program, track) : null), [ghostHint, phase, ed.program, track]);
-  const hintKey = hint ? JSON.stringify([hint.block, hint.position, hint.wrongBlockId ?? null, hint.ifId ?? null, hint.wrongSensor ?? null]) : '';
+  const hintKey = hint ? JSON.stringify([hint.block, hint.position, hint.wrongBlockId ?? null, hint.changeNumberId ?? null, hint.ifId ?? null, hint.wrongSensor ?? null]) : '';
   useEffect(() => {
     if (!hint) return;
-    if (hint.wrongBlockId) setEd((s) => (s.selected === hint.wrongBlockId ? s : selectBlock(s, hint.wrongBlockId!)));
+    if (hint.changeNumberId) setEd((s) => (s.selected === hint.changeNumberId ? s : selectBlock(s, hint.changeNumberId!)));
+    else if (hint.wrongBlockId) setEd((s) => (s.selected === hint.wrongBlockId ? s : selectBlock(s, hint.wrongBlockId!)));
     else if (hint.block.kind === 'sensor') { if (hint.ifId) setEd((s) => (s.selected === hint.ifId ? s : selectBlock(s, hint.ifId!))); }
     else if (hint.block.kind !== 'on_log') setEd((s) => (sameSlot(s.caret, hint.position) && !s.selected ? s : setCaret(s, hint.position)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -295,7 +296,8 @@ export function Garage({
     let dead = false;
     let current: GhostRun | null = null;
     let timer: ReturnType<typeof setTimeout>;
-    const at = hint.wrongBlockId ? ['.gx-tool-remove']
+    const at = hint.changeNumberId ? [`[data-id="${hint.changeNumberId}"] .gb-step`]
+      : hint.wrongBlockId ? ['.gx-tool-remove']
       : hint.wrongSensor ? [`[data-cond-for="${hint.wrongSensor.ifId}"][data-sensor="${hint.wrongSensor.sensor}"] .gb-pill-x`]
         : hint.block.kind === 'on_log' ? ['.gx-lane-add']
           : hint.block.kind === 'sensor' ? [`[data-pal-sensor="${hint.block.sensor}"]`, `[data-cond-slot="${hint.ifId}"]`]
@@ -722,6 +724,7 @@ export function Garage({
       {tooBig && <p className="gx-banner is-toobig" role="alert"><b>No entra: hay que achicarlo.</b> Tu programa usa {used} lugares y la memoria tiene {rules.slots}.{track.copa >= 2 ? ' ¿Hay algo que se repite?' : ''}</p>}
       {warnIds.size > 0 && <p className="gx-banner is-emptycond" role="alert"><b>¡Falta algo en el «si»!</b> No dice qué tiene que mirar el auto. Poné una pieza de <b>Mirar</b> en el casillero punteado{rules.palette.sensors[0] ? <>, por ejemplo <b>«{SENSOR_LABEL[rules.palette.sensors[0]]}»</b></> : null}.</p>}
       {noticeOn && <p className={`gx-banner is-${noticeOn.kind}`} role="status"><b>{noticeOn.kind === 'crash' ? '¡Chocaste!' : noticeOn.kind === 'stuck' ? '¡Falta camino!' : '¡No termina!'}</b> {noticeOn.text}</p>}
+      {!noticeOn && hint?.changeNumberId && <p className="gx-banner is-hint" role="status">Este «repetir» está bien, pero probá con otro número.</p>}
       {!noticeOn && hint?.wrongSensor && <p className="gx-banner is-hint" role="status">Esa pieza no va ahí. Sacala con la cruz.</p>}
       {!noticeOn && hint?.wrongBlockId && <p className="gx-banner is-hint" role="status">Este bloque no va ahí. Sacalo.</p>}
     </>
@@ -775,7 +778,7 @@ export function Garage({
   );
   const held = drag?.block ?? null;
   const blockPiece = (k: BlockKind) => (
-    <PaletteBlock key={k} kind={k} rules={rules} hinted={!!hint && !hint.wrongBlockId && hint.block.kind === k} full={slotCount(ed.program) >= rules.slots} onDown={palDown} onTap={palTap} />
+    <PaletteBlock key={k} kind={k} rules={rules} hinted={!!hint && !hint.wrongBlockId && !hint.changeNumberId && hint.block.kind === k} full={slotCount(ed.program) >= rules.slots} onDown={palDown} onTap={palTap} />
   );
 
   return (
@@ -829,7 +832,7 @@ export function Garage({
               </PalGroup>
             )}
             {WAIT_GROUP.some((k) => pal.includes(k)) && <PalGroup name="Esperar" cls="">{WAIT_GROUP.filter((k) => pal.includes(k)).map(blockPiece)}</PalGroup>}
-            {hint && !hint.wrongBlockId && <p className="gx-hint-caption">Pista: poné <b>{hintLabel(hint.block)}</b></p>}
+            {hint && !hint.wrongBlockId && !hint.changeNumberId && <p className="gx-hint-caption">Pista: poné <b>{hintLabel(hint.block)}</b></p>}
             <div className="gx-trash" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="34" height="34"><path d="M4,7 H20 M9,7 V4 H15 V7 M6,7 L7,21 H17 L18,7 M10,11 V17 M14,11 V17" fill="none" stroke="#2b2622" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               <b>Soltalo acá para sacarlo</b>
