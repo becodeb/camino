@@ -88,6 +88,14 @@ Tasks C06–C11 implement Design v2. C03's single-slot circuits and C02's fixed 
 - [x] C12 Garage redesign (requested 2026-10-27): the Copa's blocks look and behave like the other levels' blocks (the notched puzzle blocks of the ladder and La carrera, drag and drop plus tap-to-add, nicer); the palette sits at the side; the track stays on top; the whole screen scrolls instead of cramming; better layout; nothing ugly. Push afterwards. Redeploying is a separate decision for the user.
 - [x] C13 Garage v3 (requested 2026-10-27): conditions are pieces (a "Mirar" group of sensor pieces that go into the dashed hole of a `si`; an empty `si` is caught before ¡Largar!), a bigger palette with group headers, a first-time ghost-hand drag demo, C12's layout fixes (event lane beside the program, no empty area under it, ¡Largar! reachable on short screens), C12's checks finished (`check-copa.mjs`, `check-monstruo.mjs` locally), v3 screenshots. Push to `origin feat/copa-4to` only; no deploy.
 - [x] C14 Coins for 4to (requested 2026-10-27, live class): 4to earns the wardrobe's seeds from the Copa (finish 2, beat the rival 2/3/5 bronze/silver/gold, first-try +1, an improving revancha +1, the deer 2, a correct Espiá 1) and the typing race (2, 1st place 5), once per thing (ledger), with a big "+N" burst and a counting bag on the result and the seed bag in the garage header; 4to's wardrobe costs rise to 6/12/20/30/42 seeds; `coins_earned {source, amount}` logged; 1ro to 3ro and 5to unchanged. Evidence: `coins.test.ts`, shots `shots/copa-4to/v3/coins-*.png`.
+- [ ] C15 Teacher's observations from the 2026-10-27 4to classes, for the next round (not for that day). The 1ro agent edits shared level code, so coordinate on `src/blocks/` and the ladder.
+  - The ghost hand keeps trying to help. It should help place ONE block and then leave the child to think, with a cooldown and no repeated nagging.
+  - The `si` should come with its sensor already inside, as before C13. The sensor-as-piece step added friction.
+  - The hand gets confused around `repetir` and does not understand it. Re-check the hint logic on repeat bodies and counts on real child programs.
+  - Blocks turning red and the red box saying "acá va la próxima" look clumsy now that drag and drop exists. Remove the persistent insertion box and the red highlight noise; keep only the crash block flash after a run.
+  - Being taken out of a level after the second failed attempt frustrates them mid-try. Find where this happens (the ladder's per-item caps and step-down, or a Copa/adult skip?) and stop moving the child on while they are still trying.
+  - The race blocks are not as comfortable as the other levels' blocks. Match their drag feel exactly.
+  - In the other levels, the blue box that always sits there as if it were a block is clumsy. Drag and drop as the only option is fine (this drops tap-to-add, which needs care: shared with 1ro).
 
 ## Progress
 
