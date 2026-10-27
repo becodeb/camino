@@ -1270,6 +1270,8 @@ Cut line: T43 plus at least two games (T44, T45) must ship together; T46, T47 fo
 
   Open: nothing tried with real children. The 8 s idle and the 1.4 s beat are guesses. `check-4to.mjs` needs the 4to agent's `copa` step. Engram mirror still pending. Deploy is the parent's (the user's deadline 13:30 ART).
 
+- 2026-10-27: T52 redeployed on the user's explicit request ("para las 13.30 esté deployado"): Coolify deployment `9iagedl0p1oehtvocmg8zmai` finished; live `/api/health` 200; the served `assets/index-D3hr6Jnk.js` has the same sha256 as the local `VITE_PLAYTEST=1` build of `36cdfdf` (also contains the 4to agent's `c0f4dc6`). Parent spot check before the deploy: `check-silent.mjs` on the local stack, all checks passed. Not re-run on the final build: `check-monstruo` at 1280×800, `check-race`; `check-4to` stops at the new `copa` step (script not updated, owned by the 4to round). For a 1ro group that has not played the pilot yet: `?grado=1&sonido=no&ruta=clasica`.
+
 ## Next step
 
 1ro, T52 (2026-10-27): done and pushed on `feat/prueba-piloto`; the parent deploys before 13:30 ART. Next: watch the class with `?grado=1&sonido=no` (plan B `&ruta=clasica`) and read `ghost_demo` kind `idle`, the recipe's `ghost_placed` rounds and the dance's `length` in the report.
