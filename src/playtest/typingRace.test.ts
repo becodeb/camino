@@ -151,3 +151,21 @@ describe('the numbers', () => {
     expect(accuracy(0, 0)).toBeNull();
   });
 });
+
+describe('1ro: harder words mid-race', async () => {
+  const { harderRest, isFastWord, wordsFor } = await import('./typingRace');
+  it('a word is fast at 900 ms a letter or less with at most one wrong key', () => {
+    expect(isFastWord(1800, 2, 0)).toBe(true);
+    expect(isFastWord(1800, 2, 2)).toBe(false);
+    expect(isFastWord(3000, 2, 0)).toBe(false);
+  });
+  it('redraws the rest from the next tier, keeps what was typed, no repeats, stops at the top tier', () => {
+    const w = wordsFor(1, 5, 1);
+    const up = harderRest(w, 2, 1, 5, 1)!;
+    expect(up.tier).toBe(2);
+    expect(up.words.slice(0, 2)).toEqual(w.slice(0, 2));
+    expect(up.words).toHaveLength(w.length);
+    expect(new Set(up.words.slice(2)).size).toBe(w.length - 2);
+    expect(harderRest(wordsFor(4, 5, 1), 1, 4, 5, 1)).toBeNull();
+  });
+});

@@ -44,7 +44,7 @@ import { CupRow, MARGIN_WAIT_MS, NAME, PAIRS, PODIUM_END_MS, Podium, ProgressStr
 import {
   Backdrop, BumpBush, Clouds, CritterDriver, Dust, Flames, FlagIcon, Kart, LANES, MeDriver, SEG, STEP, TRACK_H, TrackRoad, surfaceY,
 } from './raceArt';
-import { accuracy, judgeKey, TYPING_CUP_PREFIX, typedSpot, typingRaceDef, wordsFor, wpm } from './typingRace';
+import { accuracy, harderRest, isFastWord, judgeKey, TYPING_CUP_PREFIX, typedSpot, typingRaceDef, wordsFor, wpm } from './typingRace';
 import { honestRanking, honestResult, positionAtChars, totalChars, type HonestResult as HonestResultData } from './honestRace';
 import {
   ADAPT_START, EASE_MS, PRIOR_WPM, adaptOf, advanceRival, afterRace, firstRaceTarget, liveWpm, readAdapt, rivalBase, rivalFinish, rivalWpms, startRival,
@@ -179,7 +179,8 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
   const adaptKind = adaptOf(adapt0);
   const baseWpm = honest ? rivalBase(adapt0) : null;
   const fixedWpms = baseWpm != null ? rivalWpms(baseWpm) : null;
-  const totalLetters = useMemo(() => totalChars(words), [words]);
+  // 1ro: `words` may be redrawn harder mid-race (in place), so its total is read on every render
+  const totalLetters = totalChars(words);
 
   const [phase, setPhase] = useState<Phase>('input');
   const [k, setK] = useState(0);
@@ -232,6 +233,8 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
     idleMsTotal: 0,
     /** 1ro: recent wrong-key times, the stall's end and how many stalls (mashing). */
     wrongAt: [] as number[],
+    /** 1ro: the tier the race's words are at now (a fast typist goes up mid-race). */
+    liveTier: tier,
     stallUntil: 0,
     stalls: 0,
     /** C02 (honest mode only): the place/margin/reason computed once the child crosses the line. */
@@ -283,7 +286,7 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
       ...(!s.honestResult && reason === 'finished' && !crossed.length ? { margin_estimated: true } : {}),
       help_levels: s.helpStep, adult_helped: !!lv?.adultHelped, cups: reason === 'finished' && isWin ? cups0 + 1 : cups0,
       rival_mode: rivals,
-      ...(steady ? { steady: true, stalls: s.stalls } : {}),
+      ...(steady ? { steady: true, stalls: s.stalls, live_tier: s.liveTier } : {}),
       ...(s.honestResult ? { place: s.honestResult.place, reason: s.honestResult.reason } : {}),
       // C07: how the rivals were paced. `rival_base_wpm`: the base (the child's previous wpm x 0.90 after a loss / x 1.05 after a win); in the first race, the child's average live pace they followed
       ...(honest ? { adapt: adaptKind, rival_base_wpm: baseWpm != null ? round1(baseWpm) : s.liveMs > 0 ? round1(s.liveSum / s.liveMs) : null } : {}),
@@ -349,6 +352,14 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
       s.boostTo = course.finish + PARK;
       s.meTarget = s.boostTo;
       return;
+    }
+    if (steady && isFastWord(now - (s.wordAt || now), word.length, s.wordErrors)) {
+      const up = harderRest(words, s.k + 1, s.liveTier, seed, grade);
+      if (up) {
+        words.splice(0, words.length, ...up.words);
+        log('typing_race_up', { race_no: no, word_no: s.k + 1, from: s.liveTier, to: up.tier });
+        s.liveTier = up.tier;
+      }
     }
     s.k++;
     s.typed = 0;

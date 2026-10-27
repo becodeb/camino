@@ -77,6 +77,25 @@ export function wordsFor(tier: number, seed: number, grade?: number): string[] {
   return out;
 }
 
+/**
+ * 1ro (2026-10-27): a fast typist gets harder words mid-race instead of waiting for "¡Otra carrera!".
+ * A word counts as fast when typed at FAST_MS_PER_LETTER or less a letter with at most one wrong key.
+ */
+export const FAST_MS_PER_LETTER = 900;
+export const isFastWord = (ms: number, letters: number, errors: number): boolean =>
+  letters > 0 && errors <= 1 && ms / letters <= FAST_MS_PER_LETTER;
+
+/** The race's words from `from` on, redrawn from the next tier's bank (no word already in the race); null at the top tier. */
+export function harderRest(words: readonly string[], from: number, tier: number, seed: number, grade?: number): { words: string[]; tier: number } | null {
+  const up = clampTier(tier + 1);
+  if (up === clampTier(tier)) return null;
+  const used = new Set(words.slice(0, from));
+  const pool = wordsFor(up, seed + from, grade).concat([...bankFor(up, grade)]).filter((w, i, a) => !used.has(w) && a.indexOf(w) === i);
+  const out = words.slice(0, from);
+  for (let i = from; i < words.length; i++) out.push(pool[(i - from) % Math.max(1, pool.length)] ?? words[i]);
+  return { words: out, tier: up };
+}
+
 // ------------------------------------------------------------------ the keys
 
 const ACCENTS: Readonly<Record<string, string>> = { á: 'a', é: 'e', í: 'i', ó: 'o', ú: 'u', ü: 'u' };
