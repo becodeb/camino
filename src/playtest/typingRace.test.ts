@@ -166,7 +166,7 @@ describe('1ro: harder words mid-race', async () => {
     expect(up.words.slice(0, 2)).toEqual(w.slice(0, 2));
     expect(up.words).toHaveLength(w.length);
     expect(new Set(up.words.slice(2)).size).toBe(w.length - 2);
-    expect(harderRest(wordsFor(4, 5, 1), 1, 4, 5, 1)).toBeNull();
+    expect(harderRest(wordsFor(6, 5, 1), 1, 6, 5, 1)).toBeNull();
   });
 });
 

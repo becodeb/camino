@@ -33,19 +33,24 @@ export const WORD_BANK: Readonly<Record<1 | 2 | 3 | 4, readonly string[]>> = {
  * 1ro (user request 2026-10-20): like Cokitos' moto race, single letters
  * first, then two- and three-letter words; lower case, no accents, no ñ.
  */
-export const WORD_BANK_1RO: Readonly<Record<1 | 2 | 3 | 4, readonly string[]>> = {
+export const WORD_BANK_1RO: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, readonly string[]>> = {
   1: ['a', 'e', 'i', 'o', 'u', 'm', 's', 'p', 'l', 't', 'n', 'r'],
   2: ['a', 'e', 'i', 'o', 'u', 'm', 's', 'p', 'l', 't', 'n', 'r', 'd', 'c', 'b', 'f'],
   3: ['mi', 'tu', 'su', 'la', 'el', 'sol', 'mar', 'pan', 'oso', 'ala', 'uva', 'mesa', 'sapo', 'luna'],
   4: ['sol', 'mar', 'pan', 'oso', 'uva', 'mesa', 'sapo', 'luna', 'casa', 'pato', 'gato', 'mama', 'papa', 'lupa'],
+  // 2026-10-27: 1ro's second class races ~30 minutes, so the ladder goes on: longer words, then two words with a space
+  5: ['perro', 'mango', 'leche', 'pelota', 'queso', 'nube', 'tomate', 'conejo', 'regalo', 'helado', 'zapato', 'camion'],
+  6: ['mi sol', 'el oso', 'la luna', 'un pato', 'mi casa', 'el gato', 'la mesa', 'un sapo', 'mi perro', 'la nube'],
 };
-/** 1ro's races are short (a six-year-old looks for every key). */
-export const RACE_CHARS_1RO: Readonly<Record<1 | 2 | 3 | 4, number>> = { 1: 10, 2: 12, 3: 14, 4: 16 };
+/** 1ro's races are short (a six-year-old looks for every key); they grow with each "¡Otra carrera!". */
+export const RACE_CHARS_1RO: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, number>> = { 1: 10, 2: 12, 3: 14, 4: 18, 5: 22, 6: 26 };
 
 const clampTier = (tier: number) => Math.min(4, Math.max(1, Math.floor(tier) || 1)) as 1 | 2 | 3 | 4;
+/** 1ro has two more tiers than the other grades. */
+const clampFor = (tier: number, grade?: number) => (grade === 1 ? (Math.min(6, Math.max(1, Math.floor(tier) || 1)) as 1 | 2 | 3 | 4 | 5 | 6) : clampTier(tier));
 
 /** A tier's word list ("¡Otra carrera!" goes one up, endless; 4 and beyond stay as 4). */
-export const bankFor = (tier: number, grade?: number) => (grade === 1 ? WORD_BANK_1RO : WORD_BANK)[clampTier(tier)];
+export const bankFor = (tier: number, grade?: number): readonly string[] => (grade === 1 ? WORD_BANK_1RO[clampFor(tier, 1)] : WORD_BANK[clampTier(tier)]);
 
 /**
  * How many letters (spaces included) a race of each tier needs at least: a
@@ -66,7 +71,7 @@ export function wordsFor(tier: number, seed: number, grade?: number): string[] {
     const j = Math.floor(r() * (i + 1));
     [bank[i], bank[j]] = [bank[j], bank[i]];
   }
-  const need = (grade === 1 ? RACE_CHARS_1RO : RACE_CHARS)[clampTier(tier)];
+  const need = grade === 1 ? RACE_CHARS_1RO[clampFor(tier, 1)] : RACE_CHARS[clampTier(tier)];
   const out: string[] = [];
   let chars = 0;
   for (const w of bank) {
@@ -87,8 +92,8 @@ export const isFastWord = (ms: number, letters: number, errors: number): boolean
 
 /** The race's words from `from` on, redrawn from the next tier's bank (no word already in the race); null at the top tier. */
 export function harderRest(words: readonly string[], from: number, tier: number, seed: number, grade?: number): { words: string[]; tier: number } | null {
-  const up = clampTier(tier + 1);
-  if (up === clampTier(tier)) return null;
+  const up = clampFor(tier + 1, grade);
+  if (up === clampFor(tier, grade)) return null;
   const used = new Set(words.slice(0, from));
   const pool = wordsFor(up, seed + from, grade).concat([...bankFor(up, grade)]).filter((w, i, a) => !used.has(w) && a.indexOf(w) === i);
   const out = words.slice(0, from);

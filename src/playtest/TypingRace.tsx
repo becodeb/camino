@@ -179,7 +179,8 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
   const [adapt0] = useState(adapt);
   const adaptKind = adaptOf(adapt0);
   const baseWpm = honest ? rivalBase(adapt0) : null;
-  const fixedWpms = baseWpm != null ? rivalWpms(baseWpm) : null;
+  // 1ro (2026-10-27): the rivals run right next to the child (one a little faster than their last race), so the race is close and a real challenge
+  const fixedWpms = baseWpm != null ? (steady ? ([baseWpm * 0.96, baseWpm * 1.03] as [number, number]) : rivalWpms(baseWpm)) : null;
   // 1ro: `words` may be redrawn harder mid-race (in place), so its total is read on every render
   const totalLetters = totalChars(words);
 
