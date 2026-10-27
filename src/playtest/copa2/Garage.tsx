@@ -23,15 +23,16 @@ import { PALETTES, rivalTargets, type Tier, type TrackSpec } from './tracks';
 import { RIVAL_ANIMAL, raceField, raceResult, type RaceResult } from './rivals';
 import { nextBlockHint, type Position } from './hints';
 import {
-  addBlock, addEventScript, ancestorsOf, blockById, bumpNumber, hasEdits, lapsAllowed, listAt, locate, makeBlock, moveBlock, moveSelected, newEditor, removeBlock,
-  removeSelected, sameSlot, selectBlock, setCaret, setLaps, takeEdits, toggleSensor, type Caret, type EditorState, type Rules,
+  addBlock, addEventScript, addSensor, ancestorsOf, blockById, bumpNumber, emptyConditions, hasEdits, lapsAllowed, listAt, locate, makeBlock, moveBlock, moveSelected, newEditor,
+  removeBlock, removeSensor, removeSelected, sameSlot, selectBlock, sensorTarget, setCaret, setLaps, takeEdits, type Caret, type EditorState, type Rules,
 } from './editor';
 import { stateAt, stateAtStep, stepsOf, type SceneState } from './playback';
-import { CRASH_TEXT, STUCK_TEXT, TIMEOUT_TEXT, BLOCK_LABEL, aAnimal, seconds } from './labels';
+import { CRASH_TEXT, STUCK_TEXT, TIMEOUT_TEXT, BLOCK_LABEL, SENSOR_LABEL, aAnimal, seconds } from './labels';
 import { BlockIcon } from './blockArt';
-import { HeldBlock, HeldHat, PaletteBlock } from './CopaBlocks';
-import { CANVAS_W, heightOf } from './blockLayout';
-import { MemoryMeter, NO_LIVE, ProgramPanel, ReferencePanel, type DndView, type HitFn, type Live } from './ProgramPanel';
+import { HeldBlock, HeldHat, HeldSensor, PaletteBlock, PaletteSensor } from './CopaBlocks';
+import { CANVAS_W, PILL_W, heightOf } from './blockLayout';
+import { dragDemoSeen, noteDragDemo } from './store';
+import { MemoryMeter, NO_LIVE, ProgramPanel, ReferencePanel, type DndView, type HitCondFn, type HitFn, type Live } from './ProgramPanel';
 import { CAM_MIN, COAST_U, PARK_U, RUN_W, Scene, camFor, courseFor, maybePuddles, previewWidth, uOfPos, type KartLook } from './Scene';
 import { DeerDeed, DeerDriver } from './DeerArt';
 import { GarageResult } from './GarageResult';
@@ -121,13 +122,17 @@ interface Notice {
   sig: string;
 }
 
-const ORDER: readonly BlockKind[] = ['forward', 'up', 'down', 'jump', 'turbo', 'brake', 'wait', 'repeat', 'if', 'nitro'];
-/** The palette's families, in the order they are shown (separated by a thin rule). */
-const FAMILIES: readonly (readonly BlockKind[])[] = [['forward', 'up', 'down', 'jump'], ['turbo', 'brake', 'wait', 'nitro'], ['repeat', 'if']];
+/** The palette's groups, each with its small header (the "Mirar" group is the copa's sensor pieces). */
+const GROUPS: readonly { name: string; kinds: readonly BlockKind[] }[] = [
+  { name: 'Mover', kinds: ['forward', 'up', 'down', 'jump', 'turbo', 'nitro'] },
+  { name: 'Repetir y decidir', kinds: ['repeat', 'if'] },
+];
+const WAIT_GROUP: readonly BlockKind[] = ['brake', 'wait'];
 
-type Src = { from: 'palette'; kind: BlockKind } | { from: 'program'; id: string };
+type Src = { from: 'palette'; kind: BlockKind } | { from: 'sensor'; sensor: Sensor } | { from: 'program'; id: string };
 interface Pending { src: Src; el: HTMLElement; x0: number; y0: number; id: number }
 interface Drag extends Pending { offX: number; offY: number; width: number; h: number; block: Block | null; x: number; y: number }
+const noDemo = (): boolean => { try { return /[?&]nodemo\b/.test(location.search + location.hash); } catch { return false; } };
 const ease = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 
@@ -168,12 +173,16 @@ export function Garage({
   const [drag, setDrag] = useState<Drag | null>(null);
   const [gap, setGap] = useState<{ pos: Position; h: number } | null>(null);
   const [overPalette, setOverPalette] = useState(false);
+  const [warn, setWarn] = useState<string[]>([]);
+  const [condTarget, setCondTarget] = useState<string | null>(null);
   const runCount = useRef(0);
   const page = useRef<HTMLElement>(null);
   const sceneCard = useRef<HTMLElement>(null);
   const log = useCallback((type: string, payload: Record<string, unknown>) => logger?.(type, { track: track.id, ...(deer ? { deer: true } : {}), ...payload }), [logger, track.id, deer]);
+  const phaseRef = useRef<Phase>('garage');
   const phaseCb = useRef(onPhase);
   phaseCb.current = onPhase;
+  phaseRef.current = phase;
   useEffect(() => { phaseCb.current?.(phase); }, [phase]);
   const payloadOf = useCallback((done: Run): GarageResultPayload => ({
     trackId: track.id, rival: rivalTier, won: done.result?.won ?? false, place: done.result?.place ?? 3, result: done.result!, program: done.program,
@@ -242,12 +251,26 @@ export function Garage({
     }
   }, [rules, setEd, track.copa]);
 
+  /** A sensor piece into a `si` (dropped on its hole, or tapped: the `si` that takes it is chosen by the editor). */
+  const trySensor = useCallback((sensor: Sensor, ifId?: string) => {
+    const target = ifId ?? sensorTarget(edRef.current);
+    if (!target) {
+      setMsg('Primero poné un «si». Después le ponés qué mira.');
+      setMsgTimer((n) => n + 1);
+      speak('Primero poné un si.');
+      return;
+    }
+    const res = addSensor(edRef.current, target, sensor, rules);
+    if (res.ok) { setEd(res.state); setMsg(null); return; }
+    if (res.reason === 'cond_full') { setMsg('Un «si» mira dos cosas como mucho.'); setMsgTimer((n) => n + 1); }
+  }, [rules, setEd]);
+
   const handlers = useMemo(() => ({
     onSelect: (id: string) => { setMsg(null); setEd((s) => selectBlock(s, id)); },
     onCaret: (c: Caret) => setEd((s) => setCaret(s, c)),
     onBump: (id: string, d: number) => setEd((s) => bumpNumber(s, id, d)),
     onLaps: (id: string, on: boolean) => setEd((s) => setLaps(s, id, on, rules)),
-    onSensor: (id: string, s: Sensor) => setEd((st) => toggleSensor(st, id, s, rules)),
+    onUnsensor: (id: string, s: Sensor) => setEd((st) => removeSensor(st, id, s)),
     onAddEvent: () => {
       const res = addEventScript(edRef.current, rules);
       if (res.ok) setEd(res.state);
@@ -258,10 +281,11 @@ export function Garage({
   // ---------------------------------------------------------------- the ghost hand (after two failures): only the NEXT block
 
   const hint = useMemo(() => (ghostHint && phase === 'garage' ? nextBlockHint(ed.program, track) : null), [ghostHint, phase, ed.program, track]);
-  const hintKey = hint ? JSON.stringify([hint.block, hint.position, hint.wrongBlockId ?? null]) : '';
+  const hintKey = hint ? JSON.stringify([hint.block, hint.position, hint.wrongBlockId ?? null, hint.ifId ?? null, hint.wrongSensor ?? null]) : '';
   useEffect(() => {
     if (!hint) return;
     if (hint.wrongBlockId) setEd((s) => (s.selected === hint.wrongBlockId ? s : selectBlock(s, hint.wrongBlockId!)));
+    else if (hint.block.kind === 'sensor') { if (hint.ifId) setEd((s) => (s.selected === hint.ifId ? s : selectBlock(s, hint.ifId!))); }
     else if (hint.block.kind !== 'on_log') setEd((s) => (sameSlot(s.caret, hint.position) && !s.selected ? s : setCaret(s, hint.position)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hintKey]);
@@ -271,7 +295,11 @@ export function Garage({
     let dead = false;
     let current: GhostRun | null = null;
     let timer: ReturnType<typeof setTimeout>;
-    const at = hint.wrongBlockId ? ['.gx-tool-remove'] : hint.block.kind === 'on_log' ? ['.gx-lane-add'] : [`[data-pal="${hint.block.kind}"]`, '.gx-caret'];
+    const at = hint.wrongBlockId ? ['.gx-tool-remove']
+      : hint.wrongSensor ? [`[data-cond-for="${hint.wrongSensor.ifId}"][data-sensor="${hint.wrongSensor.sensor}"] .gb-pill-x`]
+        : hint.block.kind === 'on_log' ? ['.gx-lane-add']
+          : hint.block.kind === 'sensor' ? [`[data-pal-sensor="${hint.block.sensor}"]`, `[data-cond-slot="${hint.ifId}"]`]
+            : [`[data-pal="${hint.block.kind}"]`, '.gx-caret'];
     const play = () => {
       if (dead) return;
       current = playGhost(root, [{ do: 'point', at }, { do: 'wait', ms: 700 }]);
@@ -282,12 +310,44 @@ export function Garage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hintKey]);
 
+  // ---------------------------------------------------------------- the first time: the ghost hand shows that blocks can be dragged
+  // (the format only: a piece goes from the palette to the program and comes back; nothing is added, nothing says what to build)
+  useEffect(() => {
+    if (dragDemoSeen() || noDemo() || !page.current) return;
+    const root = page.current;
+    let run: GhostRun | null = null;
+    const stop = () => { run?.cancel(); run = null; };
+    const timer = setTimeout(() => {
+      if (edRef.current.selected || phaseRef.current !== 'garage') return;
+      noteDragDemo();
+      const into = '.gx-program:not(.is-compact) .gx-lane-main .gb-hole, .gx-program:not(.is-compact) .gx-lane-main .gx-caret';
+      run = playGhost(root, [
+        { do: 'drag', from: '[data-pal="forward"]', to: into },
+        { do: 'wait', ms: 500 },
+        { do: 'drag', from: into, to: '.gx-palette' },
+      ]);
+      window.addEventListener('pointerdown', stop, { once: true });
+    }, 1400);
+    return () => { clearTimeout(timer); window.removeEventListener('pointerdown', stop); stop(); };
+    // once, when the garage opens
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ---------------------------------------------------------------- ¡Largar!
 
   const largar = useCallback(() => {
     const program = edRef.current.program;
     if (!program.main.length && !program.onLog) return;
     if (slotCount(program) > rules.slots) return; // it does not fit the memory: the banner says so
+    const empties = emptyConditions(program);
+    if (empties.length) {
+      // a `si` that looks at nothing: say so on the screen, at the hole, before anything runs
+      setWarn(empties);
+      speak('Al si le falta qué mirar. Poné una pieza en el casillero.');
+      log('garage_empty_si', { count: empties.length });
+      requestAnimationFrame(() => page.current?.querySelector('.gx-banner.is-emptycond')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+      return;
+    }
     flushEdits();
     runCount.current += 1;
     const seed = seedFor ? seedFor(runCount.current) : Math.floor(Math.random() * 2 ** 31);
@@ -429,7 +489,7 @@ export function Garage({
   const noticeOn = phase === 'garage' && noticeApplies(notice, ed.program) ? notice : null;
   const crashId = phase === 'step' && last?.sim.crash && sceneState?.crashed ? last.sim.crash.blockId : noticeOn?.kind === 'crash' ? noticeOn.blockId ?? null : null;
   const lap = sceneState ? Math.min(track.laps, Math.floor(Math.min(sceneState.pos, total - 0.001) / lapTiles) + 1) : 1;
-  const pal = ORDER.filter((k) => rules.palette.blocks.includes(k));
+  const pal = [...GROUPS.flatMap((g) => g.kinds), ...WAIT_GROUP].filter((k) => rules.palette.blocks.includes(k));
   const runEnd = phase === 'run' && run ? run.sim.timeMs / raceSpeed : 0;
   const runOver = phase === 'run' && run && run.sim.outcome !== 'finish' && clock >= runEnd + 200;
 
@@ -444,6 +504,8 @@ export function Garage({
   // A tap that never became a drag is the tap-to-add / select path, which stays exactly as it was.
 
   const hitRef = useRef<HitFn | null>(null);
+  const hitCondRef = useRef<HitCondFn | null>(null);
+  const condRef = useRef<string | null>(null);
   const pending = useRef<Pending | null>(null);
   const dragRef = useRef<Drag | null>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
@@ -466,7 +528,9 @@ export function Garage({
     const sensors = rules.palette.sensors;
     let block: Block | null = null;
     let h = r.height;
-    if (pd.src.from === 'palette') {
+    if (pd.src.from === 'sensor') {
+      h = 40;
+    } else if (pd.src.from === 'palette') {
       block = makeBlock(pd.src.kind, rules, 'held');
       h = heightOf(block, { width: CANVAS_W, sensors, laps: lapsAllowed(rules) });
     } else {
@@ -474,7 +538,7 @@ export function Garage({
       block = edRef.current.program.onLog?.id === id ? null : blockById(edRef.current.program, id);
       h = block ? heightOf(block, { width: CANVAS_W, sensors, laps: lapsAllowed(rules) }) : 0;
     }
-    const width = pd.src.from === 'palette' ? CANVAS_W : r.width;
+    const width = pd.src.from === 'sensor' ? PILL_W[pd.src.sensor] : pd.src.from === 'palette' ? CANVAS_W : r.width;
     const d: Drag = { ...pd, offX: Math.min(x - r.left, width - 10), offY: Math.min(y - r.top, 40), width, h, block, x, y };
     dragRef.current = d;
     setDrag(d);
@@ -485,8 +549,10 @@ export function Garage({
     pending.current = null;
     gapRef.current = null;
     overRef.current = false;
+    condRef.current = null;
     setDrag(null);
     setGap(null);
+    setCondTarget(null);
     setOverPalette(false);
   };
   const finish = (x: number, y: number, cancelled: boolean) => {
@@ -494,6 +560,13 @@ export function Garage({
     suppressTap.current = true;
     setTimeout(() => { suppressTap.current = false; }, 0);
     if (!d) { pending.current = null; return; }
+    if (d.src.from === 'sensor') {
+      const target = cancelled ? null : hitCondRef.current?.(x - d.offX + 22, y - d.offY + 20) ?? null;
+      const sensor = d.src.sensor;
+      clearDrag();
+      if (target) trySensor(sensor, target);
+      return;
+    }
     const pos = cancelled ? null : probe(d, x, y);
     const trash = !cancelled && overPaletteAt(x, y);
     clearDrag();
@@ -525,6 +598,11 @@ export function Garage({
       const d = dragRef.current!;
       e.preventDefault();
       fns.current.placeGhost(e.clientX, e.clientY);
+      if (d.src.from === 'sensor') {
+        const t = hitCondRef.current?.(e.clientX - d.offX + 22, e.clientY - d.offY + 20) ?? null;
+        if (t !== condRef.current) { condRef.current = t; setCondTarget(t); }
+        return;
+      }
       const over = d.src.from === 'program' && overPaletteAt(e.clientX, e.clientY);
       if (over !== overRef.current) { overRef.current = over; setOverPalette(over); }
       const pos = over || (d.src.from === 'program' && !d.block) ? null : fns.current.probe(d, e.clientX, e.clientY);
@@ -565,9 +643,12 @@ export function Garage({
       raf = requestAnimationFrame(loop);
       const { x, y } = pointerRef.current;
       const top = (Number.parseFloat(getComputedStyle(page.current ?? document.body).getPropertyValue('--gx-stick')) || 0) + 36;
-      if (y > window.innerHeight - 70) window.scrollBy(0, 14);
-      else if (y < top && window.scrollY > 0) window.scrollBy(0, -14);
-      if (dragRef.current) {
+      // the speed grows as the pointer nears the edge (and the page only moves if it has room to)
+      const edge = window.innerHeight - 60;
+      const room = document.documentElement.scrollHeight - window.innerHeight - window.scrollY;
+      if (y > edge && room > 2) window.scrollBy(0, Math.min(room, Math.round(3 + ((y - edge) / 60) * 9)));
+      else if (y < top && window.scrollY > 0) window.scrollBy(0, -Math.round(3 + Math.min(1, (top - y) / 60) * 9));
+      if (dragRef.current && dragRef.current.src.from !== 'sensor') {
         const pos = dragRef.current.src.from === 'program' && !dragRef.current.block ? null : overRef.current ? null : probe(dragRef.current, x, y);
         const next = pos ? { pos, h: dragRef.current.h } : null;
         if (JSON.stringify(next) !== JSON.stringify(gapRef.current)) { gapRef.current = next; setGap(next); }
@@ -590,8 +671,15 @@ export function Garage({
     pending.current = { src: { from: 'program', id }, el: e.currentTarget, x0: e.clientX, y0: e.clientY, id: e.pointerId };
     pointerRef.current = { x: e.clientX, y: e.clientY };
   };
+  const sensorDown = (e: ReactPointerEvent<HTMLElement>, sensor: Sensor) => {
+    if (!stateRef.current.edReady || pending.current) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pending.current = { src: { from: 'sensor', sensor }, el: e.currentTarget, x0: e.clientX, y0: e.clientY, id: e.pointerId };
+    pointerRef.current = { x: e.clientX, y: e.clientY };
+  };
+  const sensorTap = (sensor: Sensor) => { if (!suppressTap.current && phase === 'garage') trySensor(sensor); };
   const palTap = (kind: BlockKind) => { if (!suppressTap.current && phase === 'garage') tryAdd(kind); };
-  const dnd: DndView | undefined = edReady ? { dragId: drag?.src.from === 'program' ? drag.src.id : null, gap, hit: hitRef, onDown: blockDown, suppress: () => suppressTap.current } : undefined;
+  const dnd: DndView | undefined = edReady ? { dragId: drag?.src.from === 'program' ? drag.src.id : null, gap, hit: hitRef, hitCond: hitCondRef, onDown: blockDown, suppress: () => suppressTap.current } : undefined;
 
   // ---------------------------------------------------------------- the selected block's tools
 
@@ -628,10 +716,13 @@ export function Garage({
   // a program carried from the last track that does not fit this memory: shown as it is, gently, and ¡Largar! waits until it fits
   const used = slotCount(ed.program);
   const tooBig = inGarageEarly && used > rules.slots;
+  const warnIds = useMemo(() => { const e = new Set(emptyConditions(ed.program)); return new Set(warn.filter((id) => e.has(id))); }, [warn, ed.program]);
   const banner = (
     <>
       {tooBig && <p className="gx-banner is-toobig" role="alert"><b>No entra: hay que achicarlo.</b> Tu programa usa {used} lugares y la memoria tiene {rules.slots}.{track.copa >= 2 ? ' ¿Hay algo que se repite?' : ''}</p>}
+      {warnIds.size > 0 && <p className="gx-banner is-emptycond" role="alert"><b>¡Falta algo en el «si»!</b> No dice qué tiene que mirar el auto. Poné una pieza de <b>Mirar</b> en el casillero punteado{rules.palette.sensors[0] ? <>, por ejemplo <b>«{SENSOR_LABEL[rules.palette.sensors[0]]}»</b></> : null}.</p>}
       {noticeOn && <p className={`gx-banner is-${noticeOn.kind}`} role="status"><b>{noticeOn.kind === 'crash' ? '¡Chocaste!' : noticeOn.kind === 'stuck' ? '¡Falta camino!' : '¡No termina!'}</b> {noticeOn.text}</p>}
+      {!noticeOn && hint?.wrongSensor && <p className="gx-banner is-hint" role="status">Esa pieza no va ahí. Sacala con la cruz.</p>}
       {!noticeOn && hint?.wrongBlockId && <p className="gx-banner is-hint" role="status">Este bloque no va ahí. Sacalo.</p>}
     </>
   );
@@ -682,7 +773,10 @@ export function Garage({
       <span className="gx-goal-text">Ganale {aAnimal(rivalName).split(' ')[0]} <b>{rivalName.replace(/^el /, '')}</b>: llegá en menos de <b>{seconds(goalMs)}</b></span>
     </div>
   );
-  const held = drag?.src.from === 'palette' ? drag.block : drag?.block ?? null;
+  const held = drag?.block ?? null;
+  const blockPiece = (k: BlockKind) => (
+    <PaletteBlock key={k} kind={k} rules={rules} hinted={!!hint && !hint.wrongBlockId && hint.block.kind === k} full={slotCount(ed.program) >= rules.slots} onDown={palDown} onTap={palTap} />
+  );
 
   return (
     <main className={`gx-page${hint ? ' has-hint' : ''}${drag ? ' is-dragging' : ''}${drag?.src.from === 'program' ? ' is-drag-program' : ''}`} data-phase={phase} data-track={track.id} data-copa={track.copa} ref={page}>
@@ -723,21 +817,18 @@ export function Garage({
       <div className="gx-body">
         <aside className={`gx-palette-col${inGarage ? '' : ' is-idle'}${overPalette ? ' is-trash' : ''}`} data-zone="palette" aria-label="Bloques">
           <section className="sheet gx-palette">
-            {FAMILIES.map((fam) => {
-              const ks = fam.filter((k) => pal.includes(k));
-              return ks.length ? (
-                <div key={fam[0]} className={`gx-pal-family${ks.every((k) => k === 'repeat' || k === 'if') ? ' is-containers' : ''}`}>
-                  {ks.map((k) => (
-                    <PaletteBlock
-                      key={k} kind={k} rules={rules}
-                      hinted={!!hint && !hint.wrongBlockId && hint.block.kind === k}
-                      full={slotCount(ed.program) >= rules.slots}
-                      onDown={palDown} onTap={palTap}
-                    />
-                  ))}
-                </div>
-              ) : null;
+            {GROUPS.map((g) => {
+              const ks = g.kinds.filter((k) => pal.includes(k));
+              return ks.length ? <PalGroup key={g.name} name={g.name} first={g === GROUPS[0]} cls={ks.every((k) => k === 'repeat' || k === 'if') ? 'is-containers' : ''}>{ks.map(blockPiece)}</PalGroup> : null;
             })}
+            {rules.palette.sensors.length > 0 && rules.palette.blocks.includes('if') && (
+              <PalGroup name="Mirar" cls="is-sensors">
+                {rules.palette.sensors.map((sn) => (
+                  <PaletteSensor key={sn} sensor={sn} hinted={(!!hint && hint.block.kind === 'sensor' && hint.block.sensor === sn) || (warnIds.size > 0 && sn === rules.palette.sensors[0])} onDown={sensorDown} onTap={sensorTap} />
+                ))}
+              </PalGroup>
+            )}
+            {WAIT_GROUP.some((k) => pal.includes(k)) && <PalGroup name="Esperar" cls="">{WAIT_GROUP.filter((k) => pal.includes(k)).map(blockPiece)}</PalGroup>}
             {hint && !hint.wrongBlockId && <p className="gx-hint-caption">Pista: poné <b>{hintLabel(hint.block)}</b></p>}
             <div className="gx-trash" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="34" height="34"><path d="M4,7 H20 M9,7 V4 H15 V7 M6,7 L7,21 H17 L18,7 M10,11 V17 M14,11 V17" fill="none" stroke="#2b2622" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -751,7 +842,7 @@ export function Garage({
             program={inGarage ? ed.program : (active?.program ?? ed.program)}
             rules={rules} caret={ed.caret} selected={inGarage ? ed.selected : null}
             live={live} crashId={crashId} wrongId={inGarage ? hint?.wrongBlockId ?? null : null}
-            readOnly={!inGarage} handlers={handlers} banner={banner} toolbar={inGarage ? tools : undefined} dnd={dnd}
+            readOnly={!inGarage} handlers={handlers} banner={banner} toolbar={inGarage ? tools : undefined} dnd={dnd} condTarget={condTarget} warnIds={warnIds}
           />
         </div>
 
@@ -762,7 +853,7 @@ export function Garage({
             {inGarage && (
               <div className="gx-actions">
                 <button type="button" className="cut gx-largar" disabled={(!ed.program.main.length && !ed.program.onLog) || tooBig} onClick={largar}>
-                  <svg viewBox="0 0 40 40" width="52" height="52" aria-hidden="true"><path d="M8,5 V36" stroke="#2b2622" strokeWidth="4" strokeLinecap="round" /><path d="M8,6 L34,10 L28,18 L34,26 L8,22 Z" fill="#fbf7ee" stroke="#2b2622" strokeWidth="3" strokeLinejoin="round" /></svg>
+                  <svg viewBox="0 0 40 40" width="40" height="40" aria-hidden="true"><path d="M8,5 V36" stroke="#2b2622" strokeWidth="4" strokeLinecap="round" /><path d="M8,6 L34,10 L28,18 L34,26 L8,22 Z" fill="#fbf7ee" stroke="#2b2622" strokeWidth="3" strokeLinejoin="round" /></svg>
                   <span className="gx-largar-word">¡Largar!</span>
                 </button>
                 <button type="button" className="cut gx-stepbtn" disabled={!last} onClick={openStep}>
@@ -801,7 +892,7 @@ export function Garage({
       {drag && createPortal(
         <div ref={ghostRef} className="blk-ghost" style={{ width: drag.width, height: Math.max(drag.h, 40) }} aria-hidden="true">
           <div className="blk-ghost-in">
-            {held ? <HeldBlock block={held} width={drag.width} sensors={rules.palette.sensors} /> : <HeldHat width={drag.width} />}
+            {drag.src.from === 'sensor' ? <HeldSensor sensor={drag.src.sensor} /> : held ? <HeldBlock block={held} width={drag.width} sensors={rules.palette.sensors} /> : <HeldHat width={drag.width} />}
           </div>
         </div>,
         document.body,
@@ -821,8 +912,9 @@ function blockKindOf(p: Program, id: string): string {
   return blockById(p, id)?.kind ?? 'unknown';
 }
 
-function hintLabel(b: { kind: string; n?: number | 'laps'; cond?: Sensor[] }): string {
+function hintLabel(b: { kind: string; n?: number | 'laps'; sensor?: Sensor }): string {
   if (b.kind === 'on_log') return '«Si cae un tronco»';
+  if (b.kind === 'sensor') return b.sensor ? `«${SENSOR_LABEL[b.sensor]}» en el «si»` : 'una pieza de Mirar';
   const base = BLOCK_LABEL[b.kind as BlockKind] ?? b.kind;
   if (b.kind === 'repeat') return `«${base}» ${b.n === 'laps' ? 'vueltas' : `${b.n} veces`}`;
   if (b.kind === 'wait') return `«${base}» ${b.n} s`;
@@ -843,5 +935,15 @@ function TrackNotes({ track, moving }: { track: TrackSpec; moving: boolean }) {
       )}
       {track.laps > 1 && <li><BlockIcon kind="repeat" size={28} bare /> {track.laps} vueltas{track.nitro ? `, ${track.nitro} nitros` : ''}</li>}
     </ul>
+  );
+}
+
+/** A palette group: a small header, then its pieces. */
+function PalGroup({ name, cls, first, children }: { name: string; cls: string; first?: boolean; children: ReactNode }) {
+  return (
+    <div className={`gx-pal-group ${cls}`} data-group={name}>
+      <h2 className="gx-pal-head">{name}{first && <span className="gx-pal-intro">Arrastrá o tocá</span>}</h2>
+      <div className="gx-pal-grid">{children}</div>
+    </div>
   );
 }

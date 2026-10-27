@@ -14,7 +14,7 @@ import { slotCount } from './program';
 import type { Position } from './hints';
 import { lapsAllowed, withoutBlock, type Caret, type Rules } from './editor';
 import { BlockCanvas, NO_LIVE, type BlockCtx, type Live } from './CopaBlocks';
-import { CANVAS_W, FULL, MINI, MINI_W, layoutScript, pickSlot, withoutGap, type Layout, type Metrics } from './blockLayout';
+import { CANVAS_W, EVENT_W, FULL, MINI, MINI_W, layoutScript, pickSlot, withoutGap, type Layout, type Metrics } from './blockLayout';
 import { BlockIcon } from './blockArt';
 
 export { NO_LIVE };
@@ -25,18 +25,21 @@ export interface PanelHandlers {
   onCaret(c: Caret): void;
   onBump(id: string, delta: number): void;
   onLaps(id: string, on: boolean): void;
-  onSensor(id: string, s: Sensor): void;
+  onUnsensor(id: string, s: Sensor): void;
   onAddEvent(): void;
 }
 
 /** What the drag needs from the surface (Garage.tsx owns the gesture). */
 export type HitFn = (clientX: number, clientY: number) => Position | null;
+/** The `si` whose condition hole is nearest to a point (a sensor piece is being dragged), or null when none is close. */
+export type HitCondFn = (clientX: number, clientY: number) => string | null;
 export interface DndView {
   /** The block in the hand: the program is drawn without it. */
   dragId: string | null;
   /** Where a hole opens for it (a slot of the program without it), and how tall. */
   gap: { pos: Position; h: number } | null;
   hit: MutableRefObject<HitFn | null>;
+  hitCond: MutableRefObject<HitCondFn | null>;
   onDown(e: ReactPointerEvent<HTMLElement>, id: string): void;
   suppress(): boolean;
 }
@@ -70,7 +73,7 @@ export function MemoryMeter({ program, rules, shake }: { program: Program; rules
 
 /** "Tu programa anterior": the program of the last copa, faded and read-only, beside the garage (copas 2 and 3 start empty). */
 export function ReferencePanel({ program, rules }: { program: Program; rules: Rules }) {
-  const none: PanelHandlers = { onSelect() {}, onCaret() {}, onBump() {}, onLaps() {}, onSensor() {}, onAddEvent() {} };
+  const none: PanelHandlers = { onSelect() {}, onCaret() {}, onBump() {}, onLaps() {}, onUnsensor() {}, onAddEvent() {} };
   return (
     <section className="sheet gx-ref" aria-label="Tu programa anterior">
       <h2 className="gx-ref-title">Tu programa anterior</h2>
@@ -83,10 +86,14 @@ export function ReferencePanel({ program, rules }: { program: Program; rules: Ru
 
 // ------------------------------------------------------------------ the program
 
-export function ProgramPanel({ program, rules, caret, selected, live, crashId, wrongId, readOnly, handlers, banner, toolbar, pick, answerId, compact, title, dnd }: {
+export function ProgramPanel({ program, rules, caret, selected, live, crashId, wrongId, readOnly, handlers, banner, toolbar, pick, answerId, compact, title, dnd, condTarget, warnIds }: {
   program: Program; rules: Rules; caret: Caret; selected: string | null; live: Live; crashId: string | null; wrongId: string | null;
   readOnly: boolean; handlers: PanelHandlers; banner?: ReactNode; toolbar?: ReactNode;
   pick?: (id: string) => void; answerId?: string | null; compact?: boolean; title?: string; dnd?: DndView;
+  /** A sensor piece is over this `si`'s hole. */
+  condTarget?: string | null;
+  /** These `si` blocks look at nothing and the child pressed ¡Largar!. */
+  warnIds?: ReadonlySet<string>;
 }) {
   const m: Metrics = compact ? MINI : FULL;
   const width = compact ? MINI_W : CANVAS_W;
@@ -100,6 +107,7 @@ export function ProgramPanel({ program, rules, caret, selected, live, crashId, w
   const shown = useMemo(() => (dnd?.dragId ? withoutBlock(program, dnd.dragId) : program), [program, dnd?.dragId]);
   const gap = dnd?.gap ?? null;
   const marker = edit && !dnd?.dragId ? caret : null;
+  const eventWidth = compact ? MINI_W : EVENT_W;
   const base = { width, metrics: m, selected, sensors: rules.palette.sensors, laps: lapsAllowed(rules) };
   const hat = shown.onLog;
   const hasEvent = rules.palette.event;
@@ -109,21 +117,21 @@ export function ProgramPanel({ program, rules, caret, selected, live, crashId, w
     [shown.main, width, selected, marker?.script, marker?.index, JSON.stringify(marker?.path), gap?.pos.script, gap?.pos.index, JSON.stringify(gap?.pos.path), gap?.h, compact, rules],
   );
   const eventLayout = useMemo(
-    () => (hat ? layoutScript(hat.body, { ...base, script: 'event', hatId: hat.id, caret: marker?.script === 'event' ? marker : null, gap: gap?.pos.script === 'event' ? gap : null }) : null),
+    () => (hat ? layoutScript(hat.body, { ...base, width: eventWidth, script: 'event', hatId: hat.id, caret: marker?.script === 'event' ? marker : null, gap: gap?.pos.script === 'event' ? gap : null }) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hat, width, selected, marker?.script, marker?.index, JSON.stringify(marker?.path), gap?.pos.script, gap?.pos.index, JSON.stringify(gap?.pos.path), gap?.h, rules],
+    [hat, width, eventWidth, selected, marker?.script, marker?.index, JSON.stringify(marker?.path), gap?.pos.script, gap?.pos.index, JSON.stringify(gap?.pos.path), gap?.h, rules],
   );
 
   // the slot under the pointer, read in the layout WITHOUT the gap (the one the screen shows has it open)
-  const hitState = useRef({ shown, mainLayout, eventLayout, rules, base });
-  hitState.current = { shown, mainLayout, eventLayout, rules, base };
+  const hitState = useRef({ shown, mainLayout, eventLayout, rules, base, eventWidth });
+  hitState.current = { shown, mainLayout, eventLayout, rules, base, eventWidth };
   useEffect(() => {
     if (!dnd) return;
     dnd.hit.current = (x, y) => {
       const h = hitState.current;
       const plain = (script: 'main' | 'event'): Layout | null => {
         if (script === 'main') return layoutScript(h.shown.main, { ...h.base, script: 'main', start: !compact, caret: null });
-        return h.shown.onLog ? layoutScript(h.shown.onLog.body, { ...h.base, script: 'event', hatId: h.shown.onLog.id, caret: null }) : null;
+        return h.shown.onLog ? layoutScript(h.shown.onLog.body, { ...h.base, width: h.eventWidth, script: 'event', hatId: h.shown.onLog.id, caret: null }) : null;
       };
       const cands: { el: HTMLElement | null; script: 'main' | 'event'; shownLayout: Layout | null; slots: Layout['slots'] | null }[] = [
         { el: mainEl.current, script: 'main', shownLayout: h.mainLayout, slots: null },
@@ -148,12 +156,28 @@ export function ProgramPanel({ program, rules, caret, selected, live, crashId, w
       if (g) py = withoutGap(py, g.y, g.h);
       return pickSlot(lay.slots, x - best.r.left, py)?.pos ?? null;
     };
-    return () => { dnd.hit.current = null; };
+    // a sensor piece: the nearest condition hole (or the arm of a `si`) takes it
+    dnd.hitCond.current = (x, y) => {
+      const el = root.current;
+      if (!el) return null;
+      let best: { id: string; d: number } | null = null;
+      const near = (node: Element, id: string | null | undefined, bias: number) => {
+        if (!id) return;
+        const r = node.getBoundingClientRect();
+        const d = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom)) + bias;
+        if (!best || d < best.d) best = { id, d };
+      };
+      el.querySelectorAll('[data-cond-slot]').forEach((n) => near(n, n.getAttribute('data-cond-slot'), 0));
+      el.querySelectorAll('.gb-c[data-kind="if"]').forEach((n) => { const arm = n.querySelector('.gb-arm'); if (arm) near(arm, n.getAttribute('data-id'), 12); });
+      const hit = best as { id: string; d: number } | null;
+      return hit && hit.d <= 70 ? hit.id : null;
+    };
+    return () => { dnd.hit.current = null; dnd.hitCond.current = null; };
   }, [dnd, compact]);
 
   const ctx: BlockCtx = {
     readOnly: readOnly || !!compact, selected, live, crashId, wrongId, answerId, pick, sensors: rules.palette.sensors,
-    onSelect: handlers.onSelect, onCaret: handlers.onCaret, onBump: handlers.onBump, onLaps: handlers.onLaps, onSensor: handlers.onSensor,
+    onSelect: handlers.onSelect, onCaret: handlers.onCaret, onBump: handlers.onBump, onLaps: handlers.onLaps, onUnsensor: handlers.onUnsensor, condTarget, warnIds,
     onDown: dnd?.onDown, suppress: dnd?.suppress, emptyText: edit ? emptyText : undefined,
   };
 
@@ -184,9 +208,9 @@ export function ProgramPanel({ program, rules, caret, selected, live, crashId, w
             {hat && eventLayout ? (
               <div ref={eventEl} className="gx-event-canvas"><BlockCanvas layout={eventLayout} c={ctx} m={m} label="Si cae un tronco" /></div>
             ) : (
-              <button type="button" ref={addEl} className="gx-lane-add" disabled={readOnly} onClick={handlers.onAddEvent} style={{ width: CANVAS_W, height: FULL.hat + 34 }}>
-                <svg className="gx-lane-add-shape" width={CANVAS_W} height={FULL.hat + 34} viewBox={`0 0 ${CANVAS_W} ${FULL.hat + 34}`} aria-hidden="true">
-                  <path d={startPath(CANVAS_W, FULL.hat + 34, { ...DIMS, h: FULL.h })} className="gb-dashed" />
+              <button type="button" ref={addEl} className="gx-lane-add" disabled={readOnly} onClick={handlers.onAddEvent} style={{ width: EVENT_W, height: FULL.hat + 34 }}>
+                <svg className="gx-lane-add-shape" width={EVENT_W} height={FULL.hat + 34} viewBox={`0 0 ${EVENT_W} ${FULL.hat + 34}`} aria-hidden="true">
+                  <path d={startPath(EVENT_W, FULL.hat + 34, { ...DIMS, h: FULL.h })} className="gb-dashed" />
                 </svg>
                 <span className="gx-lane-add-text">
                   <BlockIcon kind="on_log" size={40} bare />

@@ -48,9 +48,15 @@ export function saveJourney(sid: string | undefined, journey: Journey): void {
   write(KEY, sid, journey);
 }
 
+let demoSeen = false;
+/** The garage's first-time drag demo (the ghost hand): shown once per child. */
+export const dragDemoSeen = (): boolean => demoSeen;
+export const noteDragDemo = (): void => { demoSeen = true; };
+
 /** A new child starts fresh (PlaytestScreen's `start`/`newSession`). */
 export function resetCopaMemory(): void {
   memory = null;
+  demoSeen = false;
   ceilingMemory = null;
   try { localStorage.removeItem(KEY); localStorage.removeItem(CEILING_KEY); } catch { /* nothing to clear */ }
 }

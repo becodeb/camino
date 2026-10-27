@@ -10,9 +10,14 @@ function apply(program: Program, hint: Hint): Program {
   const id = `h${++counter}`;
   const hb = hint.block;
   if (hb.kind === 'on_log') return { ...program, onLog: { id, body: [] } };
+  if (hb.kind === 'sensor') {
+    // the condition piece goes into the `si` the hint names
+    const put = (list: Block[]): Block[] => list.map((b) => (b.kind === 'if' && b.id === hint.ifId ? { ...b, cond: [...b.cond, hb.sensor!] } : b.kind === 'repeat' ? { ...b, body: put(b.body) } : b.kind === 'if' ? { ...b, then: put(b.then), else: put(b.else) } : b));
+    return { ...program, main: put(program.main), ...(program.onLog ? { onLog: { ...program.onLog, body: put(program.onLog.body) } } : {}) };
+  }
   const block: Block = hb.kind === 'repeat' ? { id, kind: 'repeat', n: hb.n ?? 1, body: [] }
     : hb.kind === 'wait' ? { id, kind: 'wait', n: (hb.n as number) ?? 1 }
-      : hb.kind === 'if' ? { id, kind: 'if', cond: hb.cond ?? [], then: [], else: [] }
+      : hb.kind === 'if' ? { id, kind: 'if', cond: [], then: [], else: [] }
         : hb.kind === 'nitro' ? { id, kind: 'nitro', delta: hb.delta ?? -1 }
           : { id, kind: hb.kind };
   const place = (list: Block[], path: Hint['position']['path'], at: number): Block[] => {
@@ -66,8 +71,14 @@ describe('robust to partial programs: the longest correct prefix', () => {
     const b = programBuilder('c');
     let p: Program = { main: [b.repeat(10, [])] };
     let hint = nextBlockHint(p, t)!;
-    expect(hint.block).toMatchObject({ kind: 'if', cond: ['puddle_ahead'] });
+    expect(hint.block).toMatchObject({ kind: 'if' });
     expect(hint.position).toEqual({ script: 'main', path: [{ index: 0, branch: 'body' }], index: 0 });
+    const empty = b.iff([], [], []);
+    p = { main: [b.repeat(10, [empty])] };
+    hint = nextBlockHint(p, t)!; // the condition piece is asked for before anything else
+    expect(hint.block).toEqual({ kind: 'sensor', sensor: 'puddle_ahead' });
+    expect(hint.ifId).toBe(empty.id);
+    expect(hint.wrongBlockId).toBeUndefined();
     p = { main: [b.repeat(10, [b.iff('puddle_ahead', [], [])])] };
     hint = nextBlockHint(p, t)!;
     expect(hint.block.kind).toBe('jump');
@@ -164,7 +175,8 @@ describe('every copa hints only blocks its palette has', () => {
     for (const c of COPAS) for (const t of c.tracks as readonly TrackSpec[]) {
       let p: Program = { main: [] };
       for (let h = nextBlockHint(p, t); h; h = nextBlockHint(p, t)) {
-        if (h.block.kind !== 'on_log') expect(c.palette.blocks, `${t.id}: ${h.block.kind}`).toContain(h.block.kind);
+        if (h.block.kind === 'sensor') expect(c.palette.sensors, `${t.id}: ${h.block.sensor}`).toContain(h.block.sensor);
+        else if (h.block.kind !== 'on_log') expect(c.palette.blocks, `${t.id}: ${h.block.kind}`).toContain(h.block.kind);
         p = apply(p, h);
       }
     }

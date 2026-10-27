@@ -48,7 +48,7 @@ export function trickText(copa: number, tier: Tier): string {
 
 type Phase = 'pick' | 'told' | 'watch' | 'done';
 
-const NO_HANDLERS: PanelHandlers = { onSelect() {}, onCaret() {}, onBump() {}, onLaps() {}, onSensor() {}, onAddEvent() {} };
+const NO_HANDLERS: PanelHandlers = { onSelect() {}, onCaret() {}, onBump() {}, onLaps() {}, onUnsensor() {}, onAddEvent() {} };
 const CARET: Caret = { script: 'main', path: [], index: 0 };
 
 export interface SpyProps {

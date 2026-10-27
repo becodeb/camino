@@ -12,7 +12,7 @@
 
 import type { Block, Sensor } from './program';
 import type { Position } from './hints';
-import { SENSORS } from './program';
+import { MAX_COND, SENSORS } from './program';
 
 /** One set of sizes: the program (FULL), the palette (PAL) and the faded "tu programa anterior" (MINI). */
 export interface Metrics {
@@ -38,25 +38,31 @@ export interface Metrics {
   lapsRow: number;
   /** Words are smaller and the number buttons go away. */
   small: boolean;
+  /** The palette's pieces: no condition pills, no holes drawn (a container is a small readable C). */
+  plain?: boolean;
 }
 
-export const FULL: Metrics = { h: 56, arm: 58, spine: 20, pad: 12, foot: 24, elseH: 44, hole: 46, caret: 40, start: 58, hat: 66, pill: 34, lapsRow: 44, small: false };
-export const PAL: Metrics = { h: 46, arm: 48, spine: 14, pad: 8, foot: 16, elseH: 28, hole: 16, caret: 0, start: 0, hat: 0, pill: 28, lapsRow: 0, small: true };
+export const FULL: Metrics = { h: 56, arm: 58, spine: 18, pad: 8, foot: 24, elseH: 44, hole: 46, caret: 40, start: 58, hat: 66, pill: 34, lapsRow: 44, small: false };
+export const PAL: Metrics = { h: 48, arm: 48, spine: 14, pad: 8, foot: 12, elseH: 22, hole: 10, caret: 0, start: 0, hat: 0, pill: 28, lapsRow: 0, small: true, plain: true };
 export const MINI: Metrics = { h: 38, arm: 40, spine: 12, pad: 6, foot: 12, elseH: 26, hole: 22, caret: 0, start: 40, hat: 44, pill: 26, lapsRow: 0, small: true };
 
 /** How wide a block is in the program: the canvas width. */
 export const CANVAS_W = 344;
 export const MINI_W = 232;
-export const PAL_W = 118;
-export const PAL_WIDE = 244;
+export const PAL_W = 110;
+/** The event script is narrower than the main one: at 1280 px both fit side by side. */
+export const EVENT_W = 292;
 
 /** The widths of the condition pills (icon + words), by sensor. Measured with the garage's font. */
-export const PILL_W: Readonly<Record<Sensor, number>> = { puddle_ahead: 188, straight_ahead: 176, nitro_positive: 132 };
+export const PILL_W: Readonly<Record<Sensor | 'slot' | 'more', number>> = { puddle_ahead: 230, straight_ahead: 222, nitro_positive: 168, slot: 224, more: 96 };
 const PILL_W_MINI = 0.72;
 /** The word `si` and its margin, and the `y` that joins two pills. */
 export const SI_W = 40;
 export const AND_W = 26;
 const ROW_GAP = 6;
+
+/** What the arm of a `si` holds: a sensor piece, the empty condition hole, or the dashed hole that takes a second one (`y`). */
+export type Cell = Sensor | 'slot' | 'more';
 
 export type ItemKind = 'start' | 'hat' | 'cmd' | 'repeat' | 'if' | 'hole' | 'gap' | 'caret';
 
@@ -77,8 +83,8 @@ export interface Placed {
   arm?: number;
   mouth?: number;
   mouthB?: number;
-  /** `si`: the pills of the arm, in rows. */
-  rows?: Sensor[][];
+  /** `si`: the cells of the arm (a condition piece, the empty hole, or the "y ..." hole for a second one), in rows. */
+  rows?: Cell[][];
   /** `repetir` on a track with laps: the arm has a second row for `vueltas`. */
   lapsRow?: boolean;
   /** Holes and gaps: the list they stand for. */
@@ -118,14 +124,14 @@ export interface LayoutOpts {
 const same = (a: Position | null | undefined, b: Position): boolean =>
   !!a && a.script === b.script && a.index === b.index && a.path.length === b.path.length && a.path.every((s, i) => s.index === b.path[i].index && s.branch === b.path[i].branch);
 
-/** Greedy rows of pills for a `si` arm of width `w`. Each pill after the first carries its `y`. */
-export function pillRows(w: number, shown: readonly Sensor[], m: Metrics = FULL): Sensor[][] {
+/** Greedy rows of cells for a `si` arm of width `w`. Each cell after the first carries its `y`. */
+export function pillRows(w: number, shown: readonly Cell[], m: Metrics = FULL): Cell[][] {
   const k = m.small ? PILL_W_MINI : 1;
   const usable = w - 2 * m.pad - SI_W * (m.small ? 0.8 : 1);
-  const rows: Sensor[][] = [[]];
+  const rows: Cell[][] = [[]];
   let used = 0;
   shown.forEach((s, i) => {
-    const need = PILL_W[s] * k + (i > 0 ? AND_W * k : 0);
+    const need = Math.min(PILL_W[s] * k, usable) + (i > 0 ? AND_W * k : 0);
     if (rows[rows.length - 1].length && used + need > usable) { rows.push([]); used = 0; }
     rows[rows.length - 1].push(s);
     used += need;
@@ -133,13 +139,14 @@ export function pillRows(w: number, shown: readonly Sensor[], m: Metrics = FULL)
   return rows;
 }
 
-/** The sensors a `si` shows: its own, or (selected) every one its copa offers, in the engine's order. */
-export function shownSensors(b: Extract<Block, { kind: 'if' }>, selected: boolean, offered: readonly Sensor[]): Sensor[] {
-  if (!selected) return SENSORS.filter((s) => b.cond.includes(s));
-  return SENSORS.filter((s) => offered.includes(s) || b.cond.includes(s));
+/** What a `si` shows in its arm: its sensor pieces, then the dashed hole for the next one (the first, or a second joined by `y`). */
+export function condCells(b: Extract<Block, { kind: 'if' }>, offered: readonly Sensor[]): Cell[] {
+  const have = SENSORS.filter((s) => b.cond.includes(s));
+  if (!have.length) return ['slot'];
+  return have.length < MAX_COND && offered.length > have.length ? [...have, 'more'] : have;
 }
 
-const armOf = (rows: number, m: Metrics) => Math.max(m.arm, 2 * 12 + rows * m.pill + (rows - 1) * ROW_GAP);
+const armOf = (rows: number, m: Metrics) => (m.plain ? m.arm : Math.max(m.arm, 2 * 12 + rows * m.pill + (rows - 1) * ROW_GAP));
 
 /** Lays one script out. */
 export function layoutScript(blocks: readonly Block[], o: LayoutOpts): Layout {
@@ -196,7 +203,7 @@ export function layoutScript(blocks: readonly Block[], o: LayoutOpts): Layout {
       return y0 + item.h;
     }
     if (b.kind === 'if') {
-      const rows = pillRows(w, shownSensors(b, o.selected === b.id, offered), m);
+      const rows = m.plain ? [] : pillRows(w, condCells(b, offered), m);
       const arm = armOf(rows.length, m);
       const item: Placed = { key: b.id, kind: 'if', id: b.id, block: b, pos, x, y: y0, w, h: 0, depth, arm, rows };
       items.push(item);

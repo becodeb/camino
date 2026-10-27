@@ -11,7 +11,7 @@
 // Blocks are compared by what they are (kind, count, sensors, nitro step) and
 // where they sit (depth and branch), never by id: the child's ids are their own.
 
-import { type Block, type BlockKind, type Program, type Sensor } from './program';
+import { SENSORS, type Block, type BlockKind, type Program, type Sensor } from './program';
 import type { Tier, TrackSpec } from './tracks';
 
 export type Branch = 'body' | 'then' | 'else';
@@ -20,9 +20,10 @@ export interface PathStep { index: number; branch: Branch }
 export interface Position { script: 'main' | 'event'; path: PathStep[]; index: number }
 
 export interface HintBlock {
-  kind: BlockKind | 'on_log';
+  /** `sensor`: a condition piece for the `si` at `position` (the `si` itself comes first, with an empty hole). */
+  kind: BlockKind | 'on_log' | 'sensor';
   n?: number | 'laps';
-  cond?: Sensor[];
+  sensor?: Sensor;
   delta?: number;
 }
 
@@ -35,20 +36,32 @@ export interface Hint {
   matched: number;
   /** The child's own block that sits where the hint's block should be, if there is one (replace it). */
   wrongBlockId?: string;
+  /** A `sensor` hint: the child's own `si` that takes it (its hole is the target). */
+  ifId?: string;
+  /** The child's own condition that should not be in that `si` (take it out). */
+  wrongSensor?: { ifId: string; sensor: Sensor };
 }
 
-interface Token { key: string; id: string; block: HintBlock; position: Position }
+interface Token { key: string; id: string; block: HintBlock; position: Position; ifId?: string }
 
 const keyOf = (b: HintBlock, depth: number, branch: Branch | null): string =>
-  `${depth}|${branch ?? '-'}|${b.kind}|${b.n ?? ''}|${(b.cond ?? []).slice().sort().join('+')}|${b.delta ?? ''}`;
+  `${depth}|${branch ?? '-'}|${b.kind}|${b.n ?? ''}|${b.sensor ?? ''}|${b.delta ?? ''}`;
 
 function tokensOf(p: Program): Token[] {
   const out: Token[] = [];
   const walk = (blocks: readonly Block[], script: 'main' | 'event', path: PathStep[], branch: Branch | null) => {
     blocks.forEach((b, index) => {
       const hb: HintBlock = b.kind === 'repeat' ? { kind: 'repeat', n: b.n } : b.kind === 'wait' ? { kind: 'wait', n: b.n }
-        : b.kind === 'if' ? { kind: 'if', cond: b.cond } : b.kind === 'nitro' ? { kind: 'nitro', delta: b.delta } : { kind: b.kind };
-      out.push({ key: keyOf(hb, path.length, branch), id: b.id, block: hb, position: { script, path: [...path], index } });
+        : b.kind === 'if' ? { kind: 'if' } : b.kind === 'nitro' ? { kind: 'nitro', delta: b.delta } : { kind: b.kind };
+      const position: Position = { script, path: [...path], index };
+      out.push({ key: keyOf(hb, path.length, branch), id: b.id, block: hb, position });
+      if (b.kind === 'if') {
+        // the condition pieces come right after their `si`, in the engine's order
+        for (const sensor of SENSORS.filter((x) => b.cond.includes(x))) {
+          const sb: HintBlock = { kind: 'sensor', sensor };
+          out.push({ key: keyOf(sb, path.length, branch), id: `${b.id}:${sensor}`, block: sb, position, ifId: b.id });
+        }
+      }
       if (b.kind === 'repeat') walk(b.body, script, [...path, { index, branch: 'body' }], 'body');
       else if (b.kind === 'if') {
         walk(b.then, script, [...path, { index, branch: 'then' }], 'then');
@@ -88,11 +101,18 @@ export function nextBlockHint(program: Program, track: Pick<TrackSpec, 'refs'>):
   }
   const { from, sol, matched } = best!;
   const want = sol[matched];
+  const wrong = matched < cur.length ? cur[matched] : null;
+  // a sensor piece goes into the `si` the child already has at that place (the one just before in reading order)
+  let ifId: string | undefined;
+  if (want.block.kind === 'sensor') for (let i = matched - 1; i >= 0; i--) if (cur[i].block.kind === 'if') { ifId = cur[i].id; break; }
   return {
     block: want.block,
     position: want.position,
     from,
     matched,
-    ...(matched < cur.length ? { wrongBlockId: cur[matched].id } : {}),
+    ...(ifId ? { ifId } : {}),
+    // a missing condition is asked for first: the blocks the child already put inside the `si` may well be right
+    ...(wrong && wrong.block.kind !== 'sensor' && want.block.kind !== 'sensor' ? { wrongBlockId: wrong.id } : {}),
+    ...(wrong && wrong.block.kind === 'sensor' && wrong.ifId ? { wrongSensor: { ifId: wrong.ifId, sensor: wrong.block.sensor! } } : {}),
   };
 }

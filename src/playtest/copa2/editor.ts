@@ -18,7 +18,7 @@
 //   program is left exactly as it was.
 
 import {
-  MAX_REPEAT, MAX_WAIT, SENSORS, allBlocks, slotCount,
+  MAX_COND, MAX_REPEAT, MAX_WAIT, SENSORS, allBlocks, slotCount,
   type Block, type BlockKind, type Palette, type Program, type Sensor,
 } from './program';
 import type { PathStep, Position } from './hints';
@@ -151,11 +151,12 @@ export const usage = (st: EditorState, rules: Rules): { used: number; total: num
 export const fits = (st: EditorState, rules: Rules, cost = 1): boolean => slotCount(st.program) + cost <= rules.slots;
 
 /** A fresh block with its starting values. */
-export function makeBlock(kind: BlockKind, rules: Pick<Rules, 'palette'>, id: string): Block {
+export function makeBlock(kind: BlockKind, _rules: Pick<Rules, 'palette'>, id: string): Block {
   switch (kind) {
     case 'wait': return { id, kind, n: 1 };
     case 'repeat': return { id, kind, n: 2, body: [] };
-    case 'if': return { id, kind, cond: [rules.palette.sensors[0] ?? 'puddle_ahead'], then: [], else: [] };
+    // a new `si` asks the child what the car looks at: the hole is filled with a sensor piece (addSensor)
+    case 'if': return { id, kind, cond: [], then: [], else: [] };
     case 'nitro': return { id, kind, delta: -1 };
     default: return { id, kind };
   }
@@ -163,7 +164,7 @@ export function makeBlock(kind: BlockKind, rules: Pick<Rules, 'palette'>, id: st
 
 // ------------------------------------------------------------------ editing
 
-export type RefusedBecause = 'full' | 'not_allowed' | 'nowhere';
+export type RefusedBecause = 'full' | 'not_allowed' | 'nowhere' | 'cond_full';
 export type EditResult = { ok: true; state: EditorState; id?: string } | { ok: false; reason: RefusedBecause; state: EditorState };
 
 const refuse = (state: EditorState, reason: RefusedBecause): EditResult => ({ ok: false, reason, state });
@@ -323,16 +324,41 @@ export function setLaps(st: EditorState, id: string, on: boolean, rules: Rules):
   return program ? { ...st, program, edits: bump(st.edits, 'number') } : st;
 }
 
-/** Turns a sensor on/off in a `si` (several are joined by `y`; one always stays). */
-export function toggleSensor(st: EditorState, id: string, sensor: Sensor, rules: Rules): EditorState {
-  const b = blockById(st.program, id);
-  if (!b || b.kind !== 'if' || !rules.palette.sensors.includes(sensor)) return st;
-  const has = b.cond.includes(sensor);
-  if (has && b.cond.length === 1) return st;
-  const cond = SENSORS.filter((s) => (s === sensor ? !has : b.cond.includes(s)));
-  const program = mapBlock(st.program, id, (x) => ({ ...x, cond } as Block));
-  return program ? { ...st, program, edits: bump(st.edits, 'number') } : st;
+/** The `si` blocks of the program in reading order (main script, then the event script). */
+const ifBlocks = (p: Program): Extract<Block, { kind: 'if' }>[] => allBlocks(p).filter((b): b is Extract<Block, { kind: 'if' }> => b.kind === 'if');
+
+/** The `si` that takes a sensor piece the child tapped: the selected one, else the last one still empty, else the last one with room. */
+export function sensorTarget(st: EditorState): string | null {
+  const sel = st.selected ? blockById(st.program, st.selected) : null;
+  if (sel?.kind === 'if') return sel.id;
+  const ifs = ifBlocks(st.program);
+  const empty = [...ifs].reverse().find((b) => !b.cond.length);
+  if (empty) return empty.id;
+  return [...ifs].reverse().find((b) => b.cond.length < MAX_COND)?.id ?? null;
 }
+
+/** Puts a sensor piece into the hole of a `si` (a second one is joined by `y`; the copa's sensors only). */
+export function addSensor(st: EditorState, ifId: string, sensor: Sensor, rules: Rules): EditResult {
+  const b = blockById(st.program, ifId);
+  if (!b || b.kind !== 'if') return refuse(st, 'nowhere');
+  if (!rules.palette.sensors.includes(sensor)) return refuse(st, 'not_allowed');
+  if (b.cond.includes(sensor)) return { ok: true, id: ifId, state: { ...st, selected: ifId } };
+  if (b.cond.length >= MAX_COND) return refuse(st, 'cond_full');
+  const cond = SENSORS.filter((x) => x === sensor || b.cond.includes(x));
+  const program = mapBlock(st.program, ifId, (x) => ({ ...x, cond } as Block));
+  return program ? { ok: true, id: ifId, state: { ...st, program, selected: ifId, edits: bump(st.edits, 'number') } } : refuse(st, 'nowhere');
+}
+
+/** Takes a sensor piece out of a `si` (it can be left empty: the hole comes back). */
+export function removeSensor(st: EditorState, ifId: string, sensor: Sensor): EditorState {
+  const b = blockById(st.program, ifId);
+  if (!b || b.kind !== 'if' || !b.cond.includes(sensor)) return st;
+  const program = mapBlock(st.program, ifId, (x) => ({ ...x, cond: b.cond.filter((s) => s !== sensor) } as Block));
+  return program ? { ...st, program, selected: ifId, edits: bump(st.edits, 'number') } : st;
+}
+
+/** The `si` blocks that look at nothing yet (¡Largar! waits until they do), in reading order. */
+export const emptyConditions = (p: Program): string[] => ifBlocks(p).filter((b) => !b.cond.length).map((b) => b.id);
 
 /** Hands the edit counts over (for the data) and starts counting again. */
 export function takeEdits(st: EditorState): { counts: EditCounts; state: EditorState } {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FULL, MINI, PAL, heightOf, layoutScript, pickSlot, pillRows, shownSensors, withoutGap, type Layout, type Placed } from './blockLayout';
+import { FULL, MINI, PAL, heightOf, layoutScript, condCells, pickSlot, pillRows, withoutGap, type Layout, type Placed } from './blockLayout';
 import { programBuilder, type Program } from './program';
 import { trackById } from './tracks';
 
@@ -95,7 +95,7 @@ describe('containers', () => {
 
   it('the palette and the faded reference use their own, smaller sizes', () => {
     const rep = b.repeat(2, [b.forward()]);
-    const pal = layoutScript([rep], { script: 'main', width: 248, metrics: PAL });
+    const pal = layoutScript([rep], { script: 'main', width: 118, metrics: PAL });
     const mini = layoutScript([rep], { script: 'main', width: 232, metrics: MINI });
     expect(item(pal, rep.id).h).toBe(PAL.arm + PAL.h + PAL.foot);
     expect(item(mini, rep.id).h).toBeLessThan(item(lay([rep]), rep.id).h);
@@ -103,26 +103,38 @@ describe('containers', () => {
 });
 
 describe('the si block and its pills', () => {
-  it('a selected si shows every sensor of the copa, an unselected one only its own', () => {
-    const iff = b.iff('puddle_ahead', [], []);
-    expect(shownSensors(iff, false, ['puddle_ahead', 'straight_ahead', 'nitro_positive'])).toEqual(['puddle_ahead']);
-    expect(shownSensors(iff, true, ['puddle_ahead', 'straight_ahead', 'nitro_positive'])).toEqual(['puddle_ahead', 'straight_ahead', 'nitro_positive']);
-    expect(shownSensors(iff, true, ['puddle_ahead'])).toEqual(['puddle_ahead']);
+  const ALL = ['puddle_ahead', 'straight_ahead', 'nitro_positive'] as const;
+
+  it('an empty si shows the dashed condition hole; a full one only its pieces; one piece leaves room for a second by `y`', () => {
+    expect(condCells(b.iff([], [], []), ALL)).toEqual(['slot']);
+    expect(condCells(b.iff('puddle_ahead', [], []), ALL)).toEqual(['puddle_ahead', 'more']);
+    expect(condCells(b.iff('puddle_ahead', [], []), ['puddle_ahead'])).toEqual(['puddle_ahead']); // the copa has nothing to join it with
+    expect(condCells(b.iff(['straight_ahead', 'nitro_positive'], [], []), ALL)).toEqual(['straight_ahead', 'nitro_positive']);
   });
 
-  it('pills wrap onto more rows when they do not fit, and the arm grows with the rows', () => {
+  it('cells wrap onto more rows when they do not fit, and the arm grows with the rows', () => {
     expect(pillRows(W, ['puddle_ahead']).length).toBe(1);
     expect(pillRows(W, ['puddle_ahead', 'straight_ahead', 'nitro_positive']).length).toBeGreaterThan(1);
     const iff = b.iff(['straight_ahead', 'nitro_positive'], [], []);
-        const l = lay([iff], { selected: iff.id });
+    const l = lay([iff]);
     const rows = item(l, iff.id).rows!;
     expect(item(l, iff.id).arm).toBeGreaterThanOrEqual(24 + rows.length * FULL.pill);
   });
 
-  it('every row of pills fits the arm', () => {
+  it('the empty hole is never wider than the arm, however deep the si is nested', () => {
+    for (const w of [344, 310, 276, 242]) {
+      for (const row of pillRows(w, ['slot'])) expect(row.length).toBeGreaterThan(0);
+    }
     for (const w of [344, 310, 276, 242]) {
       for (const row of pillRows(w, ['puddle_ahead', 'straight_ahead', 'nitro_positive'])) expect(row.length).toBeGreaterThan(0);
     }
+  });
+
+  it('the palette si has no pills, only its arm', () => {
+    const iff = b.iff([], [], []);
+    const pal = layoutScript([iff], { script: 'main', width: 118, metrics: PAL });
+    expect(item(pal, iff.id).rows).toEqual([]);
+    expect(item(pal, iff.id).arm).toBe(PAL.arm);
   });
 });
 

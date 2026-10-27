@@ -60,6 +60,8 @@ export const isLeaf = (b: Block): b is Leaf => b.kind !== 'repeat' && b.kind !==
 /** Largest `repetir` count the engine runs (a bigger number is the same as this). */
 export const MAX_REPEAT = 99;
 export const MAX_WAIT = 9;
+/** Most conditions a `si` joins with `y`. */
+export const MAX_COND = 2;
 
 // ------------------------------------------------------------------ building
 

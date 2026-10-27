@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addBlock, addEventScript, ancestorsOf, blockById, bumpNumber, endOfMain, lapsAllowed, listAt, locate, moveBlock, moveSelected, newEditor, removeBlock, removeSelected, withoutBlock,
-  sameSlot, selectBlock, setCaret, setLaps, takeEdits, toggleSensor, usage, withProgram, UI_MAX_REPEAT,
+  sameSlot, selectBlock, addSensor, removeSensor, sensorTarget, emptyConditions, setCaret, setLaps, takeEdits, usage, withProgram, UI_MAX_REPEAT,
   type EditorState, type Rules,
 } from './editor';
 import { PALETTES, SLOTS, trackById } from './tracks';
@@ -49,11 +49,11 @@ describe('adding blocks', () => {
     expect(st.program.main).toHaveLength(2);
   });
 
-  it('a new si starts in its "si" branch with the copa\'s first sensor, and the "si no" branch can be filled by tapping its slot', () => {
+  it('a new si starts in its "si" branch with an empty condition, and the "si no" branch can be filled by tapping its slot', () => {
     const r = rules(3);
     let st = build(newEditor(), r, ['if', 'jump']);
     const iff = st.program.main[0];
-    expect(iff).toMatchObject({ kind: 'if', cond: ['puddle_ahead'] });
+    expect(iff).toMatchObject({ kind: 'if', cond: [] });
     st = setCaret(st, { script: 'main', path: [{ index: 0, branch: 'else' }], index: 0 });
     st = build(st, r, ['forward']);
     const out = st.program.main[0];
@@ -82,7 +82,8 @@ describe('adding blocks', () => {
   it('a program built only with the editor passes the engine\'s own check', () => {
     const r = rules(3);
     const st = build(newEditor(), r, ['repeat', 'if', 'jump']);
-    expect(checkProgram(st.program, r)).toEqual([]);
+    // the new si still looks at nothing: that is the only thing wrong with it
+    expect(checkProgram(st.program, r).map((p) => p.code)).toEqual(['empty_condition']);
   });
 
   it('keeps ids unique when starting from an existing program', () => {
@@ -235,19 +236,51 @@ describe('numbers and sensors (buttons, never typing)', () => {
     expect(setLaps(st2, st2.program.main[0].id, true, r2)).toBe(st2);
   });
 
-  it('a si keeps at least one sensor, only offers the copa\'s sensors and orders them', () => {
+  it('a new si looks at nothing; a sensor piece fills its hole, a second one joins with y, the copa\'s sensors only, in the engine\'s order', () => {
     const r5 = rules(5);
     let st = build(newEditor(), r5, ['if']);
     const id = st.program.main[0].id;
-    expect(toggleSensor(st, id, 'puddle_ahead', r5)).toBe(st); // the only one stays
-    st = toggleSensor(st, id, 'nitro_positive', r5);
-    st = toggleSensor(st, id, 'straight_ahead', r5);
-    expect(st.program.main[0]).toMatchObject({ cond: ['puddle_ahead', 'straight_ahead', 'nitro_positive'] });
-    st = toggleSensor(st, id, 'puddle_ahead', r5);
-    expect(st.program.main[0]).toMatchObject({ cond: ['straight_ahead', 'nitro_positive'] });
+    expect(st.program.main[0]).toMatchObject({ kind: 'if', cond: [] });
+    expect(emptyConditions(st.program)).toEqual([id]);
+    expect(sensorTarget(st)).toBe(id);
+    let res = addSensor(st, id, 'nitro_positive', r5);
+    if (!res.ok) throw new Error('refused');
+    st = res.state;
+    expect(emptyConditions(st.program)).toEqual([]);
+    res = addSensor(st, id, 'straight_ahead', r5);
+    if (!res.ok) throw new Error('refused');
+    st = res.state;
+    expect(st.program.main[0]).toMatchObject({ cond: ['straight_ahead', 'nitro_positive'] }); // engine order, not tap order
+    const three = addSensor(st, id, 'puddle_ahead', r5);
+    expect(three.ok).toBe(false);
+    expect(!three.ok && three.reason).toBe('cond_full');
+    expect(addSensor(st, id, 'straight_ahead', r5)).toMatchObject({ ok: true }); // already there: nothing changes
+    st = removeSensor(st, id, 'straight_ahead');
+    expect(st.program.main[0]).toMatchObject({ cond: ['nitro_positive'] });
+    st = removeSensor(st, id, 'nitro_positive');
+    expect(emptyConditions(st.program)).toEqual([id]); // the hole comes back
     const r3 = rules(3);
     const st3 = build(newEditor(), r3, ['if']);
-    expect(toggleSensor(st3, st3.program.main[0].id, 'straight_ahead', r3)).toBe(st3);
+    const refused = addSensor(st3, st3.program.main[0].id, 'straight_ahead', r3);
+    expect(!refused.ok && refused.reason).toBe('not_allowed');
+  });
+
+  it('a tapped sensor goes to the selected si, else the last empty one, else the last with room', () => {
+    const r5 = rules(5);
+    let st = build(newEditor(), r5, ['if']);
+    const first = st.program.main[0].id;
+    st = setCaret(st, endOfMain(st.program));
+    st = build(st, r5, ['if']);
+    const second = st.program.main[1].id;
+    expect(st.selected).toBe(second);
+    st = selectBlock(st, first);
+    expect(sensorTarget(st)).toBe(first); // selected wins
+    st = setCaret(st, endOfMain(st.program)); // deselects
+    expect(sensorTarget(st)).toBe(second); // the last empty
+    const res = addSensor(st, second, 'puddle_ahead', r5);
+    if (!res.ok) throw new Error('refused');
+    expect(sensorTarget(setCaret(res.state, endOfMain(res.state.program)))).toBe(first); // the other one is still empty
+    expect(sensorTarget(newEditor())).toBeNull();
   });
 });
 
@@ -317,6 +350,12 @@ describe('following the ghost hint through the editor builds the gold program on
           st = res.state;
           continue;
         }
+        if (hint.block.kind === 'sensor') {
+          const put = addSensor(st, hint.ifId!, hint.block.sensor!, r);
+          if (!put.ok) throw new Error(`sensor refused: ${put.reason}`);
+          st = put.state;
+          continue;
+        }
         st = setCaret(st, hint.position);
         const res = addBlock(st, hint.block.kind, r);
         if (!res.ok) throw new Error(`refused ${hint.block.kind}: ${res.reason}`);
@@ -332,10 +371,6 @@ describe('following the ghost hint through the editor builds the gold program on
             st = bumpNumber(st, res.id!, 1);
           }
         } else if (hint.block.kind === 'if') {
-          const want = hint.block.cond ?? [];
-          const condNow = () => { const b = blockById(st.program, res.id!); return b && b.kind === 'if' ? b.cond : []; };
-          for (const s of want) if (!condNow().includes(s)) st = toggleSensor(st, res.id!, s, r);
-          for (const s of [...condNow()]) if (!want.includes(s)) st = toggleSensor(st, res.id!, s, r);
         }
       }
       expect(nextBlockHint(st.program, track)).toBeNull();
