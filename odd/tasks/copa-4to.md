@@ -93,7 +93,8 @@ Tasks C06–C11 implement Design v2. C03's single-slot circuits and C02's fixed 
   - The `si` should come with its sensor already inside, as before C13. The sensor-as-piece step added friction.
   - The hand gets confused around `repetir` and does not understand it. Re-check the hint logic on repeat bodies and counts on real child programs.
   - Blocks turning red and the red box saying "acá va la próxima" look clumsy now that drag and drop exists. Remove the persistent insertion box and the red highlight noise; keep only the crash block flash after a run.
-  - Being taken out of a level after the second failed attempt frustrates them mid-try. Find where this happens (the ladder's per-item caps and step-down, or a Copa/adult skip?) and stop moving the child on while they are still trying.
+  - Being taken out of a level after the second failed attempt frustrates them mid-try. The teacher confirmed this is NOT the Copa, so it is the ladder: its per-item failure/step-down rule moves the child on while they are still trying. Let them keep trying (move on only by time or by their own choice).
+  - In the Copa the problem was the hand: very annoying, and it suggested blocks that were not even right. Validate every hint by simulation before showing it, and never show a hint that does not make the program better.
   - The race blocks are not as comfortable as the other levels' blocks. Match their drag feel exactly.
   - In the other levels, the blue box that always sits there as if it were a block is clumsy. Drag and drop as the only option is fine (this drops tap-to-add, which needs care: shared with 1ro).
 
