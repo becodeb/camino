@@ -107,8 +107,8 @@ describe('T43: `?ruta=clasica` keeps 1ro on the default route', () => {
     expect(reduce(initialFlow(0), { type: 'next', grade: 4, classic: true, nameOn: true }, 1000).state.route).toBe('4to');
   });
 
-  it('its menu is the 2026-10-20 one', () => {
-    expect(menuFor(1, () => false, false, true).map((a) => a.id)).toEqual(['race', 'typing_race', 'sheet', 'recess', 'guardas', 'editor']);
+  it('its menu: the typing race, the monster games, the sheet and the music (2026-10-27; no arrow race)', () => {
+    expect(menuFor(1, () => false, false, true).map((a) => a.id)).toEqual(['typing_race', 'recipe', 'dance', 'oops', 'tap', 'sheet', 'recess']);
     expect(menuFor(1, () => false, true, true).map((a) => a.id)).not.toContain('recess');
     expect(menuFor(2, () => false, false, true).map((a) => a.id)).toEqual(menuFor(2, () => false).map((a) => a.id));
   });

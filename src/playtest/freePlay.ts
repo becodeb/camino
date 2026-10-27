@@ -67,8 +67,12 @@ export const MENU: Record<number, readonly ActivityId[]> = {
   5: ['workshop', 'rule_game', 'editor', 'recess', 'text_probe'],
 };
 
-/** T43: 1ro's menu on the classic route (`?ruta=clasica`, flow.ts): the one it had on 2026-10-20. */
-export const MENU_1RO_CLASSIC: readonly ActivityId[] = ['race', 'typing_race', 'sheet', 'recess', 'guardas', 'editor'];
+/**
+ * T43: 1ro's menu on the classic route (`?ruta=clasica`, flow.ts). 2026-10-27 (user: a second 1ro group plays the classic route, "que
+ * reciba un poco de las mejoras"): the typing race first, the monster games, the sheet and the music; no arrow race (nobody understood
+ * the arrows), no guardas, no workshop.
+ */
+export const MENU_1RO_CLASSIC: readonly ActivityId[] = ['typing_race', 'recipe', 'dance', 'oops', 'tap', 'sheet', 'recess'];
 
 const title = (n: number) => sheetByN(n)?.title ?? '';
 

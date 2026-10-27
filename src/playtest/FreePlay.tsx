@@ -357,7 +357,8 @@ export function FreePlay() {
     body = Probe ? <Probe key={view.n} activity={a.kind.probe} levelEnded={(end) => { counted('level_end', end); levelEnded(end); }} done={() => toMenu('done')} /> : null;
   }
   // T51: on 1ro's arcade every way back to the menu is logged (`game_exit`), and the games offer large drawn ones
-  const home = is1ro(api.flow) ? (via: ExitVia) => { log('game_exit', { game: a.id, via, visit: view.n }); toMenu('menu'); } : undefined;
+  // 2026-10-27: also on 1ro's classic route (its menu now holds the monster games and the typing race)
+  const home = grade === 1 ? (via: ExitVia) => { log('game_exit', { game: a.id, via, visit: view.n }); toMenu('menu'); } : undefined;
   return (
     <ActivityFrame id={a.id} page={view.page} back={() => toMenu('menu')} home={home}>{body}</ActivityFrame>
   );
