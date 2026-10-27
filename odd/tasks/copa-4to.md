@@ -85,6 +85,7 @@ Tasks C06–C11 implement Design v2. C03's single-slot circuits and C02's fixed 
 - [x] C09 Copa v2 garage and race UI: slot memory strip with nesting, limited palette per copa, ¡Largar!, rivals waiting at the start, crash → back to the garage with the red block, Ver paso a paso, result with truthful reason and adaptive rival tier, ghost next block after 2 failures.
 - [x] C10 Copa v2 flow: 5 copas with their tracks, ladder placement, skip on first-try solve, Espiá al zorro, Ayudá al ciervo, data events, Arcade unlock and survey wiring, `/admin`, report, teacher guide.
 - [x] C11 Final: merge the latest `origin/feat/prueba-piloto` again, full checks, deploy everything to camino-prueba (authorized 2026-10-26: "subís todos los cambios juntos a producción"), verify the served bundle by sha256.
+- [ ] C12 Garage redesign (requested 2026-10-27): the Copa's blocks look and behave like the other levels' blocks (the notched puzzle blocks of the ladder and La carrera, drag and drop plus tap-to-add, nicer); the palette sits at the side; the track stays on top; the whole screen scrolls instead of cramming; better layout; nothing ugly. Push afterwards. Redeploying is a separate decision for the user.
 
 ## Progress
 
