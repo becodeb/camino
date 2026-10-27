@@ -11,24 +11,27 @@
 // The engine (simulate, tracks, rivals, hints) is copa2/*; the editor's rules
 // (caret, memory, nesting) are editor.ts; this file is the screen.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { speak } from '../../ui/speech';
 import { CritterArt } from '../../ui/critterArt';
 import { playGhost, type GhostRun } from '../../ui/ghost';
 import { NAME } from '../Race';
-import { allBlocks, slotCount, type BlockKind, type Program, type Sensor } from './program';
+import { allBlocks, slotCount, type Block, type BlockKind, type Program, type Sensor } from './program';
 import { simulate, type SimResult } from './sim';
 import { PALETTES, rivalTargets, type Tier, type TrackSpec } from './tracks';
 import { RIVAL_ANIMAL, raceField, raceResult, type RaceResult } from './rivals';
 import { nextBlockHint, type Position } from './hints';
 import {
-  addBlock, addEventScript, ancestorsOf, blockById, bumpNumber, hasEdits, listAt, locate, moveSelected, newEditor, removeSelected,
-  sameSlot, selectBlock, setCaret, setLaps, takeEdits, toggleSensor, type Caret, type EditorState, type Rules,
+  addBlock, addEventScript, ancestorsOf, blockById, bumpNumber, hasEdits, lapsAllowed, listAt, locate, makeBlock, moveBlock, moveSelected, newEditor, removeBlock,
+  removeSelected, sameSlot, selectBlock, setCaret, setLaps, takeEdits, toggleSensor, type Caret, type EditorState, type Rules,
 } from './editor';
 import { stateAt, stateAtStep, stepsOf, type SceneState } from './playback';
 import { CRASH_TEXT, STUCK_TEXT, TIMEOUT_TEXT, BLOCK_LABEL, aAnimal, seconds } from './labels';
 import { BlockIcon } from './blockArt';
-import { MemoryMeter, NO_LIVE, ProgramPanel, ReferencePanel, type Live } from './ProgramPanel';
+import { HeldBlock, HeldHat, PaletteBlock } from './CopaBlocks';
+import { CANVAS_W, heightOf } from './blockLayout';
+import { MemoryMeter, NO_LIVE, ProgramPanel, ReferencePanel, type DndView, type HitFn, type Live } from './ProgramPanel';
 import { CAM_MIN, COAST_U, PARK_U, RUN_W, Scene, camFor, courseFor, maybePuddles, previewWidth, uOfPos, type KartLook } from './Scene';
 import { DeerDeed, DeerDriver } from './DeerArt';
 import { GarageResult } from './GarageResult';
@@ -119,6 +122,12 @@ interface Notice {
 }
 
 const ORDER: readonly BlockKind[] = ['forward', 'up', 'down', 'jump', 'turbo', 'brake', 'wait', 'repeat', 'if', 'nitro'];
+/** The palette's families, in the order they are shown (separated by a thin rule). */
+const FAMILIES: readonly (readonly BlockKind[])[] = [['forward', 'up', 'down', 'jump'], ['turbo', 'brake', 'wait', 'nitro'], ['repeat', 'if']];
+
+type Src = { from: 'palette'; kind: BlockKind } | { from: 'program'; id: string };
+interface Pending { src: Src; el: HTMLElement; x0: number; y0: number; id: number }
+interface Drag extends Pending { offX: number; offY: number; width: number; h: number; block: Block | null; x: number; y: number }
 const ease = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 
@@ -156,9 +165,12 @@ export function Garage({
   const [clock, setClock] = useState(0);
   const [step, setStep] = useState<{ i: number; since: number }>({ i: -1, since: 0 });
   const [auto, setAuto] = useState(false);
-  const [drag, setDrag] = useState<{ kind: BlockKind; x: number; y: number } | null>(null);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const [gap, setGap] = useState<{ pos: Position; h: number } | null>(null);
+  const [overPalette, setOverPalette] = useState(false);
   const runCount = useRef(0);
   const page = useRef<HTMLElement>(null);
+  const sceneCard = useRef<HTMLElement>(null);
   const log = useCallback((type: string, payload: Record<string, unknown>) => logger?.(type, { track: track.id, ...(deer ? { deer: true } : {}), ...payload }), [logger, track.id, deer]);
   const phaseCb = useRef(onPhase);
   phaseCb.current = onPhase;
@@ -167,6 +179,18 @@ export function Garage({
     trackId: track.id, rival: rivalTier, won: done.result?.won ?? false, place: done.result?.place ?? 3, result: done.result!, program: done.program,
     timeMs: done.sim.timeMs, runs: runCount.current, slots: track.slots, used: slotCount(done.program),
   }), [rivalTier, track.id, track.slots]);
+
+  // the track stays at the top while the page scrolls: the blocks scroll under it, so they need to know how tall it is
+  useLayoutEffect(() => {
+    const card = sceneCard.current;
+    const root = page.current;
+    if (!card || !root) return;
+    const set = () => root.style.setProperty('--gx-stick', `${Math.round(card.getBoundingClientRect().height) + 10}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(card);
+    return () => ro.disconnect();
+  }, []);
 
   // ---------------------------------------------------------------- the track
 
@@ -412,30 +436,162 @@ export function Garage({
   // the tap on the crash overlay brings the child back at once
   const skipOverlay = () => { if (phase === 'run' && run && run.sim.outcome !== 'finish' && !ended.current) { ended.current = true; backToGarage(run); } };
 
-  // ---------------------------------------------------------------- the palette: tap to add, drag to place
+  // ---------------------------------------------------------------- blocks in the hand: drag from the palette, reorder, throw away
+  //
+  // The same gesture as the other levels (src/blocks/BlockEditor.tsx): a pointer down on a block, a few pixels of
+  // movement turn it into a drag, the block follows the pointer as a ghost, the program opens a hole where it would
+  // land, a release places it. A placed block thrown on the palette is deleted; thrown anywhere else it goes back.
+  // A tap that never became a drag is the tap-to-add / select path, which stays exactly as it was.
 
-  const dragState = useRef<{ kind: BlockKind; x: number; y: number; moved: boolean } | null>(null);
-  const palDown = (e: ReactPointerEvent, kind: BlockKind) => {
-    if (phase !== 'garage') return;
-    dragState.current = { kind, x: e.clientX, y: e.clientY, moved: false };
-    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* a synthetic pointer */ }
+  const hitRef = useRef<HitFn | null>(null);
+  const pending = useRef<Pending | null>(null);
+  const dragRef = useRef<Drag | null>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const gapRef = useRef<{ pos: Position; h: number } | null>(null);
+  const overRef = useRef(false);
+  const suppressTap = useRef(false);
+  const pointerRef = useRef({ x: 0, y: 0 });
+  const edReady = phase === 'garage';
+  const stateRef = useRef({ rules, edReady });
+  stateRef.current = { rules, edReady };
+
+  const probe = (d: Drag, x: number, y: number): Position | null => hitRef.current?.(x - d.offX + 22, y - d.offY + 28) ?? null;
+  const placeGhost = (x: number, y: number) => {
+    const d = dragRef.current;
+    if (!d || !ghostRef.current) return;
+    ghostRef.current.style.transform = `translate(${x - d.offX}px, ${y - d.offY}px)`;
   };
-  const palMove = (e: ReactPointerEvent) => {
-    const d = dragState.current;
-    if (!d) return;
-    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) d.moved = true;
-    if (d.moved) setDrag({ kind: d.kind, x: e.clientX, y: e.clientY });
+  const begin = (pd: Pending, x: number, y: number) => {
+    const r = pd.el.getBoundingClientRect();
+    const sensors = rules.palette.sensors;
+    let block: Block | null = null;
+    let h = r.height;
+    if (pd.src.from === 'palette') {
+      block = makeBlock(pd.src.kind, rules, 'held');
+      h = heightOf(block, { width: CANVAS_W, sensors, laps: lapsAllowed(rules) });
+    } else {
+      const id = pd.src.id;
+      block = edRef.current.program.onLog?.id === id ? null : blockById(edRef.current.program, id);
+      h = block ? heightOf(block, { width: CANVAS_W, sensors, laps: lapsAllowed(rules) }) : 0;
+    }
+    const width = pd.src.from === 'palette' ? CANVAS_W : r.width;
+    const d: Drag = { ...pd, offX: Math.min(x - r.left, width - 10), offY: Math.min(y - r.top, 40), width, h, block, x, y };
+    dragRef.current = d;
+    setDrag(d);
+    setMsg(null);
   };
-  const palUp = (e: ReactPointerEvent) => {
-    const d = dragState.current;
-    dragState.current = null;
+  const clearDrag = () => {
+    dragRef.current = null;
+    pending.current = null;
+    gapRef.current = null;
+    overRef.current = false;
     setDrag(null);
-    if (!d) return;
-    if (!d.moved) { tryAdd(d.kind); return; }
-    const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-drop]');
-    if (hit?.dataset.drop) tryAdd(d.kind, JSON.parse(hit.dataset.drop) as Position);
+    setGap(null);
+    setOverPalette(false);
   };
-  const palKey = (e: React.KeyboardEvent, kind: BlockKind) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tryAdd(kind); } };
+  const finish = (x: number, y: number, cancelled: boolean) => {
+    const d = dragRef.current;
+    suppressTap.current = true;
+    setTimeout(() => { suppressTap.current = false; }, 0);
+    if (!d) { pending.current = null; return; }
+    const pos = cancelled ? null : probe(d, x, y);
+    const trash = !cancelled && overPaletteAt(x, y);
+    clearDrag();
+    if (cancelled) return;
+    if (d.src.from === 'palette') {
+      if (pos && !trash) tryAdd(d.src.kind, pos);
+      return;
+    }
+    const id = d.src.id;
+    if (trash) { setEd((s) => removeBlock(s, id)); return; }
+    if (!pos) return;
+    const res = moveBlock(edRef.current, id, pos, rules);
+    if (res.ok) setEd(res.state);
+    else if (res.reason === 'full') { setShake((n) => n + 1); setMsg(fullMessage(track.copa)); setMsgTimer((n) => n + 1); speak(fullMessage(track.copa)); }
+  };
+  const overPaletteAt = (x: number, y: number) => document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-zone]')?.dataset.zone === 'palette';
+
+  const fns = useRef({ begin, finish, probe, placeGhost });
+  fns.current = { begin, finish, probe, placeGhost };
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      const pd = pending.current;
+      if (!pd || e.pointerId !== pd.id) return;
+      pointerRef.current = { x: e.clientX, y: e.clientY };
+      if (!dragRef.current) {
+        if (Math.hypot(e.clientX - pd.x0, e.clientY - pd.y0) < 8) return;
+        fns.current.begin(pd, e.clientX, e.clientY);
+      }
+      const d = dragRef.current!;
+      e.preventDefault();
+      fns.current.placeGhost(e.clientX, e.clientY);
+      const over = d.src.from === 'program' && overPaletteAt(e.clientX, e.clientY);
+      if (over !== overRef.current) { overRef.current = over; setOverPalette(over); }
+      const pos = over || (d.src.from === 'program' && !d.block) ? null : fns.current.probe(d, e.clientX, e.clientY);
+      const next = pos ? { pos, h: d.h } : null;
+      if (JSON.stringify(next) !== JSON.stringify(gapRef.current)) { gapRef.current = next; setGap(next); }
+    };
+    const up = (e: PointerEvent) => {
+      const pd = pending.current;
+      if (!pd || e.pointerId !== pd.id) return;
+      if (dragRef.current) fns.current.finish(e.clientX, e.clientY, false);
+      pending.current = null;
+    };
+    const cancel = (e: PointerEvent) => {
+      const pd = pending.current;
+      if (!pd || e.pointerId !== pd.id) return;
+      if (dragRef.current) fns.current.finish(e.clientX, e.clientY, true);
+      pending.current = null;
+    };
+    window.addEventListener('pointermove', move, { passive: false });
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+    };
+    // the handlers read everything through refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useLayoutEffect(() => { if (drag) placeGhost(drag.x, drag.y); }, [drag]);
+
+  // near the edge of the screen a drag scrolls the page (a long program is taller than the screen)
+  useEffect(() => {
+    if (!drag) return;
+    let raf = 0;
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      const { x, y } = pointerRef.current;
+      const top = (Number.parseFloat(getComputedStyle(page.current ?? document.body).getPropertyValue('--gx-stick')) || 0) + 36;
+      if (y > window.innerHeight - 70) window.scrollBy(0, 14);
+      else if (y < top && window.scrollY > 0) window.scrollBy(0, -14);
+      if (dragRef.current) {
+        const pos = dragRef.current.src.from === 'program' && !dragRef.current.block ? null : overRef.current ? null : probe(dragRef.current, x, y);
+        const next = pos ? { pos, h: dragRef.current.h } : null;
+        if (JSON.stringify(next) !== JSON.stringify(gapRef.current)) { gapRef.current = next; setGap(next); }
+      }
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!drag]);
+
+  const palDown = (e: ReactPointerEvent<HTMLElement>, kind: BlockKind) => {
+    if (!stateRef.current.edReady || pending.current) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pending.current = { src: { from: 'palette', kind }, el: e.currentTarget, x0: e.clientX, y0: e.clientY, id: e.pointerId };
+    pointerRef.current = { x: e.clientX, y: e.clientY };
+  };
+  const blockDown = (e: ReactPointerEvent<HTMLElement>, id: string) => {
+    if (!stateRef.current.edReady || pending.current) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pending.current = { src: { from: 'program', id }, el: e.currentTarget, x0: e.clientX, y0: e.clientY, id: e.pointerId };
+    pointerRef.current = { x: e.clientX, y: e.clientY };
+  };
+  const palTap = (kind: BlockKind) => { if (!suppressTap.current && phase === 'garage') tryAdd(kind); };
+  const dnd: DndView | undefined = edReady ? { dragId: drag?.src.from === 'program' ? drag.src.id : null, gap, hit: hitRef, onDown: blockDown, suppress: () => suppressTap.current } : undefined;
 
   // ---------------------------------------------------------------- the selected block's tools
 
@@ -465,7 +621,7 @@ export function Garage({
             </>
           )}
         </>
-      ) : <p className="gx-tools-hint">Tocá un bloque para sacarlo o moverlo.</p>}
+      ) : <p className="gx-tools-hint">Arrastrá un bloque para moverlo, o tocalo para elegirlo.</p>}
     </div>
   );
 
@@ -515,9 +671,21 @@ export function Garage({
   const stepNow = step.i >= 0 ? stepList[step.i] : null;
   const atEnd = step.i >= stepList.length - 1;
   const showScene = sceneState ?? null;
+  const goalNode = deer ? (
+    <div className="gx-goal gx-goal-deer" aria-label="Arreglá el programa del ciervo">
+      <span className="gx-goal-critter"><svg viewBox="-60 -90 120 100" width="64" height="54" aria-hidden="true"><DeerDriver bare /></svg></span>
+      <span className="gx-goal-text">El ciervo se chocó. <b>Arreglá su programa</b> para que llegue a la meta</span>
+    </div>
+  ) : (
+    <div className="gx-goal" aria-label={`Ganale ${aAnimal(rivalName)}`}>
+      <span className="gx-goal-critter"><svg viewBox="-60 -90 120 100" width="64" height="54" aria-hidden="true"><CritterArt id={RIVAL_ANIMAL[rivalTier]} bare /></svg></span>
+      <span className="gx-goal-text">Ganale {aAnimal(rivalName).split(' ')[0]} <b>{rivalName.replace(/^el /, '')}</b>: llegá en menos de <b>{seconds(goalMs)}</b></span>
+    </div>
+  );
+  const held = drag?.src.from === 'palette' ? drag.block : drag?.block ?? null;
 
   return (
-    <main className={`gx-page${hint ? ' has-hint' : ''}`} data-phase={phase} data-track={track.id} data-copa={track.copa} ref={page}>
+    <main className={`gx-page${hint ? ' has-hint' : ''}${drag ? ' is-dragging' : ''}${drag?.src.from === 'program' ? ' is-drag-program' : ''}`} data-phase={phase} data-track={track.id} data-copa={track.copa} ref={page}>
       <header className="gx-head">
         <div className="gx-title">
           <div className="gx-title-row">
@@ -526,26 +694,16 @@ export function Garage({
           </div>
           <h1>{deer ? 'Ayudá al ciervo' : title ?? track.name}</h1>
         </div>
-        {deer ? (
-          <div className="gx-goal gx-goal-deer" aria-label="Arreglá el programa del ciervo">
-            <span className="gx-goal-critter"><svg viewBox="-60 -90 120 100" width="64" height="54" aria-hidden="true"><DeerDriver bare /></svg></span>
-            <span className="gx-goal-text">El ciervo se chocó. <b>Arreglá su programa</b> para que llegue a la meta</span>
-          </div>
-        ) : (
-          <div className="gx-goal" aria-label={`Ganale ${aAnimal(rivalName)}`}>
-            <span className="gx-goal-critter"><svg viewBox="-60 -90 120 100" width="64" height="54" aria-hidden="true"><CritterArt id={RIVAL_ANIMAL[rivalTier]} bare /></svg></span>
-            <span className="gx-goal-text">Ganale {aAnimal(rivalName).split(' ')[0]} <b>{rivalName.replace(/^el /, '')}</b>: llegá en menos de <b>{seconds(goalMs)}</b></span>
-          </div>
-        )}
       </header>
 
-      <section className="sheet gx-scene-card">
+      <section className="sheet gx-scene-card" ref={sceneCard}>
         <Scene
           course={course} road={road} lapTiles={lapTiles} viewW={viewW} cam={cam} me={me} rivals={rivals} pair={pair}
           puddles={puddles} logs={logs} numbers={inGarage} spinKey={sceneState?.skidding ? 1 : 0}
           meDriver={deer ? <DeerDriver /> : undefined} hideRivals={deer}
         />
         {inGarage && <TrackNotes track={track} moving={movingPuddles} />}
+        {!runOver && phase !== 'run' && goalNode}
         {phase === 'run' && sceneState && !runOver && (
           <div className="gx-hud" aria-live="off">
             <span className="gx-clock">{seconds(Math.min(tNow, run!.sim.timeMs))}</span>
@@ -563,38 +721,45 @@ export function Garage({
       </section>
 
       <div className="gx-body">
-        <div className={`gx-left${reference ? ' has-ref' : ''}`}>
-          {reference && inGarage && <ReferencePanel program={reference} rules={rules} />}
+        <aside className={`gx-palette-col${inGarage ? '' : ' is-idle'}${overPalette ? ' is-trash' : ''}`} data-zone="palette" aria-label="Bloques">
+          <section className="sheet gx-palette">
+            {FAMILIES.map((fam) => {
+              const ks = fam.filter((k) => pal.includes(k));
+              return ks.length ? (
+                <div key={fam[0]} className={`gx-pal-family${ks.every((k) => k === 'repeat' || k === 'if') ? ' is-containers' : ''}`}>
+                  {ks.map((k) => (
+                    <PaletteBlock
+                      key={k} kind={k} rules={rules}
+                      hinted={!!hint && !hint.wrongBlockId && hint.block.kind === k}
+                      full={slotCount(ed.program) >= rules.slots}
+                      onDown={palDown} onTap={palTap}
+                    />
+                  ))}
+                </div>
+              ) : null;
+            })}
+            {hint && !hint.wrongBlockId && <p className="gx-hint-caption">Pista: poné <b>{hintLabel(hint.block)}</b></p>}
+            <div className="gx-trash" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="34" height="34"><path d="M4,7 H20 M9,7 V4 H15 V7 M6,7 L7,21 H17 L18,7 M10,11 V17 M14,11 V17" fill="none" stroke="#2b2622" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <b>Soltalo acá para sacarlo</b>
+            </div>
+          </section>
+        </aside>
+
+        <div className={`gx-main${reference ? ' has-ref' : ''}`}>
           <ProgramPanel
             program={inGarage ? ed.program : (active?.program ?? ed.program)}
             rules={rules} caret={ed.caret} selected={inGarage ? ed.selected : null}
             live={live} crashId={crashId} wrongId={inGarage ? hint?.wrongBlockId ?? null : null}
-            readOnly={!inGarage} handlers={handlers} banner={banner} toolbar={inGarage ? tools : undefined}
+            readOnly={!inGarage} handlers={handlers} banner={banner} toolbar={inGarage ? tools : undefined} dnd={dnd}
           />
         </div>
 
         <aside className="gx-side">
-          {inGarage && <MemoryMeter program={ed.program} rules={rules} shake={shake} />}
-          {inGarage && msg && <p className="gx-banner is-nofit" role="alert">{msg}</p>}
-          {inGarage && (
-            <>
-              <section className="sheet gx-palette" aria-label="Bloques">
-                <div className="gx-pal-grid" style={{ ['--cols' as string]: pal.length <= 6 ? pal.length : Math.ceil(pal.length / 2) }}>
-                  {pal.map((k) => (
-                    <button
-                      key={k} type="button" data-pal={k}
-                      className={`cut gx-pal${hint && !hint.wrongBlockId && hint.block.kind === k ? ' is-hinted' : ''}${slotCount(ed.program) >= rules.slots ? ' is-full' : ''}`}
-                      onPointerDown={(e) => palDown(e, k)} onPointerMove={palMove} onPointerUp={palUp}
-                      onPointerCancel={() => { dragState.current = null; setDrag(null); }}
-                      onKeyDown={(e) => palKey(e, k)}
-                    >
-                      <BlockIcon kind={k} size={44} />
-                      <span>{BLOCK_LABEL[k]}</span>
-                    </button>
-                  ))}
-                </div>
-                {hint && !hint.wrongBlockId && <p className="gx-hint-caption">Pista: poné <b>{hintLabel(hint.block)}</b></p>}
-              </section>
+          <div className="gx-side-sticky">
+            {inGarage && <MemoryMeter program={ed.program} rules={rules} shake={shake} />}
+            {inGarage && msg && <p className="gx-banner is-nofit" role="alert">{msg}</p>}
+            {inGarage && (
               <div className="gx-actions">
                 <button type="button" className="cut gx-largar" disabled={(!ed.program.main.length && !ed.program.onLog) || tooBig} onClick={largar}>
                   <svg viewBox="0 0 40 40" width="52" height="52" aria-hidden="true"><path d="M8,5 V36" stroke="#2b2622" strokeWidth="4" strokeLinecap="round" /><path d="M8,6 L34,10 L28,18 L34,26 L8,22 Z" fill="#fbf7ee" stroke="#2b2622" strokeWidth="3" strokeLinejoin="round" /></svg>
@@ -606,33 +771,41 @@ export function Garage({
                 </button>
                 {giveUp && <button type="button" className="cut gx-giveup" onClick={giveUp.onGiveUp}>{giveUp.label}</button>}
               </div>
-            </>
-          )}
-          {phase === 'run' && (
-            <section className="sheet gx-runbox" aria-live="polite">
-              <p className="gx-run-title">¡Allá va!</p>
-              <p className="gx-run-sub">Mirá qué bloque está andando: se ilumina.</p>
-            </section>
-          )}
-          {phase === 'step' && (
-            <section className="sheet gx-stepbox" aria-label="Paso a paso">
-              <p className="gx-step-count">{step.i < 0 ? 'Antes de largar' : `Paso ${step.i + 1} de ${stepList.length}`}</p>
-              <div className="gx-step-caption">
-                {stepNow ? stepNow.caption.map((c, i) => <p key={i} className={i === stepNow.caption.length - 1 ? 'is-main' : ''}>{c}</p>) : <p className="is-main">Tocá «Siguiente» y mirá qué bloque anda primero.</p>}
-              </div>
-              <div className="gx-step-btns">
-                <button type="button" className="cut gx-step-prev" disabled={step.i < 0} onClick={() => { setAuto(false); goStep(step.i - 1); }}>Antes</button>
-                <button type="button" className="cut gx-step-next" disabled={atEnd} onClick={() => { setAuto(false); goStep(step.i + 1); }}>Siguiente</button>
-              </div>
-              <div className="gx-step-btns">
-                <button type="button" className={`cut gx-step-auto${auto ? ' is-on' : ''}`} disabled={atEnd} onClick={() => setAuto((a) => !a)}>{auto ? 'Pausa' : 'Seguir despacio'}</button>
-                <button type="button" className="cut gx-step-back" onClick={() => { setAuto(false); setPhase('garage'); }}>Volver al garaje</button>
-              </div>
-            </section>
-          )}
+            )}
+            {phase === 'run' && (
+              <section className="sheet gx-runbox" aria-live="polite">
+                <p className="gx-run-title">¡Allá va!</p>
+                <p className="gx-run-sub">Mirá qué bloque está andando: se ilumina.</p>
+              </section>
+            )}
+            {phase === 'step' && (
+              <section className="sheet gx-stepbox" aria-label="Paso a paso">
+                <p className="gx-step-count">{step.i < 0 ? 'Antes de largar' : `Paso ${step.i + 1} de ${stepList.length}`}</p>
+                <div className="gx-step-caption">
+                  {stepNow ? stepNow.caption.map((c, i) => <p key={i} className={i === stepNow.caption.length - 1 ? 'is-main' : ''}>{c}</p>) : <p className="is-main">Tocá «Siguiente» y mirá qué bloque anda primero.</p>}
+                </div>
+                <div className="gx-step-btns">
+                  <button type="button" className="cut gx-step-prev" disabled={step.i < 0} onClick={() => { setAuto(false); goStep(step.i - 1); }}>Antes</button>
+                  <button type="button" className="cut gx-step-next" disabled={atEnd} onClick={() => { setAuto(false); goStep(step.i + 1); }}>Siguiente</button>
+                </div>
+                <div className="gx-step-btns">
+                  <button type="button" className={`cut gx-step-auto${auto ? ' is-on' : ''}`} disabled={atEnd} onClick={() => setAuto((a) => !a)}>{auto ? 'Pausa' : 'Seguir despacio'}</button>
+                  <button type="button" className="cut gx-step-back" onClick={() => { setAuto(false); setPhase('garage'); }}>Volver al garaje</button>
+                </div>
+              </section>
+            )}
+          </div>
+          {reference && inGarage && <ReferencePanel program={reference} rules={rules} />}
         </aside>
       </div>
-      {drag && <div className="gx-dragghost" style={{ left: drag.x, top: drag.y }}><BlockIcon kind={drag.kind} size={52} /></div>}
+      {drag && createPortal(
+        <div ref={ghostRef} className="blk-ghost" style={{ width: drag.width, height: Math.max(drag.h, 40) }} aria-hidden="true">
+          <div className="blk-ghost-in">
+            {held ? <HeldBlock block={held} width={drag.width} sensors={rules.palette.sensors} /> : <HeldHat width={drag.width} />}
+          </div>
+        </div>,
+        document.body,
+      )}
     </main>
   );
 }

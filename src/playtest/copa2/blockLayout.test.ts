@@ -4,7 +4,7 @@ import { programBuilder, type Program } from './program';
 import { trackById } from './tracks';
 
 const b = programBuilder('t');
-const W = 360;
+const W = 344;
 
 /** copa 5's gold-like program: repetir vueltas [ repetir 6 [ si recta y nitro [ turbo, nitro ] si no [ si charco [saltar] si no [avanzar] ] ] ] */
 const deep = (): Program => ({
@@ -84,7 +84,7 @@ describe('containers', () => {
     expect(nested(inner.id).x).toBe(FULL.spine);
     expect(nested(inner.id).y + nested(inner.id).h).toBeLessThanOrEqual(nested(outer.id).y + nested(outer.id).h);
     const leaf = l.items.filter((x) => x.kind === 'cmd');
-    expect(Math.min(...leaf.map((x) => x.w))).toBeGreaterThanOrEqual(230); // the innermost block still has room for its picture and word
+    expect(Math.min(...leaf.map((x) => x.w))).toBeGreaterThanOrEqual(200); // the innermost block still has room for its picture and word
   });
 
   it('copa 5 repeats get the vueltas row', () => {
@@ -120,7 +120,7 @@ describe('the si block and its pills', () => {
   });
 
   it('every row of pills fits the arm', () => {
-    for (const w of [360, 326, 292, 258]) {
+    for (const w of [344, 310, 276, 242]) {
       for (const row of pillRows(w, ['puddle_ahead', 'straight_ahead', 'nitro_positive'])) expect(row.length).toBeGreaterThan(0);
     }
   });

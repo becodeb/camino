@@ -1,27 +1,24 @@
-// Copa v2 garage: the program as the child sees it. Warm paper cards, big
-// pictures, nesting drawn as a coloured spine (a `repetir` / `si` holds its
-// blocks inside it), NOT Scratch-like puzzle pieces. Everything here is a view
-// over the pure editor state (editor.ts): it only reports taps.
-//
-// Targets are at least 48 px tall. A tap on a block selects it (the caret goes
-// right after it); a tap on the dashed slot puts the caret there; numbers move
-// with big - and + buttons, never typing.
+// Copa v2 garage: the program as the child sees it. The kart's blocks are the
+// other levels' notched puzzle pieces (CopaBlocks.tsx), laid out by
+// blockLayout.ts: the main script under an "Al largar" block, the event script
+// under its yellow hat, containers as C shapes. This file is the surface: the
+// lanes, the insertion marker, what is lit while the program runs, and the
+// answer to "which slot is under the pointer" for the drag (Garage.tsx).
+// It only reports taps; the pure editor state (editor.ts) decides everything.
 
-import { Fragment, useEffect, useRef, type ReactNode } from 'react';
-import type { Block, Program, Sensor } from './program';
+import { useEffect, useMemo, useRef, type MutableRefObject, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { DIMS } from '../../game/editor';
+import { startPath } from '../../blocks/blocks';
+import type { Program, Sensor } from './program';
 import { slotCount } from './program';
 import type { Position } from './hints';
-import { sameSlot, lapsAllowed, type Caret, type Rules } from './editor';
-import { BlockIcon, SensorIcon } from './blockArt';
-import { BLOCK_LABEL, SENSOR_LABEL } from './labels';
+import { lapsAllowed, withoutBlock, type Caret, type Rules } from './editor';
+import { BlockCanvas, NO_LIVE, type BlockCtx, type Live } from './CopaBlocks';
+import { CANVAS_W, FULL, MINI, MINI_W, layoutScript, pickSlot, withoutGap, type Layout, type Metrics } from './blockLayout';
+import { BlockIcon } from './blockArt';
 
-export interface Live {
-  /** The block that is running (or step-lit). */
-  leaf: string | null;
-  /** Its containers (lit softly). */
-  around: ReadonlySet<string>;
-}
-export const NO_LIVE: Live = { leaf: null, around: new Set() };
+export { NO_LIVE };
+export type { Live };
 
 export interface PanelHandlers {
   onSelect(id: string): void;
@@ -32,20 +29,23 @@ export interface PanelHandlers {
   onAddEvent(): void;
 }
 
-interface Ctx extends PanelHandlers {
-  rules: Rules;
-  caret: Caret;
-  selected: string | null;
-  live: Live;
-  crashId: string | null;
-  wrongId: string | null;
-  readOnly: boolean;
-  /** Espiá: the blocks can be tapped to answer (a read-only program with a question) and `answerId` shows the right one. */
-  pick?: (id: string) => void;
-  answerId?: string | null;
+/** What the drag needs from the surface (Garage.tsx owns the gesture). */
+export type HitFn = (clientX: number, clientY: number) => Position | null;
+export interface DndView {
+  /** The block in the hand: the program is drawn without it. */
+  dragId: string | null;
+  /** Where a hole opens for it (a slot of the program without it), and how tall. */
+  gap: { pos: Position; h: number } | null;
+  hit: MutableRefObject<HitFn | null>;
+  onDown(e: ReactPointerEvent<HTMLElement>, id: string): void;
+  suppress(): boolean;
 }
 
-const dropAttr = (pos: Position) => JSON.stringify(pos);
+const emptyText = (pos: Position): string => {
+  if (!pos.path.length) return pos.script === 'event' ? 'Qué hace el auto cuando cae un tronco' : 'Tocá o arrastrá un bloque acá';
+  const last = pos.path[pos.path.length - 1];
+  return last.branch === 'then' ? 'Si es que sí: poné bloques acá' : last.branch === 'else' ? 'Si es que no: poné bloques acá' : 'Poné bloques acá adentro';
+};
 
 // ------------------------------------------------------------------ the memory
 
@@ -56,8 +56,8 @@ export function MemoryMeter({ program, rules, shake }: { program: Program; rules
   return (
     <div className={`gx-memory${over ? ' is-full' : ''}`} key={shake} data-shake={shake ? 1 : 0}>
       <div className="gx-memory-head">
-        <b>La memoria del auto: {rules.slots} lugares</b>
-        <span className="gx-memory-count" aria-live="polite">Lugares usados <b>{used}</b> de <b>{rules.slots}</b></span>
+        <b>La memoria del auto</b>
+        <span className="gx-memory-count" aria-live="polite"><b>{used}</b> de <b>{rules.slots}</b> lugares</span>
       </div>
       <ol className="gx-cells" aria-label={`${used} de ${rules.slots} lugares usados`}>
         {Array.from({ length: rules.slots }, (_, i) => (
@@ -66,171 +66,6 @@ export function MemoryMeter({ program, rules, shake }: { program: Program; rules
       </ol>
     </div>
   );
-}
-
-// ------------------------------------------------------------------ small controls
-
-function Stepper({ value, unit, onMinus, onPlus, min, max }: { value: number; unit: string; onMinus(): void; onPlus(): void; min: number; max: number }) {
-  return (
-    <span className="gx-stepper" onClick={(e) => e.stopPropagation()}>
-      <button type="button" className="cut gx-step-btn" aria-label="menos" disabled={value <= min} onClick={onMinus}>
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5,12 H19" stroke="#2b2622" strokeWidth="4" strokeLinecap="round" /></svg>
-      </button>
-      <b className="gx-num">{value}</b>
-      <button type="button" className="cut gx-step-btn" aria-label="más" disabled={value >= max} onClick={onPlus}>
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5,12 H19 M12,5 V19" stroke="#2b2622" strokeWidth="4" strokeLinecap="round" /></svg>
-      </button>
-      <span className="gx-unit">{unit}</span>
-    </span>
-  );
-}
-
-const onKey = (fn: () => void) => (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
-
-// ------------------------------------------------------------------ one block
-
-function rowClass(b: { id: string }, c: Ctx, extra = ''): string {
-  return [
-    'gx-row', extra,
-    c.selected === b.id ? 'is-sel' : '',
-    c.live.leaf === b.id ? 'is-live' : '',
-    c.live.around.has(b.id) ? 'is-around' : '',
-    c.crashId === b.id ? 'is-crash' : '',
-    c.wrongId === b.id ? 'is-wrongpick' : '',
-    c.answerId === b.id ? 'is-answer' : '',
-    c.pick ? 'is-pickable' : '',
-  ].filter(Boolean).join(' ');
-}
-
-function BlockView({ b, pos, c }: { b: Block; pos: Position; c: Ctx }) {
-  const after: Position = { script: pos.script, path: pos.path, index: pos.index + 1 };
-  const select = () => { if (c.pick) c.pick(b.id); else if (!c.readOnly) c.onSelect(b.id); };
-  if (b.kind === 'repeat') {
-    const inside = (index: number): Position => ({ script: pos.script, path: [...pos.path, { index: pos.index, branch: 'body' }], index });
-    return (
-      <div className={`gx-c gx-c-repeat${c.live.around.has(b.id) || c.live.leaf === b.id ? ' is-around' : ''}${c.crashId === b.id ? ' is-crashbox' : ''}`} data-id={b.id}>
-        <div className={rowClass(b, c, 'gx-head-row')} role="button" tabIndex={0} onClick={select} onKeyDown={onKey(select)} data-drop={dropAttr(after)}>
-          <BlockIcon kind="repeat" />
-          <span className="gx-label">repetir</span>
-          {c.selected === b.id && !c.readOnly ? (
-            <>
-              {b.n !== 'laps' && <Stepper value={b.n} unit="veces" min={1} max={20} onMinus={() => c.onBump(b.id, -1)} onPlus={() => c.onBump(b.id, 1)} />}
-              {lapsAllowed(c.rules) && (
-                <button type="button" className={`cut gx-chip${b.n === 'laps' ? ' is-on' : ''}`} aria-pressed={b.n === 'laps'} onClick={(e) => { e.stopPropagation(); c.onLaps(b.id, b.n !== 'laps'); }}>
-                  vueltas
-                </button>
-              )}
-            </>
-          ) : (
-            <b className="gx-numchip">{b.n === 'laps' ? 'vueltas' : `${b.n} veces`}</b>
-          )}
-          {c.crashId === b.id && <CrashTag />}
-        </div>
-        <div className="gx-c-body">
-          <BlockList blocks={b.body} script={pos.script} path={[...pos.path, { index: pos.index, branch: 'body' }]} c={c} emptyText="Poné bloques acá adentro" />
-        </div>
-        <div className="gx-c-foot" data-drop={dropAttr(inside(b.body.length))} />
-      </div>
-    );
-  }
-  if (b.kind === 'if') {
-    const branch = (br: 'then' | 'else', index: number): Position => ({ script: pos.script, path: [...pos.path, { index: pos.index, branch: br }], index });
-    return (
-      <div className={`gx-c gx-c-if${c.live.around.has(b.id) || c.live.leaf === b.id ? ' is-around' : ''}${c.crashId === b.id ? ' is-crashbox' : ''}`} data-id={b.id}>
-        <div className={rowClass(b, c, 'gx-head-row')} role="button" tabIndex={0} onClick={select} onKeyDown={onKey(select)} data-drop={dropAttr(after)}>
-          <BlockIcon kind="if" />
-          <span className="gx-label">si</span>
-          <span className="gx-conds">
-            {b.cond.map((s, i) => (
-              <Fragment key={s}>{i > 0 && <span className="gx-and">y</span>}<span className="gx-cond"><SensorIcon sensor={s} size={30} />{SENSOR_LABEL[s]}</span></Fragment>
-            ))}
-          </span>
-          {c.crashId === b.id && <CrashTag />}
-        </div>
-        {c.selected === b.id && !c.readOnly && c.rules.palette.sensors.length > 1 && (
-          <div className="gx-sensors" aria-label="Qué mira el auto">
-            {c.rules.palette.sensors.map((s) => (
-              <button key={s} type="button" className={`cut gx-chip${b.cond.includes(s) ? ' is-on' : ''}`} aria-pressed={b.cond.includes(s)} onClick={() => c.onSensor(b.id, s)}>
-                <SensorIcon sensor={s} size={28} />{SENSOR_LABEL[s]}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="gx-c-body">
-          <BlockList blocks={b.then} script={pos.script} path={[...pos.path, { index: pos.index, branch: 'then' }]} c={c} emptyText="Si es que sí: poné bloques acá" />
-        </div>
-        <div className="gx-else"><span>si no</span></div>
-        <div className="gx-c-body gx-c-else">
-          <BlockList blocks={b.else} script={pos.script} path={[...pos.path, { index: pos.index, branch: 'else' }]} c={c} emptyText="Si es que no: poné bloques acá" />
-        </div>
-        <div className="gx-c-foot" data-drop={dropAttr(branch('else', b.else.length))} />
-      </div>
-    );
-  }
-  return (
-    <div className={rowClass(b, c)} role="button" tabIndex={0} onClick={select} onKeyDown={onKey(select)} data-id={b.id} data-kind={b.kind} data-drop={dropAttr(after)}>
-      <BlockIcon kind={b.kind} />
-      <span className="gx-label">{BLOCK_LABEL[b.kind]}</span>
-      {b.kind === 'wait' && (c.selected === b.id && !c.readOnly
-        ? <Stepper value={b.n} unit="seg" min={1} max={9} onMinus={() => c.onBump(b.id, -1)} onPlus={() => c.onBump(b.id, 1)} />
-        : <b className="gx-numchip">{b.n} {b.n === 1 ? 'segundo' : 'segundos'}</b>)}
-      {b.kind === 'nitro' && <b className="gx-numchip">en −1</b>}
-      {c.crashId === b.id && <CrashTag />}
-    </div>
-  );
-}
-
-const CrashTag = () => <span className="gx-crash-tag">¡Acá chocó!</span>;
-
-// ------------------------------------------------------------------ a list of blocks (with the caret)
-
-function CaretRow({ pos, hint }: { pos: Position; hint: boolean }) {
-  return (
-    <div className={`gx-caret${hint ? ' is-hint' : ''}`} data-drop={dropAttr(pos)} aria-label="Acá entra el próximo bloque">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3,6 L14,12 L3,18 Z" fill="#c9574a" stroke="#2b2622" strokeWidth="2" strokeLinejoin="round" /></svg>
-      <span>acá entra el bloque</span>
-    </div>
-  );
-}
-
-function BlockList({ blocks, script, path, c, emptyText }: { blocks: readonly Block[]; script: 'main' | 'event'; path: Position['path']; c: Ctx; emptyText: string }) {
-  const slot = (index: number): Position => ({ script, path: [...path], index });
-  const here = (index: number) => !c.readOnly && sameSlot(c.caret, slot(index));
-  return (
-    <div className="gx-list">
-      {blocks.map((b, i) => (
-        <Fragment key={b.id}>
-          {here(i) && <CaretRow pos={slot(i)} hint={false} />}
-          <BlockView b={b} pos={slot(i)} c={c} />
-        </Fragment>
-      ))}
-      {here(blocks.length)
-        ? <CaretRow pos={slot(blocks.length)} hint={false} />
-        : (!blocks.length && !c.readOnly && (
-          <button type="button" className="gx-empty" data-drop={dropAttr(slot(0))} onClick={() => c.onCaret(slot(0))}>{emptyText}</button>
-        ))}
-    </div>
-  );
-}
-
-// ------------------------------------------------------------------ the two lanes
-
-/**
- * Brings `el` into view by scrolling only the lane that holds it (`scrollIntoView` also scrolls the overflow-hidden
- * ancestors, which pushed the lane's own title out of the panel). `centre`: a running block is put in the middle of the
- * lane whenever it is not clearly inside it, so a long program (copa 5's nested repeats) keeps the executing block on screen.
- */
-export function keepInView(el: Element | null | undefined, centre = false): void {
-  const lane = el?.closest<HTMLElement>('.gx-lane');
-  if (!el || !lane) return;
-  const l = lane.getBoundingClientRect();
-  const r = el.getBoundingClientRect();
-  const title = lane.querySelector<HTMLElement>('.gx-lane-title')?.getBoundingClientRect().height ?? 0;
-  const top = l.top + title + 8;
-  const bottom = l.bottom - 8;
-  if (r.top >= top && r.bottom <= bottom) return;
-  if (centre) lane.scrollTop += r.top - (l.top + title + (l.height - title) / 2 - r.height / 2);
-  else lane.scrollTop += r.top < top ? r.top - top : r.bottom - bottom;
 }
 
 /** "Tu programa anterior": the program of the last copa, faded and read-only, beside the garage (copas 2 and 3 start empty). */
@@ -246,57 +81,122 @@ export function ReferencePanel({ program, rules }: { program: Program; rules: Ru
   );
 }
 
-export function ProgramPanel({ program, rules, caret, selected, live, crashId, wrongId, readOnly, handlers, banner, toolbar, pick, answerId, compact, title }: {
+// ------------------------------------------------------------------ the program
+
+export function ProgramPanel({ program, rules, caret, selected, live, crashId, wrongId, readOnly, handlers, banner, toolbar, pick, answerId, compact, title, dnd }: {
   program: Program; rules: Rules; caret: Caret; selected: string | null; live: Live; crashId: string | null; wrongId: string | null;
   readOnly: boolean; handlers: PanelHandlers; banner?: ReactNode; toolbar?: ReactNode;
-  pick?: (id: string) => void; answerId?: string | null; compact?: boolean; title?: string;
+  pick?: (id: string) => void; answerId?: string | null; compact?: boolean; title?: string; dnd?: DndView;
 }) {
-  const c: Ctx = { ...handlers, rules, caret, selected, live, crashId, wrongId, readOnly, pick, answerId };
-  const body = useRef<HTMLDivElement>(null);
-  // keep the insertion point in view (a long program scrolls)
+  const m: Metrics = compact ? MINI : FULL;
+  const width = compact ? MINI_W : CANVAS_W;
+  const edit = !readOnly && !pick && !compact;
+  const root = useRef<HTMLElement>(null);
+  const mainEl = useRef<HTMLDivElement>(null);
+  const eventEl = useRef<HTMLDivElement>(null);
+  const addEl = useRef<HTMLButtonElement>(null);
+
+  // while a block is in the hand the program is drawn without it
+  const shown = useMemo(() => (dnd?.dragId ? withoutBlock(program, dnd.dragId) : program), [program, dnd?.dragId]);
+  const gap = dnd?.gap ?? null;
+  const marker = edit && !dnd?.dragId ? caret : null;
+  const base = { width, metrics: m, selected, sensors: rules.palette.sensors, laps: lapsAllowed(rules) };
+  const hat = shown.onLog;
+  const hasEvent = rules.palette.event;
+  const mainLayout = useMemo(
+    () => layoutScript(shown.main, { ...base, script: 'main', start: !compact, caret: marker?.script === 'main' ? marker : null, gap: gap?.pos.script === 'main' ? gap : null }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shown.main, width, selected, marker?.script, marker?.index, JSON.stringify(marker?.path), gap?.pos.script, gap?.pos.index, JSON.stringify(gap?.pos.path), gap?.h, compact, rules],
+  );
+  const eventLayout = useMemo(
+    () => (hat ? layoutScript(hat.body, { ...base, script: 'event', hatId: hat.id, caret: marker?.script === 'event' ? marker : null, gap: gap?.pos.script === 'event' ? gap : null }) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hat, width, selected, marker?.script, marker?.index, JSON.stringify(marker?.path), gap?.pos.script, gap?.pos.index, JSON.stringify(gap?.pos.path), gap?.h, rules],
+  );
+
+  // the slot under the pointer, read in the layout WITHOUT the gap (the one the screen shows has it open)
+  const hitState = useRef({ shown, mainLayout, eventLayout, rules, base });
+  hitState.current = { shown, mainLayout, eventLayout, rules, base };
+  useEffect(() => {
+    if (!dnd) return;
+    dnd.hit.current = (x, y) => {
+      const h = hitState.current;
+      const plain = (script: 'main' | 'event'): Layout | null => {
+        if (script === 'main') return layoutScript(h.shown.main, { ...h.base, script: 'main', start: !compact, caret: null });
+        return h.shown.onLog ? layoutScript(h.shown.onLog.body, { ...h.base, script: 'event', hatId: h.shown.onLog.id, caret: null }) : null;
+      };
+      const cands: { el: HTMLElement | null; script: 'main' | 'event'; shownLayout: Layout | null; slots: Layout['slots'] | null }[] = [
+        { el: mainEl.current, script: 'main', shownLayout: h.mainLayout, slots: null },
+        { el: eventEl.current, script: 'event', shownLayout: h.eventLayout, slots: null },
+        { el: addEl.current, script: 'event', shownLayout: null, slots: [{ pos: { script: 'event', path: [], index: 0 }, x: 0, y: 0, w: 1 }] },
+      ];
+      let best: { c: (typeof cands)[number]; r: DOMRect; d: number } | null = null;
+      for (const c of cands) {
+        if (!c.el) continue;
+        const r = c.el.getBoundingClientRect();
+        const dx = Math.max(r.left - x, 0, x - r.right);
+        const dy = Math.max(r.top - y, 0, y - r.bottom);
+        const d = Math.hypot(dx, dy);
+        if (!best || d < best.d) best = { c, r, d };
+      }
+      if (!best || best.d > 90) return null;
+      if (best.c.slots) return best.c.slots[0].pos;
+      const lay = plain(best.c.script);
+      if (!lay) return null;
+      let py = y - best.r.top;
+      const g = best.c.shownLayout?.items.find((it) => it.kind === 'gap');
+      if (g) py = withoutGap(py, g.y, g.h);
+      return pickSlot(lay.slots, x - best.r.left, py)?.pos ?? null;
+    };
+    return () => { dnd.hit.current = null; };
+  }, [dnd, compact]);
+
+  const ctx: BlockCtx = {
+    readOnly: readOnly || !!compact, selected, live, crashId, wrongId, answerId, pick, sensors: rules.palette.sensors,
+    onSelect: handlers.onSelect, onCaret: handlers.onCaret, onBump: handlers.onBump, onLaps: handlers.onLaps, onSensor: handlers.onSensor,
+    onDown: dnd?.onDown, suppress: dnd?.suppress, emptyText: edit ? emptyText : undefined,
+  };
+
+  // the insertion marker stays in view as the program grows (the page scrolls, not the panel)
   const first = useRef(true);
   useEffect(() => {
     if (first.current) { first.current = false; return; }
-    keepInView(body.current?.querySelector('.gx-caret'));
-  }, [caret, program]);
+    if (!edit) return;
+    root.current?.querySelector('.gx-caret')?.scrollIntoView({ block: 'nearest' });
+  }, [caret, program, edit]);
   // the running block stays on screen, however long the program is
   useEffect(() => {
-    if (live.leaf) keepInView(body.current?.querySelector('.is-live'), true);
+    if (!live.leaf) return;
+    root.current?.querySelector(`[data-id="${CSS.escape(live.leaf)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [live.leaf]);
-  const hat = program.onLog;
-  const hatClass = ['gx-row', 'gx-hat', selected === hat?.id ? 'is-sel' : '', live.leaf === hat?.id || live.around.has(hat?.id ?? '') ? 'is-around' : '', crashId === hat?.id ? 'is-crash' : ''].filter(Boolean).join(' ');
+
   return (
-    <section className={`gx-program sheet${compact ? ' is-compact' : ''}`} aria-label={compact ? 'Programa' : 'El programa del auto'}>
+    <section ref={root} className={`gx-program sheet${compact ? ' is-compact' : ''}`} data-zone="program" aria-label={compact ? 'Programa' : 'El programa del auto'}>
       {banner}
-      <div className="gx-lanes" ref={body}>
-        <div className="gx-lane gx-lane-main">
-          <button type="button" className="gx-lane-title" disabled={readOnly} onClick={() => handlers.onCaret({ script: 'main', path: [], index: 0 })}>
-            {title ?? 'Programa del auto'} <small>empieza acá</small>
-          </button>
-          <BlockList blocks={program.main} script="main" path={[]} c={c} emptyText="Tocá un bloque de la derecha para empezar" />
+      {toolbar}
+      <div className="gx-lanes">
+        <div className="gx-lane gx-lane-main" ref={mainEl}>
+          {title && <h3 className="gx-lane-title">{title}</h3>}
+          <BlockCanvas layout={mainLayout} c={ctx} m={m} label="Programa del auto" />
         </div>
-        {rules.palette.event && (
+        {hasEvent && !compact && (
           <div className={`gx-lane gx-lane-event${hat ? '' : ' is-empty'}`}>
-            {hat ? (
-              <>
-                <div className={`${hatClass}${answerId === hat.id ? ' is-answer' : ''}${pick ? ' is-pickable' : ''}`} role="button" tabIndex={0} onClick={() => (pick ? pick(hat.id) : !readOnly && handlers.onSelect(hat.id))} onKeyDown={onKey(() => (pick ? pick(hat.id) : !readOnly && handlers.onSelect(hat.id)))} data-id={hat.id}>
-                  <BlockIcon kind="on_log" />
-                  <span className="gx-label">Si cae un tronco</span>
-                </div>
-                <div className="gx-c-body">
-                  <BlockList blocks={hat.body} script="event" path={[]} c={c} emptyText="Qué hace el auto cuando cae un tronco" />
-                </div>
-              </>
+            {hat && eventLayout ? (
+              <div ref={eventEl} className="gx-event-canvas"><BlockCanvas layout={eventLayout} c={ctx} m={m} label="Si cae un tronco" /></div>
             ) : (
-              <button type="button" className="cut gx-lane-add" disabled={readOnly} onClick={handlers.onAddEvent}>
-                <BlockIcon kind="on_log" />
-                <span><b>Si cae un tronco</b><small>Un segundo programa que se prende solo</small></span>
+              <button type="button" ref={addEl} className="gx-lane-add" disabled={readOnly} onClick={handlers.onAddEvent} style={{ width: CANVAS_W, height: FULL.hat + 34 }}>
+                <svg className="gx-lane-add-shape" width={CANVAS_W} height={FULL.hat + 34} viewBox={`0 0 ${CANVAS_W} ${FULL.hat + 34}`} aria-hidden="true">
+                  <path d={startPath(CANVAS_W, FULL.hat + 34, { ...DIMS, h: FULL.h })} className="gb-dashed" />
+                </svg>
+                <span className="gx-lane-add-text">
+                  <BlockIcon kind="on_log" size={40} bare />
+                  <span><b>Si cae un tronco</b><small>Un segundo programa que se prende solo</small></span>
+                </span>
               </button>
             )}
           </div>
         )}
       </div>
-      {toolbar}
     </section>
   );
 }

@@ -2,6 +2,7 @@
 // mounts one track for screenshots and checks. Parameters (after the `?` in the
 // hash): track (default c1-a), rival (bronze|silver|gold), ghost=1 (the ghost
 // hand), preset (empty|gold|silver|bronze|deer: the program to start from),
+// ref (bronze|silver|gold: that reference program faded on the side, as "tu programa anterior"), mode=deer,
 // seed (the first run's seed; the next ones add 1), speed (the race clock, e.g. 0.3 to catch a moment). `window.__copa2` keeps
 // the data the garage logged and the results it handed back.
 
@@ -21,6 +22,8 @@ export function GarageDev() {
   const seed = Number(params.get('seed') ?? 7);
   const speed = params.get('speed') ? Number(params.get('speed')) : undefined;
   const initial: Program | undefined = preset === 'gold' || preset === 'silver' || preset === 'bronze' ? track.refs[preset] : preset === 'deer' ? track.deer.program : undefined;
+  const refParam = params.get('ref');
+  const reference: Program | undefined = refParam === 'gold' || refParam === 'silver' || refParam === 'bronze' ? track.refs[refParam] : undefined;
   const [done, setDone] = useState<GarageResultPayload | null>(null);
   const dev = useMemo<Dev>(() => ({ logs: [], results: [] }), []);
   useEffect(() => {
@@ -38,6 +41,7 @@ export function GarageDev() {
   return (
     <Garage
       key={`${track.id}-${rival}-${preset}`} track={track} rivalTier={rival} initialProgram={initial} ghostHint={params.get('ghost') === '1'}
+      reference={reference} mode={params.get('mode') === 'deer' ? 'deer' : 'race'}
       seedFor={(n) => seed + n - 1} raceSpeed={speed}
       logger={(type, payload) => { dev.logs.push({ type, payload }); }}
       onResult={(r) => { dev.results.push(r); setDone(r); }}

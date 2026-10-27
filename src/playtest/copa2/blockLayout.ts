@@ -45,7 +45,7 @@ export const PAL: Metrics = { h: 46, arm: 48, spine: 14, pad: 8, foot: 16, elseH
 export const MINI: Metrics = { h: 38, arm: 40, spine: 12, pad: 6, foot: 12, elseH: 26, hole: 22, caret: 0, start: 40, hat: 44, pill: 26, lapsRow: 0, small: true };
 
 /** How wide a block is in the program: the canvas width. */
-export const CANVAS_W = 360;
+export const CANVAS_W = 344;
 export const MINI_W = 232;
 export const PAL_W = 118;
 export const PAL_WIDE = 244;

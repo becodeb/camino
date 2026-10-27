@@ -161,8 +161,8 @@ export function Spy({ track, tier, logger, onDone, onPhase, headerExtra }: SpyPr
         )}
       </section>
 
-      <div className="gx-body">
-        <div className="gx-left">
+      <div className="gx-body is-nopal">
+        <div className="gx-main">
           <ProgramPanel
             program={program} rules={rules} caret={CARET} selected={null} live={live} crashId={null} wrongId={null} readOnly
             handlers={NO_HANDLERS} pick={phase === 'pick' ? pick : undefined} answerId={answerId}

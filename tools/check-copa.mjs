@@ -89,11 +89,23 @@ const tap = (p, kind) => p.locator(`[data-pal="${kind}"]`).click();
 const build = async (p, kinds) => { for (const k of kinds) await tap(p, k); };
 // the faded "Tu programa anterior" panel is a compact ProgramPanel too: only the child's own program counts
 const MAIN = '.gx-program:not(.is-compact) .gx-lane-main';
-const rowsOf = (p) => p.locator(`${MAIN} .gx-row[data-kind]`).evaluateAll((els) => els.map((e) => e.dataset.kind));
+const rowsOf = (p) => p.locator(`${MAIN} .gb-cmd[data-kind]`).evaluateAll((els) => els.map((e) => e.dataset.kind));
 async function setRepeat(p, n) {
-  const num = () => p.locator('.gx-stepper .gx-num').first().innerText().then(Number);
-  for (let i = 0; i < 30 && (await num()) !== n; i++) await p.locator(`.gx-step-btn[aria-label="${(await num()) < n ? 'más' : 'menos'}"]`).first().click();
+  const num = () => p.locator(`${MAIN} .gb-c[data-kind="repeat"] .gb-num`).first().innerText().then(Number);
+  for (let i = 0; i < 30 && (await num()) !== n; i++) await p.locator(`${MAIN} .gb-c[data-kind="repeat"] .gb-step[aria-label="${(await num()) < n ? 'más' : 'menos'}"]`).first().click();
 }
+/** A real pointer drag (the same events a finger or a mouse makes): the element's middle to a page point, in steps. */
+async function drag(p, from, to, { grab = 0.5 } = {}) {
+  const a = await from.boundingBox();
+  const gx = a.x + Math.min(a.width * grab, 60), gy = a.y + Math.min(a.height / 2, 28);
+  await p.mouse.move(gx, gy);
+  await p.mouse.down();
+  await p.mouse.move(gx + 14, gy + 14, { steps: 3 });
+  await p.mouse.move(to.x, to.y, { steps: 16 });
+  await p.waitForTimeout(160);
+  return { release: async () => { await p.mouse.up(); await p.waitForTimeout(260); } };
+}
+const centre = async (loc) => { const b = await loc.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
 const largar = (p) => p.locator('.gx-largar').click();
 const waitResult = (p) => p.waitForSelector('.gx-result-page', { timeout: 90_000 });
 const GOLD_C1A = ['forward', 'up', 'up', 'down', 'down', 'forward', 'jump', 'forward'];
@@ -159,7 +171,7 @@ try {
   ok((await rowsOf(k)).join() === GOLD_C1A.join(), 'c1-b opens with the program of c1-a (it carries over inside a copa)');
   await largar(k);
   await k.waitForSelector('.gx-banner.is-crash', { timeout: 30_000 });
-  ok(await k.locator('.gx-row.is-crash').count() === 1, 'a crash: the failing block is red and the program is intact');
+  ok(await k.locator('.gb.is-crash').count() === 1, 'a crash: the failing block is red and the program is intact');
   await shot(k, 'crash-c1b-garage');
   await k.locator('.gx-stepbtn').click();
   await k.waitForSelector('.gx-stepbox');
@@ -171,9 +183,16 @@ try {
   ok(true, 'two failed runs in a row on c1-b: the ghost hand is on');
   await shot(k, 'ghost-c1b');
   // rebuild: take every block out, then the right eight
-  for (let i = 0; i < 8; i++) { await k.locator(`${MAIN} .gx-row[data-kind]`).first().click(); await k.locator('.gx-tool-remove').click(); }
+  for (let i = 0; i < 8; i++) { await k.locator(`${MAIN} .gb-cmd[data-kind]`).first().click(); await k.locator('.gx-tool-remove').click(); }
   ok((await rowsOf(k)).length === 0, 'c1-b: the program emptied block by block (Sacar)');
-  await build(k, GOLD_C1B);
+  // drag from the palette into the empty program, then the rest by taps (tap-to-add is the same as dragging)
+  const hole = k.locator(`${MAIN} .gb-hole, ${MAIN} .gx-caret`).first();
+  const d0 = await drag(k, k.locator('[data-pal="forward"]'), await centre(hole));
+  ok(await k.locator(`${MAIN} .gb-gap`).count() === 1, 'a drag from the palette opens a gap (the insertion marker) where the block would go');
+  await shot(k, 'drag-in-progress');
+  await d0.release();
+  ok((await rowsOf(k)).join() === 'forward', 'drag from the palette: the block lands in the empty program');
+  await build(k, GOLD_C1B.slice(1));
   await largar(k);
   await waitResult(k);
   await k.locator('.gx-seguir').click();
@@ -196,7 +215,7 @@ try {
   await largar(k);
   await k.waitForSelector('.gx-banner.is-stuck', { timeout: 40_000 });
   ok(true, 'the deer\'s program ends short ("Falta camino"): it did not reach the meta');
-  await k.locator(`${MAIN} .gx-head-row`).first().click();
+  await k.locator(`${MAIN} .gb-c[data-kind="repeat"] .gb-arm`).first().click();
   await setRepeat(k, 4);
   await largar(k);
   await k.waitForSelector('.gx-deer-done', { timeout: 60_000 });
@@ -210,6 +229,33 @@ try {
   await tap(k, 'repeat');
   await setRepeat(k, 4);
   await build(k, ['forward', 'forward', 'up', 'down']);
+  const body = () => rowsOf(k);
+  ok((await body()).join() === 'forward,forward,up,down', 'c2-a: repetir 4 [avanzar avanzar subir bajar] built by taps');
+  // reorder by dragging: the last block goes to the top of the repetir body, then back to the end
+  // (the page is scrolled first, away from the bottom edge: a drag there scrolls the page by itself)
+  await k.evaluate(() => window.scrollTo(0, 120));
+  await k.waitForTimeout(250);
+  const arm = k.locator(`${MAIN} .gb-c[data-kind="repeat"] .gb-arm`);
+  const ab = await arm.boundingBox();
+  const r1 = await drag(k, k.locator(`${MAIN} .gb-cmd[data-kind="down"]`), { x: ab.x + 70, y: ab.y + ab.height + 6 });
+  await r1.release();
+  ok((await body()).join() === 'down,forward,forward,up', `reorder by dragging: bajar goes to the top of the repetir (${(await body()).join()})`);
+  const lastBlock = k.locator(`${MAIN} .gb-cmd[data-kind="up"]`);
+  const ub = await lastBlock.boundingBox();
+  const r2 = await drag(k, k.locator(`${MAIN} .gb-cmd[data-kind="down"]`), { x: ub.x + 40, y: ub.y + ub.height - 14 });
+  await r2.release();
+  ok((await body()).join() === 'forward,forward,up,down', `and back to the end (${(await body()).join()})`);
+  ok(await k.locator(`${MAIN} .gb-cmd`).evaluateAll((els) => els.every((e) => e.style.left === '20px')), 'all four blocks are still inside the repetir (indented by its spine)');
+  // a drag from the palette into the repetir, then thrown away on the palette
+  const r3 = await drag(k, k.locator('[data-pal="jump"]'), { x: ab.x + 70, y: ab.y + ab.height + 6 });
+  await r3.release();
+  ok((await body()).join() === 'jump,forward,forward,up,down', 'drag from the palette into the repetir body');
+  const pal = await k.locator('.gx-palette').boundingBox();
+  const r4 = await drag(k, k.locator(`${MAIN} .gb-cmd[data-kind="jump"]`), { x: pal.x + pal.width / 2, y: pal.y + 120 });
+  ok(await k.locator('.gx-palette-col.is-trash').count() === 1, 'a placed block over the palette: "Soltalo acá para sacarlo"');
+  await shot(k, 'drag-to-delete');
+  await r4.release();
+  ok((await body()).join() === 'forward,forward,up,down', 'drag to the palette: the block is deleted');
   await largar(k);
   await waitResult(k);
   await k.waitForTimeout(2200);
@@ -222,20 +268,20 @@ try {
   ok(/¿Dónde está el truco\?/.test(await k.locator('.gx-spy-big').innerText()), 'Espiá: "¿Dónde está el truco?" large on screen');
   await k.waitForTimeout(500);
   await shot(k, 'spy-pick');
-  await k.locator('.gx-program .gx-c-repeat > .gx-head-row').first().click(); // the fox's trick in copa 2 is the repetir
+  await k.locator('.gx-program .gb-c[data-kind="repeat"] .gb-arm').first().click(); // the fox's trick in copa 2 is the repetir
   await k.waitForSelector('.gx-spy-page[data-spy="told"]');
   ok(await k.locator('.gx-spy-card[data-correct="1"]').count() === 1, 'the trick tapped: right');
   await shot(k, 'spy-told');
   await k.locator('[data-act="spy-watch"]').click();
   await k.waitForSelector('.gx-spy-page[data-spy="watch"]');
-  await k.waitForFunction(() => !!document.querySelector('.gx-row.is-live'), null, { timeout: 10_000 });
+  await k.waitForFunction(() => !!document.querySelector('.gb.is-live'), null, { timeout: 10_000 });
   ok(true, 'the rival\'s run plays with its executing block glowing');
   await shot(k, 'spy-watching');
   await k.locator('[data-act="spy-done"]').click({ timeout: 60_000 });
   await k.waitForSelector('.gx-page[data-track="c2-a"]');
   ok((await rowsOf(k)).length === 4, '¡A tu taller!: back in the garage with the program intact');
   // the child learned: the plain tile jumps over the puddle (the fox's trick is the repetir; the puddles are jumped)
-  await k.locator(`${MAIN} .gx-row[data-kind="forward"]`).nth(1).click();
+  await k.locator(`${MAIN} .gb-cmd[data-kind="forward"]`).nth(1).click();
   await k.locator('.gx-tool-remove').click();
   await tap(k, 'jump');
   await largar(k);
