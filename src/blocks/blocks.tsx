@@ -196,15 +196,15 @@ export const fillOf = (cmd: string) => {
 export const isCond = (cmd: string) => cmd.startsWith('ifrock:');
 
 // ------------------------------------------------------------------ outlines
-interface Notch { x: number; w: number; d: number }
-const notchOf = (d: Dims): Notch => (d.h < 50 ? { x: 12, w: 18, d: 5 } : d.h < 64 ? { x: 15, w: 22, d: 6 } : { x: 18, w: 26, d: 7 });
-const R = 7;
+export interface Notch { x: number; w: number; d: number }
+export const notchOf = (d: Dims): Notch => (d.h < 50 ? { x: 12, w: 18, d: 5 } : d.h < 64 ? { x: 15, w: 22, d: 6 } : { x: 18, w: 26, d: 7 });
+export const R = 7;
 
 /** Top edge left → right with a dent at `x0 + n.x` (the block above's bump fits in). */
-const dent = (x0: number, y: number, n: Notch) =>
+export const dent = (x0: number, y: number, n: Notch) =>
   `L${x0 + n.x},${y} L${x0 + n.x + 4},${y + n.d} L${x0 + n.x + n.w - 4},${y + n.d} L${x0 + n.x + n.w},${y}`;
 /** Bottom edge right → left with a bump that hangs `n.d` below. */
-const bump = (x0: number, y: number, n: Notch) =>
+export const bump = (x0: number, y: number, n: Notch) =>
   `L${x0 + n.x + n.w},${y} L${x0 + n.x + n.w - 4},${y + n.d} L${x0 + n.x + 4},${y + n.d} L${x0 + n.x},${y}`;
 
 export function cardPath(w: number, h: number, d: Dims): string {

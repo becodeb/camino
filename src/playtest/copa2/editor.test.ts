@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addBlock, addEventScript, ancestorsOf, blockById, bumpNumber, endOfMain, lapsAllowed, listAt, locate, moveSelected, newEditor, removeSelected,
+  addBlock, addEventScript, ancestorsOf, blockById, bumpNumber, endOfMain, lapsAllowed, listAt, locate, moveBlock, moveSelected, newEditor, removeBlock, removeSelected, withoutBlock,
   sameSlot, selectBlock, setCaret, setLaps, takeEdits, toggleSensor, usage, withProgram, UI_MAX_REPEAT,
   type EditorState, type Rules,
 } from './editor';
@@ -342,4 +342,117 @@ describe('following the ghost hint through the editor builds the gold program on
       expect(slotCount(st.program)).toBeLessThanOrEqual(track.slots);
     });
   }
+});
+
+describe('dragging placed blocks (C12): move and delete by id', () => {
+  const r = rules(4);
+  /** forward, repetir 2 [jump, brake], down */
+  const sample = (): EditorState => {
+    let st = build(newEditor(), r, ['forward', 'repeat', 'jump', 'brake']);
+    st = setCaret(st, { script: 'main', path: [], index: 2 });
+    return build(st, r, ['down']);
+  };
+  const kinds = (st: EditorState) => st.program.main.map((b) => b.kind);
+
+  it('removeBlock takes a container with everything inside it and leaves the caret where it was', () => {
+    const st = sample();
+    const rep = st.program.main[1];
+    const out = removeBlock(st, rep.id);
+    expect(kinds(out)).toEqual(['forward', 'down']);
+    expect(slotCount(out.program)).toBe(2);
+    expect(out.caret).toEqual({ script: 'main', path: [], index: 1 });
+    expect(out.edits.remove).toBe(1);
+  });
+
+  it('reorders a block inside the main script (the slot is read in the program without it)', () => {
+    const st = sample();
+    const down = st.program.main[2];
+    const res = moveBlock(st, down.id, { script: 'main', path: [], index: 0 }, r);
+    expect(res.ok).toBe(true);
+    expect(kinds(res.state)).toEqual(['down', 'forward', 'repeat']);
+    expect(res.state.selected).toBe(down.id);
+    expect(res.state.edits.move).toBe(1);
+    expect(slotCount(res.state.program)).toBe(slotCount(st.program));
+  });
+
+  it('moves a block into a container and out of it', () => {
+    const st = sample();
+    const fwd = st.program.main[0];
+    const rep = st.program.main[1];
+    // in the program without `forward` the repetir is at index 0
+    const into = moveBlock(st, fwd.id, { script: 'main', path: [{ index: 0, branch: 'body' }], index: 1 }, r);
+    expect(into.ok).toBe(true);
+    const inner = (into.state.program.main[0] as Extract<typeof rep, { kind: 'repeat' }>).body.map((b) => b.kind);
+    expect(inner).toEqual(['jump', 'forward', 'brake']);
+    const jump = (st.program.main[1] as Extract<typeof rep, { kind: 'repeat' }>).body[0];
+    const out = moveBlock(st, jump.id, { script: 'main', path: [], index: 2 }, r);
+    expect(out.ok && kinds(out.state)).toEqual(['forward', 'repeat', 'jump', 'down']);
+  });
+
+  it('a container carries its body, ids and numbers along', () => {
+    let st = sample();
+    const rep = st.program.main[1];
+    st = bumpNumber(st, rep.id, 3);
+    const before = JSON.stringify(blockById(st.program, rep.id));
+    const res = moveBlock(st, rep.id, { script: 'main', path: [], index: 0 }, r);
+    expect(res.ok && kinds(res.state)).toEqual(['repeat', 'forward', 'down']);
+    expect(JSON.stringify(blockById(res.state.program, rep.id))).toBe(before);
+    expect(checkProgram(res.state.program, r)).toEqual([]);
+  });
+
+  it('dropping where it came from changes nothing', () => {
+    const st = sample();
+    const down = st.program.main[2];
+    const res = moveBlock(st, down.id, { script: 'main', path: [], index: 2 }, r);
+    expect(res.ok).toBe(true);
+    expect(res.state.program).toEqual(st.program);
+    expect(res.state.edits.move).toBe(0);
+  });
+
+  it('refuses a slot that points to nothing, and the event hat never moves', () => {
+    const r4 = rules(4);
+    let st = build(newEditor(), r4, ['forward']);
+    st = addEventScript(st, r4).state;
+    st = build(st, r4, ['brake']);
+    expect(moveBlock(st, st.program.onLog!.id, { script: 'main', path: [], index: 0 }, r4)).toMatchObject({ ok: false, reason: 'not_allowed' });
+    const fwd = st.program.main[0];
+    expect(moveBlock(st, fwd.id, { script: 'main', path: [{ index: 5, branch: 'body' }], index: 0 }, r4)).toMatchObject({ ok: false, reason: 'nowhere' });
+  });
+
+  it('moves a block from the main script into the event script and back', () => {
+    const r4 = rules(4);
+    let st = build(newEditor(), r4, ['forward', 'brake']);
+    st = addEventScript(st, r4).state;
+    const brake = st.program.main[1];
+    const res = moveBlock(st, brake.id, { script: 'event', path: [], index: 0 }, r4);
+    expect(res.ok).toBe(true);
+    expect(res.state.program.onLog?.body.map((b) => b.id)).toEqual([brake.id]);
+    expect(kinds(res.state)).toEqual(['forward']);
+    const back = moveBlock(res.state, brake.id, { script: 'main', path: [], index: 1 }, r4);
+    expect(back.ok && kinds(back.state)).toEqual(['forward', 'brake']);
+    expect(back.state.program.onLog?.body).toEqual([]);
+  });
+
+  it('moving the first block into an event lane without a hat creates the hat, and needs one free place', () => {
+    const r4 = rules(4);
+    const st = build(newEditor(), r4, ['forward', 'brake']);
+    const brake = st.program.main[1];
+    const res = moveBlock(st, brake.id, { script: 'event', path: [], index: 0 }, r4);
+    expect(res.ok).toBe(true);
+    expect(res.state.program.onLog?.body).toHaveLength(1);
+    expect(slotCount(res.state.program)).toBe(3);
+    const tight: Rules = { palette: r4.palette, slots: 2 };
+    expect(moveBlock(st, brake.id, { script: 'event', path: [], index: 0 }, tight)).toMatchObject({ ok: false, reason: 'full' });
+    expect(moveBlock(st, brake.id, { script: 'event', path: [], index: 0 }, rules(3))).toMatchObject({ ok: false, reason: 'nowhere' });
+  });
+
+  it('withoutBlock is the program the hand leaves behind (the original is untouched)', () => {
+    const st = sample();
+    const rep = st.program.main[1];
+    const snap = JSON.stringify(st.program);
+    const left = withoutBlock(st.program, rep.id);
+    expect(left.main.map((b) => b.kind)).toEqual(['forward', 'down']);
+    expect(JSON.stringify(st.program)).toBe(snap);
+    expect(withoutBlock(st.program, 'nope')).toBe(st.program);
+  });
 });

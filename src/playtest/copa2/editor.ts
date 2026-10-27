@@ -218,20 +218,60 @@ export function addBlock(st: EditorState, kind: BlockKind, rules: Rules, at: Car
   return { ok: true, id, state: { program, caret, selected, nextId: base.nextId + 1, edits: bump(st.edits, 'add') } };
 }
 
-/** Removes the selected block with everything inside it (the event hat takes its whole script). */
-export function removeSelected(st: EditorState): EditorState {
-  const id = st.selected;
-  if (!id) return st;
+/** Removes a block by id with everything inside it (the event hat takes its whole script). The caret goes where it was. */
+export function removeBlock(st: EditorState, id: string): EditorState {
   if (st.program.onLog?.id === id) {
     const { onLog: _gone, ...rest } = st.program;
     void _gone;
     return { ...st, program: rest, selected: null, caret: endOfMain(rest), edits: bump(st.edits, 'remove') };
   }
   const at = locate(st.program, id);
-  if (!at) return { ...st, selected: null };
+  if (!at) return st.selected === id ? { ...st, selected: null } : st;
   const program = editProgram(st.program, at.script, at.path, (l) => { l.splice(at.index, 1); return l; });
   if (!program) return { ...st, selected: null };
   return { ...st, program, selected: null, caret: { script: at.script, path: at.path, index: at.index }, edits: bump(st.edits, 'remove') };
+}
+
+/** Removes the selected block with everything inside it (the event hat takes its whole script). */
+export function removeSelected(st: EditorState): EditorState {
+  return st.selected ? removeBlock(st, st.selected) : st;
+}
+
+/** The program without the block `id` (and what is inside it): what the screen draws while that block is in the hand. */
+export function withoutBlock(p: Program, id: string): Program {
+  if (p.onLog?.id === id) { const { onLog: _gone, ...rest } = p; void _gone; return rest; }
+  const at = locate(p, id);
+  if (!at) return p;
+  return editProgram(p, at.script, at.path, (l) => { l.splice(at.index, 1); return l; }) ?? p;
+}
+
+/**
+ * Drags a placed block to `to`: a slot of the program WITHOUT that block (the gaps the screen shows while it is in
+ * the hand). A container takes everything inside it along. Moving does not change what the memory holds, except that
+ * the first block that goes into the event script creates its hat (one more place). The event hat itself never moves.
+ * Dropping where it came from is accepted and changes nothing but the selection.
+ */
+export function moveBlock(st: EditorState, id: string, to: Caret, rules: Rules): EditResult {
+  if (st.program.onLog?.id === id) return refuse(st, 'not_allowed');
+  const at = locate(st.program, id);
+  const block = blockById(st.program, id);
+  if (!at || !block) return refuse(st, 'nowhere');
+  let base = withoutBlock(st.program, id);
+  let nextId = st.nextId;
+  if (to.script === 'event' && !base.onLog) {
+    if (!rules.palette.event) return refuse(st, 'nowhere');
+    if (!fits(st, rules)) return refuse(st, 'full');
+    base = { ...base, onLog: { id: `g-${nextId}`, body: [] } };
+    nextId += 1;
+  }
+  if (!caretValid(base, to)) return refuse(st, 'nowhere');
+  if (sameSlot(to, at)) return { ok: true, id, state: { ...st, selected: id, caret: { script: at.script, path: at.path, index: at.index + 1 } } };
+  const program = editProgram(base, to.script, to.path, (l) => { l.splice(to.index, 0, block); return l; });
+  if (!program) return refuse(st, 'nowhere');
+  return {
+    ok: true, id,
+    state: { ...st, program, selected: id, caret: { script: to.script, path: to.path, index: to.index + 1 }, nextId, edits: bump(st.edits, 'move') },
+  };
 }
 
 /** Moves the selected block one place earlier (-1) or later (+1) in its list. At the end of the list it stays (`moved: false`). */
