@@ -291,15 +291,21 @@ export function FreePlay() {
 
   // 2026-10-20 (user: 1ro got to the menu too fast and got bored): 1ro's first free-play visit opens the
   // whole sheet (pages, doors, boss) by itself instead of the menu; the menu comes after it.
-  const autoSheet = useRef(false);
+  // 2026-10-27 (user: on the classic route they spend too long on the typing race alone): the sheet and then the
+  // guardas (drawing) open by themselves, one after the other, before the child chooses; while one of them is
+  // forced there is no big "Otro juego" (the adult can still use the bar's menu button).
+  const autoDone = useRef(new Set<string>());
+  const forcedVisit = useRef<string | null>(null);
   useEffect(() => {
     // T43: not in 1ro's own route (its arcade has no sheet; the guided monster games came first)
-    if (autoSheet.current || grade !== 1 || is1ro(api.flow) || view.kind !== 'menu' || view.n !== 0) return;
-    if (api.flow.activities.includes('sheet')) return;
-    const a = menu.find((x) => x.id === 'sheet');
+    if (grade !== 1 || is1ro(api.flow) || view.kind !== 'menu') return;
+    forcedVisit.current = null;
+    const nextId = (['sheet', 'guardas'] as const).find((id) => !api.flow.activities.includes(id) && !autoDone.current.has(id));
+    if (!nextId) return;
+    const a = menu.find((x) => x.id === nextId) ?? activityFor(nextId, grade);
     if (!a) return;
-    autoSheet.current = true;
-    const t = window.setTimeout(() => { if (viewRef.current.kind === 'menu') pick(a); }, 300);
+    autoDone.current.add(nextId);
+    const t = window.setTimeout(() => { if (viewRef.current.kind === 'menu') { forcedVisit.current = nextId; pick(a); } }, 300);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view.kind, grade]);
@@ -358,7 +364,7 @@ export function FreePlay() {
   }
   // T51: on 1ro's arcade every way back to the menu is logged (`game_exit`), and the games offer large drawn ones
   // 2026-10-27: also on 1ro's classic route (its menu now holds the monster games and the typing race)
-  const home = grade === 1 ? (via: ExitVia) => { log('game_exit', { game: a.id, via, visit: view.n }); toMenu('menu'); } : undefined;
+  const home = grade === 1 && forcedVisit.current !== a.id ? (via: ExitVia) => { log('game_exit', { game: a.id, via, visit: view.n }); toMenu('menu'); } : undefined;
   return (
     <ActivityFrame id={a.id} page={view.page} back={() => toMenu('menu')} home={home}>{body}</ActivityFrame>
   );
