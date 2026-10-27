@@ -225,7 +225,7 @@ await p.locator('.pp-cheer-next').click({ force: true });
 await p.waitForSelector('.pp-menu, main.level[data-level="1ro-h6-1"]', { timeout: 30_000 });
 // the menu is on screen only for a moment before the sheet opens: read it from free play's ?debug hook
 const cards = await p.evaluate(() => window.__freePlay.menu());
-ok(cards.join(',') === 'race,typing_race,sheet,recess,guardas,editor', `1ro menu (T33: the race first; the typing race second): ${cards.join(',')}`);
+ok(cards.join(',') === 'typing_race,recipe,dance,oops,tap,sheet,recess', `1ro classic menu (2026-10-27: the typing race, the monster games, the sheet, the music): ${cards.join(',')}`);
 // 0e6d4fd: the first visit opens the sheet by itself, the menu after it
 await onLevel(p, '1ro-h6-1');
 ok(true, '1ro\'s first free-play visit opens the sheet by itself');
@@ -251,6 +251,14 @@ await p.waitForTimeout(500);
 await p.locator('.pp-next-card[data-pick="menu"]').click();
 await p.waitForSelector('.pp-menu');
 ok(true, '"otro juego": back to the menu');
+await p.waitForTimeout(600);
+// 2026-10-27: a monster game from the classic menu, and back by the big drawn "Otro juego"
+await p.locator('.pp-fp-card[data-activity="recipe"]').click();
+await p.waitForSelector('.pp-play-home', { timeout: 20_000 });
+await p.waitForTimeout(1500);
+await p.locator('.pp-play-home').click();
+await p.waitForSelector('.pp-menu', { timeout: 10_000 });
+ok(true, 'the classic menu opens La receta, and its big "Otro juego" goes back to the menu');
 await p.waitForTimeout(600);
 await p.locator('.pp-fp-card[data-activity="recess"]').click();
 await onLevel(p, '1ro-h9-1');
