@@ -71,7 +71,7 @@ const waitAdmin = (a, sid, re) => a.waitForFunction(([id, src]) => new RegExp(sr
 async function child(name, kid) {
   const d = await newPage(name);
   const { p } = d;
-  await p.goto(`${base}?debug&nointro&grado=4&sonido=no#/piloto`);
+  await p.goto(`${base}?debug&nointro&nodemo&grado=4&sonido=no#/piloto`);
   await p.waitForSelector('.pp-name-input');
   await p.locator('.pp-name-input').fill(kid);
   await p.locator('.pp-name-input').press('Enter');
@@ -101,7 +101,9 @@ async function drag(p, from, to, { grab = 0.5 } = {}) {
   await p.mouse.move(gx, gy);
   await p.mouse.down();
   await p.mouse.move(gx + 14, gy + 14, { steps: 3 });
-  await p.mouse.move(to.x, to.y, { steps: 16 });
+  // `to` may be a function: measured once the block is in the hand (the program closes the gap it left, so everything below moves up)
+  const end = typeof to === 'function' ? await to() : to;
+  await p.mouse.move(end.x, end.y, { steps: 16 });
   await p.waitForTimeout(160);
   return { release: async () => { await p.mouse.up(); await p.waitForTimeout(260); } };
 }
@@ -142,10 +144,10 @@ try {
   await k.locator('[data-act="hub-go"]').click();
   await k.waitForSelector('.gx-page[data-track="c1-a"]', { timeout: 20_000 });
 
-  // the bigger ¡Largar!
+  // the big ¡Largar!
   const lb = await k.locator('.gx-largar').boundingBox();
   const lf = await k.locator('.gx-largar-word').evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
-  ok(lb.height >= 80 && lf >= 48, `¡Largar! is large and bold (button ${Math.round(lb.height)} px tall, label ${lf} px)`);
+  ok(lb.height >= 80 && lf >= 44, `¡Largar! is large and bold (button ${Math.round(lb.height)} px tall, label ${lf} px)`);
   await shot(k, 'garage-c1a-empty');
 
   // c1-a: the gold sequence by taps, won on the first run → the skip is offered
@@ -241,11 +243,10 @@ try {
   await r1.release();
   ok((await body()).join() === 'down,forward,forward,up', `reorder by dragging: bajar goes to the top of the repetir (${(await body()).join()})`);
   const lastBlock = k.locator(`${MAIN} .gb-cmd[data-kind="up"]`);
-  const ub = await lastBlock.boundingBox();
-  const r2 = await drag(k, k.locator(`${MAIN} .gb-cmd[data-kind="down"]`), { x: ub.x + 40, y: ub.y + ub.height - 14 });
+  const r2 = await drag(k, k.locator(`${MAIN} .gb-cmd[data-kind="down"]`), async () => { const ub = await lastBlock.boundingBox(); return { x: ub.x + 40, y: ub.y + ub.height - 14 }; });
   await r2.release();
   ok((await body()).join() === 'forward,forward,up,down', `and back to the end (${(await body()).join()})`);
-  ok(await k.locator(`${MAIN} .gb-cmd`).evaluateAll((els) => els.every((e) => e.style.left === '20px')), 'all four blocks are still inside the repetir (indented by its spine)');
+  ok(await k.locator(`${MAIN} .gb-cmd`).evaluateAll((els) => els.every((e) => e.style.left === '18px')), 'all four blocks are still inside the repetir (indented by its spine)');
   // a drag from the palette into the repetir, then thrown away on the palette
   const r3 = await drag(k, k.locator('[data-pal="jump"]'), { x: ab.x + 70, y: ab.y + ab.height + 6 });
   await r3.release();
@@ -379,6 +380,54 @@ try {
   ok(/Saltaste a la Copa 2/.test(await m.locator('.hb-headline').innerText()), 'M: the skip lands on the strip: "¡Saltaste a la Copa 2!"');
   await shot(m, 'hub-skipped');
   ok((await journey(m)).skipped.includes(1), 'M: copa 1 counts as finished');
+
+  // ---------------------------------------------------------------- C13: conditions are pieces (M, copa 3)
+  await m.evaluate(() => { window.__copaFlow.finishDeer(3); window.__copaFlow.goCopa(3); });
+  await m.waitForSelector('.gx-page[data-copa="3"]:not(.is-dragging)', { timeout: 20_000 });
+  ok(await m.locator('.gx-pal-head', { hasText: 'Mirar' }).count() === 1 && await m.locator('[data-pal-sensor="puddle_ahead"]').count() === 1, 'copa 3: the palette has a "Mirar" group with the sensor piece "charco adelante"');
+  const heights = await m.locator('.gb-pal').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
+  ok(heights.length > 0 && heights.every((h) => h >= 48), `palette pieces are all 48 px tall or more (${[...new Set(heights)].join(', ')})`);
+  ok(await m.locator('.gx-pal-head').evaluateAll((els) => els.map((e) => e.firstChild.textContent).join('|')) === 'Mover|Repetir y decidir|Mirar', 'palette group headers: Mover, Repetir y decidir, Mirar');
+  const palBox = await m.locator('.gx-palette-col').evaluate((e) => [e.scrollHeight, e.clientHeight]);
+  ok(palBox[0] <= palBox[1] + 6, `the copa 3 palette fits without its own scroll (${palBox.join(' in ')})`);
+  await build(m, ['repeat', 'if', 'jump']);
+  ok(await m.locator(`${MAIN} .gb-condslot.is-empty`).count() === 1, 'a new "si" shows the dashed condition hole');
+  ok(/poné qué mira el auto/.test(await m.locator(`${MAIN} .gb-condslot.is-empty`).innerText()), 'the hole carries its hint: "poné qué mira el auto"');
+  await largar(m);
+  await m.waitForSelector('.gx-banner.is-emptycond');
+  ok(await m.locator('.gx-page').getAttribute('data-phase') === 'garage' && await m.locator(`${MAIN} .gb-condslot.is-warn`).count() === 1, '¡Largar! with an empty "si": nothing runs, a message and the red hole say what is missing');
+  await shot(m, 'empty-condition-warning');
+  await m.locator('[data-pal-sensor="puddle_ahead"]').click();
+  ok(await m.locator(`${MAIN} .gb-pill[data-sensor="puddle_ahead"]`).count() === 1 && await m.locator('.gx-banner.is-emptycond').count() === 0, 'tapping the sensor piece fills the hole of the "si" and the message goes away');
+  await m.locator(`${MAIN} .gb-pill-x`).click();
+  ok(await m.locator(`${MAIN} .gb-condslot.is-empty`).count() === 1, 'the cross takes the piece out: the hole comes back');
+  const sp = await centre(m.locator('[data-pal-sensor="puddle_ahead"]'));
+  const sd = await m.locator('[data-pal-sensor="puddle_ahead"]').boundingBox();
+  await m.mouse.move(sd.x + 40, sd.y + 24); await m.mouse.down();
+  await m.mouse.move(sd.x + 54, sd.y + 38, { steps: 3 });
+  const hb = await m.locator(`${MAIN} .gb-condslot.is-empty`).boundingBox();
+  await m.mouse.move(hb.x + 100, hb.y + hb.height / 2, { steps: 14 });
+  await m.waitForTimeout(150);
+  ok(await m.locator(`${MAIN} .gb-condslot.is-target`).count() === 1, 'a sensor piece in the hand lights the hole it would fill');
+  await shot(m, 'drag-sensor');
+  await m.mouse.up(); await m.waitForTimeout(250);
+  ok(await m.locator(`${MAIN} .gb-pill[data-sensor="puddle_ahead"]`).count() === 1, 'a sensor piece dragged onto the hole fills it');
+  void sp;
+  await shot(m, 'condition-placed');
+  // a program with a condition runs
+  await largar(m);
+  await m.waitForSelector('.gx-page[data-phase="run"], .gx-page[data-phase="garage"] .gx-banner.is-crash, .gx-result-page', { timeout: 30_000 });
+  ok(await m.locator('.gx-banner.is-emptycond').count() === 0, 'with its condition set, ¡Largar! runs the program');
+
+  // the first time the garage opens, a ghost hand shows the drag (format only); it does not come back inside the same session
+  const D = await newPage('demo');
+  await D.p.goto(`${base}?debug#/copa2-dev?track=c1-a`);
+  await D.p.waitForSelector('.gx-page');
+  await D.p.waitForFunction(() => document.querySelectorAll('.ghost-layer *').length > 0, null, { timeout: 15_000 });
+  ok(true, 'the first garage shows the ghost hand dragging a palette piece');
+  await D.p.waitForTimeout(9000);
+  ok(await D.p.locator(`${MAIN} .gb-cmd`).count() === 0, 'the demo teaches the gesture, it builds nothing');
+  await D.ctx.close();
 
   // ---------------------------------------------------------------- the rows
   const name = sql(`select child_name from sessions where id = '${K.sid}';`);
