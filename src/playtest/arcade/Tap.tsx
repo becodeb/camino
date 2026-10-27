@@ -284,8 +284,10 @@ export function TapGame({ mode, startTier, rounds, done, roundWon, stopAfterRoun
 
   function tapAnimal(a: AnimalId) {
     const s = g.current;
-    if (s.mode === 'build') { selectAnimal(a); return; }
-    if (!hit()) return;
+    // 2026-10-27 (user: "a veces fallan y no funciona el salto"): in build mode tapping an animal that has rules also runs them,
+    // so a tap on an animal always does what its sign says; one without rules is only selected, as before
+    if (s.mode === 'build') { selectAnimal(a); if (!rulesOf(s.rules, a).length || s.ending) return; }
+    else if (!hit()) return;
     touched();
     for (const x of [s.st, s.tot]) { x.playTaps++; x.byAnimal[a] = (x.byAnimal[a] ?? 0) + 1; }
     const effects = rulesOf(s.rules, a);
