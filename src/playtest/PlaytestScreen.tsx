@@ -40,7 +40,7 @@ import { resetCopaMemory } from './copa2/store';
 import { setSpeechFilter } from '../ui/speech';
 import { clearCaption, installCaptions, setCaptions } from './captions';
 import { Captions } from './Captions';
-import { PLAYTEST_UNLOCKS } from './WardrobeStep';
+import { unlocksFor } from './WardrobeStep';
 import { withName } from './characterName';
 import { nameParamFromUrl, nameScreenOn } from './childName';
 import { holdHash } from './hashHold';
@@ -82,7 +82,6 @@ export function PlaytestScreen() {
     return () => setSpeechFilter(null);
   }, []);
   // the wardrobe's pieces unlock at a few seeds of this session (the year's milestones are for a year)
-  useState(() => { setUnlocks(PLAYTEST_UNLOCKS); return true; });
   useEffect(() => () => setUnlocks(null), []);
   // every spoken line can show as text (on from 3ro, or as the setup and 💬 say); a reloaded tab keeps its state
   useEffect(() => {
@@ -98,6 +97,8 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
   const [flow, setFlow] = useState<FlowState>(() => resumed?.flow ?? initialFlow(Date.now()));
   const flowRef = useRef(flow);
   flowRef.current = flow;
+  // C14: 4to's pieces cost more seeds, as it earns more (set while rendering: the wardrobe reads it in its first render)
+  setUnlocks(unlocksFor(is4to(flow)));
   const [session, setSession] = useState<SessionRecord | null>(() => (resumed ? tel.session : null));
   const [hand, setHand] = useState<HandState | null>(null);
   /** "Quedan 5 minutos" on screen (the command's id), or null. */

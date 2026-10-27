@@ -8,10 +8,12 @@
 // The ladder's ceiling rung (the placement's input) is kept the same way: Ladder.tsx
 // notes it when the ladder ends, CopaStep reads it when the Copa opens.
 
+import { parseLedger, type Ledger } from './coins';
 import { parseJourney, type Journey } from './journey';
 
 const KEY = 'camino.piloto.copa2.v1';
 const CEILING_KEY = 'camino.piloto.copa2.ceiling.v1';
+const COINS_KEY = 'camino.piloto.copa2.coins.v1';
 
 interface Stored<T> { sid: string; at: number; value: T }
 
@@ -31,6 +33,7 @@ function write<T>(key: string, sid: string | undefined, value: T): void {
 }
 
 let memory: { sid: string; journey: Journey } | null = null;
+let coinsMemory: { sid: string; ledger: Ledger } | null = null;
 let ceilingMemory: { sid: string; rung: number | null } | null = null;
 
 /** The session's journey, or null when the child has not opened the Copa yet. */
@@ -48,6 +51,20 @@ export function saveJourney(sid: string | undefined, journey: Journey): void {
   write(KEY, sid, journey);
 }
 
+/** What the Copa already paid in coins (coins.ts): kept so a ¡Revancha! or a reload never pays twice. */
+export function loadLedger(sid: string | undefined): Ledger {
+  if (!sid) return parseLedger(null);
+  if (coinsMemory?.sid === sid) return coinsMemory.ledger;
+  const l = parseLedger(read<unknown>(COINS_KEY, sid));
+  coinsMemory = { sid, ledger: l };
+  return l;
+}
+export function saveLedger(sid: string | undefined, ledger: Ledger): void {
+  if (!sid) return;
+  coinsMemory = { sid, ledger };
+  write(COINS_KEY, sid, ledger);
+}
+
 let demoSeen = false;
 /** The garage's first-time drag demo (the ghost hand): shown once per child. */
 export const dragDemoSeen = (): boolean => demoSeen;
@@ -58,7 +75,8 @@ export function resetCopaMemory(): void {
   memory = null;
   demoSeen = false;
   ceilingMemory = null;
-  try { localStorage.removeItem(KEY); localStorage.removeItem(CEILING_KEY); } catch { /* nothing to clear */ }
+  coinsMemory = null;
+  try { localStorage.removeItem(KEY); localStorage.removeItem(CEILING_KEY); localStorage.removeItem(COINS_KEY); } catch { /* nothing to clear */ }
 }
 
 /** The ladder ended with this ceiling (the highest rung passed; null: none). */

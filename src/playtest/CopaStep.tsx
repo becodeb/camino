@@ -28,6 +28,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { speak } from '../ui/speech';
+import { grant, progress } from '../curriculum/progress';
+import { SeedPouch } from '../screens/yearKit';
 import { DEBUG } from '../screens/levelKit';
 import { GameControllerArt } from './classroom';
 import { usePlaytest } from './context';
@@ -42,7 +44,9 @@ import {
   ghostOn, medalOf, newJourney, offerSkip, programFor, recordDeerRun, recordRun, setDeerProgram, setProgram, skipCopa, startDeer, stepsOf,
   type Journey,
 } from './copa2/journey';
-import { loadJourney, readLadderCeiling, saveJourney } from './copa2/store';
+import { loadJourney, loadLedger, readLadderCeiling, saveJourney, saveLedger } from './copa2/store';
+import { deerAward, spyAward, trackAward, type Award, type Ledger } from './copa2/coins';
+import { CoinBurst, type Burst } from './coinBurst';
 import { startTier } from './copa2/rivals';
 import { trackById, type CopaId } from './copa2/tracks';
 import type { Program } from './copa2/program';
@@ -84,6 +88,10 @@ export function CopaStep() {
   const [view, setView] = useState<View>({ kind: 'hub', note: boot.fresh ? 'placement' : 'back' });
   const [announce, setAnnounce] = useState(false);
   const [shown, setShown] = useState(false);
+  // C14: 4to's coins. What a run will pay waits (with the ledger as it will be) until its result is on screen.
+  const ledger = useRef<Ledger>(loadLedger(sessionId));
+  const pending = useRef<{ award: Award; ledger: Ledger } | null>(null);
+  const [burst, setBurst] = useState<Burst | null>(null);
   /** 'busy': a run is on screen (the survey and "quedan 5 minutos" wait). */
   const busy = useRef(false);
   const surveyAsked = useRef(false);
@@ -102,6 +110,16 @@ export function CopaStep() {
   }, []);
 
   useEffect(() => { apiRef.current.did('copa'); }, []);
+
+  /** Pays an award: the seeds into the bag (the wardrobe's currency), the ledger, one `coins_earned` per part, and the burst. */
+  const pay = useCallback((p: { award: Award; ledger: Ledger }) => {
+    ledger.current = p.ledger;
+    saveLedger(apiRef.current.session?.id, p.ledger);
+    if (p.award.amount <= 0) return;
+    progress.update((q) => grant(q, p.award.amount));
+    for (const part of p.award.parts) apiRef.current.log('coins_earned', { source: part.source, amount: part.amount });
+    setBurst({ amount: p.award.amount, total: progress.get().seeds, n: Date.now() });
+  }, []);
 
   // where the child starts (once per journey): placement from the ladder's ceiling
   useEffect(() => {
@@ -193,6 +211,9 @@ export function CopaStep() {
 
   // ---------------------------------------------------------------- a track
   const onRun = (trackId: string) => (r: RunReport) => {
+    pending.current = r.outcome === 'finish' && r.result
+      ? trackAward(ledger.current, trackId, { finished: true, won: r.result.won, rival: r.result.rival, timeMs: r.timeMs, firstRun: (jref.current.tracks[trackId]?.runs ?? 0) === 0 })
+      : null;
     const out = recordRun(jref.current, trackId, {
       outcome: r.outcome, ...(r.result ? { place: r.result.place, beaten: r.result.beaten } : {}), timeMs: r.timeMs,
     });
@@ -234,6 +255,7 @@ export function CopaStep() {
 
   // ---------------------------------------------------------------- the deer
   const deerRun = (copa: CopaId) => (r: RunReport) => {
+    pending.current = r.outcome === 'finish' ? deerAward(ledger.current, copa) : null;
     const out = recordDeerRun(jref.current, copa, r.outcome, Date.now());
     update(() => out.journey);
     if (out.ghostNow) log('garage_ghost', { track: `c${copa}-a`, deer: true, failures: out.journey.deer[copa]!.failStreak });
@@ -248,6 +270,7 @@ export function CopaStep() {
   // ---------------------------------------------------------------- the header's buttons
   const headerExtra = (
     <>
+      <SeedPouch className="gx-bag" />
       <button type="button" className="cut gx-hbtn" data-act="copas" onClick={toHub} aria-label="Ver las copas">
         <CupIcon size={26} /><span>Copas</span>
       </button>
@@ -258,7 +281,16 @@ export function CopaStep() {
       )}
     </>
   );
-  const onPhase = useCallback((p: string) => { busy.current = p === 'run'; }, []);
+  const onPhase = useCallback((p: string) => {
+    busy.current = p === 'run';
+    // the result is on screen: now the coins are paid, once
+    if (p === 'result' && pending.current) { const x = pending.current; pending.current = null; pay(x); }
+  }, [pay]);
+  /** The Espiá's logger: a correct answer pays its coin. */
+  const spyLog = useCallback((type: string, payload: Record<string, unknown>) => {
+    log(type, payload);
+    if (type === 'garage_spy' && payload.correct === true && typeof payload.track === 'string') pay(spyAward(ledger.current, payload.track));
+  }, [log, pay]);
 
   // ---------------------------------------------------------------- debug hooks (?debug): scripted checks
   useEffect(() => {
@@ -297,7 +329,7 @@ export function CopaStep() {
     const track = trackById(view.trackId)!;
     body = (
       <Spy
-        key={view.n} track={track} tier={view.tier} logger={log}
+        key={view.n} track={track} tier={view.tier} logger={spyLog}
         onPhase={(b) => { busy.current = b; }}
         onDone={() => { busy.current = false; setView({ kind: 'track', trackId: view.trackId, n: Date.now() }); }}
         headerExtra={headerExtra}
@@ -332,6 +364,7 @@ export function CopaStep() {
   return (
     <>
       {body}
+      <CoinBurst burst={burst} />
       {announce && shown && (
         <div className="pp-arcade-open" role="dialog" aria-label="Se abrió el Arcade">
           <div className="pp-arcade-open-card sheet">

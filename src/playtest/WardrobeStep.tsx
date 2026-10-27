@@ -37,6 +37,23 @@ export const PLAYTEST_UNLOCKS: Record<ItemId, { seeds: number }> = {
   corona: { seeds: 16 },
 };
 
+/**
+ * C14: 4to earns more seeds (the Copa and the typing race pay 1 to 10 per
+ * result, copa2/coins.ts), so its pieces cost more: a first track pays about
+ * 5, two races about 10, and the last piece takes a good part of the Copa.
+ */
+export const UNLOCKS_4TO: Record<ItemId, { seeds: number }> = {
+  bufanda: { seeds: 0 },
+  hongo: { seeds: 0 },
+  mochila: { seeds: 6 },
+  capa: { seeds: 12 },
+  botas: { seeds: 20 },
+  flotador: { seeds: 30 },
+  corona: { seeds: 42 },
+};
+/** The pieces' seed numbers for a grade. */
+export const unlocksFor = (is4: boolean): Record<ItemId, { seeds: number }> => (is4 ? UNLOCKS_4TO : PLAYTEST_UNLOCKS);
+
 /** About three minutes, then a gentle move on. */
 export const WARDROBE_MS = 3 * 60_000;
 

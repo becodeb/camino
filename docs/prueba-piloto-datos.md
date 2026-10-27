@@ -1580,6 +1580,13 @@ Ayudá al ciervo left (fixed, or given up after four failed runs in a row).
 { copa: 2..5, attempts: number, fixed: boolean, ms: number, ghost: boolean }   // ms: from the deer's program first on screen to leaving it
 ```
 
+#### `coins_earned` (C14, 4to only)
+4to's coins are the wardrobe's seeds (`progress.seeds`, never spent: a piece opens when the bag reaches its number; the wardrobe's `seeds` and `needs` fields already read them). Every payment logs one event per part, after the result is on screen.
+```
+{ source: 'copa_track' | 'copa_beat' | 'copa_first_try' | 'copa_revancha' | 'copa_deer' | 'copa_spy' | 'typing_race', amount: number }
+```
+Amounts (`src/playtest/copa2/coins.ts`): finishing a track 2 (once per track); beating the rival 2 / 3 / 5 for bronze / silver / gold (once per tier per track); a first-run win +1 (once); a revancha that improves the track's best time by 0.1 s or more +1; fixing the deer 2 (once per copa); a correct Espiá 1 (once per track); a typing race finished 2, in 1st place 5 (per race). What was paid is kept in a per-session ledger (`camino.piloto.copa2.coins.v1`) so a revancha or a reload never pays twice. The child sees a big "+N" with the bag counting up. Other grades never pay or log this event. 4to's wardrobe costs (seeds): scarf 0, mushroom hat 0, backpack 6, cape 12, boots 20, duck float 30, flower crown 42 (`UNLOCKS_4TO`); 1ro to 3ro keep 0, 0, 4, 7, 10, 13, 16.
+
 T42/T34 report (`tools/analyze-playtest.mjs`): an Arcade section with, per
 child, typing races (voluntary again, finished), best and median words per
 minute, right keys, and "Tu juego" runs and best; the motivation profiles

@@ -361,3 +361,7 @@ button.gx-giveup { font-size: 20px; font-weight: 700; }
 .gb-pal .gb.is-small .gb-word { font-size: 17px; }
 .gb-pal .gb.is-small .gb-glyph { transform: scale(0.86); margin-right: -3px; }
 .gb-pal .gb-c.is-small .gb-glyph { margin-right: 1px; }
+
+/* C14: the seed bag in the header (the wardrobe's currency), smaller than the wardrobe's */
+.gx-title-row .gx-bag .pouch-in { width: 34px; height: 39px; }
+.gx-title-row .gx-bag .pouch-count { font-size: 26px; }

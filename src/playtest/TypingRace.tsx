@@ -25,7 +25,7 @@
 // `activity_end`.
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { progress, solve } from '../curriculum/progress';
+import { grant, progress, solve } from '../curriculum/progress';
 import type { Pitch } from '../game/music';
 import { Bar } from '../screens/LevelBar';
 import { DEBUG } from '../screens/levelKit';
@@ -36,6 +36,8 @@ import { glowTargets, wiggleHelp } from '../ui/ghost';
 import { ringNote } from '../ui/sound';
 import { speak, speakWhenAllowed, stopSpeaking } from '../ui/speech';
 import { usePlaytest } from './context';
+import { CoinBurst, type Burst } from './coinBurst';
+import { typingAward } from './copa2/coins';
 import { provideDemoActions } from './demo';
 import type { LevelEnd } from './PlaytestLevel';
 import { rememberPart, resumedPart } from './resume';
@@ -163,6 +165,8 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
   const pair = PAIRS[(no - 1) % PAIRS.length];
   const [firstEver] = useState(() => no === 1);
   const [cups0] = useState(cups);
+  // C14 (4to only, honest mode): a finished race pays seeds, more for 1st place
+  const [burst, setBurst] = useState<Burst | null>(null);
   /**
    * C07: honest mode's adaptive rivals (null in band mode: `rivals` still steps the rubber band exactly as before). What they adapt to is
    * the state at the race's start: nothing yet (the first race: they follow the child's live pace) or the child's previous race.
@@ -359,6 +363,10 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
       s.honestRanking = honestRanking(playMs, rivalsMs);
       // the next race's rivals adapt to this one: its measured pace and whether it was a win (1st place)
       onAdapt?.(afterRace(adapt0, { wpm: wpm(s.right, playMs), won: s.honestResult.place === 1 }));
+      const award = typingAward(s.honestResult.place);
+      progress.update((q) => grant(q, award.amount));
+      for (const part of award.parts) apiRef.current.log('coins_earned', { source: part.source, amount: part.amount });
+      setBurst({ amount: award.amount, total: progress.get().seeds, n: Date.now() });
     }
     const isWin = !s.honestResult || s.honestResult.place === 1;
     if (isWin) {
@@ -684,6 +692,7 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
     return (
       <main ref={rootRef} className="pp-page pp-race pp-trace is-podium" data-phase={phase} data-race={no} data-tier={tier}>
         {bar}
+        <CoinBurst burst={burst} />
         {hr && ranking ? (
           <HonestResultScreen
             pair={pair} ranking={ranking} result={hr} cups={cups0 + (hr.place === 1 ? 1 : 0)} won={hr.place === 1}
@@ -701,6 +710,7 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
   return (
     <main ref={rootRef} className="pp-page pp-race pp-trace" data-phase={phase} data-race={no} data-tier={tier} data-word-no={k + 1}>
       {bar}
+      <CoinBurst burst={burst} />
       <section className="sheet rc-track" aria-label="La pista">
         <span className="tape tape-l" aria-hidden="true" />
         <span className="tape tape-r" aria-hidden="true" />
