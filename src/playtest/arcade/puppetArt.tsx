@@ -57,6 +57,8 @@ export const POSE_PARAMS: Record<Pose, PoseParams> = {
 
 /** Other moments: pointing at the cards (your turn), the tumble, the win's hop. */
 export const POINT: PoseParams = { ...REST, la: 18, ra: 70, lean: 6 };
+/** T52: the child's turn: one arm pointing down and forward, at the pose cards under the stage. */
+export const POINT_DOWN: PoseParams = { ...REST, la: 18, ra: 52, lean: 12 };
 export const TUMBLE: PoseParams = { ...REST, la: 150, ra: 160, lf: [-40, -16], rf: [40, 0], fall: 84, lift: 0 };
 export const HOP: PoseParams = { ...REST, la: 160, ra: 160, lift: -34, sy: 1.04, sx: 0.97 };
 

@@ -10,10 +10,14 @@ import { rng } from '../../ink/ink.js';
 export const POSES = ['up', 'star', 'squat', 'flamingo'] as const;
 export type Pose = typeof POSES[number];
 
-export const DANCE_MAX_TIER = 6;
+export const DANCE_MAX_TIER = 7;
 
-/** Poses in a dance at a tier: 2, 3, 4… up to 7 (the guided pass plays 2, 3, 4). */
-export const lengthOf = (tier: number) => Math.max(1, Math.min(DANCE_MAX_TIER, Math.floor(tier))) + 1;
+/**
+ * Poses in a dance at a tier: 1, 2, 3… up to 7 (the guided pass plays 1, 2,
+ * 3). T52: the first round is one pose, so the first thing a child does is
+ * trivially "tap the card of what it just did"; it was 2 to 7.
+ */
+export const lengthOf = (tier: number) => Math.max(1, Math.min(DANCE_MAX_TIER, Math.floor(tier)));
 
 /**
  * A dance of `n` poses: `prefix` kept (the dance before, so each round adds

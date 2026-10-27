@@ -265,23 +265,34 @@ export function ConfettiRain({ n = 46, seed = 1 }: { n?: number; seed?: number }
 
 // ------------------------------------------------------------------ the idle nudge
 
-/** After a while with no input, ✋ wiggles and the targets glow (never solves anything). */
-export function useIdleNudge(rootRef: React.RefObject<HTMLElement | null>, lastInput: () => number, active: () => boolean, ms = 12_000) {
+/**
+ * After a while with no input (T52: 8 s), ✋ wiggles and the targets glow
+ * (never solves anything); `ghost`, when given, also shows the next thing to
+ * do (a ghost hand pointing at it, or the dance again). It comes back every
+ * 10 s while nothing happens.
+ */
+export function useIdleNudge(rootRef: React.RefObject<HTMLElement | null>, lastInput: () => number, active: () => boolean, ms = IDLE_MS, ghost?: () => void) {
+  const cb = useRef(ghost);
+  cb.current = ghost;
   useEffect(() => {
     let last = 0;
     const id = window.setInterval(() => {
       const root = rootRef.current;
       const now = Date.now();
       if (!root || !active() || document.hidden || document.querySelector('.ghost-hand')) return;
-      if (now - lastInput() < ms || now - last < 7000) return;
+      if (now - lastInput() < ms || now - last < 10_000) return;
       last = now;
       wiggleHelp(root);
       glowTargets(root, 2400);
+      cb.current?.();
     }, 1000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }
+
+/** T52: how long without input before the idle nudge shows the next thing to do. */
+export const IDLE_MS = 8000;
 
 /** A row of little marks for the rounds of a play (the won ones filled): the bar's progress. */
 export function RoundDots({ total, done }: { total: number; done: number }): ReactNode {

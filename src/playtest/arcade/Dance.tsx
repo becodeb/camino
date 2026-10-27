@@ -11,6 +11,15 @@
 // length): never "game over". All right: they dance it together, confetti;
 // the next round adds one pose to the same dance.
 //
+// T52 (understood by a 6-year-old): while the monster holds a pose, that
+// pose's card lifts out of the grey row, lit, and the beat's frame at the top
+// shows the pose (the pose↔card link is visible); a big drawn eye sits on
+// the grey cards while it dances ("watch"); slower beats; the first round is
+// one pose; on the child's turn the monster points down at the cards; the
+// first-time ghost taps the first card and the monster copies it (not
+// counted), then hands over; after 8 s with nothing tapped the dance is
+// shown again.
+//
 // Logged (Kit.tsx useGameLog): `game_start`, `game_round` with this game's
 // measures (`length` the dance's poses, `seq`, `misses`, `miss_at`, `taps`,
 // `shows` times the dance was shown), `game_end` with `longest` (the longest
@@ -35,7 +44,7 @@ import { provideDemoActions } from '../demo';
 import { AgainButton, Buddy, ConfettiRain, DizzyStars, RoundDots, gameLevelId, sitDizzy, useGameLog, useIdleNudge, useRapidTaps, type GameProps } from './Kit';
 import { GUIDED_ROUNDS, guidedTurnOver, nextTier } from './kit';
 import { DANCE_MAX_TIER, POSES, danceRound, judgeStep, type DanceRound, type Pose } from './dance';
-import { HOP, POINT, POSE_COLOR, POSE_PARAMS, PoseCardArt, Puppet, REST, TUMBLE, usePoseTween, type Face, type PoseParams } from './puppetArt';
+import { HOP, POINT_DOWN as POINT, POSE_COLOR, POSE_PARAMS, PoseCardArt, Puppet, REST, TUMBLE, usePoseTween, type Face, type PoseParams } from './puppetArt';
 import { EndChoices } from './home';
 import './arcade.css';
 
@@ -60,8 +69,8 @@ const NAME: Record<Pose, string> = { up: '¡Arriba!', star: '¡Estrella!', squat
 const NOTE: Record<Pose, 'do' | 'mi' | 'sol' | 're'> = { up: 'sol', star: 'mi', squat: 'do', flamingo: 're' };
 
 /** A beat of the monster's dance: the pose lands, holds, and it comes back to rest. */
-const BEAT_MS = 1050;
-const HOLD_MS = 720;
+const BEAT_MS = 1400;
+const HOLD_MS = 1000;
 /** The win: the same dance, quicker, all together. */
 const FAST_BEAT_MS = 560;
 
@@ -143,7 +152,7 @@ export function DanceGame({ mode, startTier, rounds, done, roundWon, stopAfterRo
       }, 600 + i * BEAT_MS, s.show);
       later(() => { move(REST, 'watch', 200); setFlash(null); }, 600 + i * BEAT_MS + HOLD_MS, s.show);
     });
-    later(then, 600 + seq.length * BEAT_MS + 150, s.show);
+    later(then, 600 + seq.length * BEAT_MS + 450, s.show);
   }
 
   function turn() {
@@ -161,11 +170,26 @@ export function DanceGame({ mode, startTier, rounds, done, roundWon, stopAfterRo
         const root = rootRef.current;
         if (!root || s.phase !== 'turn' || s.input.length) return;
         apiRef.current.log('ghost_demo', { level_id: LEVEL_ID, kind: 'intro' });
+        // T52: the ghost's tap is answered: the monster copies the pose (not the child's tap, not counted), then points again
+        const first = s.round.seq[0];
         s.ghost = playGhost(root, [
-          { do: 'tap', at: `.dz-card[data-pose="${s.round.seq[0]}"]` },
-        ], { pace: 0.9 });
-      }, 500);
+          { do: 'tap', at: `.dz-card[data-pose="${first}"]`, apply: () => ghostTap(first) },
+          { do: 'wait', ms: 900 },
+        ], { pace: 1.2 });
+      }, 700);
     }
+  }
+
+  /** The first-time ghost's tap: the monster does the pose and points at the cards again (nothing counted). */
+  function ghostTap(p: Pose) {
+    const s = g.current;
+    if (s.phase !== 'turn' || s.input.length) return;
+    setLastTap((x) => ({ pose: p, n: (x?.n ?? 0) + 1 }));
+    move(POSE_PARAMS[p], 'dance', 220);
+    setFlash(p);
+    ringNote(NOTE[p]);
+    later(() => { if (g.current.phase === 'turn' && !g.current.input.length) { move(POINT, 'point', 260); setFlash(null); setLastTap(null); } }, 900);
+    s.lastInput = Date.now();
   }
 
   function startRound(r: DanceRound, n: number, t: number, isAgain: boolean) {
@@ -286,7 +310,11 @@ export function DanceGame({ mode, startTier, rounds, done, roundWon, stopAfterRo
     speak(byAgain ? LINES.again : LINES.more);
   }
 
-  useIdleNudge(rootRef, () => g.current.lastInput, () => g.current.phase === 'turn');
+  // T52: after 8 s with nothing tapped on its turn, the monster shows the dance again (the cards lighting up with it)
+  useIdleNudge(rootRef, () => g.current.lastInput, () => g.current.phase === 'turn' && !g.current.input.length, undefined, () => {
+    apiRef.current.log('ghost_demo', { level_id: LEVEL_ID, kind: 'idle' });
+    show(g.current.round.seq);
+  });
 
   // ---------------------------------------------------------------- 🔊, ✋
 
@@ -383,10 +411,10 @@ export function DanceGame({ mode, startTier, rounds, done, roundWon, stopAfterRo
               const on = phase === 'show' || phase === 'yay' ? i <= beat : !!mine;
               return (
                 <g key={`${no}-${i}`} transform={`translate(${slotX(i)} ${SLOT_Y})`} className={`dz-slot${on ? ' is-on' : ''}${i === beat ? ' is-beat' : ''}`} data-slot={i}>
-                  <circle r={32} fill={mine ? POSE_COLOR[mine] : on ? '#f6efdf' : 'none'} stroke="#2b2622" strokeWidth={2.6} strokeDasharray={on ? undefined : '6 7'} filter="url(#rough)" />
+                  <circle r={32} fill={mine ? POSE_COLOR[mine] : on ? POSE_COLOR[seq[i]] : 'none'} stroke="#2b2622" strokeWidth={2.6} strokeDasharray={on ? undefined : '6 7'} filter="url(#rough)" />
                   {mine && phase !== 'show' ? (
                     <g transform="translate(0 26) scale(0.21)"><Puppet p={POSE_PARAMS[mine]} face="dance" /></g>
-                  ) : on ? <circle r={9} fill="#2b2622" /> : null}
+                  ) : on ? <g transform="translate(0 26) scale(0.21)"><Puppet p={POSE_PARAMS[seq[i]]} face="dance" /></g> : null}
                   {missAt === i && phase === 'tumble' && (
                     <path className="rx-wrong-ring" d={penLoop(0, 0, 44, 42, { seed: 5 })} fill="none" stroke="#c24a3c" strokeWidth={5} strokeLinecap="round" filter="url(#rough)" />
                   )}
@@ -397,7 +425,7 @@ export function DanceGame({ mode, startTier, rounds, done, roundWon, stopAfterRo
           {/* the floor flashes the pose's colour */}
           <ellipse cx={MON.x} cy={FLOOR + 6} rx={190} ry={30} fill={flash ? POSE_COLOR[flash] : 'transparent'} className="dz-flash" stroke={flash ? '#2b2622' : 'none'} strokeWidth={2.2} strokeDasharray="3 8" />
           <g transform={`translate(${MON.x} ${FLOOR}) scale(${MON.s})`} className={`dz-monster is-${phase}`}>
-            <Puppet p={pose} face={face} look={phase === 'turn' ? [1, 0.6] : [0.3, 0]} />
+            <Puppet p={pose} face={face} look={phase === 'turn' ? [0.6, 1] : [0.3, 0]} />
           </g>
           {phase === 'tumble' && face === 'dizzy' && <DizzyStars x={MON.x + 280} y={FLOOR - 120} />}
           <rect className="dz-monster-hit" x={MON.x - 170} y={FLOOR - 330} width={340} height={340} fill="transparent" pointerEvents="none" />
@@ -408,11 +436,14 @@ export function DanceGame({ mode, startTier, rounds, done, roundWon, stopAfterRo
       <div className={`dz-panel${phase === 'turn' ? ' is-turn' : ' is-watch'}`}>
         {/* T51: the arcade's end screen, "¡Otra vez!" and "Otro juego" */}
         {phase === 'won' && mode === 'arcade' ? <EndChoices again={<AgainButton onPress={() => nextRound(true)} />} /> : (
+        <>
+        {/* T52: while it dances, a big drawn eye on the grey cards: "watch" */}
+        {phase === 'show' && <WatchEye />}
         <ul className="dz-cards" aria-label="Los pasos de baile">
           {POSES.map((p, i) => (
             <li key={p} style={{ '--tilt': `${[-1.4, 1, -0.6, 1.3][i]}deg`, '--i': i } as CSSProperties}>
               <button
-                type="button" className={`cut dz-card ga-target${lastTap?.pose === p && phase !== 'show' ? ' is-tapped' : ''}`} data-pose={p}
+                type="button" className={`cut dz-card ga-target${lastTap?.pose === p && phase !== 'show' ? ' is-tapped' : ''}${flash === p && (phase === 'show' || phase === 'yay') ? ' is-shown' : ''}`} data-pose={p}
                 key={lastTap?.pose === p ? `t${lastTap.n}` : 'c'}
                 aria-label={NAME[p]} aria-disabled={phase !== 'turn'} {...(phase === 'turn' ? { 'data-guide': 'target' } : {})}
                 style={{ '--fill': POSE_COLOR[p] } as CSSProperties}
@@ -423,6 +454,7 @@ export function DanceGame({ mode, startTier, rounds, done, roundWon, stopAfterRo
             </li>
           ))}
         </ul>
+        </>
         )}
       </div>
       {confetti > 0 && (phase === 'yay' || phase === 'won') && <ConfettiRain key={confetti} seed={confetti} />}
@@ -452,5 +484,22 @@ function Stage({ lit, you }: { lit: boolean; you: boolean }) {
       </g>
       <path d={`M-600,${FLOOR} L${VW + 600},${FLOOR}`} stroke="#2b2622" strokeWidth={2.6} opacity={0.7} />
     </g>
+  );
+}
+
+/** T52: "watch": a big drawn eye, blinking, over the grey cards while the monster dances. */
+function WatchEye() {
+  return (
+    <svg className="dz-eye" viewBox="-60 -40 120 80" aria-hidden="true">
+      <g filter="url(#rough)" strokeLinejoin="round" strokeLinecap="round">
+        <path d="M-52,0 Q0,-44 52,0 Q0,44 -52,0 Z" fill="#fbf6ea" stroke="#2b2622" strokeWidth={4} />
+        <g className="dz-eye-ball">
+          <circle cx={0} cy={0} r={17} fill="#3d6ea5" stroke="#2b2622" strokeWidth={3} />
+          <circle cx={0} cy={0} r={7} fill="#2b2622" />
+          <circle cx={-5} cy={-6} r={3.4} fill="#fff" />
+        </g>
+        <path className="dz-eye-lid" d="M-52,0 Q0,-44 52,0 Q0,44 -52,0 Z" fill="#f1e6cf" stroke="#2b2622" strokeWidth={4} />
+      </g>
+    </svg>
   );
 }

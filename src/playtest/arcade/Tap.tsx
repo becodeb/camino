@@ -215,14 +215,16 @@ export function TapGame({ mode, startTier, rounds, done, roundWon, stopAfterRoun
     void buddy.current?.nod();
   }
 
-  function addEffect(e: EffectId, source: Source, to?: AnimalId) {
-    if (!hit()) return;
+  /** `byGhost` (T52): the first-time ghost's card really adds the rule (not the child's input: no tap counted, `source: 'ghost'`). */
+  function addEffect(e: EffectId, source: Source, to?: AnimalId, byGhost = false) {
+    if (!byGhost && !hit()) return;
     const s = g.current;
     if (s.mode !== 'build' || s.ending) return;
     const a = to ?? s.selected;
     if (to) { s.selected = to; setSelected(to); }
     const r = addRule(s.rules, a, e);
     if (!r.added) {
+      if (byGhost) return;
       touched();
       setShake((x) => ({ a, n: (x?.n ?? 0) + 1 }));
       speak(LINES.full);
@@ -232,12 +234,12 @@ export function TapGame({ mode, startTier, rounds, done, roundWon, stopAfterRoun
       s.open = true;
       glog.roundStart(s.no, s.tier);
     }
-    touched();
+    if (byGhost) s.lastInput = Date.now(); else touched();
     setR(r.rules);
     setT(madeRule(s.track, a));
-    for (const x of [s.st, s.tot]) { x.added++; x.sources[source]++; }
+    for (const x of [s.st, s.tot]) { x.added++; if (!byGhost) x.sources[source]++; }
     s.made++;
-    glog.log('tap_rule', { game: GAME, mode, play_no: playNo, round: s.no, tier: s.tier, animal: a, effect: e, action: 'add', count: rulesOf(r.rules, a).length, source });
+    glog.log('tap_rule', { game: GAME, mode, play_no: playNo, round: s.no, tier: s.tier, animal: a, effect: e, action: 'add', count: rulesOf(r.rules, a).length, source: byGhost ? 'ghost' : source });
     speak(EFFECT_SAY[e]);
     act(a, [e]);
     syncEnd();
@@ -360,12 +362,13 @@ export function TapGame({ mode, startTier, rounds, done, roundWon, stopAfterRoun
         const s = g.current;
         if (!root || s.made || s.mode !== 'build') return;
         apiRef.current.log('ghost_demo', { level_id: LEVEL_ID, kind: 'intro' });
+        // T52: the ghost's card really lands on the frog's sign (the frog jumps), then it points at "¡A jugar!" and hands over
         s.ghost = playGhost(root, [
-          { do: 'tap', at: '.tp-animal-hit[data-animal="rana"]' },
-          { do: 'tap', at: '.tp-card[data-effect="jump"]' },
-          { do: 'tap', at: '.tp-mode[data-mode="play"]' },
-          { do: 'tap', at: '.tp-animal-hit[data-animal="rana"]' },
-        ], { pace: 0.9 });
+          { do: 'point', at: ['.tp-animal-hit[data-animal="rana"]'] },
+          { do: 'tap', at: '.tp-card[data-effect="jump"]', apply: () => { if (!g.current.made) addEffect('jump', 'tap', 'rana', true); } },
+          { do: 'wait', ms: 1400 },
+          { do: 'point', at: ['.tp-mode[data-mode="play"]'] },
+        ], { pace: 1.2 });
       }, 900);
     } else off = speakWhenAllowed(LINES.build);
     // the guided turn's clock (and "quedan 5 minutos"), and the totals for game_end
@@ -396,7 +399,23 @@ export function TapGame({ mode, startTier, rounds, done, roundWon, stopAfterRoun
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useIdleNudge(rootRef, () => g.current.lastInput, () => !g.current.ending);
+  /** The next thing to do (✋ step 2 and the idle nudge): a card, "¡A jugar!", an animal with rules, or back to building. */
+  const nextAt = () => {
+    const s = g.current;
+    if (s.mode === 'build') return s.track.fresh.length ? '.tp-mode[data-mode="play"]' : `.tp-card[data-effect="${sceneOf(s.tier).effects[0]}"]`;
+    const withRules = sceneOf(s.tier).animals.filter((x) => rulesOf(s.rules, x).length);
+    const target = s.track.fresh.find((x) => withRules.includes(x)) ?? withRules[0];
+    return target ? `.tp-animal-hit[data-animal="${target}"]` : '.tp-mode[data-mode="build"]';
+  };
+  // T52: after 8 s with nothing done, the ghost points at the next thing to do
+  useIdleNudge(rootRef, () => g.current.lastInput, () => !g.current.ending, undefined, () => {
+    const root = rootRef.current;
+    const s = g.current;
+    if (!root) return;
+    s.ghost?.cancel();
+    s.ghost = playGhost(root, [{ do: 'point', at: [nextAt()] }]);
+    apiRef.current.log('ghost_demo', { level_id: LEVEL_ID, kind: 'idle' });
+  });
 
   // ---------------------------------------------------------------- a card dragged onto an animal (a tap is the same)
 
@@ -449,13 +468,7 @@ export function TapGame({ mode, startTier, rounds, done, roundWon, stopAfterRoun
     if (!root) return;
     glowTargets(root, 2400);
     if (step === 1) return;
-    let at: string;
-    if (s.mode === 'build') at = s.track.fresh.length ? '.tp-mode[data-mode="play"]' : `.tp-card[data-effect="${sceneOf(s.tier).effects[0]}"]`;
-    else {
-      const withRules = sceneOf(s.tier).animals.filter((x) => rulesOf(s.rules, x).length);
-      const target = s.track.fresh.find((x) => withRules.includes(x)) ?? withRules[0];
-      at = target ? `.tp-animal-hit[data-animal="${target}"]` : '.tp-mode[data-mode="build"]';
-    }
+    const at = nextAt();
     s.ghost?.cancel();
     s.ghost = playGhost(root, [{ do: 'point', at: [at] }]);
     a.log('ghost_demo', { level_id: LEVEL_ID, kind: 'hint' });

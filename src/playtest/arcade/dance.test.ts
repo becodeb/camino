@@ -3,9 +3,9 @@ import { DANCE_MAX_TIER, POSES, danceRound, danceSequence, judgeStep, lengthOf }
 import { rng } from '../../ink/ink.js';
 
 describe('T45: copiá el baile', () => {
-  it('a dance grows by one pose per tier, from 2 up to 7', () => {
-    expect([1, 2, 3, 4, 5, 6].map(lengthOf)).toEqual([2, 3, 4, 5, 6, 7]);
-    expect(lengthOf(0)).toBe(2);
+  it('a dance grows by one pose per tier, from 1 (T52: a trivial first round) up to 7', () => {
+    expect([1, 2, 3, 4, 5, 6, 7].map(lengthOf)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(lengthOf(0)).toBe(1);
     expect(lengthOf(99)).toBe(lengthOf(DANCE_MAX_TIER));
   });
 
@@ -24,13 +24,15 @@ describe('T45: copiá el baile', () => {
 
   it('the next round keeps the dance the child knows and adds one pose', () => {
     const r1 = danceRound(1, 7);
+    expect(r1.seq).toHaveLength(1);
     const r2 = danceRound(2, 99, r1.seq);
-    expect(r2.seq.slice(0, 2)).toEqual(r1.seq);
-    expect(r2.seq).toHaveLength(3);
+    expect(r2.seq.slice(0, 1)).toEqual(r1.seq);
+    expect(r2.seq).toHaveLength(2);
     const r3 = danceRound(3, 5, r2.seq);
-    expect(r3.seq.slice(0, 3)).toEqual(r2.seq);
+    expect(r3.seq.slice(0, 2)).toEqual(r2.seq);
+    expect(r3.seq).toHaveLength(3);
     // a dance as long or longer is not a prefix: a fresh one
-    expect(danceRound(2, 3, ['up', 'star', 'squat', 'flamingo'])).toHaveProperty('seq.length', 3);
+    expect(danceRound(3, 3, ['up', 'star', 'squat', 'flamingo'])).toHaveProperty('seq.length', 3);
   });
 
   it('danceSequence keeps the prefix and avoids repeats after it', () => {

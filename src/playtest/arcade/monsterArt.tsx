@@ -134,14 +134,26 @@ export function stackOffsets(items: readonly Ingredient[], gap = 2): { bottoms: 
  * A sandwich, bottom layer on y = 0. `wrongAt`: that layer circled in red pen
  * (it shakes, CSS). `onLayer`: a tap on a layer (the plate: it comes off with
  * everything on it). `slots`: empty dashed outlines for the layers still to put.
+ * `template` (T52, replaces `slots`): the sandwich wanted, its layers still
+ * to put drawn faded in their places (building is matching), the next one
+ * pulsing.
  */
-export function Sandwich({ items, w = LAYER_W, wrongAt = null, onLayer, slots = 0, pop = -1 }: {
-  items: readonly Ingredient[]; w?: number; wrongAt?: number | null; onLayer?: (i: number) => void; slots?: number; pop?: number;
+export function Sandwich({ items, w = LAYER_W, wrongAt = null, onLayer, slots = 0, pop = -1, template }: {
+  items: readonly Ingredient[]; w?: number; wrongAt?: number | null; onLayer?: (i: number) => void; slots?: number; pop?: number; template?: readonly Ingredient[];
 }) {
   const { bottoms, top } = stackOffsets(items);
   const slotH = 24;
+  const tpl = template ? stackOffsets(template).bottoms : [];
   return (
     <g className="rx-sandwich">
+      {template?.map((it, i) => (i < items.length ? null : (
+        <g key={`t${i}-${it}`} transform={`translate(0 ${tpl[i]})`} className={`rx-ghost${i === items.length ? ' is-next' : ''}`} data-ghost={i} data-ing={it} aria-hidden="true">
+          <g filter="url(#rough)"><Layer ing={it} w={w} seed={i + 11} /></g>
+          {i === items.length && (
+            <rect className="rx-ghost-ring" x={-w / 2 - 10} y={-LAYER_H[it] - 8} width={w + 20} height={LAYER_H[it] + 14} rx={12} fill="none" stroke="#3d6ea5" strokeWidth={3} strokeDasharray="3 8" strokeLinecap="round" />
+          )}
+        </g>
+      )))}
       {Array.from({ length: slots }, (_, i) => (
         <rect
           key={`s${i}`} className="rx-slot" x={-w / 2 + 6} y={top - (i + 1) * (slotH + 6) + 6} width={w - 12} height={slotH} rx={10}

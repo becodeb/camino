@@ -11,6 +11,14 @@
 // right layers under it stay. Never losing: the round goes on until it is
 // right. Rounds grow from 2 to 5 layers, then two monsters (recipe.ts).
 //
+// T52 (understood by a 6-year-old): the plate shows the wanted layers faded
+// in their places (building is matching the drawing where the child works),
+// the next one pulsing; each layer landing gets the monster's reaction at
+// once (a happy bounce, or a frown when it is not what it wants; still
+// judged only at the bell); the first-time ghost really puts the bread on
+// the plate and hands over (the child adds one layer and rings); after 8 s
+// with nothing done the ghost points at the next faded layer and its card.
+//
 // Logged (Kit.tsx useGameLog): `game_start`, `game_round` with this game's
 // measures (order errors: the same ingredients in another order; ingredient
 // errors; the wrong layers; layers taken off; taps vs drags; the time to the
@@ -65,14 +73,16 @@ const NOTES = ['do', 're', 'mi', 'fa', 'sol'] as const;
 /** The scene's drawing space, and where things stand in it. */
 const VW = 1200, VH = 560, FLOOR = 506;
 const PLATE = { x: 830, y: 446 };
+/** T52: the plate's drawing scale. */
+const PLATE_K = 1.3;
 const BUDDY = { x: 1104, y: FLOOR, w: 170 };
 const monstersAt = (n: number) => (n === 1 ? [{ x: 250, s: 1.32 }] : [{ x: 160, s: 1 }, { x: 430, s: 1 }]);
 
 type Phase = 'build' | 'eating' | 'yum' | 'yuck' | 'won';
 type Source = 'tap' | 'drag';
 
-interface RoundStats { orderErrors: number; ingredientErrors: number; wrongAt: number[]; removed: number; sources: Record<Source, number> }
-const newStats = (): RoundStats => ({ orderErrors: 0, ingredientErrors: 0, wrongAt: [], removed: 0, sources: { tap: 0, drag: 0 } });
+interface RoundStats { orderErrors: number; ingredientErrors: number; wrongAt: number[]; removed: number; sources: Record<Source, number>; ghostPlaced: number }
+const newStats = (): RoundStats => ({ orderErrors: 0, ingredientErrors: 0, wrongAt: [], removed: 0, sources: { tap: 0, drag: 0 }, ghostPlaced: 0 });
 
 export function RecipeGame({ mode, startTier, rounds, done, roundWon, stopAfterRound, reached, playNo }: GameProps) {
   const api = usePlaytest();
@@ -96,6 +106,8 @@ export function RecipeGame({ mode, startTier, rounds, done, roundWon, stopAfterR
   const [won, setWon] = useState(0);
   const [confetti, setConfetti] = useState(0);
   const [drag, setDrag] = useState<{ ing: Ingredient; x: number; y: number } | null>(null);
+  /** T52: the monster's bounce when a layer it wants lands (a counter: each one replays it). */
+  const [nod, setNod] = useState(0);
 
   const g = useRef({
     phase: 'build' as Phase, stack: [] as Ingredient[], m: 0, round, no: 1, tier: startTier,
@@ -142,13 +154,15 @@ export function RecipeGame({ mode, startTier, rounds, done, roundWon, stopAfterR
         const s = g.current;
         if (!root || s.stack.length || s.phase !== 'build') return;
         apiRef.current.log('ghost_demo', { level_id: LEVEL_ID, kind: 'intro' });
+        // T52: the ghost really puts the first layer on the plate (slowly), then hands over
         s.ghost = playGhost(root, [
           { do: 'point', at: ['.rx-bubble-hit.is-here'] },
           { do: 'wait', ms: 300 },
-          { do: 'drag', from: `.rx-tray [data-ing="${order()[0]}"]`, to: '.rx-plate-hit' },
-          { do: 'wait', ms: 300 },
-          { do: 'tap', at: '.ga-ready' },
-        ], { pace: 0.9 });
+          { do: 'point', at: ['.rx-ghost.is-next'] },
+          { do: 'drag', from: `.rx-tray [data-ing="${order()[0]}"]`, to: '.rx-plate-hit', apply: () => ghostAdd(order()[0]) },
+          { do: 'wait', ms: 500 },
+          { do: 'point', at: ['.rx-ghost.is-next'] },
+        ], { pace: 1.25 });
       }, 1100);
     } else off = speakWhenAllowed(round.orders.length > 1 ? LINES.two : LINES.go);
     return () => {
@@ -186,11 +200,32 @@ export function RecipeGame({ mode, startTier, rounds, done, roundWon, stopAfterR
       return;
     }
     s.st.sources[source]++;
+    land(ing);
+  }
+
+  /** A layer lands on the plate; the monster reacts at once (T52): a bounce for what it wants, a frown otherwise. */
+  function land(ing: Ingredient) {
+    const s = g.current;
     const next = [...s.stack, ing];
     setPopAt(next.length - 1);
     setS(next);
     ringNote(NOTES[Math.min(NOTES.length - 1, next.length - 1)]);
     speak(NAME[ing]);
+    const m = s.m;
+    if (order()[next.length - 1] === ing) setNod((k) => k + 1);
+    else {
+      setMoodOf(m, 'yuck');
+      later(() => { if (g.current.phase === 'build' && g.current.m === m) setMoodOf(m, 'want'); }, 900);
+    }
+  }
+
+  /** T52: the first-time ghost's drop really puts the layer on the plate (not the child's input). */
+  function ghostAdd(ing: Ingredient) {
+    const s = g.current;
+    if (s.phase !== 'build' || s.stack.length) return;
+    s.st.ghostPlaced++;
+    land(ing);
+    s.lastInput = Date.now();
   }
 
   function removeFrom(i: number) {
@@ -284,6 +319,7 @@ export function RecipeGame({ mode, startTier, rounds, done, roundWon, stopAfterR
     const end = glog.roundWon({
       monsters: s.round.orders.length, layers: s.round.orders.reduce((a, o) => a + o.length, 0), orders: s.round.orders.map((o) => o.join('-')),
       order_errors: s.st.orderErrors, ingredient_errors: s.st.ingredientErrors, wrong_at: s.st.wrongAt, removed: s.st.removed, sources: { ...s.st.sources },
+      ...(s.st.ghostPlaced ? { ghost_placed: s.st.ghostPlaced } : {}),
     }, again);
     apiRef.current.lowerHand('self', LEVEL_ID);
     roundWon?.(end);
@@ -301,7 +337,18 @@ export function RecipeGame({ mode, startTier, rounds, done, roundWon, stopAfterR
     later(() => speak(g.current.round.orders.length > 1 && s.round.orders.length === 1 ? LINES.two : LINES.go), byAgain ? 900 : 0);
   }
 
-  useIdleNudge(rootRef, () => g.current.lastInput, () => g.current.phase === 'build');
+  // T52: after 8 s with nothing done, the ghost points at where the next layer goes and its card (or the bell)
+  useIdleNudge(rootRef, () => g.current.lastInput, () => g.current.phase === 'build', undefined, () => {
+    const root = rootRef.current;
+    const s = g.current;
+    if (!root || s.phase !== 'build') return;
+    const want = order();
+    s.ghost?.cancel();
+    s.ghost = s.stack.length >= want.length
+      ? playGhost(root, [{ do: 'point', at: ['.ga-ready'] }])
+      : playGhost(root, [{ do: 'point', at: ['.rx-ghost.is-next'] }, { do: 'point', at: [`.rx-tray [data-ing="${want[s.stack.length]}"]`] }]);
+    apiRef.current.log('ghost_demo', { level_id: LEVEL_ID, kind: 'idle' });
+  });
 
   // ---------------------------------------------------------------- drag from the tray (a tap is the same as a drag)
 
@@ -443,23 +490,24 @@ export function RecipeGame({ mode, startTier, rounds, done, roundWon, stopAfterR
                   </g>
                 )}
                 <g transform={`translate(${p.x} ${FLOOR}) scale(${p.s})`}>
-                  <Monster mood={moods[i] ?? 'wait'} look={here ? 1 : i === 0 ? 1 : -1} tone={(i === 0 ? 'blue' : 'pink') as MonsterLook} />
+                  <g className={`rx-nod${here && nod ? ' is-on' : ''}`} key={here ? `nod-${nod}` : 'n'}><Monster mood={moods[i] ?? 'wait'} look={here ? 1 : i === 0 ? 1 : -1} tone={(i === 0 ? 'blue' : 'pink') as MonsterLook} /></g>
                 </g>
               </g>
             );
           })}
           {/* the table and the plate, the sandwich being built */}
           <Table />
-          <g transform={`translate(${PLATE.x} ${PLATE.y})`}>
+          {/* T52: the plate and the sandwich drawn larger (the faded layers to match must read from a child's seat) */}
+          <g transform={`translate(${PLATE.x} ${PLATE.y}) scale(${PLATE_K})`}>
             <ellipse cx={0} cy={2} rx={150} ry={22} fill="#fbf6ea" stroke="#2b2622" strokeWidth={2.8} filter="url(#rough)" />
             <ellipse cx={0} cy={0} rx={112} ry={13} fill="none" stroke="#2b2622" strokeWidth={1.4} opacity={0.4} />
-            <g className={`rx-fly ${flying}`} style={{ '--dx': `${mouth.x - PLATE.x}px`, '--dy': `${mouth.y - PLATE.y}px` } as React.CSSProperties} key={`fly-${no}-${m}-${phase === 'yuck' ? 'y' : 'b'}`}>
+            <g className={`rx-fly ${flying}`} style={{ '--dx': `${(mouth.x - PLATE.x) / PLATE_K}px`, '--dy': `${(mouth.y - PLATE.y) / PLATE_K}px` } as React.CSSProperties} key={`fly-${no}-${m}-${phase === 'yuck' ? 'y' : 'b'}`}>
               <g transform="translate(0 -6)">
-                <Sandwich items={stack} wrongAt={wrongAt} onLayer={phase === 'build' ? removeFrom : undefined} slots={phase === 'build' ? Math.max(0, want.length - stack.length) : 0} pop={popAt} />
+                <Sandwich items={stack} wrongAt={wrongAt} onLayer={phase === 'build' ? removeFrom : undefined} template={phase === 'build' ? want : undefined} pop={popAt} />
               </g>
             </g>
           </g>
-          <rect ref={plateRef} className="rx-plate-hit" x={PLATE.x - 170} y={PLATE.y - 200} width={340} height={230} fill="transparent" pointerEvents="none" />
+          <rect ref={plateRef} className="rx-plate-hit" x={PLATE.x - 210} y={PLATE.y - 250} width={420} height={280} fill="transparent" pointerEvents="none" />
           <Buddy x={BUDDY.x} y={BUDDY.y} w={BUDDY.w} onView={(v) => { buddy.current = v; }} />
           {dizzy && <DizzyStars x={BUDDY.x} y={BUDDY.y - 150} />}
         </svg>
@@ -518,9 +566,9 @@ function Kitchen() {
 function Table() {
   return (
     <g aria-hidden="true" filter="url(#rough)" strokeLinejoin="round">
-      <rect x={660} y={PLATE.y + 14} width={340} height={20} rx={5} fill="#c98a4b" stroke="#2b2622" strokeWidth={2.8} />
-      <rect x={684} y={PLATE.y + 34} width={16} height={FLOOR - PLATE.y - 34} fill="#b37a40" stroke="#2b2622" strokeWidth={2.4} />
-      <rect x={960} y={PLATE.y + 34} width={16} height={FLOOR - PLATE.y - 34} fill="#b37a40" stroke="#2b2622" strokeWidth={2.4} />
+      <rect x={626} y={PLATE.y + 18} width={408} height={20} rx={5} fill="#c98a4b" stroke="#2b2622" strokeWidth={2.8} />
+      <rect x={654} y={PLATE.y + 38} width={16} height={FLOOR - PLATE.y - 38} fill="#b37a40" stroke="#2b2622" strokeWidth={2.4} />
+      <rect x={990} y={PLATE.y + 38} width={16} height={FLOOR - PLATE.y - 38} fill="#b37a40" stroke="#2b2622" strokeWidth={2.4} />
     </g>
   );
 }

@@ -17,6 +17,16 @@
 // The routine plays again, right, with a juicy win (the happy ending,
 // confetti, the child's character cheering).
 //
+// T52 (understood by a 6-year-old): on the child's turn the funny bad
+// result keeps acting (shivering, slipping…) with a red wavy frame, so "this
+// went wrong" stays on screen; the first-time ghost's tap on the wrong step
+// circles it for a moment (the tap visibly does something), then hands over;
+// the options are larger and the first time a hand shows them going to the
+// circled step; while swapping, a drawn two-way arrow joins the lifted step
+// and the step it swaps with; after 8 s with nothing done the ghost points at the
+// bad result and along the strip (find), the options and the circled step
+// (fix), or the lifted step and its partner (swap).
+//
 // Logged (Kit.tsx useGameLog): `game_start`, `game_round` with this game's
 // measures (`routine`, `kind`, `steps`, `found_try` the tap that found the
 // mistake (1 = the first), `first_tap_ms`, `fix_correct` (the first fix
@@ -96,12 +106,14 @@ export function OopsGame({ mode, startTier, rounds, done, roundWon, stopAfterRou
   const [won, setWon] = useState(0);
   const [confetti, setConfetti] = useState(0);
   const [drag, setDrag] = useState<{ id: StepId; x: number; y: number } | null>(null);
+  /** T52: the first-time ghost's tap circles that step for a moment. */
+  const [ghostMark, setGhostMark] = useState<number | null>(null);
   const options = useMemo(() => optionsOf(routine, seed0 + no), [routine, seed0, no]);
 
   const g = useRef({
     phase: 'play' as Phase, routine, steps: routine.wrong as readonly StepId[], found: null as number | null, no: 1, tier: startTier, st: newStats(),
     lastInput: Date.now(), roundAt: Date.now(), helpStep: 0, mountAt: Date.now(), timers: new Set<number>(), play: new Set<number>(),
-    ghost: null as GhostRun | null, unmounted: false, ghostShown: false,
+    ghost: null as GhostRun | null, unmounted: false, ghostShown: false, fixGhostShown: false,
   });
   const rootRef = useRef<HTMLElement>(null);
   const buddy = useRef<StageView | null>(null);
@@ -142,7 +154,12 @@ export function OopsGame({ mode, startTier, rounds, done, roundWon, stopAfterRou
         const root = rootRef.current;
         if (!root || s.phase !== 'find' || s.st.findTries) return;
         apiRef.current.log('ghost_demo', { level_id: LEVEL_ID, kind: 'intro' });
-        s.ghost = playGhost(root, [{ do: 'tap', at: `.oo-frame[data-i="${s.routine.wrongAt[0]}"]` }], { pace: 0.9 });
+        const k = s.routine.wrongAt[0];
+        s.ghost = playGhost(root, [
+          { do: 'point', at: [`.oo-frame[data-i="${s.routine.wrong.length - 1}"]`] },
+          { do: 'tap', at: `.oo-frame[data-i="${k}"]`, apply: () => { setGhostMark(k); later(() => setGhostMark(null), 1400); } },
+          { do: 'wait', ms: 900 },
+        ], { pace: 1.2 });
       }, 600);
     }
   }
@@ -209,6 +226,19 @@ export function OopsGame({ mode, startTier, rounds, done, roundWon, stopAfterRou
       setF(i);
       ringNote('sol');
       if (r.kind === 'replace') { setP('fix'); speak(LINES.found); } else { setP('swap'); speak(LINES.foundSwap); }
+      setGhostMark(null);
+      // T52: the first time, a hand shows where the options go (or what swaps with what)
+      if (firstEver && !s.fixGhostShown) {
+        s.fixGhostShown = true;
+        later(() => {
+          const root = rootRef.current;
+          if (!root || (s.phase !== 'fix' && s.phase !== 'swap') || s.st.fixTries) return;
+          apiRef.current.log('ghost_demo', { level_id: LEVEL_ID, kind: 'intro_step' });
+          s.ghost = playGhost(root, s.phase === 'fix'
+            ? [{ do: 'point', at: ['.oo-option'] }, { do: 'point', at: ['.oo-frame.is-found'] }]
+            : [{ do: 'point', at: ['.oo-frame.is-found'] }, { do: 'point', at: ['.oo-swap-hint'] }], { pace: 1.1 });
+        }, 700);
+      }
       return;
     }
     if (s.phase === 'swap' && s.found != null && i !== s.found) {
@@ -302,7 +332,19 @@ export function OopsGame({ mode, startTier, rounds, done, roundWon, stopAfterRou
     if (byAgain) speak(LINES.again);
   }
 
-  useIdleNudge(rootRef, () => g.current.lastInput, () => ['find', 'fix', 'swap'].includes(g.current.phase));
+  // T52: after 8 s with nothing done, the ghost shows where to look next
+  useIdleNudge(rootRef, () => g.current.lastInput, () => ['find', 'fix', 'swap'].includes(g.current.phase), undefined, () => {
+    const root = rootRef.current;
+    const s = g.current;
+    if (!root) return;
+    const last = s.steps.length - 1;
+    const at = s.phase === 'find' ? [`.oo-frame[data-i="${last}"]`, ...s.steps.map((_, i) => `.oo-frame[data-i="${i}"]`)]
+      : s.phase === 'fix' ? ['.oo-option', '.oo-frame.is-found']
+      : ['.oo-frame.is-found', `.oo-frame[data-i="${s.routine.wrongAt.find((k) => k !== s.found)}"]`];
+    s.ghost?.cancel();
+    s.ghost = playGhost(root, [{ do: 'point', at }]);
+    apiRef.current.log('ghost_demo', { level_id: LEVEL_ID, kind: 'idle' });
+  });
 
   // ---------------------------------------------------------------- an option dragged onto the circled step (a tap is the same)
 
@@ -434,6 +476,8 @@ export function OopsGame({ mode, startTier, rounds, done, roundWon, stopAfterRou
               i === now ? `is-now oo-act-${actOf(id)}` : '',
               found === i ? 'is-found' : '',
               found === i && phase === 'swap' ? 'is-lifted' : '',
+              // T52: on the child's turn the funny bad result keeps acting
+              (phase === 'find' || phase === 'fix' || phase === 'swap') && i === n - 1 && i !== found ? `is-bad oo-act-${actOf(id)}` : '',
               fixedAt === i ? 'is-fixed' : '',
               shake?.i === i ? 'is-no' : '',
             ].filter(Boolean).join(' ');
@@ -449,9 +493,11 @@ export function OopsGame({ mode, startTier, rounds, done, roundWon, stopAfterRou
                   onClick={() => tapFrame(i)}
                 >
                   <svg className="oo-pic" viewBox={`0 0 ${STEP_W} ${STEP_H}`} aria-hidden="true"><StepArt id={id} /></svg>
-                  {found === i && <WrongRing />}
+                  {(found === i || ghostMark === i) && <WrongRing />}
                 </button>
-                {i < n - 1 && <span className="oo-link" aria-hidden="true"><i /><i /><i /></span>}
+                {i < n - 1 && (phase === 'swap' && found != null && (found === i || found === i + 1) && routine.wrongAt.includes(found === i ? i + 1 : i)
+                  ? <SwapHint />
+                  : <span className="oo-link" aria-hidden="true"><i /><i /><i /></span>)}
               </li>
             );
           })}
@@ -484,5 +530,17 @@ export function OopsGame({ mode, startTier, rounds, done, roundWon, stopAfterRou
       {drag && <div className="oo-drag" style={{ left: drag.x, top: drag.y }} aria-hidden="true"><StepPicture id={drag.id} /></div>}
       {confetti > 0 && phase === 'won' && <ConfettiRain key={confetti} seed={confetti} />}
     </main>
+  );
+}
+
+/** T52: a drawn two-way arrow between the lifted step and a neighbour: "these two change places". */
+function SwapHint() {
+  return (
+    <svg className="oo-swap-hint" viewBox="-30 -24 60 48" aria-hidden="true">
+      <g fill="none" stroke="#3d6ea5" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" filter="url(#rough)">
+        <path d="M-22,-8 Q0,-22 22,-8 M14,-16 L22,-8 L12,-3" />
+        <path d="M22,8 Q0,22 -22,8 M-14,16 L-22,8 L-12,3" />
+      </g>
+    </svg>
   );
 }
