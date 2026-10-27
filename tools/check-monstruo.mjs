@@ -210,7 +210,7 @@ async function endOk(name, againSel = '.ga-again') {
   await p.waitForSelector('.ga-end .ga-home', { timeout: 10_000 });
   await p.waitForTimeout(1600);
   const r = await p.evaluate((aSel) => {
-    const a = document.querySelector(`.ga-end ${aSel}`), h = document.querySelector('.ga-end .ga-home');
+    const a = document.querySelector(aSel.startsWith('/') ? aSel.slice(1) : `.ga-end ${aSel}`), h = document.querySelector('.ga-end .ga-home');
     if (!a || !h) return null;
     const ra = a.getBoundingClientRect(), rh = h.getBoundingClientRect();
     const corner = document.querySelector('.pp-play-home');
@@ -730,7 +730,7 @@ try {
     await p.waitForTimeout(320);
   }
   await p.waitForSelector('.pp-trace.is-podium', { timeout: 40_000 });
-  await endOk('the typing letters race\'s podium', '.rc-again');
+  await endOk('the typing letters race\'s podium', '/.rc-again');
   await p.waitForTimeout(1500);
   await shot(p, 'typing-end');
   await p.locator('.ga-end .ga-home').click();

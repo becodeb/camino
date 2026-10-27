@@ -44,6 +44,7 @@ import { CupRow, MARGIN_WAIT_MS, NAME, PAIRS, PODIUM_END_MS, Podium, ProgressStr
 import {
   Backdrop, BumpBush, Clouds, CritterDriver, Dust, Flames, FlagIcon, Kart, LANES, MeDriver, SEG, STEP, TRACK_H, TrackRoad, surfaceY,
 } from './raceArt';
+import { EndChoices } from './arcade/home';
 import { accuracy, harderRest, isFastWord, judgeKey, TYPING_CUP_PREFIX, typedSpot, typingRaceDef, wordsFor, wpm } from './typingRace';
 import { honestRanking, honestResult, positionAtChars, totalChars, type HonestResult as HonestResultData } from './honestRace';
 import {
@@ -719,7 +720,10 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
             onAgain={next} onRevancha={() => revancha?.()}
             extra={<RaceNumbers s={g.current} />}
           />
-        ) : (
+        ) : null}
+        {/* 1ro (2026-10-27): the honest result has no "Otro juego"; on 1ro's arcade it gets the big one under its buttons */}
+        {hr && ranking && steady ? <EndChoices className="rc-end tr-honest-end" again={null} /> : null}
+        {hr && ranking ? null : (
           <Podium pair={pair} order={order} cups={cups0 + 1} again={next} extra={<RaceNumbers s={g.current} />} />
         )}
       </main>
