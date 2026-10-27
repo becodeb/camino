@@ -14,7 +14,7 @@ describe('the free-play menu', () => {
     expect(menuFor(2, none).map((a) => a.id)).toEqual(['race', 'sheet', 'recess', 'guardas', 'editor']);
     expect(menuFor(3, none).map((a) => a.id)).toEqual(['rule_game', 'sheet', 'recess', 'editor']);
     // C04: 4to's free play is the Arcade: the typing race, "Tu mejor tiempo" (back to the Copa), the wardrobe, the optional Workshop (all flow steps, no probe needed)
-    expect(menuFor(4, none).map((a) => a.id)).toEqual(['typing_race', 'copa', 'wardrobe', 'workshop']);
+    expect(menuFor(4, none).map((a) => a.id)).toEqual(['typing_race', 'copa', 'wardrobe']);
     expect(menuFor(5, none).map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess']);
   });
 
@@ -26,7 +26,7 @@ describe('the free-play menu', () => {
   });
 
   it('shows a probe\'s card once its component is registered, on its grade only', () => {
-    expect(menuFor(4, all).map((a) => a.id)).toEqual(['typing_race', 'copa', 'wardrobe', 'workshop']);
+    expect(menuFor(4, all).map((a) => a.id)).toEqual(['typing_race', 'copa', 'wardrobe']);
     expect(menuFor(5, (id: ProbeId) => id === 'text_probe').map((a) => a.id)).toEqual(['rule_game', 'editor', 'recess', 'text_probe']);
     expect(menuFor(5, all).map((a) => a.id)).toEqual(['workshop', 'rule_game', 'editor', 'recess', 'text_probe']);
     expect(menuFor(3, all).map((a) => a.id)).not.toContain('workshop');

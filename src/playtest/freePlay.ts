@@ -63,7 +63,7 @@ export const MENU: Record<number, readonly ActivityId[]> = {
   // C04: 4to's Arcade (flow.ts) is the typing race, "Tu mejor tiempo" (back to the Copa's remaining circuits),
   // the wardrobe, and the old Workshop as an optional card. No xylophone, no 1ro sheet, no rule game, no old game
   // maker, no La carrera (the Copa is the kart race now) and no "Tu juego" (the Workshop it depends on is optional).
-  4: ['typing_race', 'copa', 'wardrobe', 'workshop'],
+  4: ['typing_race', 'copa', 'wardrobe'],
   5: ['workshop', 'rule_game', 'editor', 'recess', 'text_probe'],
 };
 
