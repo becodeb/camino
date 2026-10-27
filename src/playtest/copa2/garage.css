@@ -360,3 +360,4 @@ button.gx-giveup { font-size: 20px; font-weight: 700; }
 .gb-pal .gb.is-small .gb-glyph { width: 28px; height: 28px; }
 .gb-pal .gb.is-small .gb-word { font-size: 17px; }
 .gb-pal .gb.is-small .gb-glyph { transform: scale(0.86); margin-right: -3px; }
+.gb-pal .gb-c.is-small .gb-glyph { margin-right: 1px; }
