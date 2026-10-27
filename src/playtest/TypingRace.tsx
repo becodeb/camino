@@ -45,7 +45,7 @@ import {
   Backdrop, BumpBush, Clouds, CritterDriver, Dust, Flames, FlagIcon, Kart, LANES, MeDriver, SEG, STEP, TRACK_H, TrackRoad, surfaceY,
 } from './raceArt';
 import { EndChoices } from './arcade/home';
-import { accuracy, harderRest, isFastWord, judgeKey, TYPING_CUP_PREFIX, typedSpot, typingRaceDef, wordsFor, wpm } from './typingRace';
+import { accuracy, charsAtSameSpot, harderRest, isFastWord, judgeKey, TYPING_CUP_PREFIX, typedSpot, typingRaceDef, wordsFor, wpm } from './typingRace';
 import { honestRanking, honestResult, positionAtChars, totalChars, type HonestResult as HonestResultData } from './honestRace';
 import {
   ADAPT_START, EASE_MS, PRIOR_WPM, adaptOf, advanceRival, afterRace, firstRaceTarget, liveWpm, readAdapt, rivalBase, rivalFinish, rivalWpms, startRival,
@@ -357,7 +357,10 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
     if (steady && isFastWord(now - (s.wordAt || now), word.length, s.wordErrors)) {
       const up = harderRest(words, s.k + 1, s.liveTier, seed, grade);
       if (up) {
+        const oldWords = [...words];
         words.splice(0, words.length, ...up.words);
+        // keep each rival where it is on the track: its typed letters re-measured in the new words (no teleport)
+        s.runs = s.runs.map((r) => ({ ...r, chars: charsAtSameSpot(r.chars, oldWords, words) })) as [RivalRun, RivalRun];
         log('typing_race_up', { race_no: no, word_no: s.k + 1, from: s.liveTier, to: up.tier });
         s.liveTier = up.tier;
       }
@@ -717,7 +720,7 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
         {hr && ranking ? (
           <HonestResultScreen
             pair={pair} ranking={ranking} result={hr} cups={cups0 + (hr.place === 1 ? 1 : 0)} won={hr.place === 1}
-            onAgain={next} onRevancha={() => revancha?.()}
+            onAgain={next} onRevancha={() => revancha?.()} noRevancha={steady}
             extra={<RaceNumbers s={g.current} />}
           />
         ) : null}

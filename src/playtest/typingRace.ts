@@ -96,6 +96,24 @@ export function harderRest(words: readonly string[], from: number, tier: number,
   return { words: out, tier: up };
 }
 
+/**
+ * After `harderRest` redraws the words, where a rival that had typed `chars` of the old words stands in the new ones: the same word
+ * and the same fraction of it, so the rival's spot on the track does not jump (user, 2026-10-27: "a veces se teletransportan").
+ */
+export function charsAtSameSpot(chars: number, oldWords: readonly string[], newWords: readonly string[]): number {
+  if (!(chars > 0)) return 0;
+  let left = chars, before = 0;
+  for (let i = 0; i < oldWords.length; i++) {
+    const withSpace = oldWords[i].length + (i < oldWords.length - 1 ? 1 : 0);
+    const nw = newWords[i] ?? oldWords[i];
+    const newWithSpace = nw.length + (i < newWords.length - 1 ? 1 : 0);
+    if (left < withSpace) return before + (left / withSpace) * newWithSpace;
+    left -= withSpace;
+    before += newWithSpace;
+  }
+  return before;
+}
+
 // ------------------------------------------------------------------ the keys
 
 const ACCENTS: Readonly<Record<string, string>> = { á: 'a', é: 'e', í: 'i', ó: 'o', ú: 'u', ü: 'u' };

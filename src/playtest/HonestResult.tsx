@@ -22,7 +22,7 @@ import { NAME, PodiumMe } from './Race';
 const AGAIN = '¡Otra carrera!';
 const REVANCHA = '¡Revancha!';
 
-export function HonestResultScreen({ pair, ranking, result, cups, won, onAgain, onRevancha, extra }: {
+export function HonestResultScreen({ pair, ranking, result, cups, won, onAgain, onRevancha, extra, noRevancha = false }: {
   pair: readonly [CritterId, CritterId];
   /** Fastest first: 'me' or the rival's index in `pair`. */
   ranking: readonly Racer[];
@@ -32,6 +32,8 @@ export function HonestResultScreen({ pair, ranking, result, cups, won, onAgain, 
   won: boolean;
   onAgain(): void;
   onRevancha(): void;
+  /** 1ro (2026-10-27): only "¡Otra carrera!"; two buttons that look the same confuse a six-year-old. */
+  noRevancha?: boolean;
   extra?: ReactNode;
 }) {
   const [fresh, setFresh] = useState(!won);
@@ -76,10 +78,12 @@ export function HonestResultScreen({ pair, ranking, result, cups, won, onAgain, 
           <AgainArt />
           <span className="rc-again-word" aria-hidden="true">{AGAIN}</span>
         </button>
+        {!noRevancha && (
         <button type="button" className="cut rc-again rc-revancha" aria-label={REVANCHA} onClick={() => { speak(REVANCHA); onRevancha(); }}>
           <span className="rc-revancha-flip"><AgainArt /></span>
           <span className="rc-again-word" aria-hidden="true">{REVANCHA}</span>
         </button>
+        )}
       </div>
     </section>
   );

@@ -169,3 +169,13 @@ describe('1ro: harder words mid-race', async () => {
     expect(harderRest(wordsFor(4, 5, 1), 1, 4, 5, 1)).toBeNull();
   });
 });
+
+describe('1ro: rivals keep their spot when the words get harder', async () => {
+  const { charsAtSameSpot } = await import('./typingRace');
+  it('same word, same fraction', () => {
+    expect(charsAtSameSpot(0, ['a', 'e', 'i'], ['a', 'sol', 'mesa'])).toBe(0);
+    expect(charsAtSameSpot(2, ['a', 'e', 'i'], ['a', 'sol', 'mesa'])).toBe(2);
+    expect(charsAtSameSpot(3, ['a', 'e', 'i'], ['a', 'sol', 'mesa'])).toBeCloseTo(4);
+    expect(charsAtSameSpot(99, ['a', 'e'], ['a', 'sol'])).toBe(5);
+  });
+});
