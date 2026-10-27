@@ -1219,6 +1219,34 @@ Cut line: T43 plus at least two games (T44, T45) must ship together; T46, T47 fo
 
   Open: nothing tried with real children or on a touchscreen; whether 1ro finds the corner button is the thing to watch on Tuesday (`game_exit` by via). Engram mirror still pending (the engram MCP resolves `~/projects` as ambiguous). Not deployed.
 
+- 2026-10-27: T52 audit, before any change (route: delegated direct, one writer; the 1ro fun round section and the T43–T51 entries read first). Screens shot step by step, silent (`/?grado=1&sonido=no`, 1366×768, mid-animation bursts every 0.4–0.6 s) from the deployed code (T51), in `shots/t52/before/` (not committed). Judged as a 6-year-old who cannot read or hear:
+
+  | Screen | What the child sees | Likely action | Break | Fix idea |
+  | --- | --- | --- | --- | --- |
+  | Character choice | four characters on stumps | taps one, then keeps tapping them (confetti) | the next-page arrow is a small page icon, nothing pulses | (kept: the favourite screen; no change) |
+  | Recipe, ghost demo | the hand points at the bubble, drags the bread to the plate, taps the bell | watches | the bread vanishes when dropped and the bell does nothing: the demo shows magic, not the action; the plate stays empty | the ghost really puts the bread on the plate, then hands over (the child adds one layer and rings) |
+  | Recipe, building | the order in a bubble top-left, an empty plate right with faint dashed slots, five cards and a bell | taps cards at random, left to right | the goal is far from where they work; the slots say "how many", never "which"; every card looks equally "next" | the plate shows each wanted layer as a faded silhouette in its slot (building = matching); the next slot's silhouette and the matching card pulse; the bubble stays as the monster's wish |
+  | Recipe, a tap | the layer lands on the plate | taps more | fine (immediate), but a wrong layer looks just as good as a right one until the bell | a layer that does not match its silhouette lands with a little wobble and the monster frowns at once (still judged only at the bell) |
+  | Recipe, serving wrong | the sandwich vanishes, the monster grimaces, comes back with a red ring, then the plate empties | waits | the eating is too fast to see; the emptying plate reads as "it was deleted" | (the silhouettes stay on the plate, so after the spit the empty slot shows again what goes there) |
+  | Recipe, idle 12 s | the bubble glows faintly | nothing | too late and too faint | after 8 s idle the ghost hand points at the next silhouette and its card |
+  | Between games (cheer) | "¡Otro juego!" in letters and the child's character | waits / taps | does not show which game comes next | (kept: 3.5 s, it goes on by itself) |
+  | Dance, the show | the monster dances 2 poses in ~2 s under a spotlight; the cards grey; two dashed circles on top get an ink dot | watches, maybe misses it | the poses are never linked to the cards (the cards stay grey while it dances); the top circles get only a dot (looks like eyes); two poses at once is already a memory test | while it holds a pose, that pose's card lifts out of the grey row, lit, and the beat's circle shows the pose; slower beats (1.4 s); a big drawn eye over the grey cards says "watch"; round 1 is ONE pose |
+  | Dance, your turn | the spotlight jumps to the child's character, the monster points sideways at it, the cards light up | looks at its own character | the monster points away from the cards; the four cards all equal, no "start here" | the monster points down at the cards; the card row bobs once; after 8 s idle the dance is shown again |
+  | Dance, ghost demo | a hand taps the first card | watches | nothing happens on the ghost's tap (no copy) | the ghost's tap is a real first tap (the monster copies it, the circle fills), then the child goes on |
+  | Dance, a miss | the monster tumbles, dizzy stars, the beat circled red | laughs | fine | (kept) |
+  | Dance, a win | quick dance, confetti | laughs | fine | (kept) |
+  | ¿Qué salió mal?, the strip | three framed steps light one by one; the last: shivering in a swimsuit in the snow | watches | the bad result is small (thin shiver marks); nothing says "this is wrong" | the last step's monster reacts bigger (a wobbling frame and a sad face mark) |
+  | ¿Qué salió mal?, find | all three steps lit equally | taps the first one | after a right step's shake, nothing points further | after 8 s idle the ghost points at the bad result, then the step before it |
+  | ¿Qué salió mal?, fix | the step circled red, three small options bottom-left, far from it | taps one | the options sit away from the circled step and are small (~80 px) | the options are larger and centred under the circled step, with a dashed line to it |
+  | ¿Qué salió mal?, swap | the step lifted and circled | taps somewhere | "tap the one to swap with" cannot be guessed | the neighbours bob with a drawn two-way arrow |
+  | Tocá y pasa, ghost demo | the hand taps the frog, a card, "¡A jugar!", the frog | watches | none of it happens (no rule lands, the mode does not change): an animation the child cannot connect | the ghost's card tap really adds the rule (the frog jumps, the card lands on its sign); then the child's turn: "¡A jugar!" pulses |
+  | Tocá y pasa, building | three signs with empty slots, three small cards, two mode buttons "Armar" / "¡A jugar!" | taps animals | the two mode buttons are abstract | "¡A jugar!" pulses as soon as there is a new rule (only it is new) |
+  | Tocá y pasa, playing | warm sky, a small hand bobbing over the frog | taps the frog | fine | (kept) |
+  | Arcade menu | seven drawn cards | taps a picture | fine | (kept) |
+  | End screen | "¡Otra vez!" (orange loop) and "Otro juego" (the menu cards) | taps one | fine | (kept) |
+
+  Main breaks: the ghost demos act on nothing (recipe, tap) or nothing answers them (dance), so the child cannot connect the demo to their own action; the recipe's goal is far from the plate and the slots do not say what goes where; the dance never links a pose to its card; the first rounds are already two steps; idle help comes late and faint.
+
 ## Next step
 
 1ro fun round: T43–T47, T49–T51 done and pushed (`feat/prueba-piloto`), not deployed. Next: the user tries T51 on the local stack (`http://192.168.1.37:8812/?grado=1&sonido=no`) and, if it is right, asks for the redeploy before the class; the redeploy waits for the user's explicit request (outside class hours). Then the class on Tuesday 2026-10-27 with `https://camino-prueba.becode.com.ar/?grado=1&sonido=no` (plan B `&ruta=clasica`), following `docs/prompts/prueba-1ro-guia.md`; afterwards `node tools/export-playtest.mjs` and `node tools/analyze-playtest.mjs exports/<file>.json --since 2026-10-27 --until 2026-10-27` (the section "Los juegos del monstruo"). T48 "El collar" stays a reserve.
