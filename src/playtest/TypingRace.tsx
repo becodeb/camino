@@ -73,6 +73,12 @@ const IDLE_REPEAT_MS = 6000;
 const BAD_MS = 520;
 /** C02: a gap this long between two keys counts towards the honest result's `slow_idle` reason. */
 const IDLE_GAP_MS = 1500;
+/** 1ro (2026-10-27): the kart moves steadily instead of a turbo jump per word (the user: "más lineal, no tan turbo cada palabra"). */
+const STEADY_SPEED = 1.6;
+/** 1ro: mashing keys (this many wrong keys within MASH_WINDOW_MS) stalls the kart for STALL_MS; keys are ignored meanwhile. */
+const MASH_WRONG = 4;
+const MASH_WINDOW_MS = 1200;
+const STALL_MS = 1500;
 
 const LINES = {
   first: '¡Carrera de teclas! Escribí las palabras con el teclado. Cada letra justa te hace ir más rápido.',
@@ -156,6 +162,7 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => reportSeed?.(seed), [seed]);
   const grade = api.session?.grade;
+  const steady = grade === 1;
   const words = useMemo(() => wordsFor(tier, seed, grade), [tier, seed, grade]);
   const def = useMemo(() => typingRaceDef(words, tier, seed), [words, tier, seed]);
   const course = useMemo(() => courseOf(def), [def]);
@@ -223,6 +230,10 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
     /** C02: a gap of IDLE_GAP_MS or more between two right keys counts as idle time (the honest result's `slow_idle` reason). */
     lastKeyAt: 0,
     idleMsTotal: 0,
+    /** 1ro: recent wrong-key times, the stall's end and how many stalls (mashing). */
+    wrongAt: [] as number[],
+    stallUntil: 0,
+    stalls: 0,
     /** C02 (honest mode only): the place/margin/reason computed once the child crosses the line. */
     honestResult: null as HonestResultData | null,
     honestRanking: null as Array<'me' | 0 | 1> | null,
@@ -272,6 +283,7 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
       ...(!s.honestResult && reason === 'finished' && !crossed.length ? { margin_estimated: true } : {}),
       help_levels: s.helpStep, adult_helped: !!lv?.adultHelped, cups: reason === 'finished' && isWin ? cups0 + 1 : cups0,
       rival_mode: rivals,
+      ...(steady ? { steady: true, stalls: s.stalls } : {}),
       ...(s.honestResult ? { place: s.honestResult.place, reason: s.honestResult.reason } : {}),
       // C07: how the rivals were paced. `rival_base_wpm`: the base (the child's previous wpm x 0.90 after a loss / x 1.05 after a win); in the first race, the child's average live pace they followed
       ...(honest ? { adapt: adaptKind, rival_base_wpm: baseWpm != null ? round1(baseWpm) : s.liveMs > 0 ? round1(s.liveSum / s.liveMs) : null } : {}),
@@ -290,6 +302,7 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
     const v = judgeKey(word?.[s.typed], k0);
     if (v === 'ignore') return;
     const now = Date.now();
+    if (steady && now < s.stallUntil) return;
     // C02: a long gap since the last key counts towards the honest result's `slow_idle` reason (own idea, not race.ts's idle-nudge timing).
     if (s.lastKeyAt) { const gap = now - s.lastKeyAt; if (gap > IDLE_GAP_MS) s.idleMsTotal += gap; }
     s.lastKeyAt = now;
@@ -299,6 +312,10 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
     if (v === 'wrong') {
       s.wrong++;
       s.wordErrors++;
+      if (steady) {
+        s.wrongAt = s.wrongAt.filter((t) => now - t < MASH_WINDOW_MS).concat(now);
+        if (s.wrongAt.length >= MASH_WRONG) { s.wrongAt = []; s.stallUntil = now + STALL_MS; s.stalls++; log('rapid_taps', { game: LEVEL_ID, wrong: MASH_WRONG, stall_ms: STALL_MS }); }
+      }
       s.badId++;
       setBad(s.badId);
       later(() => { if (g.current.badId === s.badId) setBad(0); }, BAD_MS);
@@ -327,7 +344,7 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
     s.chars += word.length;
     s.wordsDone++;
     chime(['mi', 'sol'], 100);
-    setBoost(true);
+    if (!steady) setBoost(true);
     if (s.k === n - 1) {
       s.boostTo = course.finish + PARK;
       s.meTarget = s.boostTo;
@@ -435,7 +452,8 @@ function TypingRun({ no, tier, again, revanchaRun, cups, rivals = 'band', adapt 
     if (s.me < s.boostTo - 0.01) {
       // the boost: a finished word takes the kart to the next stretch at turbo speed (after the line it slows down to park)
       const left = s.boostTo - s.me;
-      const v = s.crossedAt ? Math.max(0.35, Math.min(TURBO_SPEED, left * 1.6)) : TURBO_SPEED;
+      const top = steady ? STEADY_SPEED : TURBO_SPEED;
+      const v = s.crossedAt ? Math.max(0.35, Math.min(top, left * 1.6)) : top;
       s.me = Math.min(s.boostTo, s.me + v * dt);
     } else {
       if (boostRef.current) { boostRef.current = false; setBoost(false); }

@@ -134,7 +134,7 @@ export const MENU_LINES = {
 export const RACE_START_TIER: Readonly<Record<number, number>> = { 4: 4 };
 
 /** C02: 4to's Carrera de teclas has honest, fixed-pace rivals (it can really lose); every other grade keeps the band (always wins). */
-export const raceRivalsFor = (grade: number): 'band' | 'honest' => (grade === 4 ? 'honest' : 'band');
+export const raceRivalsFor = (grade: number): 'band' | 'honest' => (grade === 4 || grade === 1 ? 'honest' : 'band');
 
 // ------------------------------------------------------------------ the time
 
