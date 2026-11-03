@@ -35,6 +35,13 @@ export const PLAYTEST_UNLOCKS: Record<ItemId, { seeds: number }> = {
   botas: { seeds: 10 },
   flotador: { seeds: 13 },
   corona: { seeds: 16 },
+  // T56 (2026-11-03): six more, in between and after, so every few seeds open something new
+  gorra: { seeds: 2 },
+  mono: { seeds: 5 },
+  zapatillas: { seeds: 8 },
+  collar: { seeds: 11 },
+  rinonera: { seeds: 14 },
+  fiesta: { seeds: 18 },
 };
 
 /** About three minutes, then a gentle move on. */

@@ -19,7 +19,9 @@ export const CHARACTER_NAME: Record<CharacterId, string> = { brote: 'Brote', min
 export const SLOTS = ['head', 'neck', 'back', 'waist', 'feet'] as const;
 export type Slot = typeof SLOTS[number];
 
-export type ItemId = 'bufanda' | 'hongo' | 'mochila' | 'capa' | 'botas' | 'flotador' | 'corona';
+export type ItemId = 'bufanda' | 'hongo' | 'mochila' | 'capa' | 'botas' | 'flotador' | 'corona'
+  // T56 (2026-11-03): six more pieces, for the playtest's wardrobe (the year's are far, after the crown)
+  | 'gorra' | 'mono' | 'zapatillas' | 'collar' | 'rinonera' | 'fiesta';
 
 /** When a piece unlocks: a number of seeds in the pouch (never spent), or a sheet finished. */
 export type Unlock = { seeds: number } | { sheet: number };
@@ -35,16 +37,25 @@ export interface Item {
 /**
  * The wardrobe of the forest and the river, in the order they unlock over a
  * year: the first seeds of the first class, the long paths of sheet 2, the
- * river after the music recess (sheet 9), the pond of sheet 13.
+ * river after the music recess (sheet 9), the pond of sheet 13. T56
+ * (2026-11-03): six more pieces in between (the playtest's wardrobe opens
+ * them every few seeds, WardrobeStep.tsx; in the year they come after the
+ * crown, from 60 seeds).
  */
 export const ITEMS: readonly Item[] = [
   { id: 'bufanda', slot: 'neck', name: 'la bufanda', unlock: { seeds: 3 } },
   { id: 'hongo', slot: 'head', name: 'el gorro de hongo', unlock: { seeds: 10 } },
+  { id: 'gorra', slot: 'head', name: 'la gorra', unlock: { seeds: 60 } },
   { id: 'mochila', slot: 'back', name: 'la mochila de explorador', unlock: { sheet: 2 } },
+  { id: 'mono', slot: 'neck', name: 'el moño', unlock: { seeds: 70 } },
   { id: 'capa', slot: 'back', name: 'la capa de hoja', unlock: { seeds: 25 } },
+  { id: 'zapatillas', slot: 'feet', name: 'las zapatillas', unlock: { seeds: 80 } },
   { id: 'botas', slot: 'feet', name: 'las botas de lluvia', unlock: { sheet: 9 } },
+  { id: 'collar', slot: 'neck', name: 'el collar de cuentas', unlock: { seeds: 90 } },
   { id: 'flotador', slot: 'waist', name: 'el flotador de patito', unlock: { sheet: 13 } },
+  { id: 'rinonera', slot: 'waist', name: 'la riñonera', unlock: { seeds: 100 } },
   { id: 'corona', slot: 'head', name: 'la corona de flores', unlock: { seeds: 50 } },
+  { id: 'fiesta', slot: 'head', name: 'el gorro de fiesta', unlock: { seeds: 110 } },
 ];
 export const itemById = (id: string): Item | null => ITEMS.find((i) => i.id === id) ?? null;
 export const isItemId = (x: unknown): x is ItemId => typeof x === 'string' && !!itemById(x);

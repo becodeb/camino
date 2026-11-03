@@ -12,8 +12,11 @@ describe('the playtest wardrobe', () => {
   it('unlocks two pieces for everyone, then more with more seeds, in the year\'s order', () => {
     setUnlocks(PLAYTEST_UNLOCKS);
     expect(unlockedItems(EMPTY)).toEqual(['bufanda', 'hongo']);
-    expect(unlockedItems(grant(EMPTY, 4))).toEqual(['bufanda', 'hongo', 'mochila']);
-    expect(unlockedItems(grant(EMPTY, 16))).toEqual(ITEMS.map((i) => i.id));
+    expect(unlockedItems(grant(EMPTY, 4))).toEqual(['bufanda', 'hongo', 'gorra', 'mochila']);
+    // T56: thirteen pieces, the last at 18 seeds
+    expect(ITEMS).toHaveLength(13);
+    expect(unlockedItems(grant(EMPTY, 17))).not.toContain('fiesta');
+    expect(unlockedItems(grant(EMPTY, 18))).toEqual(ITEMS.map((i) => i.id));
     const seeds = ITEMS.map((i) => PLAYTEST_UNLOCKS[i.id].seeds);
     expect(seeds).toEqual([...seeds].sort((a, b) => a - b));
   });

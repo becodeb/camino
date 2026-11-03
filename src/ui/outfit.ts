@@ -260,6 +260,83 @@ function flotador(front: SVGElement, behind: SVGElement, a: Anchor, uid: string)
   el('circle', { cx: 3, cy: -11.5, r: 1.6, fill: INK }, d);
 }
 
+// ------------------------------------------------------------------ T56: six more pieces (2026-11-03)
+
+/** A cap: a red dome with a seam and a button, its visor out to the front-right. */
+function gorra(front: SVGElement, a: Anchor, uid: string) {
+  const g = at(front, a, 'gorra');
+  const w = a.w * 1.05;
+  el('path', { d: `M${0.35 * w},${0.02 * w} Q${1.05 * w},${-0.06 * w} ${1.22 * w},${0.12 * w} Q${0.8 * w},${0.24 * w} ${0.3 * w},${0.16 * w} Z`, fill: '#a8463b', ...ink({ 'stroke-width': 2.2 }) }, g);
+  const dome = `M${-0.78 * w},${0.06 * w} C${-0.82 * w},${-0.78 * w} ${0.82 * w},${-0.78 * w} ${0.78 * w},${0.06 * w} Q0,${0.2 * w} ${-0.78 * w},${0.06 * w} Z`;
+  facet(g, dome, '#c9574a', '#a8463b', `${uid}-gorra`, [-4, -4]);
+  el('path', { d: `M0,${-0.56 * w} Q${-0.08 * w},${-0.2 * w} 0,${0.12 * w}`, fill: 'none', stroke: INK, 'stroke-width': 1.4, opacity: 0.5 }, g);
+  el('circle', { cx: 0, cy: -0.58 * w, r: 3, fill: '#f0d27a', ...ink({ 'stroke-width': 1.6 }) }, g);
+}
+
+/** A party hat: a striped cone tilted on the head, a pompom on its tip. */
+function fiesta(front: SVGElement, a: Anchor, uid: string) {
+  const g = at(front, { ...a, rot: (a.rot ?? 0) + 8 }, 'fiesta');
+  const w = a.w * 0.62, h = a.w * 1.35;
+  const cone = `M${-w},0 L0,${-h} L${w},0 Q0,${0.22 * w} ${-w},0 Z`;
+  facet(g, cone, '#7298c1', '#5a7fa6', `${uid}-fiesta`, [-3, -3]);
+  const clip = el('clipPath', { id: `${uid}-fiesta-st` }, g);
+  el('path', { d: cone }, clip);
+  const st = el('g', { 'clip-path': `url(#${uid}-fiesta-st)` }, g);
+  for (const k of [0.25, 0.55]) el('path', { d: `M${-w},${-h * k + 4} L${w},${-h * k - 4}`, stroke: '#f0d27a', 'stroke-width': 5 }, st);
+  el('path', { d: cone, fill: 'none', ...ink({ 'stroke-width': 2.2 }) }, g);
+  el('path', { d: blob(0, -h - 2, 5, 5, { seed: 9, n: 8 }), fill: '#e7a3a0', ...ink({ 'stroke-width': 1.8 }) }, g);
+}
+
+/** A bow tie at the neck: two rounded wings and a knot. */
+function mono(front: SVGElement, a: Anchor) {
+  const g = at(front, { ...a, y: a.y + 2 }, 'mono');
+  const w = Math.max(9, a.w * 0.48), h = w * 0.62;
+  for (const s of [-1, 1]) el('path', { d: `M0,0 Q${s * w * 0.4},${-h * 1.1} ${s * w},${-h} Q${s * w * 1.12},0 ${s * w},${h} Q${s * w * 0.4},${h * 1.1} 0,0 Z`, fill: '#c9574a', ...ink({ 'stroke-width': 2 }) }, g);
+  for (const s of [-1, 1]) el('circle', { cx: s * w * 0.62, cy: -h * 0.2, r: 1.6, fill: CREAM }, g);
+  el('ellipse', { cx: 0, cy: 0, rx: w * 0.2, ry: h * 0.55, fill: '#a8463b', ...ink({ 'stroke-width': 1.8 }) }, g);
+}
+
+/** A bead necklace round the neck: round beads of three colours along a hanging curve. */
+function collar(front: SVGElement, a: Anchor) {
+  const g = at(front, a, 'collar');
+  const w = a.w * 0.92;
+  const colors = ['#e7a3a0', '#f0d27a', '#7298c1'];
+  const n = 9;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const x = (1 - t) * (1 - t) * -w + t * t * w;
+    const y = (1 - t) * (1 - t) * -3 + 2 * (1 - t) * t * 10 + t * t * -3;
+    el('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: i === (n - 1) / 2 ? 4.4 : 3.2, fill: colors[i % 3], ...ink({ 'stroke-width': 1.5 }) }, g);
+  }
+}
+
+/** Red sneakers: low shoes with a white sole and a lace; their tops just over the body's lower edge. */
+function zapatillas(front: SVGElement, parts: Record<string, unknown>, fit: Fit, uid: string) {
+  const parent = fit.bootsInLegs && parts.legs instanceof SVGElement ? parts.legs : front;
+  const layer = el('g', { 'data-item': 'zapatillas' }, parent);
+  const k = fit.boot;
+  fit.feet.forEach(([x, y], i) => {
+    const g = el('g', { transform: `translate(${x} ${y}) scale(${k})` }, layer);
+    const d = 'M-7,-8 L5,-8 Q11,-5 11.5,-1 Q11.5,2.2 0,2.2 Q-11,2.2 -11,-1 Q-11,-6 -7,-8 Z';
+    facet(g, d, '#c9574a', '#a8463b', `${uid}-zap${i}`, [-3, -2], 2.4);
+    el('path', { d: 'M-10.6,0.4 Q0,3.4 11,0.4', fill: 'none', stroke: CREAM, 'stroke-width': 3, 'stroke-linecap': 'round' }, g);
+    el('path', { d: 'M-3,-7 L1,-4 M-1,-7.5 L3,-4.5', fill: 'none', stroke: CREAM, 'stroke-width': 1.5, 'stroke-linecap': 'round' }, g);
+  });
+}
+
+/** A bum bag at the waist: a strap round it and an orange pouch with a zip in front. */
+function rinonera(front: SVGElement, a: Anchor, uid: string) {
+  const g = at(front, a, 'rinonera');
+  const w = a.w + 2;
+  el('path', { d: `M${-w},-2 Q0,6 ${w},-2`, fill: 'none', stroke: INK, 'stroke-width': 5.4, 'stroke-linecap': 'round' }, g);
+  el('path', { d: `M${-w},-2 Q0,6 ${w},-2`, fill: 'none', stroke: '#8d6844', 'stroke-width': 3, 'stroke-linecap': 'round' }, g);
+  const pw = Math.max(12, a.w * 0.62), ph = pw * 0.62;
+  const pouch = wobblyPoly([[-pw, -ph * 0.35], [pw, -ph * 0.35], [pw * 0.92, ph], [-pw * 0.92, ph]], { wob: 0.5, bow: 1, seed: 31 });
+  facet(g, pouch, '#de8a56', '#c06f3e', `${uid}-rin`, [-3, -3], 2.2);
+  el('path', { d: `M${-pw * 0.75},${ph * 0.1} L${pw * 0.75},${ph * 0.1}`, stroke: INK, 'stroke-width': 1.4, opacity: 0.6 }, g);
+  el('rect', { x: pw * 0.5, y: ph * 0.1 - 1, width: 3, height: 5, rx: 1, fill: '#f0d27a', ...ink({ 'stroke-width': 1.1 }) }, g);
+}
+
 const ellipsePath = (cx: number, cy: number, rx: number, ry: number) =>
   `M${cx - rx},${cy} a${rx},${ry} 0 1,0 ${rx * 2},0 a${rx},${ry} 0 1,0 ${-rx * 2},0 Z`;
 
@@ -298,6 +375,12 @@ const DRAW: Record<ItemId, Draw> = {
   mochila: (f, b, fit, uid) => mochila(f, b, fit.back, uid),
   botas: (f, _b, fit, uid, _body, parts) => botas(f, parts, fit, uid),
   flotador: (f, b, fit, uid) => flotador(f, b, fit.waist, uid),
+  gorra: (f, _b, fit, uid) => gorra(f, fit.head, uid),
+  fiesta: (f, _b, fit, uid) => fiesta(f, fit.head, uid),
+  mono: (f, _b, fit) => mono(f, fit.neck),
+  collar: (f, _b, fit) => collar(f, fit.neck),
+  zapatillas: (f, _b, fit, uid, _body, parts) => zapatillas(f, parts, fit, uid),
+  rinonera: (f, _b, fit, uid) => rinonera(f, fit.waist, uid),
 };
 
 /** How the pieces sit alone on their hooks in the wardrobe (a 80 × 80 drawing centred on 0). */
