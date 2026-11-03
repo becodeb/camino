@@ -20,11 +20,15 @@
 //   asked, ↺ and ✋ pressed while they are shown);
 //   the ladder from rung 1: pass 1, pass 2, then rung 3 (the fix page) with
 //   an offline stretch: the three helps, 🔊, a fourth ✋ raises the hand, the
-//   adult answers, a failed run ends the item (fail) and the ladder stops
-//   (ceiling 2); the cheer; free play: 💬 turned on in the bar (the line shows
+//   adult answers, a failed run ends the item (fail); 2026-11-03: 1ro's
+//   ladder is the GENTLE one (`?caps=fast` here: 60 s), it does not stop: the
+//   fail steps down to rung 2 (`check: floor`, passes), and the ladder goes
+//   on until its time is over (max_time, ceiling 2); the cheer; free play: 💬 turned on in the bar (the line shows
 //   in a bubble), the menu, sheet 6 (its four core pages, "¿Cómo seguís?":
-//   más fácil, its first extra, "¿Cómo seguís?" again: otro juego), the music recess
-//   (one song), back, the time runs out on the menu (the cheer); the typing
+//   más fácil, its first extra, "¿Cómo seguís?" again: otro juego), the drawing (guardas,
+//   opened by itself, left by the bar's small button), ¡Pum! Letras (2026-11-03: a bubble popped by its physical key, left by
+//   the big "Otro juego"), the music recess (one song), back: the fourth activity of the first
+//   pass, so the time is over (the cheer); the typing
 //   minigame (T12: rounds; ?teclas=0.5: a 30 s cap; ?metas=4: four holes a
 //   round): the intro skipped by pressing its own key, round 1's four holes
 //   filled by three early catches (the golden seed fills two), the round's
@@ -165,7 +169,8 @@ const one = await page();
 let p = one.p;
 // T43 (2026-10-25): 1ro has its own route now (the monster games, tools/check-monstruo.mjs); `ruta=clasica`
 // keeps it on the default route this part has always checked (the one 2do still follows)
-const s1 = await newSession(p, '1ro', 'debug&teclas=0.5&metas=4&ruta=clasica');
+// 2026-11-03: `caps=fast` (item 30 s, no input 12 s, ladder 60 s) so 1ro's gentle ladder (7 minutes) ends in this run
+const s1 = await newSession(p, '1ro', 'debug&teclas=0.5&metas=4&ruta=clasica&caps=fast');
 ok(/^\p{Lu}\p{Ll}+ [1-9]\d$/u.test(s1.code), `the session keeps an internal code for the admin page ("${s1.code}")`);
 await p.locator('.doors-next').click({ force: true });
 
@@ -211,11 +216,18 @@ await hold(p, hx, hy, 1500);
 await p.locator('[data-kind="hint"]').click();
 ok(!(await p.locator('.pp-hand').count()), 'the adult answered: the hand is down');
 await failRun(p, [{ t: 'cmd', cmd: 'right' }]);
-await p.waitForSelector('[data-interlude="cheer"]', { timeout: 15_000 });
-ok(true, 'a failed run after the solution hint ends the item; the ladder stops with the cheer');
+// 2026-11-03: the gentle ladder does not stop on a fail: it walks on to an easier page
+// (the walk is short: wait for the next page itself)
+await onLevel(p, 'pp-l2');
+ok(true, 'a failed run after the solution hint ends the item; the ladder walks on (it never stops on a fail)');
 const offline = await p.evaluate(() => window.__piloto.status());
 ok(offline.pending > 5 && offline.failures > 0, `offline: ${offline.pending} events wait, ${offline.failures} failed posts`);
 await one.ctx.setOffline(false);
+ok((await p.evaluate(() => window.__ladder.state())).gentle === true, 'the floor item is rung 2 again: the ladder stepped one rung down');
+await solve(p);
+// the rest of the 60 s of the fast ladder goes by on pages nobody touches (each ends by its idle cap); then the time is over
+await p.waitForSelector('[data-interlude="cheer"]', { timeout: 150_000 });
+ok(true, 'the ladder\'s time is over: the cheer');
 await p.locator('.pp-cheer-next').click({ force: true });
 
 // free play: 💬 on, the menu, the sheet (four core pages, "¿Cómo seguís?": más fácil, its extra, otro juego), the music recess (one song), back
@@ -225,7 +237,7 @@ await p.locator('.pp-cheer-next').click({ force: true });
 await p.waitForSelector('.pp-menu, main.level[data-level="1ro-h6-1"]', { timeout: 30_000 });
 // the menu is on screen only for a moment before the sheet opens: read it from free play's ?debug hook
 const cards = await p.evaluate(() => window.__freePlay.menu());
-ok(cards.join(',') === 'typing_race,recipe,dance,oops,tap,sheet,recess', `1ro classic menu (2026-10-27: the typing race, the monster games, the sheet, the music): ${cards.join(',')}`);
+ok(cards.join(',') === 'typing_race,pop,recipe,dance,oops,sheet,recess', `1ro classic menu (2026-11-03: the typing race, ¡Pum! Letras, the monster games without Tocá y pasa, the sheet, the music): ${cards.join(',')}`);
 // 0e6d4fd: the first visit opens the sheet by itself, the menu after it
 await onLevel(p, '1ro-h6-1');
 ok(true, '1ro\'s first free-play visit opens the sheet by itself');
@@ -249,27 +261,52 @@ await p.waitForSelector('.pp-next');
 ok(true, 'after the extra page, "¿Cómo seguís?" again');
 await p.waitForTimeout(500);
 await p.locator('.pp-next-card[data-pick="menu"]').click();
-await p.waitForSelector('.pp-menu');
+// the menu shows for ~300 ms before the drawing opens by itself: either it or the drawing
+await p.waitForSelector('.pp-menu, .pp-fp-activity[data-activity="guardas"]', { timeout: 30_000 });
 ok(true, '"otro juego": back to the menu');
+// 2026-10-27 (classic route): after the sheet the drawing (guardas) opens by itself too, before the child chooses;
+// its bar's small menu button (there is no big "Otro juego" on a forced visit) goes back to the menu
+await p.waitForSelector('.pp-fp-activity[data-activity="guardas"]', { timeout: 20_000 });
+ok(true, 'the classic route\'s second forced visit: the drawing (guardas) opens by itself after the sheet');
+await p.waitForTimeout(1200);
+await p.locator('.pp-menu-back').click();
+await p.waitForSelector('.pp-menu', { timeout: 15_000 });
 await p.waitForTimeout(600);
-// 2026-10-27: a monster game from the classic menu, and back by the big drawn "Otro juego"
-await p.locator('.pp-fp-card[data-activity="recipe"]').click();
+{
+  const back = await p.evaluate(() => ({ menu: document.querySelector('.pp-menu')?.dataset.menu ?? null, step: window.__piloto.flow().step, cards: window.__freePlay?.menu?.() ?? null }));
+  ok(!!back.menu && back.menu.split(' ').includes('pop'), `back on the classic menu with ¡Pum! Letras on it (${JSON.stringify(back)})`);
+}
+// A game from the classic menu, and back by the big drawn "Otro juego". 2026-11-03: it is ¡Pum! Letras now (the new card of the
+// classic menu; a bubble popped by its physical key). The pick must stay the third one of the first pass: a fourth activity
+// picked ends it when the child is back on the menu (FREE_PLAY_MIN_VISITS), and the music recess below is the fourth.
+// (La receta and "¿Qué salió mal?" are played through by tools/check-monstruo.mjs on 1ro's own route; the classic menu's dance
+// card is opened by no check since this version: a fourth pick here would end the first pass.)
+await p.locator('.pp-fp-card[data-activity="pop"]').click();
+await p.waitForSelector('.pz-game .pz-kb', { timeout: 20_000 });
+await p.waitForFunction(() => window.__monster?.state().items.length > 0, null, { timeout: 15_000 });
+{
+  const e = await p.evaluate(() => window.__monster.state().expected);
+  await p.keyboard.press(e.toLowerCase());
+  await p.waitForFunction(() => window.__monster.state().right >= 1, null, { timeout: 5000 });
+}
+ok(true, '¡Pum! Letras opens from the classic menu: a bubble popped by its physical key');
 await p.waitForSelector('.pp-play-home', { timeout: 20_000 });
 await p.waitForTimeout(1500);
 await p.locator('.pp-play-home').click();
 await p.waitForSelector('.pp-menu', { timeout: 10_000 });
-ok(true, 'the classic menu opens La receta, and its big "Otro juego" goes back to the menu');
+ok(true, 'the classic menu opens ¡Pum! Letras, and its big "Otro juego" goes back to the menu');
 await p.waitForTimeout(600);
 await p.locator('.pp-fp-card[data-activity="recess"]').click();
 await onLevel(p, '1ro-h9-1');
 await solve(p);
 await onLevel(p, '1ro-h9-2');
 await p.waitForTimeout(500);
-await p.locator('.pp-menu-back').click();
-await p.waitForSelector('.pp-menu');
 const seedsFree = await p.evaluate(() => Number(document.querySelector('.seed-pouch')?.dataset.count));
-// the time runs out on the menu: the cheer, and the next step
-await p.evaluate(() => window.__freePlay.budget(0));
+await p.locator('.pp-menu-back').click();
+// since 2026-10-27 the sheet and the drawing open by themselves, so the recess is the fourth activity of the first pass
+// (FREE_PLAY_MIN_VISITS): back from it the time is over at once (the cheer, no menu). If the menu does show, the time runs out on it.
+await p.waitForSelector('.pp-menu, [data-interlude="cheer"]', { timeout: 30_000 });
+if (await p.locator('.pp-menu').count()) await p.evaluate(() => window.__freePlay.budget(0));
 await p.waitForSelector('[data-interlude="cheer"]', { timeout: 15_000 });
 ok(true, `free play's time is over on the menu: the cheer (${seedsFree} seeds in the pouch)`);
 await p.locator('.pp-cheer-next').click({ force: true });
@@ -526,11 +563,11 @@ for (const [name, s] of [['1ro', s1], ['5to', s5], ['3ro', s3b]]) {
 }
 // free play
 const picks = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'choice' and payload->>'activity' <> 'character' order by seq`)).map((x) => x.p);
-ok(picks.map((x) => x.door ? `door:${x.door}` : `${x.activity}#${x.visit}`).join(' ') === 'sheet#1 door:easy recess#2', `free-play choices: ${JSON.stringify(picks)}`);
+ok(picks.map((x) => x.door ? `door:${x.door}` : `${x.activity}#${x.visit}`).join(' ') === 'sheet#1 door:easy guardas#2 pop#3 recess#4', `free-play choices: ${JSON.stringify(picks)}`);
 const nexts = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'next_choice' order by seq`)).map((x) => x.p);
 ok(nexts.map((x) => `${x.pick}#${x.n}`).join(' ') === 'easy#1 menu#2' && nexts.every((x) => x.sheet === 6 && x.time_ms >= 0), `next_choice rows: ${JSON.stringify(nexts)}`);
 const fpEnds = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'activity_end' order by seq`)).map((x) => x.p);
-ok(fpEnds.length === 2 && fpEnds.every((x) => x.reason === 'menu' && x.time_ms > 0), `activity_end rows: ${JSON.stringify(fpEnds)}`);
+ok(fpEnds.length === 4 && fpEnds.every((x) => x.reason === 'menu' && x.time_ms > 0), `activity_end rows: ${JSON.stringify(fpEnds)}`);
 // 6-1 … 6-4 solved, the easy extra solved, then "otro juego"
 ok(fpEnds[0]?.activity === 'sheet' && fpEnds[0]?.levels === 5 && fpEnds[0]?.wins === 5 && fpEnds[0]?.extras === 1, `the sheet visit counts its pages, wins and the extra solved: ${JSON.stringify(fpEnds[0])}`);
 const sheetEnds = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'level_end' and payload->>'activity' = 'sheet' order by seq`)).map((x) => x.p);
@@ -619,12 +656,13 @@ ok(Number(sql(`select count(*) from events where session_id = '${s1.sid}' and ty
 
 // the 1ro ladder
 const steps1 = JSON.parse(json(`select (payload->>'rung')::int rung, payload->>'item' item, payload->>'concept' concept, payload->>'check' chk, payload->>'result' result, payload->>'next' nxt, (payload->>'help_levels')::int help, (payload->>'adult_helped')::boolean adult, (payload->>'attempts')::int attempts, payload->>'end_reason' why from events where session_id = '${s1.sid}' and type = 'ladder_step' order by seq`));
-ok(steps1.map((x) => `${x.rung}${x.result === 'pass' ? '✓' : '✗'}`).join(' ') === '1✓ 2✓ 3✗', `1ro ladder: ${steps1.map((x) => `${x.rung}${x.result === 'pass' ? '✓' : '✗'}`).join(' ')}`);
-ok(steps1[0]?.nxt === 'pp-l2' && steps1[1]?.nxt === 'pp-l3' && steps1[2]?.nxt === null, 'next items recorded, null at the stop');
-ok(steps1.map((x) => x.why).join(',') === 'solved,solved,solution_hint', `end reasons: ${steps1.map((x) => x.why).join(',')}`);
+const seq1 = steps1.map((x) => `${x.rung}${x.chk === 'floor' ? 'f' : ''}${x.result === 'pass' ? '✓' : '✗'}`).join(' ');
+ok(seq1.startsWith('1✓ 2✓ 3✗ 2f✓') && steps1.slice(4).every((x) => x.result === 'fail' && ['idle_cap', 'time_cap', 'ladder_time'].includes(x.why)), `1ro gentle ladder: ${seq1} (a step down after the fail, then untouched pages)`);
+ok(steps1[0]?.nxt === 'pp-l2' && steps1[1]?.nxt === 'pp-l3' && steps1[2]?.nxt === 'pp-l2' && steps1[3]?.nxt === 'pp-l3' && steps1[steps1.length - 1].nxt === null, `next items recorded (the fail steps down to pp-l2), null at the stop: ${steps1.map((x) => x.nxt).join(',')}`);
+ok(steps1.slice(0, 4).map((x) => x.why).join(',') === 'solved,solved,solution_hint,solved' && ['ladder_time', 'idle_cap', 'time_cap'].includes(steps1[steps1.length - 1].why), `end reasons: ${steps1.map((x) => x.why).join(',')}`);
 ok(steps1[2]?.help === 3 && steps1[2]?.adult === true && steps1[2]?.concept === 'fix', `the fix item records help 3 and the adult's help: ${JSON.stringify(steps1[2])}`);
 const end1 = JSON.parse(json(`select payload p from events where session_id = '${s1.sid}' and type = 'ladder_end'`))[0]?.p;
-ok(end1?.reason === 'ceiling' && end1?.ceiling_rung === 2 && end1?.entry_rung === 1 && end1?.items === 3, `1ro ladder_end ${JSON.stringify(end1)}`);
+ok(end1?.reason === 'max_time' && end1?.ceiling_rung === 2 && end1?.entry_rung === 1 && end1?.items === steps1.length && steps1.length >= 4, `1ro ladder_end ${JSON.stringify(end1)}`);
 const view1 = sql(`select ladder_ceiling_rung from v_session_summary where session_id = '${s1.sid}';`);
 const conc1 = sql(`select string_agg(concept || ':' || rung, ',' order by rung) from v_ladder_ceiling where session_id = '${s1.sid}';`);
 ok(view1 === '2' && conc1 === 'sequence:1,long_sequence:2', `views agree: ladder_ceiling_rung ${view1}, v_ladder_ceiling ${conc1}`);

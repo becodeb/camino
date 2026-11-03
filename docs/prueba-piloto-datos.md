@@ -1818,8 +1818,8 @@ the shared three (`game_start`, `game_round`, `game_end` with
 makes the character dizzy), `help`, `speak` and `ghost_demo` with
 `level_id: 'game:pop'`, and `game_exit`.
 
-`game_round` (one per **wave won**, `solved: true`; a play left mid-wave logs
-a `solved: false` round with only the generic fields):
+`game_round` (one per **wave won**, `solved: true`; a wave left after at least
+one key typed logs a `solved: false` round with only the generic fields):
 ```
 {
   game: 'pop', mode: 'arcade', play_no, round, tier,    // tier: the wave's first tier
