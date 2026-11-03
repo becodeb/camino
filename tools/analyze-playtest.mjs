@@ -18,7 +18,7 @@ import { MONSTER_GAME_NAME, MONSTER_GAMES, monsterReport } from '../src/playtest
 function parseArgs(argv) {
   const [file, ...rest] = argv;
   if (!file) {
-    console.error('usage: node tools/analyze-playtest.mjs <export.json> [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--csv <file>]');
+    console.error('usage: node tools/analyze-playtest.mjs <export.json> [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--csv <file>] [--guided recipe,oops]');
     process.exit(2);
   }
   const opts = {};
@@ -27,6 +27,7 @@ function parseArgs(argv) {
     if (rest[i] === '--since') opts.since = rest[++i];
     else if (rest[i] === '--until') opts.until = rest[++i];
     else if (rest[i] === '--csv') csv = rest[++i];
+    else if (rest[i] === '--guided') opts.guided = rest[++i].split(',').filter(Boolean);
   }
   return { file, opts, csv };
 }
@@ -280,13 +281,18 @@ const SKILL_LINE = {
   tap: (k) => `reglas hechas por chico (mediana) ${k.medianRulesMade ?? '—'}; tiempo jugando con lo que armó (mediana) ${fmtMs(k.medianPlayMs)}; toques jugando (mediana) ${k.medianPlayTaps ?? '—'}; efectos elegidos: ${fmtDist(k.effectsChosen ?? {})}`,
 };
 
+// T58: 1ro's guided pass was the four games until 2026-11-03; since then recipe and oops (the dance and "Tocá y pasa" left it).
+// `--since` on or after that date counts those two; `--guided a,b` overrides.
+const GUIDED_2026_11_03 = ['recipe', 'oops'];
+const guidedFor = (opts) => opts.guided ?? ((opts.since ?? '') >= '2026-11-03' ? GUIDED_2026_11_03 : MONSTER_GAMES);
+
 function reportMonster(r) {
   section('Los juegos del monstruo (1ro, T43–T47)');
   if (r.sessions === 0) {
     line('Sin datos de los juegos del monstruo en este export (de antes del 2026-10-25, o ningún chico de 1ro los jugó).');
     return;
   }
-  line(`Chicos de 1ro que jugaron: ${r.sessions}. Pasada guiada completa (los ${MONSTER_GAMES.length} juegos terminados): ${r.guidedAll}. Salieron de la pasada guiada (bandera verde): ${r.guidedDone}.`);
+  line(`Chicos de 1ro que jugaron: ${r.sessions}. Pasada guiada completa (${r.guidedGames.join(' + ')} terminados): ${r.guidedAll}. Salieron de la pasada guiada (bandera verde): ${r.guidedDone}.`);
   line('"Repetir voluntario" = elegirlo otra vez en el Arcade (ya jugado) o "¡Otra vez!".');
   for (const g of r.games) {
     line(`- ${MONSTER_GAME_NAME[g.game]} (${g.game}): ${g.children} chico(s), ${g.plays} partida(s) (${g.arcadePicks} elegidas en el Arcade), ${g.rounds} ronda(s) ganada(s), repetir voluntario ${g.voluntaryReplays}, terminadas ${g.finished} / abandonadas ${g.quit}, mareos (toques muy rápidos) ${g.rapidTaps}.`);
@@ -302,7 +308,37 @@ function reportMonster(r) {
   line('Por chico:');
   for (const c of r.children) {
     const per = MONSTER_GAMES.map((g) => `${g} ${c.plays[g] ?? 0}${c.voluntary[g] ? ` (+${c.voluntary[g]} vol.)` : ''}`).join(', ');
-    line(`  - ${c.code}: ${per}; favorito ${c.favourite.length ? c.favourite.join('/') : '—'}; pasada guiada ${c.guidedFinished.length}/${MONSTER_GAMES.length}${c.guidedDone ? ' (bandera verde)' : ''}.`);
+    line(`  - ${c.code}: ${per}; favorito ${c.favourite.length ? c.favourite.join('/') : '—'}; pasada guiada ${c.guidedFinished.length}/${r.guidedGames.length}${c.guidedDone ? ' (bandera verde)' : ''}.`);
+  }
+}
+
+// T58: "¡Pum! Letras" (1ro's arcade card, read apart: it does not count toward the guided pass)
+function reportPop(r) {
+  section('¡Pum! Letras (1ro, arcade; no cuenta en la pasada guiada)');
+  if (r.children === 0) { line('Ningún chico de 1ro jugó ¡Pum! Letras en este export (de antes del 2026-11-03, o nadie la eligió).'); return; }
+  line(`Chicos: ${r.children}. Partidas: ${r.plays} (${r.arcadePicks} elegidas en el Arcade), olas ganadas: ${r.waves}, repetir voluntario ${r.voluntaryReplays}, terminadas ${r.finished} / abandonadas ${r.quit}.`);
+  line(`Burbujas reventadas: ${r.popped} (palabras: ${r.wordsPopped}). Teclas justas ${r.right} / erradas ${r.wrong}: acierto ${fmtPctOrDash(r.accuracyPct)}.`);
+  line(`Teclado físico ${r.physical}, táctil ${r.touch} (porción táctil ${fmtPctOrDash(r.touchSharePct)}).`);
+  line(`Nivel más alto alcanzado: ${r.highestTier ?? '—'} de 6. Dónde terminó cada ola (nivel → olas): ${fmtDist(r.tierEndDist)}. Subidas de nivel dentro de la ola: ${r.tierUps}. Pasos de adaptación: ${r.adaptUps} arriba / ${r.adaptDowns} abajo.`);
+  line('Por chico:');
+  for (const c of r.perChild) {
+    line(`  - ${c.code}: ${c.plays} partida(s), ${c.waves} ola(s), ${c.popped} reventadas (${c.wordsPopped} palabras), acierto ${fmtPctOrDash(c.accuracyPct)}, teclas físicas ${c.physical} / táctiles ${c.touch}, nivel más alto ${c.highestTier ?? '—'}.`);
+  }
+}
+
+// T58: 1ro's gentle blocks ladder (never stops on a non-pass; ends by itself after ~7 min / 10 items)
+function reportGentleLadder(r) {
+  section('Escalera suave de 1ro (T53/T57b: 5 intentos fallidos por ítem, baja un escalón, termina sola en ~7 min)');
+  if (r.sessions === 0) { line('Ningún chico de 1ro llegó al final de la escalera en este export.'); return; }
+  line(`Chicos de 1ro que cerraron la escalera: ${r.sessions}. Ítems: ${r.items} (mediana ${r.medianItems ?? '—'} por chico), pasados ${r.passes}.`);
+  line(`Bajadas de escalón (check "floor"): ${r.stepDowns}, en ${r.childrenWithStepDown} chico(s) (mediana ${r.medianStepDowns ?? '—'} por chico).`);
+  line(`Por qué terminó la escalera: ${fmtDist(r.endReasons)}`);
+  line(`Por qué terminó cada ítem: ${fmtDist(r.itemEndReasons)}`);
+  line(`Distribución del techo: ${fmtDist(r.ceilingDist)}`);
+  line(`Minutos en la escalera: mediana ${fmtMs(r.medianMs)}, máximo ${fmtMs(r.maxMs)}.`);
+  line('Por chico:');
+  for (const c of r.perChild) {
+    line(`  - ${c.code}: ${c.items} ítem(s), ${c.passes} pasado(s), ${c.stepDowns} bajada(s), techo ${c.ceiling ?? '—'}, terminó por ${c.reason ?? '—'} en ${fmtMs(c.ms)}.`);
   }
 }
 
@@ -475,7 +511,10 @@ async function main() {
   reportCopa2(a.copa2);
   {
     const keptIds = new Set(a.kept.map((s) => s.id));
-    reportMonster(monsterReport(a.kept, data.events.filter((e) => keptIds.has(e.session_id))));
+    const m = monsterReport(a.kept, data.events.filter((e) => keptIds.has(e.session_id)), guidedFor(opts));
+    reportMonster(m);
+    reportPop(m.pop);
+    reportGentleLadder(m.ladder);
   }
   reportProfiles(a.profiles);
   reportGrades(a.grades);

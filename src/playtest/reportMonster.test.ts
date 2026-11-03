@@ -100,11 +100,85 @@ describe('the 1ro arcade section ("Los juegos del monstruo")', () => {
     });
   });
 
+  it('T58: "¡Pum! Letras" is read apart (waves, popped, accuracy, keys, tier) and never counts toward the guided pass', () => {
+    seq = 0;
+    const popWave = (sid: string, o: Record<string, unknown> = {}) => round(sid, 'pop', 'arcade', {
+      popped: 40, words_popped: 3, right: 45, wrong: 5, sources: { key: 10, touch: 40 }, tier: 1, tier_end: 4, tier_ups: 3, adapt_ups: 1, adapt_downs: 0, ...o,
+    });
+    const popEnd = (sid: string, reason: string, o: Record<string, unknown> = {}) => end(sid, 'pop', 'arcade', reason, { right: 45, wrong: 5, popped: 40, physical: 10, touch: 40, ...o });
+    const events = [
+      ...guidedPass('a'),
+      // a: two waves in one play (the second by "¡Otra vez!"), finished
+      start('a', 'pop', 'arcade', 1), popWave('a'), popWave('a', { again: true, tier_end: 5, tier_ups: 4, popped: 30, words_popped: 5 }), popEnd('a', 'finished', { right: 90, wrong: 10, popped: 70, physical: 20, touch: 80 }),
+      // b: a play left mid-wave (no won wave), then a second pick of the card
+      start('b', 'recipe', 'guided'), end('b', 'recipe', 'guided', 'finished'),
+      start('b', 'pop', 'arcade', 1), ev('b', 'game_round', { game: 'pop', mode: 'arcade', solved: false, tier: 2 }), popEnd('b', 'quit', { right: 8, wrong: 2, popped: 7, physical: 10, touch: 0 }),
+      start('b', 'pop', 'arcade', 2),
+      // c: a tab closed before the play's game_end: falls back to the won wave's own numbers
+      start('c', 'pop', 'arcade', 1), popWave('c', { tier_end: 3, popped: 20, right: 20, wrong: 0, sources: { key: 0, touch: 20 } }),
+      // a 2do session and another game's event are not pop's
+      start('d', 'pop', 'arcade', 1), popWave('d'),
+    ];
+    const r = monsterReport([session('a'), session('b'), session('c'), session('d', 2)], events);
+    // pop is not a monster game: the games rows and the guided totals are the four
+    expect(r.games.map((g) => g.game)).toEqual(['recipe', 'dance', 'oops', 'tap']);
+    expect(r.guidedAll).toBe(1);
+    expect(r.children.find((c) => c.sessionId === 'a')!.plays).not.toHaveProperty('pop');
+    expect(r.pop).toMatchObject({ children: 3, plays: 4, waves: 3, arcadePicks: 4, voluntaryReplays: 2, finished: 1, quit: 1, popped: 70 + 7 + 20, wordsPopped: 3 + 5 + 3, right: 90 + 8 + 20, wrong: 10 + 2, physical: 20 + 10, touch: 80 + 0 + 20, highestTier: 5, tierUps: 3 + 4 + 3, adaptUps: 3 });
+    expect(r.pop.accuracyPct).toBeCloseTo((118 / 130) * 100, 5);
+    expect(r.pop.touchSharePct).toBeCloseTo((100 / 130) * 100, 5);
+    expect(r.pop.tierEndDist).toEqual({ '4': 1, '5': 1, '3': 1 });
+    const a = r.pop.perChild.find((c) => c.sessionId === 'a')!;
+    expect(a).toMatchObject({ plays: 1, waves: 2, popped: 70, wordsPopped: 8, highestTier: 5, physical: 20, touch: 80 });
+    const b = r.pop.perChild.find((c) => c.sessionId === 'b')!;
+    expect(b).toMatchObject({ plays: 2, waves: 0, popped: 7, highestTier: 2 });
+    // c has no game_end: its won wave stands in
+    expect(r.pop.perChild.find((c) => c.sessionId === 'c')).toMatchObject({ waves: 1, popped: 20, right: 20, physical: 0, touch: 20, highestTier: 3 });
+  });
+
+  it('T58: a custom guided list (1ro\'s route of 2026-11-03: recipe and oops) sets what a complete guided pass is', () => {
+    seq = 0;
+    const events = [
+      start('a', 'recipe', 'guided'), end('a', 'recipe', 'guided', 'finished'), start('a', 'oops', 'guided'), end('a', 'oops', 'guided', 'finished'), ev('a', 'route_done', {}),
+      start('b', 'recipe', 'guided'), end('b', 'recipe', 'guided', 'finished'),
+    ];
+    const r = monsterReport([session('a'), session('b')], events, ['recipe', 'oops']);
+    expect(r.guidedGames).toEqual(['recipe', 'oops']);
+    expect(r.guidedAll).toBe(1);
+    expect(r.children.map((c) => c.guidedFinished)).toEqual([['recipe', 'oops'], ['recipe']]);
+  });
+
+  it('T58: the gentle ladder of 1ro: items, step-downs (check floor), why it ended (wrap_up included), minutes', () => {
+    seq = 0;
+    const step = (sid: string, rung: number, check: 'climb' | 'floor', result: 'pass' | 'fail', end_reason: string) => ev(sid, 'ladder_step', { rung, check, result, end_reason });
+    const lend = (sid: string, o: Record<string, unknown>) => ev(sid, 'ladder_end', { entry_rung: 1, ...o });
+    const events = [
+      // a: two passes, a failed item, a step down that passed, ended by the time cap
+      step('a', 1, 'climb', 'pass', 'solved'), step('a', 2, 'climb', 'pass', 'solved'), step('a', 3, 'climb', 'fail', 'runs'), step('a', 2, 'floor', 'pass', 'solved'),
+      lend('a', { items: 4, ceiling_rung: 2, time_ms: 420_000, reason: 'max_time' }),
+      // b: "Juegos para todos" deferred to the end: wrap_up; no step down
+      step('b', 1, 'climb', 'pass', 'solved'), lend('b', { items: 1, ceiling_rung: 1, time_ms: 60_000, reason: 'wrap_up' }),
+      // c: never passed anything, stepped down at rung 1 (it repeats)
+      step('c', 1, 'climb', 'fail', 'time_cap'), step('c', 1, 'floor', 'fail', 'idle_cap'), lend('c', { items: 2, ceiling_rung: null, time_ms: 300_000, reason: 'max_items' }),
+      // 4to's ladder and a 1ro session that never reached the end of the ladder are not in this section
+      step('d', 7, 'climb', 'pass', 'solved'), lend('d', { items: 1, ceiling_rung: 7, time_ms: 1000, reason: 'top' }),
+      step('e', 1, 'climb', 'pass', 'solved'),
+    ];
+    const r = monsterReport([session('a'), session('b'), session('c'), session('d', 4), session('e')], events).ladder;
+    expect(r).toMatchObject({ sessions: 3, items: 7, passes: 4, stepDowns: 2, childrenWithStepDown: 2, medianItems: 2, medianStepDowns: 1, medianMs: 300_000, maxMs: 420_000 });
+    expect(r.endReasons).toEqual({ max_time: 1, wrap_up: 1, max_items: 1 });
+    expect(r.itemEndReasons).toEqual({ solved: 4, runs: 1, time_cap: 1, idle_cap: 1 });
+    expect(r.ceilingDist).toEqual({ '2': 1, '1': 1, null: 1 });
+    expect(r.perChild.find((c) => c.sessionId === 'c')).toMatchObject({ items: 2, stepDowns: 1, passes: 0, ceiling: null, reason: 'max_items' });
+  });
+
   it('says nothing when no 1ro child played a monster game', () => {
     const r = monsterReport([session('x'), session('y', 4)], [ev('y', 'game_start', { game: 'recipe', mode: 'arcade' }), ev('x', 'level_start', {})]);
     expect(r.sessions).toBe(0);
     expect(r.children).toEqual([]);
     expect(r.games.every((g) => g.plays === 0 && g.skill != null)).toBe(true);
     expect(r.exits).toEqual({});
+    expect(r.pop).toMatchObject({ children: 0, waves: 0, highestTier: null, accuracyPct: null });
+    expect(r.ladder).toMatchObject({ sessions: 0, items: 0, medianMs: null });
   });
 });
