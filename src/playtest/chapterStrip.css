@@ -45,3 +45,5 @@
   .cs-station { width: 22px; height: 22px; border-width: 2px; }
   .cs-star { width: 16px; height: 16px; }
 }
+/* In the ladder the top-left corner holds the block palette: the strip moves to the free top-right, beside Probar */
+.pp-chapter-strip.is-ladder { left: auto; right: 34px; top: 124px; }

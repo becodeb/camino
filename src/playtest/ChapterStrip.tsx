@@ -26,7 +26,7 @@ export function ChapterStrip({ games, game, levels = 0, inLadder = false }: { ga
   const shown = inLadder ? Math.min(MAX_LEVELS, levels + 1) : 1;
   const firstLevel = inLadder ? Math.max(0, levels + 1 - MAX_LEVELS) : 0;
   return (
-    <div className="pp-chapter-strip" role="img" aria-label="Tu camino" data-game={game} data-levels={levels}>
+    <div className={`pp-chapter-strip${inLadder ? " is-ladder" : ""}`} role="img" aria-label="Tu camino" data-game={game} data-levels={levels}>
       {Array.from({ length: games }, (_, i) => {
         const state = i < game ? 'done' : i === game && !inLadder ? 'here' : 'todo';
         return (
