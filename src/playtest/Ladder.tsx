@@ -22,7 +22,7 @@ import { usePlaytest } from './context';
 import { BarProgressContext } from './barProgress';
 import { Cheer, WalkOn } from './interlude';
 import {
-  capsFrom, ceiling, decide, firstItem, itemOf, itemResult, itemVerdict, newItemMemo, record, rungOf, startLadder, TOP_LONG,
+  capsFrom, ceiling, decide, firstItem, itemOf, itemResult, itemVerdict, newItemMemo, record, rungOf, startLadder, TOP_LONG, FAILED_RUNS_GENTLE,
   type Check, type LadderState, type StopReason,
 } from './ladder';
 import { pilotLevel } from './levels';
@@ -30,6 +30,7 @@ import { ArrowWordsContext } from '../blocks/blocks';
 import { vmItem } from './ladderVm';
 import { LadderVmItem } from './LadderVmItem';
 import { ClimbPath } from './ClimbPath';
+import { playGhost } from '../ui/ghost';
 import type { LevelDef } from '../game/levels';
 import { PlaytestLevel, type LevelEnd } from './PlaytestLevel';
 import { rememberPart, resumedPart } from './resume';
@@ -51,7 +52,26 @@ type View =
 interface SavedLadder { state: LadderState; ended: boolean }
 
 /** The caps (`?caps=fast` for the scripted checks; T39: 4to's long ladder has its own). */
-const capsOf = (s: LadderState) => capsFrom(typeof location !== 'undefined' ? location.search : '', !!s.long);
+const capsOf = (s: LadderState) => capsFrom(typeof location !== 'undefined' ? location.search : '', !!s.long, !!s.gentle);
+
+/** T53: how long the repeat's number pulses after a failed run (1ro's gentle ladder). */
+const NUDGE_MS = 6000;
+/**
+ * T53: after a failed run on a page with a `repetir` block, its number
+ * pulses and the ghost hand shows tapping it (a gesture only, nothing
+ * changes): 1ro kids never found that the number changes when tapped.
+ */
+function nudgeRepeatCount() {
+  setTimeout(() => {
+    const root = document.querySelector<HTMLElement>('main.level');
+    if (!root || root.dataset.busy === 'true') return;
+    const counts = [...root.querySelectorAll<HTMLElement>('button.blk-count:not(.is-empty):not(.is-pinned):not(:disabled)')];
+    if (!counts.length) return;
+    for (const c of counts) c.classList.add('pp-count-nudge');
+    setTimeout(() => { for (const c of counts) c.classList.remove('pp-count-nudge'); }, NUDGE_MS);
+    playGhost(root, [{ do: 'tap', at: 'button.blk-count:not(.is-empty):not(.is-pinned)' }]);
+  }, 900);
+}
 
 /** T39: 4to reads: word first on every block (the round-2 pages up to rung 8 are picture-first, for 1ro). */
 const forLong = (l: LevelDef): LevelDef => (l.blockLabel === 'word-picture' ? l : { ...l, blockLabel: 'word-picture' });
@@ -78,6 +98,7 @@ export function Ladder() {
   const caps = capsOf(start.s);
   const [view, setView] = useState<View>(start.view);
   const memo = useRef(newItemMemo());
+  const failsSeen = useRef<{ item: string; fails: number }>({ item: '', fails: 0 });
   const stopped = useRef(start.ended);
 
   const endLadder = (reason: StopReason | 'left') => {
@@ -169,7 +190,17 @@ export function Ladder() {
   };
 
   const watch = (stats: Parameters<typeof itemVerdict>[0]) => {
-    const reason = itemVerdict(stats, memo.current, Date.now(), { caps, ladderStart: state.current.startedAt });
+    // T53: a new failed run on the gentle ladder nudges the repeat's number
+    if (state.current.gentle) {
+      const seen = failsSeen.current;
+      const id = `${stats.level_id}@${stats.startedAt}`;
+      if (seen.item !== id) failsSeen.current = { item: id, fails: 0 };
+      if (stats.fails > failsSeen.current.fails) {
+        failsSeen.current = { item: id, fails: stats.fails };
+        if (stats.fails < FAILED_RUNS_GENTLE && !stats.won) nudgeRepeatCount();
+      }
+    }
+    const reason = itemVerdict(stats, memo.current, Date.now(), { caps, ladderStart: state.current.startedAt, ...(state.current.gentle ? { failedRuns: FAILED_RUNS_GENTLE } : {}) });
     return reason ? { outcome: 'fail' as const, reason } : null;
   };
   const extra = { concept: r.concept, rung: r.rung, item: itemId, check: view.check, ...(long ? { variant } : {}) };

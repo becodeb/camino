@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { formatOf } from '../game/formats';
 import {
   CAPS, CAPS_LONG, ENTRY, FAILED_RUNS, FAST_CAPS, FAST_CAPS_LONG, HARD_MS, IDLE_MS, ITEM_MS, LADDER, LADDER_ROUND1, MAX_ITEMS, MAX_ITEMS_LONG, MAX_MS, TOP, TOP_LONG,
+  CAPS_GENTLE, FAILED_RUNS_GENTLE, MAX_ITEMS_GENTLE,
   capsFrom, ceiling, decide, entryRung, firstItem, itemOf, itemResult, itemVerdict, newItemMemo, record, rungOf, startLadder, type Attempt, type LadderState,
 } from './ladder';
 import { ladderItem, LADDER_VARIANT_ITEMS } from './ladderItems';
@@ -13,6 +14,8 @@ const T0 = 1_000_000;
 const pass = (rung: number, check: Attempt['check'] = 'climb'): Attempt => ({ rung, check, result: 'pass' });
 const fail = (rung: number, check: Attempt['check'] = 'climb'): Attempt => ({ rung, check, result: 'fail' });
 const play = (s: LadderState, ...as: Attempt[]) => as.reduce(record, s);
+/** The standard (non-gentle) ladder from rung 1: the rules every grade but 1ro (T53) still follows. */
+const std1 = (): LadderState => { const s = startLadder(1, T0); delete s.gentle; return s; };
 
 describe('the item bank', () => {
   it('has twelve fixed rungs of pages and (T39) six more on the Workshop blocks, each real, in order', () => {
@@ -75,7 +78,7 @@ describe('entry by grade', () => {
 
 describe('where the ladder goes', () => {
   it('steps up one rung after a pass', () => {
-    const s = play(startLadder(1, T0), pass(1));
+    const s = play(std1(), pass(1));
     expect(decide(s, T0 + 60_000)).toEqual({ rung: 2, check: 'climb' });
     expect(decide(play(s, pass(2)), T0)).toEqual({ rung: 3, check: 'climb' });
   });
@@ -87,7 +90,7 @@ describe('where the ladder goes', () => {
   });
 
   it('after a fail above a passed rung, stops (no floor check needed)', () => {
-    const s = play(startLadder(1, T0), pass(1), pass(2), fail(3));
+    const s = play(std1(), pass(1), pass(2), fail(3));
     expect(decide(s, T0)).toEqual({ stop: 'ceiling' });
     expect(ceiling(s)).toBe(2);
   });
@@ -102,14 +105,14 @@ describe('where the ladder goes', () => {
   });
 
   it('failing rung 1 stops: there is nothing below', () => {
-    const s = play(startLadder(1, T0), fail(1));
+    const s = play(std1(), fail(1));
     expect(decide(s, T0)).toEqual({ stop: 'bottom' });
     expect(ceiling(s)).toBeNull();
   });
 
   it('stops at MAX_ITEMS items (8 since the classroom round), not before', () => {
     // 1ro climbing from 1 with passes reaches the eighth item on rung 8
-    let s = startLadder(1, T0);
+    let s = std1();
     for (let r = 1; r < MAX_ITEMS; r++) s = record(s, pass(r));
     expect(decide(s, T0)).toEqual({ rung: 8, check: 'climb' });
     s = record(s, pass(8));
@@ -276,5 +279,41 @@ describe('when an item ends', () => {
     expect(FAST_CAPS.idleMs).toBeLessThan(FAST_CAPS.itemMs);
     expect(itemVerdict(stats(), newItemMemo(), T0 + FAST_CAPS.idleMs, { caps: FAST_CAPS })).toBe('idle_cap');
     expect(itemVerdict(stats({ lastInputAt: T0 + FAST_CAPS.itemMs - 1 }), newItemMemo(), T0 + FAST_CAPS.itemMs, { caps: FAST_CAPS })).toBe('time_cap');
+  });
+});
+
+describe('T53: 1ro\'s gentle ladder', () => {
+  it('only 1ro gets it', () => {
+    expect(startLadder(1, T0).gentle).toBe(true);
+    for (const g of [2, 3, 4, 5]) expect(startLadder(g, T0).gentle).toBeUndefined();
+    expect(capsFrom('', false, true)).toBe(CAPS_GENTLE);
+    expect(capsFrom('?caps=fast', false, true)).toBe(FAST_CAPS);
+    expect(CAPS_GENTLE.ladderMs).toBe(15 * 60_000);
+  });
+
+  it('never stops on a non-pass: steps down one rung (rung 1 repeats), then climbs again', () => {
+    const s0 = startLadder(1, T0);
+    expect(decide(play(s0, fail(1)), T0)).toEqual({ rung: 1, check: 'floor' });
+    const s = play(s0, pass(1), pass(2), fail(3));
+    expect(decide(s, T0)).toEqual({ rung: 2, check: 'floor' });
+    expect(decide(play(s, fail(2, 'floor')), T0)).toEqual({ rung: 1, check: 'floor' });
+    expect(decide(play(s, pass(2, 'floor')), T0)).toEqual({ rung: 3, check: 'climb' });
+  });
+
+  it('stops only on time, item count or the top', () => {
+    let s = startLadder(1, T0);
+    for (let i = 0; i < MAX_ITEMS_GENTLE - 1; i++) s = record(s, fail(1));
+    expect(decide(s, T0)).toEqual({ rung: 1, check: 'floor' });
+    expect(decide(record(s, fail(1)), T0)).toEqual({ stop: 'max_items' });
+    expect(decide(play(startLadder(1, T0), fail(1)), T0 + CAPS_GENTLE.ladderMs, CAPS_GENTLE)).toEqual({ stop: 'max_time' });
+    expect(decide(play(startLadder(1, T0), fail(1)), T0 + MAX_MS, CAPS_GENTLE)).toEqual({ rung: 1, check: 'floor' });
+    expect(decide(play(startLadder(1, T0), pass(TOP)), T0)).toEqual({ stop: 'top' });
+  });
+
+  it('an item ends on FAILED_RUNS_GENTLE failed runs, not on two', () => {
+    const st = (fails: number): LevelStats => ({ level_id: 'x', startedAt: T0, runs: fails, fails, wins: 0, lastResult: 'bump', helpStep: 0, adultHelped: false, won: false, lastInputAt: T0 });
+    expect(FAILED_RUNS_GENTLE).toBe(5);
+    expect(itemVerdict(st(FAILED_RUNS), newItemMemo(), T0, { failedRuns: FAILED_RUNS_GENTLE })).toBeNull();
+    expect(itemVerdict(st(FAILED_RUNS_GENTLE), newItemMemo(), T0, { failedRuns: FAILED_RUNS_GENTLE })).toBe('runs');
   });
 });

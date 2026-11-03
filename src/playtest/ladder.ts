@@ -106,9 +106,23 @@ export const FAST_CAPS: Caps = { itemMs: 30_000, idleMs: 12_000, ladderMs: 60_00
 export const MAX_ITEMS_LONG = 18;
 export const CAPS_LONG: Caps = { itemMs: ITEM_MS, idleMs: IDLE_MS, ladderMs: MAX_MS, hardMs: HARD_MS };
 export const FAST_CAPS_LONG: Caps = { itemMs: 30_000, idleMs: 12_000, ladderMs: FAST_CAPS.ladderMs, hardMs: FAST_CAPS.hardMs };
-export const capsFrom = (search: string, long = false): Caps => (/[?&]caps=fast\b/.test(search) ? (long ? FAST_CAPS_LONG : FAST_CAPS) : long ? CAPS_LONG : CAPS);
+/**
+ * T53, 1ro's gentle ladder (`gentle` on the state, set by startLadder for
+ * 1ro; every other grade unchanged): kids hated being stopped. An item ends
+ * on FAILED_RUNS_GENTLE failed runs (the help keeps escalating meanwhile),
+ * and decide() never stops for floor/ceiling/bottom: a non-pass steps down
+ * one rung (rung 1 repeats), a pass climbs again, until the time, the item
+ * count or the top. Caps sized for ~15 minutes.
+ */
+export const MAX_ITEMS_GENTLE = 20;
+export const CAPS_GENTLE: Caps = { itemMs: 4 * 60_000, idleMs: 2 * 60_000, ladderMs: 15 * 60_000, hardMs: 16 * 60_000 };
+export const GENTLE_GRADES: readonly number[] = [1];
+export const capsFrom = (search: string, long = false, gentle = false): Caps =>
+  /[?&]caps=fast\b/.test(search) ? (long ? FAST_CAPS_LONG : FAST_CAPS) : long ? CAPS_LONG : gentle ? CAPS_GENTLE : CAPS;
 /** Failed runs (levels.ts `isFailedRun`) that end an item. */
 export const FAILED_RUNS = 2;
+/** T53: the gentle ladder's failed runs before an item ends. */
+export const FAILED_RUNS_GENTLE = 5;
 
 export type ItemResult = 'pass' | 'fail';
 /** `climb`: a step of the way up (the entry included); `floor`: the one easier item after the first non-pass. */
@@ -136,15 +150,21 @@ export interface LadderState {
   items: Attempt[];
   /** T39: 4to's long ladder (MAX_ITEMS_LONG, rungs up to TOP_LONG, a second item per rung). */
   long?: boolean;
+  /** T53: 1ro's gentle ladder (never stops on a non-pass; more runs per item). */
+  gentle?: boolean;
 }
 
 export type Decision = { rung: number; check: Check; variant?: 1 } | { stop: StopReason };
 
 export function startLadder(grade: number, now: number): LadderState {
-  return { entry: entryRung(grade), startedAt: now, items: [], ...(LONG_GRADES.includes(grade) ? { long: true } : {}) };
+  return {
+    entry: entryRung(grade), startedAt: now, items: [],
+    ...(LONG_GRADES.includes(grade) ? { long: true } : {}),
+    ...(GENTLE_GRADES.includes(grade) ? { gentle: true } : {}),
+  };
 }
 
-const maxItemsOf = (s: LadderState) => (s.long ? MAX_ITEMS_LONG : MAX_ITEMS);
+const maxItemsOf = (s: LadderState) => (s.long ? MAX_ITEMS_LONG : s.gentle ? MAX_ITEMS_GENTLE : MAX_ITEMS);
 const topOf = (s: LadderState) => (s.long ? TOP_LONG : TOP);
 
 export const firstItem = (s: LadderState): Decision => ({ rung: s.entry, check: 'climb' });
@@ -162,12 +182,14 @@ const passed = (s: LadderState, rung: number) => s.items.some((a) => a.rung === 
 export function decide(s: LadderState, now: number, caps: Caps = CAPS): Decision {
   const last = s.items[s.items.length - 1];
   if (!last) return firstItem(s);
-  if (last.check === 'floor') return { stop: 'floor' };
+  if (last.check === 'floor' && !s.gentle) return { stop: 'floor' };
   if (s.items.length >= maxItemsOf(s)) return { stop: 'max_items' };
   if (now - s.startedAt >= caps.ladderMs) return { stop: 'max_time' };
   if (last.result === 'pass') return last.rung >= topOf(s) ? { stop: 'top' } : { rung: last.rung + 1, check: 'climb' };
   // T39: the long ladder's second chance on the same rung, a different item
   if (s.long && !last.variant && rungOf(last.rung)?.variant) return { rung: last.rung, check: 'climb', variant: 1 };
+  // T53: the gentle ladder steps down one rung (rung 1 repeats) and never stops here
+  if (s.gentle) return { rung: Math.max(1, last.rung - 1), check: 'floor' };
   const below = last.rung - 1;
   if (below < 1) return { stop: 'bottom' };
   if (passed(s, below)) return { stop: 'ceiling' };
@@ -195,14 +217,14 @@ export const newItemMemo = (): ItemMemo => ({ failsAtHelp: null });
  * (`ladder_time`, from `ladderStart`). A solved page is never cut: the child
  * turns it (or it turns by itself).
  */
-export function itemVerdict(stats: LevelStats, memo: ItemMemo, now: number, o: { caps?: Caps; ladderStart?: number } = {}): EndReason | null {
+export function itemVerdict(stats: LevelStats, memo: ItemMemo, now: number, o: { caps?: Caps; ladderStart?: number; failedRuns?: number } = {}): EndReason | null {
   const caps = o.caps ?? CAPS;
   if (stats.won || stats.lastResult === 'win') return null;
   if (stats.helpStep >= 3 || stats.adultHelped) {
     if (memo.failsAtHelp == null) memo.failsAtHelp = stats.fails;
     else if (stats.fails > memo.failsAtHelp) return stats.helpStep >= 3 ? 'solution_hint' : 'adult';
   }
-  if (stats.fails >= FAILED_RUNS) return 'runs';
+  if (stats.fails >= (o.failedRuns ?? FAILED_RUNS)) return 'runs';
   if (o.ladderStart != null && now - o.ladderStart >= caps.hardMs) return 'ladder_time';
   if (now - stats.startedAt >= caps.itemMs) return 'time_cap';
   if (now - Math.max(stats.startedAt, stats.lastInputAt ?? 0) >= caps.idleMs) return 'idle_cap';
