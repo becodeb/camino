@@ -114,6 +114,7 @@ export function Ladder() {
       items: s.items.length,
       time_ms: Date.now() - s.startedAt,
       reason,
+      ...(s.gentle ? { gentle: true } : {}),
     });
   };
 
