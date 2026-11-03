@@ -20,21 +20,25 @@ describe('T43: 1ro\'s route', () => {
     expect(routeOf(start(4))).toBe(ROUTE_4TO);
   });
 
-  it('character → the guided games → the arcade (the green flag), never the tool check, the ladder or the typing step', () => {
+  it('character → the guided games (the green flag) → T54: the gentle ladder → the arcade, never the tool check or the typing step', () => {
     let s = start(1);
     expect(s.step).toBe('character');
     s = next(s).state;
     expect(s.step).toBe('games');
-    const t = next(s, 9000);
+    const g = next(s, 9000);
+    expect(g.state.step).toBe('ladder');
+    expect(g.routeDoneNow).toBe(true);
+    expect(g.state.routeDone).toBe(true);
+    expect(g.change).toMatchObject({ from: 'games', to: 'ladder', reason: 'next', budget_ms: BUDGET_1RO_MS.games });
+    const t = next(g.state, 12_000);
     expect(t.state.step).toBe('free_play');
-    expect(t.routeDoneNow).toBe(true);
-    expect(t.state.routeDone).toBe(true);
-    expect(t.change).toMatchObject({ from: 'games', to: 'free_play', reason: 'next', budget_ms: BUDGET_1RO_MS.games });
+    expect(t.routeDoneNow).toBeFalsy();
+    expect(t.change).toMatchObject({ from: 'ladder', to: 'free_play', reason: 'next', budget_ms: BUDGET_1RO_MS.ladder });
     // the arcade has no end
     expect(next(t.state).state).toBe(t.state);
     expect(freePlayEndless(t.state)).toBe(true);
     // the visits never touched the old route's steps
-    expect(t.state.visits.map((v) => v.step)).toEqual(['setup', 'character', 'games', 'free_play']);
+    expect(t.state.visits.map((v) => v.step)).toEqual(['setup', 'character', 'games', 'ladder', 'free_play']);
   });
 
   it('with the name screen on, the name comes first', () => {
@@ -44,7 +48,7 @@ describe('T43: 1ro\'s route', () => {
   });
 
   it('the arcade\'s wardrobe card goes to the wardrobe and back; 2do never moves that way', () => {
-    const arcade = next(next(start(1)).state).state;
+    const arcade = next(next(next(start(1)).state).state).state;
     const w = to(arcade, { type: 'arcade', to: 'wardrobe' }).state;
     expect(w.step).toBe('wardrobe');
     expect(next(w).state.step).toBe('free_play');
@@ -56,7 +60,7 @@ describe('T43: 1ro\'s route', () => {
   });
 
   it('the adult corner menu opens the ladder from the arcade and comes back; only for 1ro', () => {
-    const arcade = next(next(start(1)).state).state;
+    const arcade = next(next(next(start(1)).state).state).state;
     const l = to(arcade, { type: 'adult_goto', to: 'ladder' });
     expect(l.state.step).toBe('ladder');
     expect(l.change?.reason).toBe('adult');

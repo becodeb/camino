@@ -43,7 +43,7 @@ import { usePlaytest } from '../context';
 import { provideDemoActions } from '../demo';
 import { AgainButton, Buddy, ConfettiRain, DizzyStars, RoundDots, gameLevelId, sitDizzy, useGameLog, useIdleNudge, useRapidTaps, type GameProps } from './Kit';
 import { GUIDED_ROUNDS, guidedTurnOver, nextTier } from './kit';
-import { DANCE_MAX_TIER, POSES, danceRound, judgeStep, type DanceRound, type Pose } from './dance';
+import { DANCE_GUIDED_MAX_TIER, DANCE_MAX_TIER, POSES, danceRound, judgeStep, type DanceRound, type Pose } from './dance';
 import { HOP, POINT_DOWN as POINT, POSE_COLOR, POSE_PARAMS, PoseCardArt, Puppet, REST, TUMBLE, usePoseTween, type Face, type PoseParams } from './puppetArt';
 import { EndChoices } from './home';
 import './arcade.css';
@@ -305,7 +305,7 @@ export function DanceGame({ mode, startTier, rounds, done, roundWon, stopAfterRo
 
   function nextRound(byAgain: boolean) {
     const s = g.current;
-    const t = nextTier(s.tier, DANCE_MAX_TIER);
+    const t = nextTier(s.tier, mode === 'guided' && !byAgain ? DANCE_GUIDED_MAX_TIER : DANCE_MAX_TIER);
     startRound(danceRound(t, seed0 + s.no * 131, s.round.seq), s.no + 1, t, byAgain);
     speak(byAgain ? LINES.again : LINES.more);
   }

@@ -11,6 +11,8 @@ export const POSES = ['up', 'star', 'squat', 'flamingo'] as const;
 export type Pose = typeof POSES[number];
 
 export const DANCE_MAX_TIER = 7;
+/** T54: the guided pass's dances stop growing at this many poses (5 guided rounds: 1, 2, 3, 4, 4). */
+export const DANCE_GUIDED_MAX_TIER = 4;
 
 /**
  * Poses in a dance at a tier: 1, 2, 3… up to 7 (the guided pass plays 1, 2,

@@ -67,6 +67,9 @@
 // adult corner menu (`adult_goto`). "Quedan 5 minutos": the round on
 // screen, then the survey, then the arcade. "Juegos para todos" moves a
 // child still in the guided pass to the arcade.
+// T54 (2026-11-03): after the guided pass (still the green flag) comes the
+// gentle blocks ladder (ladder.ts `gentle`, entry rung 1) as a second
+// guided chapter, then the arcade.
 
 export const STEPS = [
   'setup', 'name', 'character', 'tool_check', 'ladder', 'free_play', 'typing', 'wardrobe', 'survey', 'goodbye', 'class_end',
@@ -124,8 +127,10 @@ export const BUDGET_4TO_MS: Partial<Record<StepId, number>> = {
 /** T43: 1ro's planned times (the guided pass, then a long arcade). */
 export const BUDGET_1RO_MS: Partial<Record<StepId, number>> = {
   ...BUDGET_MS,
-  games: 10 * 60_000,
-  free_play: 20 * 60_000,
+  // T54 (2026-11-03): a longer guided pass (5 rounds a game), then the gentle ladder, then a shorter arcade
+  games: 25 * 60_000,
+  ladder: 15 * 60_000,
+  free_play: 10 * 60_000,
 };
 
 /** T39: the routes that differ from the default one, by grade (T43: 1ro's). */
@@ -308,11 +313,11 @@ function next1ro(state: FlowState): { to: StepId; done?: boolean } | null {
   switch (step) {
     case 'name': return { to: 'character' };
     case 'character': return { to: 'games' };
-    // the guided pass is done: the arcade, and the green flag
-    case 'games': return { to: 'free_play', done: !state.routeDone };
+    // the guided pass is done: the green flag, then (T54) the gentle blocks ladder as a second guided chapter
+    case 'games': return { to: 'ladder', done: !state.routeDone };
     // the arcade has no end
     case 'free_play': return null;
-    // the arcade's wardrobe, the survey, and the adult's ladder (or tool check) go back to it
+    // the arcade's wardrobe, the survey, the ladder (T54: after the guided pass, or the adult's) and the tool check go back to it
     case 'wardrobe':
     case 'survey':
     case 'ladder':

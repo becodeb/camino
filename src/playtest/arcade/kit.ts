@@ -18,15 +18,18 @@ export type GameId = typeof GAME_IDS[number];
  */
 export const GUIDED: readonly GameId[] = ['recipe', 'dance', 'oops', 'tap'];
 
-/** Rounds of each game in the guided pass (the arcade's games are endless). */
-export const GUIDED_ROUNDS = 3;
+/** Rounds of each game in the guided pass (the arcade's games are endless). T54 (2026-11-03): 3 → 5, a longer guided pass. */
+export const GUIDED_ROUNDS = 5;
 /**
  * A game's guided turn also ends after the round on screen once it has
  * lasted this long: the class (2026-10-27, ~45–50 min) is all on screens
  * (T51: no unplugged warm-up), ~20 min of guided pass for the four games,
  * the rest free arcade.
  */
-export const GUIDED_TURN_MS = 5 * 60_000;
+export const GUIDED_TURN_MS = 6 * 60_000;
+// T54 (2026-11-03): 21/25 kids finished the 3-round pass in ~15 min and got
+// bored in the free arcade; 5 rounds and up to 6 min a game (~25 min for
+// the four), then the gentle blocks ladder (flow.ts), then the arcade.
 
 /** The guided turn is over after the round just won: its rounds are done, or its time is. */
 export const guidedTurnOver = (roundsWon: number, startedAt: number, now: number, rounds = GUIDED_ROUNDS, turnMs = GUIDED_TURN_MS) =>
