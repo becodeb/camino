@@ -146,3 +146,23 @@ describe('matching a key', () => {
     expect(accuracyPct(2, 1)).toBe(66.7);
   });
 });
+
+describe('the tier climbs inside a wave (2026-11-03)', () => {
+  it('a run of quick pops at the top adaptive step is ready to go one tier up', async () => {
+    const { tierUpReady, adaptStep, newAdapt, ADAPT_UP_STREAK } = await import('./pop');
+    let a = newAdapt();
+    for (let i = 0; i < ADAPT_UP_STREAK * 2; i++) a = adaptStep(a, { kind: 'pop', landed: false });
+    expect(a.level).toBe(2);
+    expect(tierUpReady(a)).toBe(false);
+    for (let i = 0; i < ADAPT_UP_STREAK; i++) a = adaptStep(a, { kind: 'pop', landed: false });
+    expect(tierUpReady(a)).toBe(true);
+  });
+  it('tier 6 brings four-letter words', async () => {
+    const { pickText, WORDS_4 } = await import('./pop');
+    let seen = false;
+    let x = 0.1;
+    const r = () => (x = (x * 9301 + 0.49297) % 1);
+    for (let i = 0; i < 200; i++) if ((WORDS_4 as readonly string[]).includes(pickText(6, r, [], null))) seen = true;
+    expect(seen).toBe(true);
+  });
+});

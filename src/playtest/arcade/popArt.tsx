@@ -23,7 +23,7 @@ const YELLOW = '#f0d27a';
 export const STAR_D = 'M0,-11 L3.2,-3.4 11,-3.4 4.8,1.8 7,10 0,5.2 -7,10 -4.8,1.8 -11,-3.4 -3.2,-3.4Z';
 
 /** A bubble's radius: a letter, or a word with its picture. */
-export const bubbleR = (text: string) => (text.length > 1 ? 90 : 66);
+export const bubbleR = (text: string) => (text.length > 3 ? 100 : text.length > 1 ? 90 : 66);
 
 /** A word's picture, about 96 × 64 round (0, 0). */
 export function WordPic({ w }: { w: PicWord }) {
@@ -119,7 +119,7 @@ export function WordPic({ w }: { w: PicWord }) {
 export function Bubble({ text, typed, target, seed }: { text: string; typed: number; target: boolean; seed: number }) {
   const r = bubbleR(text);
   const word = text.length > 1;
-  const w = 44;
+  const w = text.length > 3 ? 40 : 44;
   const x0 = -((text.length - 1) * w) / 2;
   return (
     <g className={`pz-bubble${target ? ' is-target' : ''}`}>

@@ -19,7 +19,7 @@
 //   otherwise the bubble whose letter it is. Case and accents never matter;
 //   keys that are not letters are ignored.
 
-export const POP_MAX_TIER = 5;
+export const POP_MAX_TIER = 6;
 /** New bubbles come for this long; then the ones on screen are the last of the wave. */
 export const WAVE_MS = 60_000;
 
@@ -31,12 +31,16 @@ export const LETTERS_3 = [...LETTERS_2, 'N', 'R', 'D', 'B', 'C', 'F'] as const;
 /** Three-letter words a six-year-old knows and that draw well, each with its picture (popArt.tsx). */
 export const PIC_WORDS = ['SOL', 'MAR', 'PAN', 'OSO', 'UVA', 'PEZ', 'OJO', 'PIE'] as const;
 export type PicWord = typeof PIC_WORDS[number];
+/** Tier 6: four-letter words read at school, no picture (the bubble shows the word). */
+export const WORDS_4 = ['MAMA', 'PAPA', 'CASA', 'MESA', 'LUNA', 'GATO', 'PATO', 'SAPO', 'DEDO', 'PELO'] as const;
 export const isPicWord = (t: string): t is PicWord => (PIC_WORDS as readonly string[]).includes(t);
 
 export interface TierSpec {
   letters: readonly string[];
   /** How likely a new bubble is a word with its picture (0: letters only). */
   wordShare: number;
+  /** The words that come down (default PIC_WORDS). */
+  words?: readonly string[];
   /** Bubbles on screen at most, per adaptive step. */
   atOnce: readonly [number, number, number];
   /** How long a bubble takes from the sky to the grass, per adaptive step. */
@@ -45,15 +49,16 @@ export interface TierSpec {
   gapMs: number;
 }
 
-export const TIERS: Readonly<Record<1 | 2 | 3 | 4 | 5, TierSpec>> = {
+export const TIERS: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, TierSpec>> = {
   1: { letters: LETTERS_1, wordShare: 0, atOnce: [1, 1, 2], fallMs: [14_000, 12_000, 10_500], gapMs: 900 },
   2: { letters: LETTERS_2, wordShare: 0, atOnce: [1, 2, 2], fallMs: [13_000, 11_000, 9_500], gapMs: 1200 },
   3: { letters: LETTERS_3, wordShare: 0, atOnce: [2, 2, 3], fallMs: [12_000, 10_500, 9_000], gapMs: 1500 },
   4: { letters: LETTERS_2, wordShare: 0.5, atOnce: [1, 2, 2], fallMs: [17_000, 15_000, 13_000], gapMs: 1500 },
   5: { letters: LETTERS_3, wordShare: 1, atOnce: [1, 1, 2], fallMs: [17_000, 15_000, 13_000], gapMs: 1800 },
+  6: { letters: LETTERS_3, wordShare: 1, words: [...PIC_WORDS, ...WORDS_4], atOnce: [1, 1, 2], fallMs: [19_000, 17_000, 15_000], gapMs: 1800 },
 };
 
-export const clampTier = (t: number) => Math.max(1, Math.min(POP_MAX_TIER, Math.floor(t) || 1)) as 1 | 2 | 3 | 4 | 5;
+export const clampTier = (t: number) => Math.max(1, Math.min(POP_MAX_TIER, Math.floor(t) || 1)) as 1 | 2 | 3 | 4 | 5 | 6;
 export const tierSpec = (t: number): TierSpec => TIERS[clampTier(t)];
 
 // ------------------------------------------------------------------ adaptivity inside a wave
@@ -97,6 +102,13 @@ export function adaptStep(a: Adapt, ev: AdaptEvent): Adapt {
   }
 }
 
+/**
+ * The tier climbs inside a wave (user, 2026-11-03: the difficulty has to move
+ * on by itself, words have to show up): at the top adaptive step, one more run
+ * of ADAPT_UP_STREAK quick pops goes one tier up (then the steps start again).
+ */
+export const tierUpReady = (a: Pick<Adapt, 'level' | 'streak'>) => a.level === 2 && a.streak >= ADAPT_UP_STREAK;
+
 export const atOnceOf = (tier: number, a: Pick<Adapt, 'level'>) => tierSpec(tier).atOnce[a.level];
 export const fallMsOf = (tier: number, a: Pick<Adapt, 'level'>) => tierSpec(tier).fallMs[a.level];
 
@@ -116,7 +128,7 @@ export function pickText(tier: number, r: () => number, live: readonly Pick<Live
   const spec = tierSpec(tier);
   const taken = new Set(live.map((l) => l.text[0]));
   const free = (pool: readonly string[]) => pool.filter((t) => !taken.has(t[0]) && t !== last);
-  const words = free(PIC_WORDS);
+  const words = free(spec.words ?? PIC_WORDS);
   const letters = free(spec.letters);
   const wantWord = spec.wordShare > 0 && r() < spec.wordShare;
   const pool = wantWord && words.length ? words : letters.length ? letters : words.length ? words : spec.letters.filter((t) => !taken.has(t[0]));

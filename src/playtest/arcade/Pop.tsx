@@ -47,7 +47,7 @@ import { EndChoices } from './home';
 import { Monster } from './monsterArt';
 import { ConfettiBurst, Meadow } from './tapArt';
 import {
-  POP_MAX_TIER, WAVE_MS, accuracyPct, adaptStep, atOnceOf, expectedOf, fallMsOf, judge, newAdapt, normKey, pickLane, pickText,
+  POP_MAX_TIER, WAVE_MS, accuracyPct, adaptStep, clampTier, tierUpReady, atOnceOf, expectedOf, fallMsOf, judge, newAdapt, normKey, pickLane, pickText,
   shouldSpawn, targetOf, tierSpec, waveOver, type Adapt, type Live,
 } from './pop';
 import { Bubble, FlyingStar, PILE_MAX, PopBurstArt, PopKeyArt, Shot, StarPile, bubbleR, pileSpot } from './popArt';
@@ -79,8 +79,8 @@ const MONSTER = { x: 1136, s: 0.62 };
 type Source = 'key' | 'touch' | 'ghost';
 type Phase = 'play' | 'won';
 interface Item extends Live { lane: number; spawnAt: number; fallMs: number; landedAt: number }
-interface Stats { right: number; wrong: number; keys: { key: number; touch: number }; popped: number; words: number; texts: string[]; landed: number; ghost: number }
-const newStats = (): Stats => ({ right: 0, wrong: 0, keys: { key: 0, touch: 0 }, popped: 0, words: 0, texts: [], landed: 0, ghost: 0 });
+interface Stats { right: number; wrong: number; keys: { key: number; touch: number }; popped: number; words: number; texts: string[]; landed: number; ghost: number; tierUps: number }
+const newStats = (): Stats => ({ right: 0, wrong: 0, keys: { key: 0, touch: 0 }, popped: 0, words: 0, texts: [], landed: 0, ghost: 0, tierUps: 0 });
 
 const restY = (it: Pick<Item, 'text'>) => GROUND - bubbleR(it.text) - 4;
 const topY = (it: Pick<Item, 'text'>) => -bubbleR(it.text) - 8;
@@ -291,6 +291,15 @@ export function PopGame({ mode, startTier, rounds, done, roundWon, stopAfterRoun
     pos.current.delete(it.id);
     els.current.delete(it.id);
     s.adapt = adaptStep(s.adapt, { kind: 'pop', landed: it.landed });
+    if (tierUpReady(s.adapt) && s.tier < POP_MAX_TIER) {
+      // a tier up inside the wave: harder letters, then words, without waiting for "¡Otra vez!"
+      const wordsNow = tierSpec(s.tier).wordShare === 0 && tierSpec(s.tier + 1).wordShare > 0;
+      s.tier = clampTier(s.tier + 1);
+      s.adapt = { ...newAdapt(), top: s.adapt.top };
+      s.st.tierUps++;
+      setTier(s.tier);
+      if (wordsNow) later(() => speak(LINES.words), 600);
+    }
     s.st.popped++; s.tot.popped++;
     totals();
     if (it.text.length > 1) s.st.words++;
@@ -320,7 +329,7 @@ export function PopGame({ mode, startTier, rounds, done, roundWon, stopAfterRoun
     const end = glog.roundWon({
       correct: st.wrong === 0, popped: st.popped, words_popped: st.words, texts: st.texts, right: st.right, wrong: st.wrong,
       accuracy: accuracyPct(st.right, st.wrong), sources: { ...st.keys }, landed: st.landed,
-      adapt_top: s.adapt.top, adapt_ups: s.adapt.ups, adapt_downs: s.adapt.downs, wave_ms: Date.now() - s.waveAt,
+      tier_end: s.tier, tier_ups: st.tierUps, adapt_top: s.adapt.top, adapt_ups: s.adapt.ups, adapt_downs: s.adapt.downs, wave_ms: Date.now() - s.waveAt,
       ...(st.ghost ? { ghost_popped: st.ghost } : {}),
     }, again);
     apiRef.current.lowerHand('self', LEVEL_ID);
