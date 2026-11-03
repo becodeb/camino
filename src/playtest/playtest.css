@@ -573,7 +573,8 @@ button.pp-key:focus-visible { outline: 3px dashed var(--blue-ink); outline-offse
 .piloto .mode-wardrobe .mirror { grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); overflow: hidden; }
 .piloto .mode-wardrobe .mirror > svg { min-height: 0; min-width: 0; }
 .piloto .mode-wardrobe .ropero { overflow: hidden; }
-.piloto .mode-wardrobe .hooks { overflow-y: auto; grid-auto-rows: minmax(64px, 1fr); }
+/* 2026-11-03: 13 pieces squashed the rows; fixed tall rows and a scroll instead */
+.piloto .mode-wardrobe .hooks { overflow-y: auto; grid-auto-rows: 124px; scrollbar-width: auto; padding-bottom: 12px; }
 .piloto .mode-wardrobe .cast { min-height: 0; overflow-y: auto; }
 @media (max-height: 700px) {
   .piloto .mode-wardrobe .cast-btn { width: 84px; height: 84px; }
