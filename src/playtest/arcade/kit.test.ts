@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DIZZY_MS, GAME_IDS, GUIDED, GUIDED_ROUNDS, GUIDED_TURN_MS, arcadeStartTier, createRapidTaps, guidedTier, guidedTurnOver, nextTier } from './kit';
+import { DIZZY_MS, GAME_IDS, GUIDED, GUIDED_BEFORE_T54, GUIDED_ROUNDS, guidedResumeIndex, GUIDED_TURN_MS, arcadeStartTier, createRapidTaps, guidedTier, guidedTurnOver, nextTier } from './kit';
 
 describe('T43: the arcade kit', () => {
   it('the guided pass plays every registered game, each once', () => {
@@ -26,7 +26,23 @@ describe('T43: the arcade kit', () => {
     // T54: 5 rounds, up to 6 min a game, the four games fit ~25 minutes
     expect(GUIDED_ROUNDS).toBe(5);
     expect(GUIDED_TURN_MS).toBe(6 * 60_000);
-    expect(4 * GUIDED_TURN_MS).toBeLessThanOrEqual(25 * 60_000);
+    expect(GUIDED.length * GUIDED_TURN_MS).toBeLessThanOrEqual(25 * 60_000);
+  });
+
+  it('T54: the dance is out of the guided pass (an arcade card only)', () => {
+    expect(GUIDED).toEqual(['recipe', 'oops', 'tap']);
+    expect(GAME_IDS).toContain('dance');
+  });
+
+  it('T54: a resumed guided pass never crashes or gets stuck, whatever version saved it', () => {
+    // this version: the game's id
+    expect(guidedResumeIndex({ i: 1, id: 'oops' })).toBe(1);
+    expect(guidedResumeIndex({ i: 3, id: 'done' })).toBe(GUIDED.length);
+    // an older version: an index into the old order (the dance goes on with the next game)
+    expect(GUIDED_BEFORE_T54.map((_, k) => guidedResumeIndex({ i: k }))).toEqual([0, 1, 1, 2]);
+    expect(guidedResumeIndex({ i: 4 })).toBe(GUIDED.length);
+    // not understood: from the start
+    for (const bad of [null, undefined, 'x', 7, {}, { i: -1 }, { i: 'two' }, { i: NaN }, { id: 'nope' }]) expect(guidedResumeIndex(bad)).toBe(0);
   });
 
   describe('the rapid-tap detector', () => {

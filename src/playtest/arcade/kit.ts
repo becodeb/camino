@@ -16,7 +16,38 @@ export type GameId = typeof GAME_IDS[number];
  * The guided first pass, in order: every game once, short. T45 ("Copiá el
  * baile"), T46 ("¿Qué salió mal?") and T47 ("Tocá y pasa") slot in here.
  */
-export const GUIDED: readonly GameId[] = ['recipe', 'dance', 'oops', 'tap'];
+export const GUIDED: readonly GameId[] = ['recipe', 'oops', 'tap'];
+/**
+ * T54 (2026-11-03): nobody understood "Copiá el baile" in the guided pass,
+ * so it is an arcade card only. The guided order before that, kept to read a
+ * resume state saved by the older version (GuidedGames.tsx).
+ */
+export const GUIDED_BEFORE_T54: readonly GameId[] = ['recipe', 'dance', 'oops', 'tap'];
+
+/**
+ * Where a reloaded guided pass goes on (0…GUIDED.length; GUIDED.length: the
+ * pass is over). `saved` is whatever the resume state holds: the game's id
+ * (this version), or only an index into GUIDED_BEFORE_T54 (older versions);
+ * anything not understood starts the pass over, never past its end.
+ */
+export function guidedResumeIndex(saved: unknown): number {
+  if (!saved || typeof saved !== 'object') return 0;
+  const { i, id } = saved as { i?: unknown; id?: unknown };
+  if (typeof i === 'number' && Number.isFinite(i) && i >= GUIDED.length && id === 'done') return GUIDED.length;
+  if (typeof id === 'string') {
+    const at = GUIDED.indexOf(id as GameId);
+    if (at >= 0) return at;
+  }
+  if (typeof i !== 'number' || !Number.isFinite(i) || i < 0) return 0;
+  const n = Math.floor(i);
+  // an older version's index: its game, or (the dance) the next game it would have played
+  if (n >= GUIDED_BEFORE_T54.length) return GUIDED.length;
+  for (let k = n; k < GUIDED_BEFORE_T54.length; k++) {
+    const at = GUIDED.indexOf(GUIDED_BEFORE_T54[k]);
+    if (at >= 0) return at;
+  }
+  return GUIDED.length;
+}
 
 /** Rounds of each game in the guided pass (the arcade's games are endless). T54 (2026-11-03): 3 → 5, a longer guided pass. */
 export const GUIDED_ROUNDS = 5;
@@ -28,8 +59,8 @@ export const GUIDED_ROUNDS = 5;
  */
 export const GUIDED_TURN_MS = 6 * 60_000;
 // T54 (2026-11-03): 21/25 kids finished the 3-round pass in ~15 min and got
-// bored in the free arcade; 5 rounds and up to 6 min a game (~25 min for
-// the four), then the gentle blocks ladder (flow.ts), then the arcade.
+// bored in the free arcade; 5 rounds and up to 6 min a game (~18 min for
+// the three, the dance being out), then the gentle blocks ladder (flow.ts), then the arcade.
 
 /** The guided turn is over after the round just won: its rounds are done, or its time is. */
 export const guidedTurnOver = (roundsWon: number, startedAt: number, now: number, rounds = GUIDED_ROUNDS, turnMs = GUIDED_TURN_MS) =>
