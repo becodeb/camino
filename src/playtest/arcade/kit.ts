@@ -8,8 +8,8 @@
 // add their games by adding one entry to GAME_IDS / GUIDED here and one to
 // the registry there; nothing else changes.
 
-/** Every monster game. */
-export const GAME_IDS = ['recipe', 'dance', 'oops', 'tap'] as const;
+/** Every monster game. "¡Pum! Letras" (`pop`) is an arcade card only, not in the guided pass. */
+export const GAME_IDS = ['recipe', 'dance', 'oops', 'tap', 'pop'] as const;
 export type GameId = typeof GAME_IDS[number];
 
 /**
