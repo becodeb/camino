@@ -581,14 +581,14 @@ try {
   await p.locator('.pp-cheer-next').click();
   await p.waitForSelector('.piloto[data-step="free_play"] .pp-menu', { timeout: 15_000 });
   const menu = await p.locator('.pp-menu').getAttribute('data-menu');
-  ok(menu === 'recipe dance oops tap buddy wardrobe typing_race', `1ro's arcade: ${menu} (no La carrera, no sheet)`);
+  ok(menu === 'recipe dance oops tap pop buddy wardrobe typing_race', `1ro's arcade: ${menu} (no La carrera, no sheet)`);
   ok((await p.locator('.piloto.route-done').count()) === 1, 'leaving the guided pass raised the green flag');
   await p.waitForTimeout(800);
   ok(await fits(), 'the arcade menu fits the viewport');
   const msizes = await p.evaluate(() => [...document.querySelectorAll('.pp-fp-card')].map((e) => { const r = e.getBoundingClientRect(); return [Math.min(r.width, r.height), r.bottom <= innerHeight && r.right <= innerWidth]; }));
-  ok(msizes.length === 7 && msizes.every(([x, inView]) => x >= 48 && inView), `seven cards, all in view and ≥ 48 px (${msizes.map(([x]) => Math.round(x)).join(', ')})`);
+  ok(msizes.length === 8 && msizes.every(([x, inView]) => x >= 48 && inView), `eight cards, all in view and ≥ 48 px (${msizes.map(([x]) => Math.round(x)).join(', ')})`);
   const rows = await p.evaluate(() => [...document.querySelectorAll('.pp-fp-card')].map((e) => e.getBoundingClientRect().top).sort((x, y) => x - y).reduce((n, t, i, a) => n + (i && t - a[i - 1] > 60 ? 1 : 0), 1));
-  ok(rows === 2, `the seven cards in two rows (${rows})`);
+  ok(rows === 2, `the eight cards in two rows (${rows})`);
   const cap = await p.evaluate(() => { const t = document.querySelector('.pp-cap-text'); return t ? { text: t.textContent, cut: t.scrollHeight > t.clientHeight + 4, h: [t.scrollHeight, t.clientHeight] } : null; });
   ok(!!cap && !cap.cut && !/receta/i.test(cap.text), `the menu's caption is short and not cut off (${cap?.text} ${cap?.h})`);
   await shot(p, 'arcade-menu');

@@ -530,6 +530,11 @@
 .ga-game.is-dizzy .pz-kb { filter: saturate(0.6); opacity: 0.75; }
 .pp-has-home .pz-panel { padding-left: 128px; }
 
+/* 1ro's arcade with eight cards ("¡Pum! Letras" added): two rows of four */
+.pp-menu-sheet.n8 { --art-h: clamp(100px, calc((100dvh - 360px) / 2), 200px); padding: 20px 24px 18px; }
+.pp-menu-sheet.n8 .pp-fp-cards { grid-template-columns: repeat(4, auto); gap: 12px 14px; }
+.pp-menu-sheet.n8 .pp-fp-art, .pp-menu-sheet.n8 .pp-fp-buddy { max-width: calc((100vw - 340px) / 4); }
+
 @media (prefers-reduced-motion: reduce) {
   .pz-ring, .pz-next, .pz-shake, .pz-fly, .pz-star.is-new, .pz-pile.is-glow .pz-star { animation: none !important; }
 }

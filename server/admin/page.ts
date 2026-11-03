@@ -261,7 +261,7 @@ details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
     class_end: 'actividad terminada', name: 'nombre', workshop: 'taller de juegos', copa: 'Copa de 4to', games: 'juegos del monstruo'
   };
   // T49: 1ro's monster games by name
-  var GAME = { recipe: 'La receta del monstruo', dance: 'Copiá el baile', oops: '¿Qué salió mal?', tap: 'Tocá y pasa' };
+  var GAME = { recipe: 'La receta del monstruo', dance: 'Copiá el baile', oops: '¿Qué salió mal?', tap: 'Tocá y pasa', pop: '¡Pum! Letras' };
   // C10: the medals of the tracks finished so far, best of each ("2 oro, 1 plata")
   function medals(m) {
     if (!m) return '';
