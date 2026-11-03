@@ -175,6 +175,8 @@ export interface FlowState {
   route?: RouteKind;
   /** T39 (4to): the Arcade is open (the Workshop's challenges 1–5, or "Juegos para todos"). */
   arcadeOpen?: boolean;
+  /** 1ro (2026-11-03): "Juegos para todos" arrived during the guided games or the ladder: the step ends after the round or level on screen, then the arcade. */
+  gamesAllPending?: boolean;
 }
 
 export interface StepChange {
@@ -273,7 +275,7 @@ export function wrapTarget(state: FlowState): StepId {
 }
 
 /** Whether "quedan 5 minutos" still has to move the child on from the step on screen (free play after both is the end). */
-export const wrapPending = (state: FlowState) => !!state.wrapUp && (is4to(state)
+export const wrapPending = (state: FlowState) => (!!state.gamesAllPending && is1ro(state) && (state.step === 'games' || state.step === 'ladder')) || !!state.wrapUp && (is4to(state)
   ? !((state.step === 'free_play' || state.step === 'copa' || state.step === 'workshop') && wrapTarget(state) === state.step)
   : !(state.step === 'free_play' && wrapTarget(state) === 'free_play'));
 
@@ -305,6 +307,8 @@ function next4to(state: FlowState): { to: StepId } | null {
 /** T43: `next` on 1ro's route (after setup, and not ended early). */
 function next1ro(state: FlowState): { to: StepId; done?: boolean } | null {
   const { step } = state;
+  // "Juegos para todos" waited for the round or level on screen: now the arcade
+  if (state.gamesAllPending && !state.wrapUp && (step === 'games' || step === 'ladder')) return { to: 'free_play', done: step === 'games' && !state.routeDone };
   if (state.wrapUp) {
     const to = wrapTarget(state);
     // leaving the guided pass is still the green flag, also on the way out
@@ -361,7 +365,7 @@ function go(state: FlowState, to: StepId, reason: StepReason, now: number, patch
   // leaving the survey by answering it (not skipping it) marks it done
   const surveyDone = state.surveyDone || (from === 'survey' && reason === 'next');
   return {
-    state: { ...state, ...(surveyDone ? { surveyDone: true } : {}), ...patch, step: to, visits },
+    state: { ...state, ...(surveyDone ? { surveyDone: true } : {}), ...(to === 'free_play' && state.gamesAllPending ? { gamesAllPending: false } : {}), ...patch, step: to, visits },
     change: {
       from, to, reason, time_ms,
       ...(budget_ms != null ? { budget_ms, over_budget: time_ms != null && time_ms > budget_ms } : {}),
@@ -399,7 +403,11 @@ export function reduce(state: FlowState, action: FlowAction, now: number): Trans
         return state.arcadeOpen || !CHILD_STEPS.includes(state.step) || state.step === 'name' || state.step === 'character'
           ? same : { state: { ...state, arcadeOpen: true }, change: null };
       }
-      if (is1ro(state)) return canGamesAll1ro(state.step) ? go(state, 'free_play', 'games_all', now) : same;
+      if (is1ro(state)) {
+        // the guided games and the ladder end the round or level on screen first (user, 2026-11-03)
+        if (state.step === 'games' || state.step === 'ladder') return state.gamesAllPending ? same : { state: { ...state, gamesAllPending: true }, change: null };
+        return canGamesAll1ro(state.step) ? go(state, 'free_play', 'games_all', now) : same;
+      }
       return canGamesAll(state.step) ? go(state, 'free_play', 'games_all', now) : same;
     case 'arcade_open': {
       if (!is4to(state) || state.routeDone) return same;

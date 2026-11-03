@@ -58,7 +58,7 @@ export const MENU: Record<number, readonly ActivityId[]> = {
   // typing letters). La carrera (arrow karts) left it: nobody understood the arrows (it opens from the adult menu).
   // T45/T46: "Copiá el baile" and "¿Qué salió mal?" after the recipe; T47: "Tocá y pasa" last of the monster games.
   // 2026-11-03: "¡Pum! Letras" (letters in bubbles, typed; 1ro loved the typing race) after the monster games, arcade only.
-  1: ['recipe', 'dance', 'oops', 'tap', 'pop', 'buddy', 'wardrobe', 'typing_race'],
+  1: ['pop', 'recipe', 'dance', 'oops', 'buddy', 'wardrobe', 'typing_race'],
   2: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   3: ['rule_game', 'sheet', 'recess', 'editor'],
   // C04: 4to's Arcade (flow.ts) is the typing race, "Tu mejor tiempo" (back to the Copa's remaining circuits),
@@ -73,7 +73,7 @@ export const MENU: Record<number, readonly ActivityId[]> = {
  * reciba un poco de las mejoras"): the typing race first, the monster games, the sheet and the music; no arrow race (nobody understood
  * the arrows), no guardas, no workshop.
  */
-export const MENU_1RO_CLASSIC: readonly ActivityId[] = ['typing_race', 'recipe', 'dance', 'oops', 'tap', 'sheet', 'recess'];
+export const MENU_1RO_CLASSIC: readonly ActivityId[] = ['typing_race', 'pop', 'recipe', 'dance', 'oops', 'sheet', 'recess'];
 
 const title = (n: number) => sheetByN(n)?.title ?? '';
 

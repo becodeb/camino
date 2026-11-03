@@ -317,7 +317,8 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
       // `apply` returns null when nothing changed (flow.ts's `canGamesAll`:
       // already in free play, or not past the character screen) — then
       // there is nothing to announce.
-      if (apply({ type: 'games_all' })) setGamesAll(cmd.id);
+      // 1ro's games and ladder wait for the round or level on screen (no change yet): no banner over the level
+      if (apply({ type: 'games_all' })?.change) setGamesAll(cmd.id);
     } else {
       // T28: a device asleep (lid closed) when this was sent can wake up long
       // after, with a new child already sitting down — never show them the

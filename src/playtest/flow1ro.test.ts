@@ -71,14 +71,25 @@ describe('T43: 1ro\'s route', () => {
     expect(to(third, { type: 'adult_goto', to: 'ladder' }).state).toBe(third);
   });
 
-  it('"Juegos para todos" moves a child in the guided pass to the arcade; a child already there does not move', () => {
+  it('"Juegos para todos" lets a child in the guided pass end the round on screen, then the arcade; a child already there does not move', () => {
     const games = next(start(1)).state;
-    const t = to(games, { type: 'games_all' });
+    const w = to(games, { type: 'games_all' });
+    expect(w.state.step).toBe('games');
+    expect(w.change).toBeNull();
+    expect(wrapPending(w.state)).toBe(true);
+    expect(to(w.state, { type: 'games_all' }).state).toBe(w.state);
+    const t = next(w.state);
     expect(t.state.step).toBe('free_play');
-    expect(t.change?.reason).toBe('games_all');
-    expect(t.state.routeDone).toBeUndefined();
+    expect(t.routeDoneNow).toBe(true);
+    expect(t.state.gamesAllPending).toBe(false);
     expect(freePlayEndless(t.state)).toBe(true);
     expect(to(t.state, { type: 'games_all' }).state).toBe(t.state);
+    // the ladder: the same, after the level on screen
+    const ladder = next(games).state;
+    expect(ladder.step).toBe('ladder');
+    const l = to(ladder, { type: 'games_all' });
+    expect(l.state.step).toBe('ladder');
+    expect(next(l.state).state.step).toBe('free_play');
     expect(to(start(1), { type: 'games_all' }).state.step).toBe('character');
   });
 
@@ -112,7 +123,7 @@ describe('T43: `?ruta=clasica` keeps 1ro on the default route', () => {
   });
 
   it('its menu: the typing race, the monster games, the sheet and the music (2026-10-27; no arrow race)', () => {
-    expect(menuFor(1, () => false, false, true).map((a) => a.id)).toEqual(['typing_race', 'recipe', 'dance', 'oops', 'tap', 'sheet', 'recess']);
+    expect(menuFor(1, () => false, false, true).map((a) => a.id)).toEqual(['typing_race', 'pop', 'recipe', 'dance', 'oops', 'sheet', 'recess']);
     expect(menuFor(1, () => false, true, true).map((a) => a.id)).not.toContain('recess');
     expect(menuFor(2, () => false, false, true).map((a) => a.id)).toEqual(menuFor(2, () => false).map((a) => a.id));
   });

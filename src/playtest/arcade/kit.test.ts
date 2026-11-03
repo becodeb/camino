@@ -30,7 +30,7 @@ describe('T43: the arcade kit', () => {
   });
 
   it('T54: the dance is out of the guided pass (an arcade card only)', () => {
-    expect(GUIDED).toEqual(['recipe', 'oops', 'tap']);
+    expect(GUIDED).toEqual(['recipe', 'oops']);
     expect(GAME_IDS).toContain('dance');
   });
 

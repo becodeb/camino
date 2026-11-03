@@ -16,7 +16,8 @@ export type GameId = typeof GAME_IDS[number];
  * The guided first pass, in order: every game once, short. T45 ("Copiá el
  * baile"), T46 ("¿Qué salió mal?") and T47 ("Tocá y pasa") slot in here.
  */
-export const GUIDED: readonly GameId[] = ['recipe', 'oops', 'tap'];
+// 2026-11-03 (in class): nobody understood "Tocá y pasa" either; it leaves the pass and the menus
+export const GUIDED: readonly GameId[] = ['recipe', 'oops'];
 /**
  * T54 (2026-11-03): nobody understood "Copiá el baile" in the guided pass,
  * so it is an arcade card only. The guided order before that, kept to read a
@@ -34,6 +35,8 @@ export function guidedResumeIndex(saved: unknown): number {
   if (!saved || typeof saved !== 'object') return 0;
   const { i, id } = saved as { i?: unknown; id?: unknown };
   if (typeof i === 'number' && Number.isFinite(i) && i >= GUIDED.length && id === 'done') return GUIDED.length;
+  // a pass saved on its last game before "Tocá y pasa" left: the pass is over
+  if (id === 'tap') return GUIDED.length;
   if (typeof id === 'string') {
     const at = GUIDED.indexOf(id as GameId);
     if (at >= 0) return at;
