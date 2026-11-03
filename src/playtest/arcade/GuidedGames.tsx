@@ -12,6 +12,7 @@ import { Cheer } from '../interlude';
 import { rememberPart, resumedPart } from '../resume';
 import { GamePlay } from './games';
 import { GUIDED, GUIDED_ROUNDS, guidedResumeIndex } from './kit';
+import { ChapterStrip } from '../ChapterStrip';
 
 const LINES = {
   between: '¡Muy bien! ¡Ahora otro juego!',
@@ -32,7 +33,18 @@ export function GuidedGames() {
   };
   if (cheer || i >= GUIDED.length) {
     const last = i >= GUIDED.length;
-    return <Cheer key={`cheer-${i}`} line={last ? '¡A jugar!' : '¡Otro juego!'} say={last ? LINES.end : LINES.between} done={() => { setCheer(false); if (last) api.next(); }} autoMs={3500} />;
+    return (
+      <>
+        <ChapterStrip games={GUIDED.length} game={i} />
+        <Cheer key={`cheer-${i}`} line={last ? '¡A jugar!' : '¡Otro juego!'} say={last ? LINES.end : LINES.between} done={() => { setCheer(false); if (last) api.next(); }} autoMs={3500} />
+      </>
+    );
   }
-  return <GamePlay key={i} id={GUIDED[i]} mode="guided" rounds={GUIDED_ROUNDS} done={finished} stopAfterRound={() => wrapPending(api.flow)} />;
+  // T55: the progress strip on top of the game
+  return (
+    <>
+      <ChapterStrip games={GUIDED.length} game={i} />
+      <GamePlay key={i} id={GUIDED[i]} mode="guided" rounds={GUIDED_ROUNDS} done={finished} stopAfterRound={() => wrapPending(api.flow)} />
+    </>
+  );
 }
