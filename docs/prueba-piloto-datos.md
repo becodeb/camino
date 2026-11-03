@@ -484,8 +484,9 @@ by 9 minutes, `end_reason: 'ladder_time'`. The ceiling is the pilot's most
 important number: with the entry by grade, 8 items still let a child who
 keeps passing climb far (1ro from rung 1 to 8, 3ro from 5 to the top), and
 8 minutes keep the ladder a short part of a free class. El docente's
-"quedan 5 minutos" ends the ladder after the item on screen (`ladder_end`
-`reason: 'wrap_up'`). The caps
+"quedan 5 minutos" ended the ladder after the item on screen (`ladder_end`
+`reason: 'wrap_up'`) until 2026-11-03; since then that command is only a
+banner and `wrap_up` is 1ro's deferred "Juegos para todos". The caps
 are wall time; round 1's rule-game item ran 234 s because the tab was
 hidden and the browser delayed the 5-second check (round 2 also checks when
 the tab shows again, and on every input). `?caps=fast` in the URL shortens
@@ -583,12 +584,50 @@ The ladder stopped (once per session that reached it). **RQ 2.**
   reason: 'top' | 'ceiling' | 'floor' | 'bottom' | 'max_items' | 'max_time' | 'wrap_up' | 'left'
 }
 ```
+2026-11-03: `wrap_up` is no longer "Quedan 5 minutos" (that command is only a banner
+now, see `class_command`); on 1ro it is "Juegos para todos" arriving during
+the ladder (`gamesAllPending`, below): the level on screen ends, then the
+arcade. 1ro's gentle ladder is described right below this block.
 `top`: rung 12 passed (T39, 4to: rung 18); `ceiling`: a fail right above a passed rung (4to: after the rung's second item too);
 `wrap_up` (T14): "quedan 5 minutos" arrived, the item on screen was the last;
 `floor`: after the floor check; `bottom`: rung 1 failed; `max_items`,
 `max_time`: the caps; `left`: the flow moved on mid-ladder (the adult ended
 the session or skipped the step; the item open then has no `ladder_step`,
 its `level_end` says `skipped`).
+
+#### T53/T57b: 1ro's gentle ladder (from 2026-11-03)
+
+For a grade-1 session the ladder state carries `gentle` (set by `startLadder`
+in `src/playtest/ladder.ts`; it is not a logged field: read a 1ro
+`ladder_step`/`ladder_end` from 2026-11-03 on as gentle). Every other grade
+keeps the rules above. What changes:
+
+- **No kicking out.** `decide()` never stops for `floor`, `ceiling` or `bottom`:
+  after a non-pass the ladder steps **one rung down** (rung 1 repeats) and
+  a pass climbs again. A step down is a `ladder_step` with
+  **`check: 'floor'`** (the same field as before; for 1ro it no longer means
+  "the one floor check before stopping"). `reason: 'floor' | 'ceiling' |
+  'bottom'` never appears in a gentle `ladder_end`.
+- **More tries per item.** An item ends on **5 failed runs** (was 2,
+  `end_reason: 'runs'`; the help keeps escalating meanwhile). After a failed
+  run on a page with `repetir` the block's number pulses and the ghost hand
+  shows tapping it (a gesture only; the repeat's number changes when tapped
+  and many children had not found that). Per item: 3 minutes of wall time,
+  2 minutes without input.
+- **Ends by itself.** Caps: **7 minutes** (checked between items; an item
+  still open at 8 minutes ends, `end_reason: 'ladder_time'`) or **10 items**
+  (`MAX_ITEMS_GENTLE`) or the top (rung 12); `ladder_end.reason` is then
+  `max_time`, `max_items` or `top`. The first version (2026-11-03 morning) had
+  15 minutes / 20 items; 10–15 minutes bored the class, so it was cut during
+  the day: read the minutes in `ladder_end.time_ms`, they tell which build
+  the child had.
+- **Where it sits.** 1ro's own route: character → `games` → the green flag
+  (`route_done`) → `ladder` → `free_play`. On `?ruta=clasica` the ladder comes after
+  the tool check, as before, and is gentle too.
+- The report ("Escalera suave de 1ro", `reportMonster.ts`) counts, over the
+  grade-1 sessions that have a `ladder_end`: items, passes, step-downs
+  (`check: 'floor'`), why the ladder ended (`ladder_end.reason`) and why
+  each item ended (`ladder_step.end_reason`), the ceiling and the minutes.
 
 ### `typing`
 One key pressed in "Teclas del bosque" (step `typing`, `src/playtest/TypingStep.tsx`,
@@ -761,7 +800,7 @@ menu opens and when the card is held (a tap picks it). **RQ 5.**
 
 | Grade | Menu (in order) |
 |---|---|
-| 1ro | T43–T47 (from 2026-10-25, 1ro's route): the arcade of "1ro's monster games" (see below): `recipe`, `dance`, `oops`, `tap`, `buddy` ("Tu personaje"), `wardrobe` (the wardrobe step), `typing_race`. With `?ruta=clasica`, and before 2026-10-25: `race` (T33, "La carrera"; see below), `sheet` (sheet 6 "La escalera", its doors and boss), `recess` (sheet 9, the music recess; left off while muted), `guardas` (sheet 14), `editor` (sheet 7's workshop and corkboard) |
+| 1ro | T43–T47 (from 2026-10-25, 1ro's route): the arcade of "1ro's monster games" (see below): `recipe`, `dance`, `oops`, `tap`, `buddy` ("Tu personaje"), `wardrobe` (the wardrobe step), `typing_race`. 2026-11-03 (in class): the arcade menu is **four big cards** in this order: `pop` ("¡Pum! Letras"), `typing_race`, `wardrobe`, `recipe` ("Tocá y pasa" left 1ro for good; the dance lives only in the classic menu, `oops` in the guided pass and the classic menu). With `?ruta=clasica` the menu is `typing_race`, `pop`, `recipe`, `dance`, `oops`, `sheet`, `recess`. Before 2026-10-25: `race` (T33, "La carrera"; see below), `sheet` (sheet 6 "La escalera", its doors and boss), `recess` (sheet 9, the music recess; left off while muted), `guardas` (sheet 14), `editor` (sheet 7's workshop and corkboard) |
 | 2do | `race`, `sheet` (sheet 8 "Zigzag"), `recess`, `guardas`, `editor` (sheet 7) |
 | 3ro | `rule_game`, `sheet` (sheet 13 "Antes y después"), `recess`, `editor` (sheet 7) |
 | 4to | T39/T41: the Arcade (see "4to's Arcade" below): `typing_race` ("Carrera de teclas"), `own_game` ("Tu juego"), `race` (from tier 4), `workshop` (back to the Workshop step), `wardrobe` (the wardrobe step). Before T39: `rule_game`, `editor` (sheet 15), `recess`, `game_maker` (T7's probe "Hacé tu juego", now only from the adult's corner menu) |
@@ -1595,7 +1634,30 @@ the order `recipe`, `dance`, `oops`, `tap`, 3 rounds or 4 minutes each
 (T51, from 2026-10-26: 5 minutes, ~20 minutes for the pass),
 whichever comes first after the round on screen; leaving it is the green
 flag, `route_done`) → `free_play` (1ro's arcade, endless: the four games,
-`buddy`, `wardrobe`, `typing_race`). Code: `src/playtest/arcade/` (`kit.ts`
+`buddy`, `wardrobe`, `typing_race`).
+
+**The route of 2026-11-03** (T54, T57b; the class of that day changed it
+three times, deployed one commit at a time): character → `games` (the guided
+pass, **`recipe` and `oops` only**: the dance left it in T54, "Tocá y pasa"
+in T57b; **5 rounds a game**, up to 6 minutes, `GUIDED_ROUNDS` /
+`GUIDED_TURN_MS` in `arcade/kit.ts`) → the green flag (`route_done`) → the
+gentle blocks `ladder` (see `ladder_end`; ~7 minutes, never kicks a child
+out) → `free_play` with four big cards (`pop`, `typing_race`, `wardrobe`,
+`recipe`). No survey on the way (see `class_command`). A guided-pass
+resume saved by an older version (an index into the 4-game order) maps to
+the new order. The report counts the guided pass as the games passed to it
+(recipe + oops for `--since 2026-11-03`, all four before; `--guided a,b`
+overrides).
+
+**`gamesAllPending`** (flow state, 2026-11-03): el docente's "Juegos para
+todos" on a 1ro child in `games` or `ladder` does **not** move them at once
+(and shows no banner over the level): it sets `gamesAllPending`, the round
+or level on screen is finished (a won round ends the game; the ladder item
+ends and `ladder_end.reason` is `wrap_up`), and then the `step` goes to
+`free_play` (`reason: 'next'`; leaving `games` this way is still the green
+flag, `route_done`). A child in the arcade, wardrobe or survey moves as
+before. `class_command` `games_all` is logged when the command is seen,
+well before the move. Code: `src/playtest/arcade/` (`kit.ts`
 the shared rules, `Kit.tsx` the telemetry, one file per game). **The main
 data of this round: what each child picks and replays by themselves.**
 
@@ -1737,6 +1799,60 @@ arrow and the wardrobe's page ("listo") end the card as before
 (`activity_end` / `wardrobe` `close`), and "quedan 5 minutos" or the adult's
 moves end it by themselves. "Tocá y pasa" has no end screen (its rounds roll
 on while playing): only the corner button and the bar's.
+
+#### "¡Pum! Letras" (`pop`, 2026-11-03)
+
+A 1ro arcade card (`src/playtest/arcade/Pop.tsx`, pure rules in `pop.ts`),
+ZType for six-year-olds: soap bubbles with a capital letter (from tier 4 a
+word under its picture) come down; the child types the letter on the
+physical keyboard, or taps it on the drawn keyboard under the scene, and the
+bubble pops into a star. Nothing is ever lost (a bubble that reaches the
+grass waits there). It is **not** a monster game and **not** in the guided
+pass: it only appears as a menu card (1ro's four cards and the classic
+menu), so it never counts toward the guided totals. A wave brings new
+bubbles for one minute, then the last ones; a clear sky wins it. The tier
+(1 vowels … 6 four-letter words) climbs **inside** a wave after a run of
+quick pops; "¡Otra vez!" starts the next wave one tier up. Its events are
+the shared three (`game_start`, `game_round`, `game_end` with
+`game: 'pop'`, `mode: 'arcade'`), plus `rapid_taps` (a burst of wrong keys
+makes the character dizzy), `help`, `speak` and `ghost_demo` with
+`level_id: 'game:pop'`, and `game_exit`.
+
+`game_round` (one per **wave won**, `solved: true`; a play left mid-wave logs
+a `solved: false` round with only the generic fields):
+```
+{
+  game: 'pop', mode: 'arcade', play_no, round, tier,    // tier: the wave's first tier
+  correct: boolean,            // no wrong key in the wave
+  attempts: number,            // keys typed (right + wrong)
+  popped: number,              // bubbles popped
+  words_popped: number,        // of which words (tier 4+)
+  texts: string[],             // every bubble's text, in order of arrival
+  right: number, wrong: number,
+  accuracy: number | null,     // right / (right + wrong), in %, one decimal
+  sources: { key: number, touch: number },  // keys by the physical keyboard / the drawn one
+  landed: number,              // bubbles that reached the grass
+  tier_end: number,            // the tier the wave ended at (1–6)
+  tier_ups: number,            // tier climbs inside the wave
+  adapt_top: number, adapt_ups: number, adapt_downs: number,  // adaptive steps (0–2) reached / climbed / dropped
+  wave_ms: number,
+  ghost_popped?: number,       // popped by the first-time ghost demo (not the child)
+  again?: true,                // the wave was started by "¡Otra vez!"
+  first_input_ms, ms
+}
+```
+`game_end` (once per play) adds the play's totals, mid-wave keys included:
+`keys_typed`, `right`, `wrong`, `accuracy`, `physical` (physical-keyboard
+keys), `touch` (drawn-keyboard keys), `popped`, besides the shared `reason`
+(`finished` / `quit`), `rounds` (waves won), `ms`, `rapid_taps`,
+`help_levels`, `adult_helped`.
+
+The report ("¡Pum! Letras", `reportMonster.ts`, read apart from `games`):
+children, plays, waves won, popped (and words), accuracy, physical vs touch
+keys (a 6-year-old on a laptop is mostly touch: 85 % in the first class),
+the highest tier, where each wave ended, tier climbs and adaptive steps,
+and the same per child. The totals come from `game_end` (a play with no
+`game_end`, e.g. a closed tab, falls back to its won waves).
 
 The survey on 1ro's route asks only the liking faces per card played
 (`survey_answer` `liked_<game>`, see below). T49 report
@@ -1917,9 +2033,14 @@ T14: a class command from `/admin` reached this device and was applied
 ```
 { kind: 'five_min' | 'cancel_five_min' | 'end_class' | 'games_all' | 'cancel_games_all', id: number, sent_at: string, received_at: string, step: string, late?: true }
 ```
-`five_min`: "¡Quedan 5 minutos!" was shown and said; the step on screen
-ends after its item (`ladder_end`/`typing_end` `wrap_up`, free play like its
-time), then the wardrobe and the survey, then free play. `cancel_five_min`:
+`five_min`: "¡Quedan 5 minutos!" was shown and said. **Since 2026-11-03 it
+is only the countdown banner, for every grade**: it no longer sets the
+flow's `wrapUp`, so no step ends after its item, and there is no wardrobe
+or survey on the way out (the user wants no more surveys; the event is still
+logged, `step` carries no `wrap_up: true` for it). Before that day: the step
+on screen ended after its item (`ladder_end`/`typing_end` `wrap_up`, free
+play like its time), then the wardrobe and the survey, then free play.
+`cancel_five_min`:
 "Cancelar aviso" reached the device while the warning was still pending
 (a warning cancelled before the device saw it is never applied).
 
