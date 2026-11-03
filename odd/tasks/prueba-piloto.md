@@ -161,6 +161,15 @@ Route per task: delegated direct, one writer at a time (each task touches 2+ non
 
 Cut line: T43 plus at least two games (T44, T45) must ship together; T46, T47 follow in order; T48 is a reserve. Never deploy a half-working game: an unfinished game stays out of the menu.
 
+### 1ro longer class round (user request 2026-11-03)
+
+Data from last week's 1ro classes: 21/25 kids finished the 4-game guided pass in ~15 min, then got bored in ~25 min of free arcade; in the classic route the ladder stopped a child after a failed item (kids hate being kicked out), many never found that the number in `repetir` changes when tapped, and nobody saw their progress. Nobody understood "Copiá el baile". Class today 13:30 ART; the parent deploys incrementally during the class, so every commit must stand alone and a resume state saved by an older version must never crash or stall.
+
+- [x] T53 Gentle ladder for 1ro, both routes (`gentle` on the ladder state, set by `startLadder` for 1ro; every other grade unchanged): an item ends on 5 failed runs instead of 2 while the help escalates; after a failed run the `repetir` block's number pulses and the ghost hand shows tapping it (gesture only); `decide()` never stops for `floor`/`ceiling`/`bottom` (a non-pass steps down one rung, rung 1 repeats; a pass climbs again) until 15 min, 20 items or the top; per-item caps 4 min / 2 min idle. Telemetry fields unchanged (`check: 'floor'` marks a step down).
+- [x] T54 Longer monster route for 1ro: the dance is out of the guided pass (arcade card only; GUIDED = recipe, oops, tap), 5 rounds a game (the dance's guided growth capped at 4 poses, moot while it is out), up to 6 min a game; after the guided pass (still the green flag) the gentle ladder as a second guided chapter (entry rung 1), then the arcade. A guided-pass resume saved by the older version (index into the 4-game order) maps to the new order (the dance goes on with the next game); anything not understood starts the pass over.
+- [x] T55 Visible progress for 1ro: a drawn strip under the top bar (scene's top-left corner, pointer-events none, no text) during the guided pass and the ladder on 1ro's route: a disc per monster game, a block per blocks level met (the latest six); done ones get a star, the one on screen pulses.
+- [ ] T56 More wardrobe items (~6 more pieces with prices in the same style).
+
 ## Progress
 
 - 2026-09-30: worktree and branch created from `feat/primer-grado` (fe6a277); code mapped; this document created before the first source write.
@@ -1271,6 +1280,12 @@ Cut line: T43 plus at least two games (T44, T45) must ship together; T46, T47 fo
   Open: nothing tried with real children. The 8 s idle and the 1.4 s beat are guesses. `check-4to.mjs` needs the 4to agent's `copa` step. Engram mirror still pending. Deploy is the parent's (the user's deadline 13:30 ART).
 
 - 2026-10-27: T52 redeployed on the user's explicit request ("para las 13.30 esté deployado"): Coolify deployment `9iagedl0p1oehtvocmg8zmai` finished; live `/api/health` 200; the served `assets/index-D3hr6Jnk.js` has the same sha256 as the local `VITE_PLAYTEST=1` build of `36cdfdf` (also contains the 4to agent's `c0f4dc6`). Parent spot check before the deploy: `check-silent.mjs` on the local stack, all checks passed. Not re-run on the final build: `check-monstruo` at 1280×800, `check-race`; `check-4to` stops at the new `copa` step (script not updated, owned by the 4to round). For a 1ro group that has not played the pilot yet: `?grado=1&sonido=no&ruta=clasica`.
+
+- 2026-11-03: T53–T55, 1ro longer class round (route: delegated direct, one writer; urgent, class 13:30 ART, deadline 16:02 GMT; the 1ro fun round section, `flow.ts`, `ladder.ts`, `kit.ts`, `Ladder.tsx`, `GuidedGames.tsx` read first). Commits on `feat/prueba-piloto`, not pushed, not deployed (the parent deploys incrementally): `811a606` (T53), `38c9a1a` and `882366f` (T54), `5333663` (T55).
+  - `npm run typecheck`: passed after each commit.
+  - `npx vitest run src/playtest/ladder.test.ts` (33 passed), `src/playtest/arcade src/playtest/flow1ro.test.ts src/playtest/reportMonster.test.ts src/playtest/surveyPlan.test.ts` (8 files, 50 passed), `src/playtest/flow.test.ts src/playtest/surveyPlan.test.ts src/playtest/resume.test.ts` (34 passed), `src/playtest/ChapterStrip.test.ts` (2 passed).
+  - `VITE_PLAYTEST=1 npm run build`: built (chunk-size warning only).
+  - Not run: Playwright/scripted checks (`check-piloto.mjs` and friends), screenshots of the strip and the nudge on a real page. Risky, to smoke-test: the strip's position over each game's scene and the ladder's page (fixed 122px from the top, 34px from the left); the repeat nudge on a ladder page with `repetir` after a failed run; 1ro's `games` → `ladder` → `free_play`; a tab reloaded mid-pass from the deployed version.
 
 ## Next step
 
