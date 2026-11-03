@@ -170,6 +170,21 @@ Data from last week's 1ro classes: 21/25 kids finished the 4-game guided pass in
 - [x] T55 Visible progress for 1ro: a drawn strip under the top bar (scene's top-left corner, pointer-events none, no text) during the guided pass and the ladder on 1ro's route: a disc per monster game, a block per blocks level met (the latest six); done ones get a star, the one on screen pulses.
 - [x] T56 More wardrobe items: six more pieces drawn in the same ink style (la gorra, el moño, las zapatillas, el collar de cuentas, la riñonera, el gorro de fiesta), interleaved in `ITEMS` and opening in the playtest at 2/5/8/11/14/18 seeds (the old seven keep their thresholds); in the year they open after the crown, from 60 seeds.
 
+- [x] T57 "¡Pum! Letras" (ZType-like 1ro arcade card): letters in bubbles popped by typing them, never lost, adaptive waves; climbs tiers inside a wave up to four-letter words (in-class fix).
+- [x] T57b In-class fixes (user, during the 2026-11-03 class; each deployed at once): "Tocá y pasa" out of the guided pass and the menus (nobody understood it; GUIDED = recipe, oops); 1ro's arcade menu = four big cards (¡Pum! Letras, Carrera de teclas, Vestidor, La receta; the character card and the games just done hid the ones they want); "Juegos para todos" on 1ro waits for the round or level on screen (`gamesAllPending`); "Quedan 5 minutos" is only the countdown banner (no survey, no wardrobe: the user wants no more surveys); the gentle ladder ends by itself after ~7 min / 10 items (10–15 min bored them); T55's strip is off (did not match the game's look; component kept); the wardrobe's hooks keep a fixed height and scroll.
+
+### Round for next week's 1ro classes (user request 2026-11-03, after the class)
+
+The user: "ponete a mejorarlo sin problema", next class next week. Today's data (14 kids, monster route): guided pass 6–8 min, ladder 10–15 min with nobody finishing it alone ("cuando tienen que pensar se aburren"), the arcade dominated by the typing race (91 races) and the wardrobe; ¡Pum! Letras only 6 plays while it was hidden among 8 cards. Earlier asks still open: visible progress in the game's own look, comparing with the classmate (each at their own level), the classic route made nicer, more fun-but-didactic arcade activities with blocks.
+
+Route per task (Mandatory Delegation Triggers): T58–T59 delegated (tools, report, docs: 4+ files); T60 delegated to an Opus designer in its own worktree (new UI, the user rejected the first strip on looks), shown to the user as screenshots before any deploy; T61–T62 after T60's direction is agreed.
+
+- [ ] T58 Data and docs catch up with today: the class report counts `pop` (per wave: popped, accuracy, tier reached, physical vs touch) without counting it toward the guided pass; the gentle ladder (`gentle`, step-downs, why it ended) and `gamesAllPending` documented in `docs/prueba-piloto-datos.md`; the 1ro teacher guide updated (no survey, four cards, the timings).
+- [ ] T59 Checks follow the new 1ro route: `tools/check-monstruo.mjs` (recipe → oops → ladder → four-card arcade, ¡Pum! Letras, deferred "Juegos para todos", "Quedan 5 minutos" banner only) and `tools/check-piloto.mjs` (classic route) pass on a local stack.
+- [ ] T60 Progress a 6-year-old sees and can show the classmate, drawn in the game's own style (paper, ink, tape, the character, the garden and the seeds): design options as screenshots next to the current screens, the user picks, then built. Never a level number to compare; each child at their own difficulty.
+- [ ] T61 The blocks levels feel like a game for 1ro (short, a juicy reward per level, the monster/character reacting), so thinking is not where they get bored.
+- [ ] T62 More arcade activities that are fun and a bit didactic (blocks-based), and the classic route's arcade aligned with the new one.
+
 ## Progress
 
 - 2026-09-30: worktree and branch created from `feat/primer-grado` (fe6a277); code mapped; this document created before the first source write.
