@@ -56,12 +56,12 @@ const ACTIVITY_WORD: Record<string, string> = {
   editor: 'Hacer un nivel', corkboard: 'La cartelera', rule_game: 'El juego de reglas', game_maker: 'Hacer tu juego', text_probe: 'Bloques y texto', race: 'La carrera', workshop: 'El taller de juegos',
   typing_race: 'La carrera de teclas', own_game: 'Tu juego',
   // T43: 1ro's arcade
-  recipe: 'La receta del monstruo', dance: 'Copiá el baile', oops: '¿Qué salió mal?', tap: 'Tocá y pasa', buddy: 'Tu personaje', games: 'Los juegos del monstruo',
+  recipe: 'La receta del monstruo', dance: 'Copiá el baile', oops: '¿Qué salió mal?', tap: 'Tocá y pasa', pop: '¡Pum! Letras', buddy: 'Tu personaje', games: 'Los juegos del monstruo',
 };
 
 /** T49/T51: how each game of 1ro's arcade is named in its own question. */
 const GAME_SAY: Partial<Record<ActivityId, string>> = {
-  recipe: 'la receta del monstruo', dance: 'copiar el baile', oops: '«¿Qué salió mal?»', tap: '«Tocá y pasa»',
+  recipe: 'la receta del monstruo', dance: 'copiar el baile', oops: '«¿Qué salió mal?»', tap: '«Tocá y pasa»', pop: '«¡Pum! Letras»',
   buddy: 'tu personaje', wardrobe: 'el vestidor', typing_race: 'la carrera de teclas',
 };
 

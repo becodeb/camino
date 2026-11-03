@@ -57,7 +57,8 @@ export const MENU: Record<number, readonly ActivityId[]> = {
   // T43 (2026-10-25): 1ro's arcade: the monster games first, then the favourites (the character, the wardrobe, the
   // typing letters). La carrera (arrow karts) left it: nobody understood the arrows (it opens from the adult menu).
   // T45/T46: "Copiá el baile" and "¿Qué salió mal?" after the recipe; T47: "Tocá y pasa" last of the monster games.
-  1: ['recipe', 'dance', 'oops', 'tap', 'buddy', 'wardrobe', 'typing_race'],
+  // 2026-11-03: "¡Pum! Letras" (letters in bubbles, typed; 1ro loved the typing race) after the monster games, arcade only.
+  1: ['recipe', 'dance', 'oops', 'tap', 'pop', 'buddy', 'wardrobe', 'typing_race'],
   2: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   3: ['rule_game', 'sheet', 'recess', 'editor'],
   // C04: 4to's Arcade (flow.ts) is the typing race, "Tu mejor tiempo" (back to the Copa's remaining circuits),
@@ -105,6 +106,7 @@ export function activityFor(id: ActivityId, grade: number): Activity | null {
     case 'dance': return { id, kind: { game: 'dance' }, say: 'Copiá el baile: mirá cómo baila el monstruo y bailá igual.', caption: 'El baile' };
     case 'oops': return { id, kind: { game: 'oops' }, say: '¿Qué salió mal? Mirá lo que hace el monstruo y arreglá lo que está mal.', caption: '¿Qué salió mal?' };
     case 'tap': return { id, kind: { game: 'tap' }, say: 'Tocá y pasa: decile a cada animal qué hace cuando lo tocás, y jugá.', caption: 'Tocá y pasa' };
+    case 'pop': return { id, kind: { game: 'pop' }, say: '¡Pum, letras! Apretá la letra de cada burbuja y reventala.', caption: '¡Pum! Letras' };
     case 'buddy': return { id, kind: { buddy: true }, say: 'Tu personaje: tocalo y festeja.', caption: 'Tu personaje' };
     default: return null;
   }

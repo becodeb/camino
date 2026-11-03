@@ -17,6 +17,8 @@ import { OopsGame } from './Oops';
 import { OOPS_MAX_TIER } from './oops';
 import { TapGame } from './Tap';
 import { TAP_MAX_TIER } from './tap';
+import { PopGame } from './Pop';
+import { POP_MAX_TIER } from './pop';
 
 export interface GameEntry {
   Component: ComponentType<GameProps>;
@@ -28,6 +30,7 @@ export const GAMES: Record<GameId, GameEntry> = {
   dance: { Component: DanceGame, maxTier: DANCE_MAX_TIER },
   oops: { Component: OopsGame, maxTier: OOPS_MAX_TIER },
   tap: { Component: TapGame, maxTier: TAP_MAX_TIER },
+  pop: { Component: PopGame, maxTier: POP_MAX_TIER },
 };
 
 let memory: { sid: string; plays: Partial<Record<GameId, number>>; reached: Partial<Record<GameId, number>> } | null = null;
