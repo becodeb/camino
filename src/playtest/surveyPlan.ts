@@ -27,7 +27,8 @@ export interface SurveyStep {
 /** The survey's questions for a session that did `activities` (flow.ts `activities`); `arcade1ro`: 1ro's own route. */
 export function surveyPlan(activities: readonly string[], arcade1ro = false, grade = 0): SurveyStep[] {
   if (arcade1ro) {
-    const played = (MENU[1] ?? []).filter((a) => activities.includes(a));
+    // 2026-11-03: the arcade menu shrank to four cards; the guided games still get their faces
+    const played = [...(MENU[1] ?? []), ...(['oops', 'dance', 'tap'] as ActivityId[])].filter((a) => activities.includes(a));
     if (played.length) return played.map((game) => ({ id: `liked_${game}` as const, game }));
     return [{ id: 'liked' }];
   }

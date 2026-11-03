@@ -58,7 +58,8 @@ export const MENU: Record<number, readonly ActivityId[]> = {
   // typing letters). La carrera (arrow karts) left it: nobody understood the arrows (it opens from the adult menu).
   // T45/T46: "Copiá el baile" and "¿Qué salió mal?" after the recipe; T47: "Tocá y pasa" last of the monster games.
   // 2026-11-03: "¡Pum! Letras" (letters in bubbles, typed; 1ro loved the typing race) after the monster games, arcade only.
-  1: ['pop', 'recipe', 'dance', 'oops', 'buddy', 'wardrobe', 'typing_race'],
+  // 2026-11-03 (in class): the games they just did and the character card hid the ones they want; four big cards
+  1: ['pop', 'typing_race', 'wardrobe', 'recipe'],
   2: ['race', 'sheet', 'recess', 'guardas', 'editor'],
   3: ['rule_game', 'sheet', 'recess', 'editor'],
   // C04: 4to's Arcade (flow.ts) is the typing race, "Tu mejor tiempo" (back to the Copa's remaining circuits),
