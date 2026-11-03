@@ -114,8 +114,9 @@ export const FAST_CAPS_LONG: Caps = { itemMs: 30_000, idleMs: 12_000, ladderMs: 
  * one rung (rung 1 repeats), a pass climbs again, until the time, the item
  * count or the top. Caps sized for ~15 minutes.
  */
-export const MAX_ITEMS_GENTLE = 20;
-export const CAPS_GENTLE: Caps = { itemMs: 4 * 60_000, idleMs: 2 * 60_000, ladderMs: 15 * 60_000, hardMs: 16 * 60_000 };
+// 2026-11-03 (in class): 10–15 minutes of ladder bored them; it now ends by itself after ~7 minutes
+export const MAX_ITEMS_GENTLE = 10;
+export const CAPS_GENTLE: Caps = { itemMs: 3 * 60_000, idleMs: 2 * 60_000, ladderMs: 7 * 60_000, hardMs: 8 * 60_000 };
 export const GENTLE_GRADES: readonly number[] = [1];
 export const capsFrom = (search: string, long = false, gentle = false): Caps =>
   /[?&]caps=fast\b/.test(search) ? (long ? FAST_CAPS_LONG : FAST_CAPS) : long ? CAPS_LONG : gentle ? CAPS_GENTLE : CAPS;

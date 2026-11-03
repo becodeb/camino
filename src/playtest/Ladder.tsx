@@ -35,9 +35,7 @@ import type { LevelDef } from '../game/levels';
 import { PlaytestLevel, type LevelEnd } from './PlaytestLevel';
 import { rememberPart, resumedPart } from './resume';
 import { noteLadderCeiling } from './copa2/store';
-import { is1ro, wrapPending } from './flow';
-import { ChapterStrip } from './ChapterStrip';
-import { GUIDED } from './arcade/kit';
+import { wrapPending } from './flow';
 
 /** Said while the character walks to the next page (in turn, never about how it went). */
 const WALK_LINES = ['¡Vamos a la próxima!', '¡Seguimos!', '¡Otra hoja!', '¡A ver esta!'];
@@ -238,7 +236,8 @@ export function Ladder() {
   // the bar: a stone (with its seed) per item met so far, and the one on screen circled; a path that grows (the ladder's length depends on the child)
   const items = state.current.items.length;
   // T55: on 1ro's route (after the guided pass) the progress strip on top: the four games done, a block per level
-  const strip = state.current.gentle && is1ro(api.flow) ? <ChapterStrip games={GUIDED.length} game={GUIDED.length} levels={items} inLadder /> : null;
+  // 2026-11-03 (user): the progress strip did not match the game's look; off (ChapterStrip.tsx kept)
+  const strip = null;
   return (
     <BarProgressContext.Provider value={{ kind: 'dots', done: [...Array.from({ length: items }, () => true), false], here: items }}>
       {strip}

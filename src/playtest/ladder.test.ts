@@ -288,7 +288,7 @@ describe('T53: 1ro\'s gentle ladder', () => {
     for (const g of [2, 3, 4, 5]) expect(startLadder(g, T0).gentle).toBeUndefined();
     expect(capsFrom('', false, true)).toBe(CAPS_GENTLE);
     expect(capsFrom('?caps=fast', false, true)).toBe(FAST_CAPS);
-    expect(CAPS_GENTLE.ladderMs).toBe(15 * 60_000);
+    expect(CAPS_GENTLE.ladderMs).toBe(7 * 60_000);
   });
 
   it('never stops on a non-pass: steps down one rung (rung 1 repeats), then climbs again', () => {
@@ -306,7 +306,7 @@ describe('T53: 1ro\'s gentle ladder', () => {
     expect(decide(s, T0)).toEqual({ rung: 1, check: 'floor' });
     expect(decide(record(s, fail(1)), T0)).toEqual({ stop: 'max_items' });
     expect(decide(play(startLadder(1, T0), fail(1)), T0 + CAPS_GENTLE.ladderMs, CAPS_GENTLE)).toEqual({ stop: 'max_time' });
-    expect(decide(play(startLadder(1, T0), fail(1)), T0 + MAX_MS, CAPS_GENTLE)).toEqual({ rung: 1, check: 'floor' });
+    expect(decide(play(startLadder(1, T0), fail(1)), T0 + CAPS_GENTLE.ladderMs - 1, CAPS_GENTLE)).toEqual({ rung: 1, check: "floor" });
     expect(decide(play(startLadder(1, T0), pass(TOP)), T0)).toEqual({ stop: 'top' });
   });
 

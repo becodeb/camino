@@ -303,8 +303,8 @@ function Playtest({ resumed }: { resumed: SavedSession | null }) {
         return;
       }
       log('class_command', { kind: 'five_min', ...received });
+      // 2026-11-03 (user): only the countdown banner; no more survey or wardrobe on the way out
       setBanner(cmd.id);
-      apply({ type: 'wrap_up', on: true });
     } else if (cmd.kind === 'games_all') {
       // T37: a command cancelled before this device ever saw it is dropped
       // by telemetry.ts's own queue and never reaches here (same as
